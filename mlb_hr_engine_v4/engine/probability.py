@@ -90,10 +90,49 @@ def pitcher_hr_factor(pitcher_stats: dict) -> float:
     return max(0.65, min(1.50, combined))
 
 
-def pitcher_combined_factor(pitcher_hr_fac: float, statcast_contact_fac: float) -> float:
-    """Blend HR/FB factor with Statcast contact quality (barrel% against, EV against)."""
-    combined = pitcher_hr_fac * 0.55 + statcast_contact_fac * 0.45
-    return max(0.60, min(1.55, combined))
+def pitcher_k_gb_suppressor(pitcher_stats: dict) -> float:
+    """
+    K% + GB% combined suppressor.
+    K% → fewer balls in play → fewer HR opportunities.
+    GB% → fewer fly balls → lower HR conversion rate.
+    Both are more stable indicators than raw HR/9.
+    """
+    k  = int(pitcher_stats.get("strikeOuts", 0))
+    bf = int(pitcher_stats.get("battersFaced", 0))
+    go = int(pitcher_stats.get("groundOuts", 0))
+    ao = int(pitcher_stats.get("airOuts", 0))
+
+    # K% factor — 22.5% is league avg; each 5pp above reduces HR prob ~4%
+    if bf >= 30:
+        k_pct  = k / bf
+        k_factor = max(0.82, min(1.12, 1.0 - 0.80 * (k_pct - 0.225)))
+    else:
+        k_factor = 1.0
+
+    # GB% factor — 44% is league avg on outs; high GB = strong HR suppressor
+    total_outs = go + ao
+    if total_outs >= 50:
+        gb_pct   = go / total_outs
+        gb_factor = max(0.86, min(1.12, 1.0 - 0.45 * (gb_pct - 0.44)))
+    else:
+        gb_factor = 1.0
+
+    return max(0.76, min(1.18, k_factor * gb_factor))
+
+
+def pitcher_combined_factor(
+    pitcher_hr_fac: float,
+    statcast_contact_fac: float,
+    k_gb_fac: float = 1.0,
+) -> float:
+    """
+    Weighted blend of three independent pitcher HR signals:
+      40% HR/FB rate (most HR-specific)
+      35% Statcast contact quality against
+      25% K% + GB% suppressor (ball-in-play profile)
+    """
+    combined = pitcher_hr_fac * 0.40 + statcast_contact_fac * 0.35 + k_gb_fac * 0.25
+    return max(0.55, min(1.60, combined))
 
 
 def platoon_factor(splits: dict, pitcher_hand: str, batter_side: str, season_pa: int) -> float:
@@ -131,6 +170,24 @@ def expected_pa(lineup_spot: Optional[int]) -> float:
     return config.DEFAULT_PA
 
 
+def fly_ball_adjusted_park_factor(park_factor: float, season_stats: dict) -> float:
+    """
+    Scale park HR impact by batter's fly-ball tendency.
+    A batter who hits more fly balls benefits more (or suffers more) from park HR factor.
+    League avg fly-ball rate: ~18% of AB.
+    """
+    fly_balls = int(season_stats.get("flyBalls", 0))
+    ab        = int(season_stats.get("atBats", 1))
+    if ab < 80 or fly_balls == 0:
+        return park_factor
+
+    fb_pct     = fly_balls / ab
+    league_fb  = 0.18
+    fb_dev     = (fb_pct - league_fb) / league_fb   # % above/below avg
+    adjusted   = 1.0 + (park_factor - 1.0) * (1.0 + 0.30 * fb_dev)
+    return max(0.70, min(1.45, adjusted))
+
+
 def park_factor(home_team: str, batter_is_home: bool) -> float:
     return get_park(home_team).get("hr_factor", 1.0)
 
@@ -149,8 +206,10 @@ def game_hr_probability(
     pk_factor: float = 1.0, pitcher_fac: float = 1.0,
     w_factor: float = 1.0, plat_factor: float = 1.0,
 ) -> float:
-    adjusted = hr_rate * pk_factor * pitcher_fac * w_factor * plat_factor
-    lam = adjusted * exp_pa
+    # Cap combined multiplier — prevents extreme stacking of park + pitcher + weather + platoon
+    combined = pk_factor * pitcher_fac * w_factor * plat_factor
+    combined = max(0.42, min(1.82, combined))
+    lam = hr_rate * combined * exp_pa
     return max(0.001, min(0.999, 1.0 - math.exp(-lam)))
 
 

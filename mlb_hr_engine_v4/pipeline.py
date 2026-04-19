@@ -37,6 +37,7 @@ def _build_player_profile(
 
     exp_pa    = prob.expected_pa(lineup_spot)
     pk_factor = prob.park_factor(home_team, team == home_team)
+    pk_factor = prob.fly_ball_adjusted_park_factor(pk_factor, season_stats)
 
     pitcher_id   = pitcher.get("id")
     pitcher_name = pitcher.get("name", "TBD")
@@ -49,7 +50,8 @@ def _build_player_profile(
 
     hr_fb_fac  = prob.pitcher_hr_factor(pitcher_stats)
     sc_pit_fac = statcast_client.pitcher_contact_suppressor(pitcher_id or 0, pitcher_data)
-    pit_factor = prob.pitcher_combined_factor(hr_fb_fac, sc_pit_fac)
+    k_gb_fac   = prob.pitcher_k_gb_suppressor(pitcher_stats)
+    pit_factor = prob.pitcher_combined_factor(hr_fb_fac, sc_pit_fac, k_gb_fac)
 
     park_data = get_park(home_team)
     is_dome   = home_team in weather_client.DOME_TEAMS
