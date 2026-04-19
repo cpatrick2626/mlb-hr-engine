@@ -61,59 +61,28 @@ def get_game_weather(lat: float, lon: float, game_hour_utc: int = 18) -> dict:
 
 def wind_factor(wind_mph: float, wind_deg: float, is_dome: bool = False) -> float:
     """
-    Rough HR adjustment for wind speed and direction.
-    Wind direction 0-360°: blowing FROM that compass bearing.
-    Typical ballparks face various orientations — we approximate:
-      - High wind out (wind_mph > 12 from "behind" batter) → boost
-      - High wind in (into batter's face) → suppress
-    Without park-specific orientation, we use a simplified model:
-      - Direction 45-135° = generally "out to CF" for typical E-facing parks → boost
-      - Direction 225-315° = "in from CF" → suppress
+    Stage 5 (expert pipeline): continuous wind adjustment.
+    Formula: wind_adj = wind_to_CF_mph * 0.003  (~3% per mph blowing out)
+    wind_to_CF_mph = component of wind blowing toward CF (angle-weighted).
+    Most parks' CF orientation is roughly east-facing (~90°).
     """
-    if is_dome:
+    import math
+    if is_dome or wind_mph < 2:
         return 1.0
-
-    factor = 1.0
-
-    # Temperature already handled in probability.py; here just wind
-    if wind_mph < 5:
-        return 1.0
-
-    # Approximate "out" direction (favorable) vs "in" (unfavorable)
-    out_deg = 90   # east wind = blowing toward LF/CF in most parks
-    angle_diff = abs(((wind_deg - out_deg) + 180) % 360 - 180)
-
-    if angle_diff < 60:  # wind blowing "out"
-        if wind_mph >= 15:
-            factor = 1.15
-        elif wind_mph >= 10:
-            factor = 1.08
-        else:
-            factor = 1.04
-    elif angle_diff > 120:  # wind blowing "in"
-        if wind_mph >= 15:
-            factor = 0.82
-        elif wind_mph >= 10:
-            factor = 0.90
-        else:
-            factor = 0.95
-
-    return factor
+    cf_bearing   = 90.0   # typical park CF direction
+    angle_diff   = abs(((wind_deg - cf_bearing) + 180) % 360 - 180)
+    wind_to_cf   = wind_mph * math.cos(math.radians(angle_diff))
+    adj          = wind_to_cf * 0.003
+    return max(0.82, min(1.18, 1.0 + adj))
 
 
 DOME_TEAMS = {"TB", "MIA", "TOR", "MIL", "HOU", "ARI", "TEX"}
 
 
 def temp_factor(temp_f: float) -> float:
-    """Cold air is denser → suppresses carry; hot air is thinner → boosts."""
-    if temp_f < 40:
-        return 0.82
-    if temp_f < 50:
-        return 0.88
-    if temp_f < 60:
-        return 0.94
-    if temp_f > 90:
-        return 1.06
-    if temp_f > 80:
-        return 1.03
-    return 1.0
+    """
+    Stage 5 (expert pipeline): continuous temperature adjustment.
+    Formula: ~2% per 10°F from baseline 72°F (denser/thinner air affects carry).
+    """
+    adj = 0.002 * (temp_f - 72.0)
+    return max(0.82, min(1.08, 1.0 + adj))

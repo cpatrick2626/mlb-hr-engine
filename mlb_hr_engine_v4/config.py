@@ -35,8 +35,10 @@ MAX_PITCHER_SUPPRESSOR: float = 0.75  # Skip elite HR suppressors
 
 # ── Probability Model ─────────────────────────────────────────────────────────
 RECENT_DAYS: int = 30
-RECENT_WEIGHT: float = 0.65
-SEASON_WEIGHT: float = 0.35
+# HR/PA stabilizes slowly (~300+ PA needed); expert table weights HR/FB at 0.20 recent.
+# 0.30 balances early-season noise vs capturing genuine rate changes.
+RECENT_WEIGHT: float = 0.30
+SEASON_WEIGHT: float = 0.70
 LEAGUE_AVG_HR_PA: float = 0.033    # ~1 HR per 30 PA league-wide
 REGRESSION_PA: int = 200            # Bayes regression towards league mean
 MIN_RECENT_PA: int = 30             # Need ≥30 recent PA to trust recent rate

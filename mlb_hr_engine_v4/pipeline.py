@@ -78,8 +78,16 @@ def _build_player_profile(
     plat_factor = prob.platoon_factor(splits, pitcher_hand, batter_side, season_pa)
 
     streak_fac = prob.hot_streak_factor(short_form, season_stats)
+
+    # Stage 6: batter × pitcher interaction term (non-additive matchup synergy).
+    # When an elite power hitter (high Statcast) faces a hittable pitcher (high
+    # contact quality allowed), the combined effect exceeds simple multiplication.
+    batter_excess  = max(0.0, power_mult - 1.0)
+    pitcher_excess = max(0.0, sc_pit_fac - 1.0)
+    interaction    = batter_excess * pitcher_excess * 0.35
+
     model_prob = prob.game_hr_probability(
-        hr_rate * streak_fac, exp_pa,
+        hr_rate * streak_fac * (1.0 + interaction), exp_pa,
         pk_factor=pk_factor, pitcher_fac=pit_factor,
         w_factor=w_factor, plat_factor=plat_factor,
     )

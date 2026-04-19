@@ -14,6 +14,23 @@ MLB_API = "https://statsapi.mlb.com/api/v1"
 _SESSION = requests.Session()
 _SESSION.headers.update({"User-Agent": "MLB-HR-Engine/1.0"})
 
+# Session-level cache for game logs — avoids duplicate API calls when
+# get_player_recent_stats() and get_player_short_form() are both called.
+_GAME_LOG_CACHE: dict[int, list] = {}
+
+
+def _game_log_splits(player_id: int) -> list:
+    if player_id not in _GAME_LOG_CACHE:
+        try:
+            data = _get(f"/people/{player_id}/stats", {
+                "stats": "gameLog", "group": "hitting",
+                "season": config.CURRENT_SEASON,
+            })
+            _GAME_LOG_CACHE[player_id] = data.get("stats", [{}])[0].get("splits", [])
+        except Exception:
+            _GAME_LOG_CACHE[player_id] = []
+    return _GAME_LOG_CACHE[player_id]
+
 
 def _get(path: str, params: dict = None) -> dict:
     url = f"{MLB_API}{path}"
@@ -135,37 +152,22 @@ def _get_prior_season_stats(player_id: int) -> dict:
 
 
 def get_player_recent_stats(player_id: int) -> dict:
-    """
-    Aggregate hitting stats over the last RECENT_DAYS from game log.
-    Returns dict with homeRuns, plateAppearances, games.
-    """
-    try:
-        data = _get(f"/people/{player_id}/stats", {
-            "stats": "gameLog",
-            "group": "hitting",
-            "season": config.CURRENT_SEASON,
-        })
-        splits = data.get("stats", [{}])[0].get("splits", [])
-    except Exception:
-        return {}
-
+    """Aggregate hitting stats over last RECENT_DAYS. Uses cached game log."""
+    splits = _game_log_splits(player_id)
     cutoff = date.today() - timedelta(days=config.RECENT_DAYS)
     totals = {"homeRuns": 0, "plateAppearances": 0, "atBats": 0, "games": 0}
-
     for split in splits:
-        raw_date = split.get("date", "2000-01-01")
         try:
-            game_date = date.fromisoformat(raw_date)
+            gd = date.fromisoformat(split.get("date", "2000-01-01"))
         except ValueError:
             continue
-        if game_date < cutoff:
+        if gd < cutoff:
             continue
         st = split.get("stat", {})
-        totals["homeRuns"] += int(st.get("homeRuns", 0))
+        totals["homeRuns"]         += int(st.get("homeRuns", 0))
         totals["plateAppearances"] += int(st.get("plateAppearances", 0))
-        totals["atBats"] += int(st.get("atBats", 0))
-        totals["games"] += 1
-
+        totals["atBats"]           += int(st.get("atBats", 0))
+        totals["games"]            += 1
     return totals
 
 
@@ -211,21 +213,12 @@ def _get_prior_pitcher_stats(pitcher_id: int) -> dict:
 
 def get_player_short_form(player_id: int, days: int = 14) -> dict:
     """
-    Aggregate hitting stats over the last `days` (default 14) from game log.
+    Aggregate hitting stats over last `days` (default 14). Uses cached game log.
     Used for hot/cold streak detection separate from the 30-day window.
     """
-    try:
-        data = _get(f"/people/{player_id}/stats", {
-            "stats": "gameLog",
-            "group": "hitting",
-            "season": config.CURRENT_SEASON,
-        })
-        splits = data.get("stats", [{}])[0].get("splits", [])
-    except Exception:
-        return {}
-
-    cutoff = date.today() - timedelta(days=days)
-    totals = {"homeRuns": 0, "plateAppearances": 0, "atBats": 0, "games": 0}
+    splits  = _game_log_splits(player_id)
+    cutoff  = date.today() - timedelta(days=days)
+    totals  = {"homeRuns": 0, "plateAppearances": 0, "atBats": 0, "games": 0}
     for split in splits:
         try:
             gd = date.fromisoformat(split.get("date", "2000-01-01"))
@@ -258,12 +251,13 @@ def get_player_platoon_splits(player_id: int) -> dict:
         result = {}
         for split in splits_raw:
             code = split.get("split", {}).get("code", "")
-            st = split.get("stat", {})
-            pa = int(st.get("plateAppearances", 0))
-            hr = int(st.get("homeRuns", 0))
+            st   = split.get("stat", {})
+            pa   = int(st.get("plateAppearances", 0))
+            hr   = int(st.get("homeRuns", 0))
             if pa > 0:
-                result[code] = hr / pa
-        return result  # keys: "vl" = vs LHP, "vr" = vs RHP
+                result[code]           = hr / pa   # HR rate
+                result[f"{code}_pa"]   = pa        # actual PA count for shrinkage
+        return result  # keys: "vl"/"vr" = rate, "vl_pa"/"vr_pa" = PA count
     except Exception:
         return {}
 

@@ -137,29 +137,40 @@ def pitcher_combined_factor(
 
 def platoon_factor(splits: dict, pitcher_hand: str, batter_side: str, season_pa: int) -> float:
     """
-    v2: Real L/R splits from MLB Stats API.
-    splits keys: "vl" = vs LHP rate, "vr" = vs RHP rate.
-    Regresses toward overall average based on split PA sample size.
+    Stage 1 (expert pipeline): Bayesian shrinkage toward overall average.
+    Formula: X_split = (n / (n + 50)) * X_platoon + (50 / (n + 50)) * X_overall
+    50 PA is the standard sabermetric shrinkage constant for L/R splits.
+    Uses actual split PA counts returned from the MLB Stats API.
     """
     if not pitcher_hand or not batter_side:
         return 1.0
 
-    split_key = "vl" if pitcher_hand.upper().startswith("L") else "vr"
+    split_key  = "vl" if pitcher_hand.upper().startswith("L") else "vr"
     split_rate = splits.get(split_key)
-    vl = splits.get("vl", 0)
-    vr = splits.get("vr", 0)
+    split_pa   = splits.get(f"{split_key}_pa", 0)   # actual PA count
 
-    if not split_rate or (vl + vr) == 0:
-        # Fallback to v1 heuristic
+    vl_rate = splits.get("vl", 0)
+    vr_rate = splits.get("vr", 0)
+    vl_pa   = splits.get("vl_pa", 0)
+    vr_pa   = splits.get("vr_pa", 0)
+
+    if not split_rate or (vl_rate + vr_rate) == 0:
         b, p = batter_side[0].upper(), pitcher_hand[0].upper()
         if b == "S":
             return 1.03
         return 1.06 if b != p else 0.96
 
-    total_rate = (vl + vr) / 2.0
-    split_pa_proxy = season_pa * 0.4
-    reg_n = 200
-    regressed = (split_rate * split_pa_proxy + total_rate * reg_n) / (split_pa_proxy + reg_n)
+    # Weighted overall rate (PA-weighted across both splits)
+    total_pa   = vl_pa + vr_pa
+    total_rate = ((vl_rate * vl_pa + vr_rate * vr_pa) / total_pa
+                  if total_pa > 0 else (vl_rate + vr_rate) / 2.0)
+
+    # Bayesian shrinkage — use actual split PA if available, else season proxy
+    n = split_pa if split_pa > 0 else int(season_pa * 0.4)
+    SHRINK = 50   # standard constant: 50 PA to trust a split halfway
+    trust     = n / (n + SHRINK)
+    regressed = trust * split_rate + (1 - trust) * total_rate
+
     factor = regressed / total_rate if total_rate > 0 else 1.0
     return max(0.70, min(1.50, factor))
 
