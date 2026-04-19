@@ -1,15 +1,15 @@
 """
-P&L Tracker — logs picks daily and tracks outcomes + profit/loss.
+P&L Tracker — logs picks and tracks outcomes + profit/loss.
 
-Files written to mlb_hr_engine_v2/tracking/:
-  picks_log.csv    — every pick ever made (auto-appended each run)
-  results.csv      — picks with outcome filled in (HR yes/no, profit)
+Storage:
+  When Google Sheets is configured (GOOGLE_CREDENTIALS + GOOGLE_SHEET_ID secrets),
+  data is written to and read from the cloud sheet — survives Streamlit restarts.
+  Otherwise falls back to local CSV files (mlb_hr_engine_v4/tracking/).
 
 Workflow:
-  1. main.py calls log_picks() each run → appends to picks_log.csv
-  2. After games end, run:  python tracking/update_results.py
-     → auto-fetches MLB game results and calculates P&L
-  3. display.py calls pnl_summary() to show running totals at the bottom
+  1. app.py / main.py calls log_picks() each run → appends to picks_log
+  2. Sidebar "Update Yesterday" button calls update_yesterday() → settles outcomes
+  3. tab_performance() calls pnl_summary() + get_picks_log() to display results
 """
 
 import csv
@@ -18,6 +18,8 @@ from datetime import date, timedelta
 from pathlib import Path
 
 import requests
+
+from tracking import sheets as _sheets
 
 LOG_PATH     = Path(__file__).parent / "picks_log.csv"
 RESULTS_PATH = Path(__file__).parent / "results.csv"
@@ -33,143 +35,192 @@ LOG_FIELDS = [
 RESULTS_FIELDS = LOG_FIELDS + ["hr_result", "profit_loss", "notes"]
 
 
-def log_picks(picks: list[dict], model_version: str = "v2") -> int:
-    """
-    Append today's qualified picks to picks_log.csv.
-    Returns number of picks logged.
-    Skips re-logging if today's picks already exist.
-    """
+# ── Public API ────────────────────────────────────────────────────────────────
+
+def storage_backend() -> str:
+    return "sheets" if _sheets.available() else "csv"
+
+
+def log_picks(picks: list[dict], model_version: str = "v4") -> int:
+    """Append today's qualified picks. Returns number logged (0 if already done)."""
     today = date.today().isoformat()
-    existing_dates = _read_existing_dates(LOG_PATH)
 
-    if today in existing_dates:
-        return 0  # Already logged today
+    if _sheets.available():
+        if today in _sheets.existing_dates("picks_log"):
+            return 0
+        rows = [_pick_row(p, today, model_version) for p in picks]
+        _sheets.append_rows("picks_log", LOG_FIELDS, rows)
+    else:
+        if today in _read_existing_dates(LOG_PATH):
+            return 0
+        rows = [_pick_row(p, today, model_version) for p in picks]
+        _append_csv(LOG_PATH, LOG_FIELDS, rows)
 
-    rows = []
-    for p in picks:
-        rows.append({
-            "date":             today,
-            "model_version":    model_version,
-            "player_name":      p.get("player_name", ""),
-            "team":             p.get("team", ""),
-            "opponent":         p.get("opponent", ""),
-            "pitcher":          p.get("pitcher_name", ""),
-            "lineup_spot":      p.get("lineup_spot", ""),
-            "model_prob_pct":   f"{p.get('model_prob', 0)*100:.2f}",
-            "market_prob_pct":  f"{p.get('market_no_vig_prob', 0)*100:.2f}",
-            "ev_pct":           f"{p.get('ev_pct', 0):.2f}",
-            "edge_pct":         f"{p.get('edge_pct', 0):.2f}",
-            "american_odds":    p.get("best_american", ""),
-            "bet_dollars":      f"{p.get('bet_dollars', 0):.2f}",
-            "park_factor":      f"{p.get('park_factor', 1):.3f}",
-            "pitcher_factor":   f"{p.get('pitcher_factor', 1):.3f}",
-            "weather_factor":   f"{p.get('weather_factor', 1):.3f}",
-            "season_pa":        p.get("season_pa", ""),
-            "recent_pa":        p.get("recent_pa", ""),
-            "confidence":       f"{p.get('confidence', 0):.1f}",
-            "score":            f"{p.get('score', 0):.2f}",
-        })
-
-    _append_rows(LOG_PATH, LOG_FIELDS, rows)
     return len(rows)
 
 
-def fetch_yesterday_outcomes(model_version: str = "v2") -> dict[str, bool]:
+def update_yesterday() -> dict:
     """
-    Auto-fetch game results from MLB Stats API for yesterday's picks.
-    Returns {player_name: hit_hr (bool)}.
+    Fetch yesterday's HR outcomes from MLB Stats API and settle picks.
+    Returns dict with keys: settled (int), not_found (int), date (str).
     """
     yesterday = (date.today() - timedelta(days=1)).isoformat()
-    pending = _load_pending_picks(yesterday, model_version)
+    pending = _load_pending(yesterday)
     if not pending:
-        return {}
+        return {"settled": 0, "not_found": 0, "date": yesterday}
 
     outcomes: dict[str, bool] = {}
     for pick in pending:
-        pid = pick.get("player_id")
+        pid = pick.get("player_id") or pick.get("playerid") or ""
         if not pid:
             continue
-        hit_hr = _check_player_hr_yesterday(int(pid), yesterday)
-        if hit_hr is not None:
-            outcomes[pick["player_name"]] = hit_hr
+        result = _mlb_hr_result(int(pid), yesterday)
+        if result is not None:
+            outcomes[pick["player_name"]] = result
 
-    return outcomes
-
-
-def update_results(date_str: str, outcomes: dict[str, bool], model_version: str = "v2") -> None:
-    """
-    Write outcomes to results.csv for a given date.
-    outcomes: {player_name: hit_hr}
-    """
-    picks = _load_pending_picks(date_str, model_version)
-    rows = []
-    for p in picks:
-        name = p["player_name"]
+    settled = 0
+    result_rows = []
+    for pick in pending:
+        name = pick["player_name"]
         hit_hr = outcomes.get(name)
-        odds = int(p.get("american_odds", 0) or 0)
-        bet = float(p.get("bet_dollars", 0) or 0)
+        odds = int(pick.get("american_odds") or 0)
+        bet  = float(pick.get("bet_dollars") or 0)
 
         if hit_hr is None:
-            profit = ""
+            pl = ""
         elif hit_hr:
-            if odds > 0:
-                profit = round(bet * odds / 100, 2)
-            else:
-                profit = round(bet * 100 / abs(odds), 2)
+            pl = round(bet * odds / 100, 2) if odds > 0 else round(bet * 100 / abs(odds), 2)
+            settled += 1
         else:
-            profit = round(-bet, 2)
+            pl = round(-bet, 2)
+            settled += 1
 
-        rows.append({**p, "hr_result": 1 if hit_hr else 0 if hit_hr is not None else "",
-                     "profit_loss": profit, "notes": ""})
+        result_rows.append({
+            **pick,
+            "hr_result":   1 if hit_hr else (0 if hit_hr is not None else ""),
+            "profit_loss": pl,
+            "notes":       "",
+        })
 
-    _append_rows(RESULTS_PATH, RESULTS_FIELDS, rows)
+    if result_rows:
+        if _sheets.available():
+            _sheets.append_rows("results", RESULTS_FIELDS, result_rows)
+        else:
+            _append_csv(RESULTS_PATH, RESULTS_FIELDS, result_rows)
+
+    return {"settled": settled, "not_found": len(pending) - settled, "date": yesterday}
 
 
 def pnl_summary() -> dict:
-    """
-    Return running P&L stats from results.csv.
-    """
-    if not RESULTS_PATH.exists():
+    """Return running P&L stats from settled results."""
+    rows = _load_results()
+    if not rows:
         return {}
 
-    total_bet = 0.0
-    total_profit = 0.0
-    wins = 0
-    losses = 0
-    pending = 0
-
-    with open(RESULTS_PATH, newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            bet = float(row.get("bet_dollars", 0) or 0)
-            pl = row.get("profit_loss", "")
-            total_bet += bet
-            if pl == "":
-                pending += 1
+    total_bet, total_profit, wins, losses, pending = 0.0, 0.0, 0, 0, 0
+    for row in rows:
+        bet = float(row.get("bet_dollars") or 0)
+        pl  = row.get("profit_loss", "")
+        total_bet += bet
+        if pl == "" or pl is None:
+            pending += 1
+        else:
+            profit = float(pl)
+            total_profit += profit
+            if profit > 0:
+                wins += 1
             else:
-                profit = float(pl)
-                total_profit += profit
-                if profit > 0:
-                    wins += 1
-                else:
-                    losses += 1
+                losses += 1
 
-    total_decided = wins + losses
+    decided = wins + losses
     return {
-        "total_picks":   total_decided + pending,
+        "total_picks":   decided + pending,
         "wins":          wins,
         "losses":        losses,
         "pending":       pending,
-        "win_rate":      wins / total_decided if total_decided else 0,
+        "win_rate":      wins / decided if decided else 0,
         "total_wagered": total_bet,
         "total_profit":  total_profit,
-        "roi_pct":       (total_profit / total_bet * 100) if total_bet > 0 else 0,
+        "roi_pct":       total_profit / total_bet * 100 if total_bet > 0 else 0,
+        "backend":       storage_backend(),
     }
+
+
+def get_picks_log() -> list[dict]:
+    """Return all picks ever logged, newest first."""
+    if _sheets.available():
+        rows = _sheets.read_rows("picks_log")
+    else:
+        if not LOG_PATH.exists():
+            return []
+        with open(LOG_PATH, newline="", encoding="utf-8") as f:
+            rows = list(csv.DictReader(f))
+    return list(reversed(rows))
 
 
 # ── Internal helpers ──────────────────────────────────────────────────────────
 
-def _append_rows(path: Path, fields: list[str], rows: list[dict]) -> None:
+def _pick_row(p: dict, today: str, model_version: str) -> dict:
+    return {
+        "date":            today,
+        "model_version":   model_version,
+        "player_name":     p.get("player_name", ""),
+        "team":            p.get("team", ""),
+        "opponent":        p.get("opponent", ""),
+        "pitcher":         p.get("pitcher_name", ""),
+        "lineup_spot":     p.get("lineup_spot", ""),
+        "model_prob_pct":  f"{p.get('model_prob', 0)*100:.2f}",
+        "market_prob_pct": f"{p.get('market_no_vig_prob', 0)*100:.2f}",
+        "ev_pct":          f"{p.get('ev_pct', 0):.2f}",
+        "edge_pct":        f"{p.get('edge_pct', 0):.2f}",
+        "american_odds":   p.get("best_american", ""),
+        "bet_dollars":     f"{p.get('bet_dollars', 0):.2f}",
+        "park_factor":     f"{p.get('park_factor', 1):.3f}",
+        "pitcher_factor":  f"{p.get('pitcher_factor', 1):.3f}",
+        "weather_factor":  f"{p.get('weather_factor', 1):.3f}",
+        "season_pa":       p.get("season_pa", ""),
+        "recent_pa":       p.get("recent_pa", ""),
+        "confidence":      f"{p.get('confidence', 0):.1f}",
+        "score":           f"{p.get('score', 0):.2f}",
+    }
+
+
+def _load_pending(date_str: str) -> list[dict]:
+    """Load picks for a date that haven't been settled yet."""
+    if _sheets.available():
+        all_picks = _sheets.read_rows("picks_log")
+        settled_names = {r.get("player_name") for r in _load_results()
+                         if str(r.get("date", "")) == date_str}
+        return [r for r in all_picks
+                if str(r.get("date", "")) == date_str
+                and r.get("player_name") not in settled_names]
+    else:
+        if not LOG_PATH.exists():
+            return []
+        with open(LOG_PATH, newline="", encoding="utf-8") as f:
+            all_picks = list(csv.DictReader(f))
+        # Check which are already settled
+        settled_names: set[str] = set()
+        if RESULTS_PATH.exists():
+            with open(RESULTS_PATH, newline="", encoding="utf-8") as f:
+                for row in csv.DictReader(f):
+                    if row.get("date") == date_str:
+                        settled_names.add(row.get("player_name", ""))
+        return [r for r in all_picks
+                if r.get("date") == date_str
+                and r.get("player_name") not in settled_names]
+
+
+def _load_results() -> list[dict]:
+    if _sheets.available():
+        return _sheets.read_rows("results")
+    if not RESULTS_PATH.exists():
+        return []
+    with open(RESULTS_PATH, newline="", encoding="utf-8") as f:
+        return list(csv.DictReader(f))
+
+
+def _append_csv(path: Path, fields: list[str], rows: list[dict]) -> None:
     write_header = not path.exists()
     with open(path, "a", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
@@ -182,29 +233,14 @@ def _read_existing_dates(path: Path) -> set[str]:
     if not path.exists():
         return set()
     with open(path, newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        return {row["date"] for row in reader if "date" in row}
+        return {row.get("date", "") for row in csv.DictReader(f)}
 
 
-def _load_pending_picks(date_str: str, model_version: str) -> list[dict]:
-    if not LOG_PATH.exists():
-        return []
-    rows = []
-    with open(LOG_PATH, newline="", encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            if row.get("date") == date_str and row.get("model_version") == model_version:
-                rows.append(row)
-    return rows
-
-
-def _check_player_hr_yesterday(player_id: int, date_str: str) -> bool | None:
-    """Query MLB Stats API game log for a specific date."""
+def _mlb_hr_result(player_id: int, date_str: str) -> bool | None:
     try:
         resp = requests.get(
             f"https://statsapi.mlb.com/api/v1/people/{player_id}/stats",
-            params={"stats": "gameLog", "group": "hitting",
-                    "season": date_str[:4]},
+            params={"stats": "gameLog", "group": "hitting", "season": date_str[:4]},
             timeout=10,
         )
         splits = resp.json().get("stats", [{}])[0].get("splits", [])

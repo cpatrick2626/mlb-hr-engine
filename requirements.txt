@@ -6,3 +6,5 @@ rich>=13.7.0
 python-dotenv>=1.0.0
 rapidfuzz>=3.6.0
 streamlit>=1.32.0
+gspread>=6.0.0
+google-auth>=2.0.0
