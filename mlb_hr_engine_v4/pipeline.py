@@ -36,6 +36,9 @@ def _build_player_profile(
     hr_rate    = prob.statcast_blended_rate(raw_rate, power_mult, season_pa)
     sc_summary = statcast_client.statcast_summary(player_id, batter_data)
 
+    streak_fac = prob.hot_streak_factor(short_form, season_stats)
+    k_fac      = prob.batter_k_suppressor(season_stats)
+
     exp_pa    = prob.expected_pa(lineup_spot)
     pk_factor = prob.park_factor(home_team, team == home_team)
     pk_factor = prob.fly_ball_adjusted_park_factor(pk_factor, season_stats)
@@ -44,15 +47,19 @@ def _build_player_profile(
     pitcher_name = pitcher.get("name", "TBD")
     pitcher_hand = ""
     pitcher_stats = {}
+    recent_pitcher_stats = {}
     if pitcher_id:
-        pitcher_stats = mlb_stats.get_pitcher_season_stats(pitcher_id)
+        pitcher_stats        = mlb_stats.get_pitcher_season_stats(pitcher_id)
+        recent_pitcher_stats = mlb_stats.get_pitcher_recent_stats(pitcher_id)
         info = mlb_stats.get_player_info(pitcher_id)
         pitcher_hand = info.get("pitchHand", {}).get("code", "")
 
-    hr_fb_fac  = prob.pitcher_hr_factor(pitcher_stats)
-    sc_pit_fac = statcast_client.pitcher_contact_suppressor(pitcher_id or 0, pitcher_data)
-    k_gb_fac   = prob.pitcher_k_gb_suppressor(pitcher_stats)
-    pit_factor = prob.pitcher_combined_factor(hr_fb_fac, sc_pit_fac, k_gb_fac)
+    hr_fb_fac      = prob.pitcher_hr_factor(pitcher_stats)
+    sc_pit_fac     = statcast_client.pitcher_contact_suppressor(pitcher_id or 0, pitcher_data)
+    k_gb_fac       = prob.pitcher_k_gb_suppressor(pitcher_stats)
+    pit_factor     = prob.pitcher_combined_factor(hr_fb_fac, sc_pit_fac, k_gb_fac)
+    recent_pit_fac = prob.pitcher_recent_factor(recent_pitcher_stats)
+    pit_factor     = max(0.55, min(1.60, pit_factor * recent_pit_fac))
 
     # Pitcher HR/9 for confidence threshold flag
     pit_ip_str = pitcher_stats.get("inningsPitched", "0.0")
@@ -77,8 +84,6 @@ def _build_player_profile(
     splits      = mlb_stats.get_player_platoon_splits(player_id)
     plat_factor = prob.platoon_factor(splits, pitcher_hand, batter_side, season_pa)
 
-    streak_fac = prob.hot_streak_factor(short_form, season_stats)
-
     # Stage 6: batter × pitcher interaction term (non-additive matchup synergy).
     # When an elite power hitter (high Statcast) faces a hittable pitcher (high
     # contact quality allowed), the combined effect exceeds simple multiplication.
@@ -86,8 +91,9 @@ def _build_player_profile(
     pitcher_excess = max(0.0, sc_pit_fac - 1.0)
     interaction    = batter_excess * pitcher_excess * 0.35
 
+    adjusted_rate = hr_rate * streak_fac * k_fac * (1.0 + interaction)
     model_prob = prob.game_hr_probability(
-        hr_rate * streak_fac * (1.0 + interaction), exp_pa,
+        adjusted_rate, exp_pa,
         pk_factor=pk_factor, pitcher_fac=pit_factor,
         w_factor=w_factor, plat_factor=plat_factor,
     )
@@ -110,6 +116,7 @@ def _build_player_profile(
         "short_form_pa": int(short_form.get("plateAppearances", 0)),
         "short_form_hr": int(short_form.get("homeRuns", 0)),
         "streak_factor": round(streak_fac, 3),
+        "k_factor": round(k_fac, 3),
         "avg_launch_angle": sc_summary.get("avg_launch_angle"),
     }
 
@@ -162,6 +169,14 @@ def _enrich_with_ev(player):
     )
     player["bet_dollars"] = sizing.bet_dollars(model_p, player["best_american"])
     return player
+
+
+def serializable(players: list) -> list:
+    """Strip non-JSON-serializable fields (weather dict, sets, bytes) for JSON dumps."""
+    return [
+        {k: v for k, v in p.items() if k != "weather" and not isinstance(v, (set, bytes))}
+        for p in players
+    ]
 
 
 # ── Public API ────────────────────────────────────────────────────────────────

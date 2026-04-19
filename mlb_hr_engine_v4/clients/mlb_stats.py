@@ -262,6 +262,42 @@ def get_player_platoon_splits(player_id: int) -> dict:
         return {}
 
 
+def get_pitcher_recent_stats(pitcher_id: int, days: int = 30) -> dict:
+    """Aggregate pitching stats over last `days` from game log. Used for recent-form adjustment."""
+    try:
+        data = _get(f"/people/{pitcher_id}/stats", {
+            "stats": "gameLog", "group": "pitching",
+            "season": config.CURRENT_SEASON,
+        })
+        splits = data.get("stats", [{}])[0].get("splits", [])
+        cutoff = date.today() - timedelta(days=days)
+        totals: dict = {"homeRuns": 0, "inningsPitched": 0.0, "battersFaced": 0,
+                        "strikeOuts": 0, "groundOuts": 0, "airOuts": 0}
+        for split in splits:
+            try:
+                gd = date.fromisoformat(split.get("date", "2000-01-01"))
+            except ValueError:
+                continue
+            if gd < cutoff:
+                continue
+            st = split.get("stat", {})
+            totals["homeRuns"]     += int(st.get("homeRuns", 0))
+            totals["battersFaced"] += int(st.get("battersFaced", 0))
+            totals["strikeOuts"]   += int(st.get("strikeOuts", 0))
+            totals["groundOuts"]   += int(st.get("groundOuts", 0))
+            totals["airOuts"]      += int(st.get("airOuts", 0))
+            ip_str = str(st.get("inningsPitched", "0.0"))
+            try:
+                parts = ip_str.split(".")
+                ip = int(parts[0]) + int(parts[1]) / 3.0 if len(parts) > 1 else float(ip_str)
+            except Exception:
+                ip = 0.0
+            totals["inningsPitched"] += ip
+        return totals
+    except Exception:
+        return {}
+
+
 def get_player_info(player_id: int) -> dict:
     """Minimal bio — bats, position, full name."""
     try:

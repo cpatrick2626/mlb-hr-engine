@@ -30,6 +30,7 @@ _SESSION.headers.update({
 LEAGUE_AVG_BARREL_RATE = 0.052    # barrel per PA (5.2%)
 LEAGUE_AVG_EXIT_VELO   = 88.9     # mph avg_hit_speed
 LEAGUE_AVG_HARD_HIT    = 0.394    # EV > 95 mph per BIP
+LEAGUE_AVG_XSLG        = 0.405    # expected SLG from contact quality (2024 MLB)
 
 # Conversion: ~57% of barrels result in HRs
 BARREL_TO_HR_RATE = 0.57
@@ -83,22 +84,28 @@ def _launch_angle_factor(avg_la: float) -> float:
 
 def batter_power_multiplier(player_id: int, batter_data: dict[int, dict]) -> float:
     """
-    Power multiplier: barrel% (60%) + exit velocity (25%) + launch angle (15%).
+    Power multiplier: barrel% (45%) + xSLG (20%) + launch angle (15%) + hard hit% (10%) + exit velo (10%).
+    Barrel% is most HR-specific. Hard hit% adds margin signal beyond barrel alone.
     >1.0 = above-average power; <1.0 = below-average.
     """
     stats = batter_data.get(player_id)
     if not stats:
         return 1.0
 
-    barrel_rate  = stats.get("barrel_rate", LEAGUE_AVG_BARREL_RATE)
-    ev           = stats.get("exit_velocity_avg", LEAGUE_AVG_EXIT_VELO)
-    avg_la       = stats.get("avg_launch_angle")
+    barrel_rate = stats.get("barrel_rate", LEAGUE_AVG_BARREL_RATE)
+    ev          = stats.get("exit_velocity_avg", LEAGUE_AVG_EXIT_VELO)
+    avg_la      = stats.get("avg_launch_angle")
+    xslg        = stats.get("xslg", LEAGUE_AVG_XSLG)
+    hard_hit    = stats.get("hard_hit_pct", LEAGUE_AVG_HARD_HIT)
 
-    barrel_mult  = barrel_rate / LEAGUE_AVG_BARREL_RATE
-    ev_mult      = 1.0 + (ev - LEAGUE_AVG_EXIT_VELO) / 100.0
-    la_mult      = _launch_angle_factor(float(avg_la)) if avg_la is not None else 1.0
+    barrel_mult   = barrel_rate / LEAGUE_AVG_BARREL_RATE
+    ev_mult       = 1.0 + (ev - LEAGUE_AVG_EXIT_VELO) / 100.0
+    la_mult       = _launch_angle_factor(float(avg_la)) if avg_la is not None else 1.0
+    xslg_mult     = xslg / LEAGUE_AVG_XSLG
+    hard_hit_mult = hard_hit / LEAGUE_AVG_HARD_HIT
 
-    composite = barrel_mult * 0.60 + ev_mult * 0.25 + la_mult * 0.15
+    composite = (barrel_mult * 0.45 + xslg_mult * 0.20 + la_mult * 0.15
+                 + hard_hit_mult * 0.10 + ev_mult * 0.10)
     return round(max(0.60, min(1.60, composite)), 3)
 
 
@@ -118,7 +125,7 @@ def pitcher_contact_suppressor(pitcher_id: int, pitcher_data: dict[int, dict]) -
     barrel_mult = barrel_against / LEAGUE_AVG_BARREL_RATE
     ev_mult = 1.0 + (ev_against - LEAGUE_AVG_EXIT_VELO) / 100.0
 
-    composite = barrel_mult * 0.65 + ev_mult * 0.35
+    composite = barrel_mult * 0.70 + ev_mult * 0.30
     return round(max(0.60, min(1.60, composite)), 3)
 
 
@@ -128,11 +135,13 @@ def statcast_summary(player_id: int, batter_data: dict[int, dict]) -> dict:
     brl   = stats.get("barrel_rate", 0)
     ev    = stats.get("exit_velocity_avg", 0)
     la    = stats.get("avg_launch_angle")
+    xslg  = stats.get("xslg")
     return {
         "barrel_pct":        f"{brl*100:.1f}%" if brl else "",
         "exit_velo":         f"{ev:.1f}" if ev else "",
         "hard_hit":          f"{stats.get('hard_hit_pct', 0)*100:.1f}%",
         "avg_launch_angle":  round(float(la), 1) if la is not None else None,
+        "xslg":              round(xslg, 3) if xslg is not None else None,
         "season":            stats.get("season", config.CURRENT_SEASON),
     }
 
@@ -183,6 +192,9 @@ def _parse_leaderboard_csv(raw: str) -> dict[int, dict]:
             avg_la_raw = row.get("avg_launch_angle") or row.get("launch_angle_avg")
             avg_la = float(avg_la_raw) if avg_la_raw else None
 
+            xslg_raw = row.get("xslg") or row.get("expected_slg")
+            xslg = float(xslg_raw) if xslg_raw else None
+
             result[pid] = {
                 "pa": bip,
                 "barrel_rate": barrel_rate_pa,
@@ -190,6 +202,7 @@ def _parse_leaderboard_csv(raw: str) -> dict[int, dict]:
                 "hard_hit_pct": hard_hit,
                 "exit_velocity_avg": ev,
                 "avg_launch_angle": avg_la,
+                "xslg": xslg,
                 "season": config.CURRENT_SEASON,
             }
         except (ValueError, KeyError):
