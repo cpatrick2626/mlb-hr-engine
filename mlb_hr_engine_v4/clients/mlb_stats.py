@@ -62,11 +62,13 @@ def get_today_schedule(target_date: Optional[str] = None) -> list[dict]:
                 "game_date": game_date,
                 "home_team": home_abbr,
                 "away_team": away_abbr,
+                "home_team_id": home.get("team", {}).get("id"),
+                "away_team_id": away.get("team", {}).get("id"),
                 "home_pitcher": _parse_pitcher(home_pitcher),
                 "away_pitcher": _parse_pitcher(away_pitcher),
                 "home_lineup": home_lineup,
                 "away_lineup": away_lineup,
-                "venue_team": home_abbr,  # home team = their park
+                "venue_team": home_abbr,
                 "status": status,
             })
 
@@ -242,6 +244,27 @@ def get_player_info(player_id: int) -> dict:
         return people[0] if people else {}
     except Exception:
         return {}
+
+
+def get_team_active_roster(team_id: int) -> list[dict]:
+    """
+    Fetch active roster batters as a lineup fallback when lineups aren't posted yet.
+    Returns non-pitchers only; lineup_spot=None so DEFAULT_PA is used.
+    """
+    try:
+        data = _get(f"/teams/{team_id}/roster", {"rosterType": "active"})
+        roster = []
+        for entry in data.get("roster", []):
+            if entry.get("position", {}).get("type") == "Pitcher":
+                continue
+            person = entry.get("person", {})
+            pid  = person.get("id")
+            name = person.get("fullName", "")
+            if pid and name:
+                roster.append({"id": pid, "name": name, "lineup_spot": None})
+        return roster
+    except Exception:
+        return []
 
 
 def _first_splits(data: dict) -> Optional[dict]:

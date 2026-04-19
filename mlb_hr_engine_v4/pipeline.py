@@ -161,12 +161,16 @@ def load_game_data(
     all_players = []
     for game in games:
         home, away = game["home_team"], game["away_team"]
-        for lineup, team, opp, opp_pitcher in [
-            (game["home_lineup"], home, away, game.get("away_pitcher", {})),
-            (game["away_lineup"], away, home, game.get("home_pitcher", {})),
+        for lineup, team, opp, team_id, opp_pitcher in [
+            (game["home_lineup"], home, away, game.get("home_team_id"), game.get("away_pitcher", {})),
+            (game["away_lineup"], away, home, game.get("away_team_id"), game.get("home_pitcher", {})),
         ]:
             if not lineup:
-                continue
+                # Lineup not posted yet — fall back to active roster
+                if team_id:
+                    lineup = mlb_stats.get_team_active_roster(team_id)
+                if not lineup:
+                    continue
             for batter in lineup:
                 pid  = batter.get("id")
                 name = batter.get("name", "Unknown")
