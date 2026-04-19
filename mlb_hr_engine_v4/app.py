@@ -101,13 +101,13 @@ def _load_data(target_date: str):
 
 def get_data():
     """Load or retrieve cached game data, showing a spinner on first load."""
-    target_date = config.TARGET_DATE or None
-    cache_key   = target_date or "today"
+    from datetime import date as _date
+    target_date = config.TARGET_DATE or _date.today().strftime("%Y-%m-%d")
 
-    if "data" not in st.session_state or st.session_state.get("cache_key") != cache_key:
+    if "data" not in st.session_state or st.session_state.get("cache_key") != target_date:
         with st.spinner("Loading today's games, odds, and player profiles… (takes 2-4 min first time)"):
-            st.session_state["data"]      = _load_data(cache_key)
-            st.session_state["cache_key"] = cache_key
+            st.session_state["data"]      = _load_data(target_date)
+            st.session_state["cache_key"] = target_date
 
     return st.session_state["data"]
 
