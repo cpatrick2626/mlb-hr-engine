@@ -3,11 +3,19 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+def _secret(key: str, default: str = "") -> str:
+    """Read from Streamlit secrets (cloud) or .env / env vars (local)."""
+    try:
+        import streamlit as st
+        return st.secrets.get(key, os.getenv(key, default))
+    except Exception:
+        return os.getenv(key, default)
+
 # ── API Keys ──────────────────────────────────────────────────────────────────
-ODDS_API_KEY: str = os.getenv("ODDS_API_KEY", "")
+ODDS_API_KEY: str = _secret("ODDS_API_KEY")
 
 # ── Bankroll ──────────────────────────────────────────────────────────────────
-BANKROLL: float = float(os.getenv("BANKROLL", "1000"))
+BANKROLL: float = float(_secret("BANKROLL", "1000"))
 
 # ── Date Override ─────────────────────────────────────────────────────────────
 TARGET_DATE: str | None = os.getenv("TARGET_DATE")   # None = use today
