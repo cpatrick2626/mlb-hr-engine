@@ -175,7 +175,105 @@ def tab_picks(data: dict):
                 "EV mph":  p.get("exit_velo", "--"),
                 "Score":   f"{p.get('score',0):.1f}",
             })
-        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+        # ── Compute ranges from raw values ──────────────────────────────────
+        def _rng(vals, fmt=".1f", suffix="", sign=False):
+            clean = [v for v in vals if v is not None]
+            if not clean:
+                return "N/A"
+            lo, hi = min(clean), max(clean)
+            f = f"+{fmt}" if sign and hi >= 0 else fmt
+            return f"{lo:{'+' + fmt if sign else fmt}}{suffix} → {hi:{'+' + fmt if sign else fmt}}{suffix}"
+
+        evs    = [p.get("ev_pct", 0) for p in ranked]
+        edges  = [p.get("edge_pct", 0) for p in ranked]
+        models = [p.get("model_prob", 0) * 100 for p in ranked]
+        mkts   = [p.get("market_no_vig_prob", 0) * 100 for p in ranked]
+        bets   = [p.get("bet_dollars", 0) for p in ranked]
+        confs  = [p.get("confidence", 0) for p in ranked]
+        scores = [p.get("score", 0) for p in ranked]
+
+        ev_rng    = _rng(evs,    sign=True, suffix="%")
+        edge_rng  = _rng(edges,  sign=True, suffix="%")
+        model_rng = _rng(models, suffix="%")
+        mkt_rng   = _rng(mkts,   suffix="%")
+        bet_rng   = f"${min(bets):.0f} → ${max(bets):.0f}" if bets else "N/A"
+        conf_rng  = _rng(confs,  fmt=".0f")
+        score_rng = _rng(scores, fmt=".1f")
+
+        # ── Visible range bar above table ───────────────────────────────────
+        range_items = [
+            ("Model%", model_rng), ("Mkt%", mkt_rng), ("Edge", edge_rng),
+            ("EV%", ev_rng), ("Bet $", bet_rng), ("Conf", conf_rng),
+        ]
+        range_html = " &nbsp;|&nbsp; ".join(
+            f"<span style='color:#8b949e'>{k}:</span> "
+            f"<span style='color:#e6edf3; font-weight:600'>{v}</span>"
+            for k, v in range_items
+        )
+        st.markdown(
+            f"<div style='font-size:11px; background:#161b22; border:1px solid #30363d; "
+            f"border-radius:6px; padding:6px 12px; margin-bottom:8px;'>"
+            f"📊 Today's ranges — {range_html}</div>",
+            unsafe_allow_html=True,
+        )
+
+        # ── Dataframe with column tooltips ──────────────────────────────────
+        st.dataframe(
+            pd.DataFrame(rows),
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "#":      st.column_config.TextColumn("#",
+                    help="Composite rank: 40% EV% + 35% Edge% + 25% Confidence"),
+                "Player": st.column_config.TextColumn("Player",
+                    help="Batter name"),
+                "Team":   st.column_config.TextColumn("Team",
+                    help="Batter's team abbreviation"),
+                "Opp":    st.column_config.TextColumn("Opp",
+                    help="Opposing team"),
+                "Pitcher":st.column_config.TextColumn("Pitcher",
+                    help="Probable starting pitcher the batter will face"),
+                "Odds":   st.column_config.TextColumn("Odds",
+                    help="Best available American odds across all bookmakers for HR (0.5+)"),
+                "Model%": st.column_config.TextColumn("Model%",
+                    help=f"Model's estimated HR probability today.\n"
+                         f"Poisson model using Statcast barrel%, exit velocity, "
+                         f"park factor, pitcher HR rate, weather & platoon splits.\n"
+                         f"Today's range: {model_rng}"),
+                "Mkt%":   st.column_config.TextColumn("Mkt%",
+                    help=f"Market's no-vig implied probability from bookmaker odds — "
+                         f"what the books believe the true HR probability is.\n"
+                         f"Today's range: {mkt_rng}"),
+                "Edge":   st.column_config.TextColumn("Edge",
+                    help=f"Model% minus Market%. Positive = model sees more value "
+                         f"than the market prices in. Min threshold: +{config.MIN_EDGE_PCT}%.\n"
+                         f"Today's range: {edge_rng}"),
+                "EV%":    st.column_config.TextColumn("EV%",
+                    help=f"Expected Value %. Average profit per $100 wagered if model "
+                         f"probabilities are correct. >10% strong, >20% excellent. "
+                         f"Min threshold: +{config.MIN_EV_PCT}%.\n"
+                         f"Today's range: {ev_rng}"),
+                "Bet $":  st.column_config.TextColumn("Bet $",
+                    help=f"Suggested bet size using Quarter-Kelly criterion "
+                         f"(capped at 5% of ${config.BANKROLL:,.0f} bankroll = "
+                         f"${config.BANKROLL * config.MAX_BET_PCT:.0f} max).\n"
+                         f"Today's range: {bet_rng}"),
+                "Conf":   st.column_config.TextColumn("Conf",
+                    help=f"Confidence score 0–100. Based on plate appearance sample size, "
+                         f"Statcast data availability, and model vs market agreement.\n"
+                         f"Today's range: {conf_rng}"),
+                "Brl%":   st.column_config.TextColumn("Brl%",
+                    help="Barrel rate % from Statcast (well-struck hard contact at ideal angle). "
+                         "League avg ~7%. Higher = more true power."),
+                "EV mph": st.column_config.TextColumn("EV mph",
+                    help="Average exit velocity in mph from Statcast. "
+                         "League avg ~88 mph. Higher = harder contact overall."),
+                "Score":  st.column_config.TextColumn("Score",
+                    help=f"Composite ranking score = 40% EV% + 35% Edge% + 25% Confidence.\n"
+                         f"Today's range: {score_rng}"),
+            },
+        )
 
     st.markdown('<div class="section-header">All Players — Model Probabilities</div>',
                 unsafe_allow_html=True)
