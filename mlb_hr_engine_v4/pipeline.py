@@ -23,8 +23,9 @@ def _build_player_profile(
     player_id, player_name, lineup_spot, team, opponent,
     home_team, pitcher, batter_data, pitcher_data,
 ):
-    season_stats = mlb_stats.get_player_season_stats(player_id)
-    recent_stats = mlb_stats.get_player_recent_stats(player_id)
+    season_stats    = mlb_stats.get_player_season_stats(player_id)
+    recent_stats    = mlb_stats.get_player_recent_stats(player_id)
+    short_form      = mlb_stats.get_player_short_form(player_id, days=14)
     season_pa = int(season_stats.get("plateAppearances", 0))
     recent_pa = int(recent_stats.get("plateAppearances", 0))
     if season_pa == 0 and recent_pa == 0:
@@ -53,6 +54,16 @@ def _build_player_profile(
     k_gb_fac   = prob.pitcher_k_gb_suppressor(pitcher_stats)
     pit_factor = prob.pitcher_combined_factor(hr_fb_fac, sc_pit_fac, k_gb_fac)
 
+    # Pitcher HR/9 for confidence threshold flag
+    pit_ip_str = pitcher_stats.get("inningsPitched", "0.0")
+    try:
+        parts  = str(pit_ip_str).split(".")
+        pit_ip = int(parts[0]) + int(parts[1]) / 3.0 if len(parts) > 1 else float(pit_ip_str)
+    except Exception:
+        pit_ip = 0.0
+    pit_hrs  = int(pitcher_stats.get("homeRuns", 0))
+    pitcher_hr9 = round((pit_hrs / pit_ip) * 9.0, 2) if pit_ip >= 5 else 0.0
+
     park_data = get_park(home_team)
     is_dome   = home_team in weather_client.DOME_TEAMS
     weather   = weather_client.get_game_weather(park_data["lat"], park_data["lon"])
@@ -66,8 +77,9 @@ def _build_player_profile(
     splits      = mlb_stats.get_player_platoon_splits(player_id)
     plat_factor = prob.platoon_factor(splits, pitcher_hand, batter_side, season_pa)
 
+    streak_fac = prob.hot_streak_factor(short_form, season_stats)
     model_prob = prob.game_hr_probability(
-        hr_rate, exp_pa,
+        hr_rate * streak_fac, exp_pa,
         pk_factor=pk_factor, pitcher_fac=pit_factor,
         w_factor=w_factor, plat_factor=plat_factor,
     )
@@ -86,6 +98,11 @@ def _build_player_profile(
         "park_factor": round(pk_factor, 3), "pitcher_factor": round(pit_factor, 3),
         "weather_factor": round(w_factor, 3), "platoon_factor": round(plat_factor, 3),
         "model_prob": round(model_prob, 4), "weather": weather,
+        "pitcher_hr9": pitcher_hr9,
+        "short_form_pa": int(short_form.get("plateAppearances", 0)),
+        "short_form_hr": int(short_form.get("homeRuns", 0)),
+        "streak_factor": round(streak_fac, 3),
+        "avg_launch_angle": sc_summary.get("avg_launch_angle"),
     }
 
 
@@ -123,9 +140,17 @@ def _enrich_with_ev(player):
     market_p = player.get("market_no_vig_prob", 0)
     player["ev_pct"]     = ev_engine.expected_value_pct(model_p, dec_odds)
     player["edge_pct"]   = ev_engine.edge_pct(model_p, market_p)
+
+    # Extract raw barrel rate for threshold bonus
+    barrel_raw  = float(str(player.get("barrel_pct", "0")).replace("%", "") or 0) / 100.0
+    pitcher_hr9 = float(player.get("pitcher_hr9", 0) or 0)
+
     player["confidence"] = prob.confidence_score(
         player.get("season_pa", 0), player.get("recent_pa", 0),
-        model_p, market_p, has_statcast=player.get("has_statcast", False),
+        model_p, market_p,
+        has_statcast=player.get("has_statcast", False),
+        barrel_rate=barrel_raw,
+        pitcher_hr9=pitcher_hr9,
     )
     player["bet_dollars"] = sizing.bet_dollars(model_p, player["best_american"])
     return player

@@ -68,31 +68,37 @@ def get_pitcher_statcast(year: int = None) -> dict[int, dict]:
     return data
 
 
+LEAGUE_AVG_LAUNCH_ANGLE = 12.5   # degrees — typical MLB avg launch angle
+
+def _launch_angle_factor(avg_la: float) -> float:
+    """
+    HR sweet spot is 20–35°. Penalise heavy ground-ball hitters (<15°)
+    and pop-up hitters (>40°). Gaussian centred at 27°, spread 11°.
+    """
+    import math
+    dist = avg_la - 27.0
+    raw  = math.exp(-(dist ** 2) / (2 * 11.0 ** 2))   # 1.0 at 27°, ~0.5 at 38°/16°
+    return max(0.86, min(1.13, 0.87 + 0.26 * raw))
+
+
 def batter_power_multiplier(player_id: int, batter_data: dict[int, dict]) -> float:
     """
-    Return a power multiplier based on barrel% vs league average.
-    >1.0 = above-average power (underpriced by raw HR/PA)
-    <1.0 = below-average power (overpriced by raw HR/PA)
-
-    Capped at [0.60, 1.60] to prevent extreme values.
+    Power multiplier: barrel% (60%) + exit velocity (25%) + launch angle (15%).
+    >1.0 = above-average power; <1.0 = below-average.
     """
     stats = batter_data.get(player_id)
     if not stats:
         return 1.0
 
-    barrel_rate = stats.get("barrel_rate", LEAGUE_AVG_BARREL_RATE)
-    ev = stats.get("exit_velocity_avg", LEAGUE_AVG_EXIT_VELO)
-    hard_hit = stats.get("hard_hit_pct", LEAGUE_AVG_HARD_HIT)
+    barrel_rate  = stats.get("barrel_rate", LEAGUE_AVG_BARREL_RATE)
+    ev           = stats.get("exit_velocity_avg", LEAGUE_AVG_EXIT_VELO)
+    avg_la       = stats.get("avg_launch_angle")
 
-    # Barrel-based component (strongest predictor)
-    barrel_mult = barrel_rate / LEAGUE_AVG_BARREL_RATE
+    barrel_mult  = barrel_rate / LEAGUE_AVG_BARREL_RATE
+    ev_mult      = 1.0 + (ev - LEAGUE_AVG_EXIT_VELO) / 100.0
+    la_mult      = _launch_angle_factor(float(avg_la)) if avg_la is not None else 1.0
 
-    # Exit velocity component (small secondary boost)
-    ev_mult = 1.0 + (ev - LEAGUE_AVG_EXIT_VELO) / 100.0
-
-    # Weighted composite
-    composite = barrel_mult * 0.70 + ev_mult * 0.30
-
+    composite = barrel_mult * 0.60 + ev_mult * 0.25 + la_mult * 0.15
     return round(max(0.60, min(1.60, composite)), 3)
 
 
@@ -119,13 +125,15 @@ def pitcher_contact_suppressor(pitcher_id: int, pitcher_data: dict[int, dict]) -
 def statcast_summary(player_id: int, batter_data: dict[int, dict]) -> dict:
     """Return display-ready Statcast summary for a player."""
     stats = batter_data.get(player_id, {})
-    brl = stats.get("barrel_rate", 0)
-    ev = stats.get("exit_velocity_avg", 0)
+    brl   = stats.get("barrel_rate", 0)
+    ev    = stats.get("exit_velocity_avg", 0)
+    la    = stats.get("avg_launch_angle")
     return {
-        "barrel_pct": f"{brl*100:.1f}%" if brl else "",
-        "exit_velo":  f"{ev:.1f}" if ev else "",
-        "hard_hit":   f"{stats.get('hard_hit_pct', 0)*100:.1f}%",
-        "season":     stats.get("season", config.CURRENT_SEASON),
+        "barrel_pct":        f"{brl*100:.1f}%" if brl else "",
+        "exit_velo":         f"{ev:.1f}" if ev else "",
+        "hard_hit":          f"{stats.get('hard_hit_pct', 0)*100:.1f}%",
+        "avg_launch_angle":  round(float(la), 1) if la is not None else None,
+        "season":            stats.get("season", config.CURRENT_SEASON),
     }
 
 
@@ -172,12 +180,16 @@ def _parse_leaderboard_csv(raw: str) -> dict[int, dict]:
             hard_hit = float(row.get("ev95percent", 0) or 0) / 100.0
             ev = float(row.get("avg_hit_speed", 0) or 0)
 
+            avg_la_raw = row.get("avg_launch_angle") or row.get("launch_angle_avg")
+            avg_la = float(avg_la_raw) if avg_la_raw else None
+
             result[pid] = {
                 "pa": bip,
                 "barrel_rate": barrel_rate_pa,
                 "barrel_bip_rate": barrel_bip_rate,
                 "hard_hit_pct": hard_hit,
                 "exit_velocity_avg": ev,
+                "avg_launch_angle": avg_la,
                 "season": config.CURRENT_SEASON,
             }
         except (ValueError, KeyError):

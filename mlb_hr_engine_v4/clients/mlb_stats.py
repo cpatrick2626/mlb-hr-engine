@@ -209,6 +209,38 @@ def _get_prior_pitcher_stats(pitcher_id: int) -> dict:
         return {}
 
 
+def get_player_short_form(player_id: int, days: int = 14) -> dict:
+    """
+    Aggregate hitting stats over the last `days` (default 14) from game log.
+    Used for hot/cold streak detection separate from the 30-day window.
+    """
+    try:
+        data = _get(f"/people/{player_id}/stats", {
+            "stats": "gameLog",
+            "group": "hitting",
+            "season": config.CURRENT_SEASON,
+        })
+        splits = data.get("stats", [{}])[0].get("splits", [])
+    except Exception:
+        return {}
+
+    cutoff = date.today() - timedelta(days=days)
+    totals = {"homeRuns": 0, "plateAppearances": 0, "atBats": 0, "games": 0}
+    for split in splits:
+        try:
+            gd = date.fromisoformat(split.get("date", "2000-01-01"))
+        except ValueError:
+            continue
+        if gd < cutoff:
+            continue
+        st = split.get("stat", {})
+        totals["homeRuns"]         += int(st.get("homeRuns", 0))
+        totals["plateAppearances"] += int(st.get("plateAppearances", 0))
+        totals["atBats"]           += int(st.get("atBats", 0))
+        totals["games"]            += 1
+    return totals
+
+
 def get_player_platoon_splits(player_id: int) -> dict:
     """
     L/R platoon HR splits for a batter.

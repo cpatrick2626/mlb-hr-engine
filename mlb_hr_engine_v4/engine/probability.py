@@ -213,17 +213,53 @@ def game_hr_probability(
     return max(0.001, min(0.999, 1.0 - math.exp(-lam)))
 
 
+def hot_streak_factor(short_form: dict, season_stats: dict) -> float:
+    """
+    Detect hot/cold form over the last 14 days vs season average.
+    Conservative — capped at ±8% to avoid over-reacting to small samples.
+    """
+    short_pa = int(short_form.get("plateAppearances", 0))
+    short_hr = int(short_form.get("homeRuns", 0))
+    season_pa = int(season_stats.get("plateAppearances", 0))
+    season_hr = int(season_stats.get("homeRuns", 0))
+
+    if short_pa < 15 or season_pa < 50:
+        return 1.0
+    season_rate = season_hr / season_pa
+    if season_rate < 0.005:
+        return 1.0
+
+    short_rate = short_hr / short_pa
+    relative   = short_rate / season_rate
+    # tanh softens extreme ratios; max ±8% adjustment
+    factor = 1.0 + 0.08 * math.tanh(math.log(max(relative, 0.05)) / 1.5)
+    return max(0.93, min(1.08, factor))
+
+
 def confidence_score(
     season_pa: int, recent_pa: int,
     model_prob: float, market_prob: float,
     has_statcast: bool = False,
+    barrel_rate: float = 0.0,
+    pitcher_hr9: float = 0.0,
 ) -> float:
-    """v2: +8 pts when Statcast data improves estimate reliability."""
-    sample_conf   = min(season_pa / 400.0, 1.0) * 35.0
-    recent_conf   = min(recent_pa / 80.0,  1.0) * 20.0
+    """
+    Confidence score 0-100.
+    Threshold bonuses: Barrel > 12% (+5), Pitcher HR/9 > 1.4 (+4).
+    """
+    sample_conf    = min(season_pa / 400.0, 1.0) * 35.0
+    recent_conf    = min(recent_pa / 80.0,  1.0) * 20.0
     statcast_bonus = 8.0 if has_statcast else 0.0
+
+    # Threshold bonuses (from the weighted factor list)
+    barrel_bonus  = 5.0 if barrel_rate > 0.12 else 0.0          # Barrel > 12%
+    pitcher_bonus = 4.0 if pitcher_hr9 > 1.4  else 0.0          # Pitcher HR/9 > 1.4
+
     edge = abs(model_prob - market_prob)
-    se = math.sqrt(model_prob * (1 - model_prob) / max(season_pa, 1))
-    snr = min(edge / (se + 0.01), 3.0) / 3.0
-    edge_conf = snr * 30.0
-    return round(min(sample_conf + recent_conf + edge_conf + statcast_bonus, 100.0), 1)
+    se   = math.sqrt(model_prob * (1 - model_prob) / max(season_pa, 1))
+    snr  = min(edge / (se + 0.01), 3.0) / 3.0
+    edge_conf = snr * 28.0
+
+    total = (sample_conf + recent_conf + edge_conf
+             + statcast_bonus + barrel_bonus + pitcher_bonus)
+    return round(min(total, 100.0), 1)
