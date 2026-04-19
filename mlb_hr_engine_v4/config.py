@@ -45,6 +45,7 @@ MIN_RECENT_PA: int = 30             # Need ≥30 recent PA to trust recent rate
 
 # League-average HR/9 for pitchers (2024 MLB)
 LEAGUE_AVG_HR9: float = 1.35
+LEAGUE_AVG_ISO: float = 0.155   # ISO = SLG - AVG; 2024 MLB average
 
 CURRENT_SEASON: int = 2026
 

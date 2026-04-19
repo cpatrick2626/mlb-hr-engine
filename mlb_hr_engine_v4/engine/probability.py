@@ -35,6 +35,19 @@ def base_hr_rate(season_stats: dict, recent_stats: dict) -> float:
     else:
         rate = regressed_season
 
+    # ISO adjustment: stabilizes in ~150-200 PA vs ~300 PA for HR/PA.
+    # Fades to zero influence once sample is large enough to trust HR/PA directly.
+    try:
+        slg = float(season_stats.get("sluggingPercentage", 0) or 0)
+        avg = float(season_stats.get("avg", 0) or 0)
+        iso = max(0.0, slg - avg)
+        if iso > 0 and season_pa >= 30:
+            iso_mult = max(0.70, min(1.50, iso / config.LEAGUE_AVG_ISO))
+            iso_trust = max(0.0, min(0.20, 1.0 - season_pa / 300.0))
+            rate = rate * (1.0 - iso_trust) + rate * iso_mult * iso_trust
+    except (ValueError, TypeError):
+        pass
+
     return max(rate, 0.001)
 
 
@@ -43,10 +56,43 @@ def statcast_blended_rate(raw_rate: float, statcast_power_mult: float, season_pa
     Blend raw HR/PA with Statcast power adjustment.
     When sample is small (early season), weight Statcast more — it stabilizes in ~50 PA.
     """
-    statcast_weight = max(0.20, 1.0 - (season_pa / 400.0))
+    statcast_weight = max(0.15, 1.0 - (season_pa / 350.0))
     raw_weight = 1.0 - statcast_weight
     statcast_rate = raw_rate * statcast_power_mult
     return max(raw_weight * raw_rate + statcast_weight * statcast_rate, 0.001)
+
+
+def batter_k_suppressor(season_stats: dict) -> float:
+    """
+    High K% → fewer balls in play → fewer HR opportunities.
+    One-sided: only suppresses above league avg (22.5%). Never boosts contact hitters
+    since low K% power is already captured by ISO and barrel%.
+    """
+    k  = int(season_stats.get("strikeOuts", 0))
+    pa = int(season_stats.get("plateAppearances", 0))
+    if pa < 50:
+        return 1.0
+    k_pct = k / pa
+    factor = 1.0 - max(0.0, 0.60 * (k_pct - 0.225))
+    return round(max(0.85, min(1.0, factor)), 3)
+
+
+def pitcher_recent_factor(recent_pitcher_stats: dict) -> float:
+    """
+    Blend last-30-day pitcher HR/9 into the season factor.
+    Caps at ±20% influence; fades below 10 IP (too small to trust).
+    Max 30% weight even at 40+ recent IP — season sample always dominates.
+    """
+    ip  = recent_pitcher_stats.get("inningsPitched", 0.0)
+    if ip < 10:
+        return 1.0
+    hrs = int(recent_pitcher_stats.get("homeRuns", 0))
+    recent_hr9 = (hrs / ip) * 9.0
+    reg_ip = 30
+    regressed = (recent_hr9 * ip + config.LEAGUE_AVG_HR9 * reg_ip) / (ip + reg_ip)
+    direction = config.LEAGUE_AVG_HR9 / max(regressed, 0.1)
+    trust = min(ip / 40.0, 0.30)
+    return round(max(0.80, min(1.20, 1.0 + trust * (direction - 1.0))), 3)
 
 
 def pitcher_hr_factor(pitcher_stats: dict) -> float:
@@ -131,7 +177,7 @@ def pitcher_combined_factor(
       35% Statcast contact quality against
       25% K% + GB% suppressor (ball-in-play profile)
     """
-    combined = pitcher_hr_fac * 0.40 + statcast_contact_fac * 0.35 + k_gb_fac * 0.25
+    combined = pitcher_hr_fac * 0.45 + statcast_contact_fac * 0.35 + k_gb_fac * 0.20
     return max(0.55, min(1.60, combined))
 
 
