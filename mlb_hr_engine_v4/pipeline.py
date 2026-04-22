@@ -162,8 +162,16 @@ def _enrich_with_ev(player):
     dec_odds = mkt.american_to_decimal(player["best_american"])
     model_p  = player["model_prob"]
     market_p = player.get("market_no_vig_prob", 0)
-    player["ev_pct"]     = ev_engine.expected_value_pct(model_p, dec_odds)
-    player["edge_pct"]   = ev_engine.edge_pct(model_p, market_p)
+
+    # edge_pct uses the full model signal (odds-independent)
+    player["edge_pct"] = ev_engine.edge_pct(model_p, market_p)
+
+    # EV% is capped so long-shot odds (+2000, +3000) can't amplify a small
+    # probability gap into absurd triple-digit EV values.
+    # Cap: model cannot claim more than 1.4x the market's true probability.
+    # At 1.4x the math produces max ~45% EV regardless of odds length.
+    ev_model_p = min(model_p, market_p * 1.4) if market_p > 0 else model_p
+    player["ev_pct"] = ev_engine.expected_value_pct(ev_model_p, dec_odds)
 
     # Extract raw barrel rate for threshold bonus
     barrel_raw  = float(str(player.get("barrel_pct", "0")).replace("%", "") or 0) / 100.0

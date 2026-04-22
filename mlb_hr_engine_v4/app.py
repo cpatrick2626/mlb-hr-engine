@@ -247,16 +247,16 @@ div[data-testid="stSelectbox"] label { font-size: 12px; color: #666; }
 # ── Rating helpers ─────────────────────────────────────────────────────────────
 
 def _pick_rating(ev_pct: float, edge_pct: float, model_prob: float, confidence: float) -> str:
-    # ONCE IN A LIFETIME: genuinely rare — needs high EV + meaningful edge + confident model.
-    # High odds (e.g. +2000) can produce huge EV% mathematically even on slim edge;
-    # requiring edge >= 12 and confidence >= 65 filters those out.
-    if ev_pct >= 50 and edge_pct >= 12 and confidence >= 65:
+    # EV% is capped at ~45% max (model prob capped at 1.4x market before calculation).
+    # Thresholds calibrated to that compressed scale:
+    #   5-15% EV  → bread-and-butter (model sees modest mispricing)
+    #   15-30% EV → strong edge (clear disagreement with confident signal)
+    #   30%+ EV   → once in a lifetime (rare: high EV + big edge + high confidence)
+    if ev_pct >= 30 and edge_pct >= 12 and confidence >= 65:
         return "🌟 ONCE IN A LIFETIME"
-    # STRONG EDGE: clear mispricing with a confident model signal.
-    if (ev_pct >= 30 and edge_pct >= 8 and confidence >= 50) or \
-       (ev_pct >= 15 and edge_pct >= 5 and confidence >= 50):
+    if (ev_pct >= 18 and edge_pct >= 7 and confidence >= 50) or \
+       (ev_pct >= 12 and edge_pct >= 5 and confidence >= 50):
         return "🔥 STRONG EDGE"
-    # BREAD AND BUTTER: any positive EV with minimum edge — bread-and-butter plays.
     if ev_pct >= 5 and edge_pct >= 2:
         return "✅ BREAD AND BUTTER"
     return "📊 MARGINAL"
