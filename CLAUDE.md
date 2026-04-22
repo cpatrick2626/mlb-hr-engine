@@ -4,11 +4,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-MLB HR Prop Betting Engine — predicts home run probabilities for every starting batter, prices them against market odds, identifies positive-EV bets, and recommends bet sizes. The repo contains four versioned iterations (`mlb_hr_engine_v1` through `v4`) plus a root-level comparison tool.
+Codex HR Engine — predicts home run probabilities for every starting batter, prices them against market odds, identifies positive-EV bets, and recommends bet sizes. The repo contains four versioned iterations (`codex_hr_engine_v1` through `v4`) plus a root-level comparison tool.
 
 ## Common Commands
 
-All commands run from within a specific version's directory (e.g., `cd mlb_hr_engine_v4`).
+All commands run from within a specific version's directory (e.g., `cd codex_hr_engine_v4`).
 
 ```bash
 # Run today's picks (CLI)
@@ -102,3 +102,4 @@ Every version follows the same flow:
 ### compare.py (root)
 
 Runs both v1 and v2 engines for the same date, diffs their outputs, and displays probability shifts, EV changes, and pick-set divergence in rich tables. Reads/writes `compare_v1.json` / `compare_v2.json` when `--dump-json` is passed to the individual engines.
+

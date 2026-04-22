@@ -1,5 +1,5 @@
 """
-compare.py — Side-by-side comparison of v1 vs v2 MLB HR Engine outputs.
+compare.py — Side-by-side comparison of v1 vs v2 Codex HR Engine outputs.
 
 Usage:
     python compare.py                    # runs both engines for today
@@ -23,8 +23,8 @@ from rich import box
 
 PYTHON = sys.executable
 BASE_DIR = Path(__file__).parent
-V1_DIR = BASE_DIR / "mlb_hr_engine_v1"
-V2_DIR = BASE_DIR / "mlb_hr_engine_v2"
+V1_DIR = BASE_DIR / "codex_hr_engine_v1"
+V2_DIR = BASE_DIR / "codex_hr_engine_v2"
 
 console = Console(legacy_windows=False, highlight=False, width=200)
 
@@ -114,7 +114,7 @@ def compare(v1_path: str, v2_path: str) -> None:
 
     # ── Header panel ──────────────────────────────────────────────────────────
     console.print(Panel(
-        f"[bold white]MLB HR ENGINE — v1 vs v2 COMPARISON[/bold white]\n"
+        f"[bold white]CODEX HR ENGINE — v1 vs v2 COMPARISON[/bold white]\n"
         f"[dim]Date: {date_str}  |  "
         f"V1: {v1_stats.get('players',0)} players, {v1_stats.get('qualified',0)} picks  |  "
         f"V2: {v2_stats.get('players',0)} players, {v2_stats.get('qualified',0)} picks  |  "
@@ -304,3 +304,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

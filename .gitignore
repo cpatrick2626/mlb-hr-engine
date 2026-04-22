@@ -14,18 +14,19 @@ build/
 .streamlit/secrets.toml
 
 # Tracking data (generated at runtime — not source code)
-mlb_hr_engine_v1/tracking/*.csv
-mlb_hr_engine_v2/tracking/*.csv
+codex_hr_engine_v1/tracking/*.csv
+codex_hr_engine_v2/tracking/*.csv
 
 # Compare script temp outputs
 compare_v1.json
 compare_v2.json
 
 # Manual odds (user-filled, not source code)
-mlb_hr_engine_v1/manual_odds.csv
-mlb_hr_engine_v2/manual_odds.csv
+codex_hr_engine_v1/manual_odds.csv
+codex_hr_engine_v2/manual_odds.csv
 
 # OS
 .DS_Store
 Thumbs.db
 desktop.ini
+

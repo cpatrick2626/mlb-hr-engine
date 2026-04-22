@@ -20,7 +20,7 @@ import requests
 from pathlib import Path
 
 # Use v4 modules
-sys.path.insert(0, str(Path(__file__).parent / "mlb_hr_engine_v4"))
+sys.path.insert(0, str(Path(__file__).parent / "codex_hr_engine_v4"))
 
 # Patch config to use 2025 data
 import config as _cfg
@@ -31,7 +31,7 @@ from engine import probability as prob
 
 MLB_API  = "https://statsapi.mlb.com/api/v1"
 SESSION  = requests.Session()
-SESSION.headers.update({"User-Agent": "MLB-HR-Engine-Test/1.0"})
+SESSION.headers.update({"User-Agent": "Codex-HR-Engine-Test/1.0"})
 MIN_PA   = 300   # qualified threshold
 
 
@@ -233,3 +233,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+
