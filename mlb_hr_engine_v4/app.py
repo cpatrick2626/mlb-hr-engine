@@ -699,16 +699,135 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
             for c in _COL_HELP
         }
 
+        # Full names + descriptions shown in the dropdown for each toggleable column
+        _COL_FULL = {
+            "Brl%":
+                "Brl%  ·  Barrel Rate — % of batted balls hit 98+ mph at 26-30° launch angle. "
+                "League avg ~8%. Single strongest Statcast predictor of HR power. "
+                "Effect: higher barrel% → larger power multiplier → higher model probability.",
+            "SwSp%":
+                "SwSp%  ·  Sweet Spot Rate — % of batted balls hit at 8-32° launch angle. "
+                "League avg ~34%. More balls in this optimal window = more HR opportunities. "
+                "Effect: contributes 10% weight to the Statcast power multiplier.",
+            "FB%":
+                "FB%  ·  Fly Ball Rate — % of batted balls that are fly balls. "
+                "League avg ~36%. Only fly balls can leave the park. "
+                "Effect: 15% weight in power multiplier; also scales how much park factor applies to this batter.",
+            "GB%":
+                "GB%  ·  Ground Ball Rate — % of batted balls that are grounders. "
+                "League avg ~44%. Grounders almost never become HRs. "
+                "Effect: high GB% suppresses the power multiplier and limits park factor benefit.",
+            "LD%":
+                "LD%  ·  Line Drive Rate — % of batted balls that are line drives. "
+                "League avg ~21%. Signals solid contact quality but not HR trajectory. "
+                "Effect: informational only — not directly used in the HR probability model.",
+            "Pull%":
+                "Pull%  ·  Pull Rate — % of batted balls pulled to the strong side. "
+                "League avg ~40%. Pull hitters access the shorter porch and benefit more from wind. "
+                "Effect: 8% weight in the power multiplier.",
+            "Oppo%":
+                "Oppo%  ·  Opposite-Field Rate — % of batted balls hit to the weak side. "
+                "High oppo% signals a contact/gap hitter, not a HR profile. "
+                "Effect: informational — model uses pull%, not oppo%, in the power multiplier.",
+            "Hard Hit%":
+                "Hard Hit%  ·  Hard-Hit Rate — % of batted balls hit 95+ mph exit velocity. "
+                "League avg ~38%. Strong correlation with HR output and overall power. "
+                "Effect: 10% weight in the Statcast power multiplier.",
+            "Exit Velo":
+                "Exit Velo  ·  Average Exit Velocity (mph) — how hard the batter hits the ball. "
+                "League avg ~88 mph. 90+ = above average; 95+ = elite power hitter. "
+                "Effect: 5% weight in the power multiplier; also gates how much barrel% is trusted.",
+            "Launch Angle":
+                "Launch Angle  ·  Average Launch Angle (degrees) — upward trajectory of batted balls. "
+                "Optimal HR zone: 25-35°. Too low = grounders; too high = pop-ups. "
+                "Effect: informational — not directly in the model but correlates strongly with barrel%.",
+            "PwrMult":
+                "PwrMult  ·  Statcast Power Multiplier (0.45–1.75) — composite of all 7 Statcast signals: "
+                "barrel% (38%), FB% (15%), xSLG (14%), sweet spot (10%), hard-hit% (10%), pull% (8%), exit velo (5%). "
+                "1.0 = league average. Effect: multiplied into the batter's HR rate before park/pitcher adjustments.",
+            "Park":
+                "Park  ·  Park HR Factor — historical HR rate at today's stadium vs league average. "
+                "1.0 = neutral. Coors = 1.28 (most HR-friendly). Petco = 0.89 (most suppressive). Oracle = 0.83. "
+                "Effect: multiplied into the combined factor; scaled by this batter's fly-ball tendency.",
+            "Pitcher":
+                "Pitcher  ·  Pitcher HR Factor (0.55–1.60) — how homer-prone today's starter is. "
+                "Blends HR/FB rate (40%), Statcast contact quality allowed (40%), K%+GB% suppressor (20%). "
+                "Effect: multiplied into the combined factor. Above 1.0 = pitcher gives up more HRs than average.",
+            "Weather":
+                "Weather  ·  Weather Factor (0.80–1.20) — impact of temperature and wind on HR probability. "
+                "Hot air is thinner = ball carries farther. Wind blowing out = strong boost; in = suppressor. "
+                "Effect: multiplied into the combined factor. Dome teams always receive 1.0.",
+            "Platoon":
+                "Platoon  ·  Platoon Split Factor — batter's HR rate vs this pitcher's hand vs their overall rate. "
+                "Bayesian-shrunk using actual split PA counts (50-PA standard constant). "
+                "Effect: multiplied into the combined factor. Above 1.0 = batter has a platoon advantage today.",
+            "Season PA":
+                "Season PA  ·  Season Plate Appearances — total PA this season. "
+                "Effect: drives how much the model regresses toward league average. "
+                "Low PA → heavy regression toward 0.033 HR/PA; high PA → model trusts the actual rate.",
+            "Season HR":
+                "Season HR  ·  Season Home Runs — total HRs hit this season. "
+                "Combined with Season PA to compute the raw season HR/PA rate before Bayesian adjustment.",
+            "Recent PA":
+                "Recent PA  ·  Recent Plate Appearances — PA in the last 20 games. "
+                "Effect: determines whether recent form gets blended into the rate. "
+                "Requires ≥20 recent PA for the recent rate to carry any weight (30% weight, season 70%).",
+            "HR Rate":
+                "HR Rate  ·  Blended HR/PA Rate — the model's final adjusted rate before game-day factors. "
+                "Combines Bayesian-regressed season rate, recent form blend, and Statcast power multiplier. "
+                "Effect: this is λ before being multiplied by park, pitcher, weather, platoon, and expected PA.",
+            "Streak":
+                "Streak  ·  Hot/Cold Streak Factor (0.93–1.08) — last 10-game HR rate vs full-season average. "
+                "Capped at ±8% to avoid overreacting to small samples. Requires ≥8 recent PA and ≥30 season PA. "
+                "Effect: multiplied into the adjusted rate before the Poisson calculation.",
+            "K Factor":
+                "K Factor  ·  Strikeout Suppressor (0.85–1.00) — high K% = fewer balls in play = fewer HR chances. "
+                "One-sided: only suppresses above league avg K% (22.5%). Never boosts contact hitters. "
+                "Effect: multiplied into the adjusted rate. Max suppression is −15% at very high K%.",
+            "Pitcher HR/9":
+                "Pitcher HR/9  ·  HRs Allowed per 9 Innings — season figure for today's starter. "
+                "League avg = 1.35. Above 1.5 = HR-prone target. Below 1.0 = strong HR suppressor. "
+                "Effect: feeds into the pitcher HR factor; also triggers a +4pt confidence bonus if > 1.4.",
+            "Exp PA":
+                "Exp PA  ·  Expected Plate Appearances — how many times this batter will bat today. "
+                "Lineup spot 1 = ~4.5 PA. Spot 9 = ~3.2 PA. Unknown lineup = 3.8 default. "
+                "Effect: directly scales λ — more PA = higher HR probability even at the same HR/PA rate.",
+            "Odds":
+                "Odds  ·  Best Available American Odds — highest payout line across all tracked sportsbooks. "
+                "Higher number = longer shot = bigger payout if the bet wins. "
+                "Effect: determines the decimal odds used in the EV% calculation.",
+            "Mkt%":
+                "Mkt%  ·  Market No-Vig Probability — the book's true estimated HR probability after vig removal. "
+                "Formula: raw implied prob ÷ (1 + 7.5% vig). HR props carry 7-10% juice on retail books. "
+                "Effect: used as the baseline. Model probability above this = positive edge.",
+            "Edge%":
+                "Edge%  ·  Model Edge — model probability minus market no-vig probability. "
+                "Uses the full model probability (not the EV-capped version). "
+                "Effect: primary odds-independent signal. Positive edge = model sees a mispriced line.",
+            "EV%":
+                "EV%  ·  Expected Value % — [p × (decimal odds−1) − (1−p)] × 100. "
+                "Capped: model prob is limited to 1.4× market before calculation, preventing long-shot odds "
+                "from inflating EV into the hundreds. Max ~45%. Positive EV = profitable long-run.",
+            "Confidence":
+                "Confidence  ·  Model Confidence Score (0–100) — how much to trust this probability estimate. "
+                "Built from: sample size (35 pts), recent PA (20 pts), edge signal-to-noise (28 pts), "
+                "Statcast availability (+8), barrel >12% (+5), pitcher HR/9 >1.4 (+4). "
+                "Effect: gates the OIAL and STRONG EDGE ratings — low confidence can't achieve top tiers.",
+        }
+
         # ── Column selector ───────────────────────────────────────────────────
         default_visible = st.session_state.get(
             "model_visible_cols",
             ["Brl%", "SwSp%", "FB%", "GB%", "Pull%", "Exit Velo", "PwrMult", "Park", "Pitcher"],
         )
         with st.expander("⚙️ Customize columns", expanded=False):
+            st.caption("Each option shows the full stat name, description, and how it affects the model. "
+                       "Player · Team · Spot · Vs · Model% are always shown.")
             selected_toggle = st.multiselect(
-                "Add or remove stat columns (Player / Team / Spot / Vs / Model% always shown):",
+                "Select columns to display:",
                 options=_TOGGLE_COLS,
                 default=default_visible,
+                format_func=lambda c: _COL_FULL.get(c, c),
                 key="model_col_picker",
             )
             st.session_state["model_visible_cols"] = selected_toggle
