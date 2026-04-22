@@ -15,6 +15,7 @@ from clients import statcast as statcast_client
 from data.park_factors import get_park
 from engine import market as mkt, probability as prob, ev as ev_engine, sizing, filters
 from output import ranker, parlay as parlay_engine
+from output.parlay import build_profile_parlays
 
 
 # ── Core helpers (same logic as v3 main.py, extracted here) ──────────────────
@@ -42,6 +43,15 @@ def _build_player_profile(
         statcast_pa=sc_pa, statcast_source=sc_source,
     )
     sc_summary = statcast_client.statcast_summary(player_id, batter_data, batter_bb_data)
+
+    # Derived contact-quality fields used by profile-based parlay scoring
+    xba_raw    = sc_stats.get("xba")
+    xslg_raw   = sc_stats.get("xslg")
+    actual_slg = float(season_stats.get("sluggingPercentage", 0) or 0)
+    xiso       = (round(float(xslg_raw) - float(xba_raw), 3)
+                  if (xslg_raw is not None and xba_raw is not None) else None)
+    xslg_diff  = (round(float(xslg_raw) - actual_slg, 3)
+                  if xslg_raw is not None else None)
 
     streak_fac = prob.hot_streak_factor(short_form, season_stats)
     k_fac      = prob.batter_k_suppressor(season_stats)
@@ -135,6 +145,11 @@ def _build_player_profile(
         "streak_factor": round(streak_fac, 3),
         "k_factor": round(k_fac, 3),
         "avg_launch_angle": sc_summary.get("avg_launch_angle"),
+        "xslg": sc_summary.get("xslg"),
+        "xba": xba_raw,
+        "xiso": xiso,
+        "xslg_diff": xslg_diff,
+        "actual_slg": round(actual_slg, 3),
     }
 
 
@@ -291,8 +306,9 @@ def load_game_data(
     for team in team_players:
         team_players[team].sort(key=lambda x: x.get("model_prob", 0), reverse=True)
 
-    # Auto parlay combos
-    auto_parlays = parlay_engine.build_auto_parlays(ranked)
+    # Auto parlay combos (legacy leg-count view + new profile-based view)
+    auto_parlays    = parlay_engine.build_auto_parlays(ranked)
+    profile_parlays = build_profile_parlays(all_players)
 
     return {
         "date":         game_date,
@@ -305,7 +321,8 @@ def load_game_data(
         "all_props":    all_props,
         "batter_data":  batter_data,
         "team_players": team_players,
-        "auto_parlays": auto_parlays,
+        "auto_parlays":    auto_parlays,
+        "profile_parlays": profile_parlays,
         "stats": {
             "games":     len(games),
             "players":   len(all_players),

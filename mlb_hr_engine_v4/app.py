@@ -910,11 +910,63 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
 # TAB 2 — PARLAYS
 # ══════════════════════════════════════════════════════════════════════════════
 def tab_parlays(data: dict):
-    ranked       = data.get("ranked", [])
-    team_players = data.get("team_players", {})
-    auto_parlays = data.get("auto_parlays", {})
+    ranked          = data.get("ranked", [])
+    team_players    = data.get("team_players", {})
+    auto_parlays    = data.get("auto_parlays", {})
+    profile_parlays = data.get("profile_parlays", [])
 
-    st.markdown('<div class="section-header">⚡ AUTO PARLAYS</div>', unsafe_allow_html=True)
+    # ── Profile-based parlays ──────────────────────────────────────────────────
+    st.markdown('<div class="section-header">🎯 PROFILE-BASED PARLAYS</div>',
+                unsafe_allow_html=True)
+    st.caption(
+        "Each section builds the best 3-leg combos for a specific power profile. "
+        "Players are scored on the relevant Statcast signals, then ranked 60% by EV "
+        "and 40% by profile fit. Requires players with both odds and Statcast data."
+    )
+
+    if not profile_parlays or all(not p.get("combos") for p in profile_parlays):
+        st.warning("Not enough players with odds + Statcast data for profile parlays. "
+                   "Refresh data after lineups post.")
+    else:
+        for profile in profile_parlays:
+            pname    = profile.get("name", "")
+            subtitle = profile.get("subtitle", "")
+            desc     = profile.get("desc", "")
+            combos   = profile.get("combos", [])
+
+            st.markdown(
+                f"<div style='margin:18px 0 4px 0;'>"
+                f"<span style='font-size:16px; font-weight:700; color:#f0f0f0;'>{pname}</span>"
+                f"<span style='font-size:11px; color:#888888; margin-left:10px;'>— {subtitle}</span>"
+                f"</div>"
+                f"<div style='font-size:11px; color:#666666; margin-bottom:8px;'>{desc}</div>",
+                unsafe_allow_html=True,
+            )
+
+            if not combos:
+                st.caption("Not enough qualifying players for this profile today.")
+                continue
+
+            cols = st.columns(len(combos))
+            for col, combo, i in zip(cols, combos, range(1, len(combos) + 1)):
+                with col:
+                    # Show profile score alongside combo label
+                    ps = combo.get("profile_score", 0)
+                    label = f"Combo {i}"
+                    html = _combo_html(combo, label)
+                    # Inject profile score line before closing div
+                    ps_line = (
+                        f'<div style="margin-top:4px; font-size:10px; color:#666666;">'
+                        f'Profile fit: <b style="color:#888888">{ps:.2f}</b></div>'
+                    )
+                    html = html.rstrip().rstrip("</div>") + ps_line + "</div>"
+                    st.markdown(html, unsafe_allow_html=True)
+
+    st.divider()
+
+    # ── Legacy leg-count parlays ───────────────────────────────────────────────
+    st.markdown('<div class="section-header">⚡ AUTO PARLAYS (BY LEG COUNT)</div>',
+                unsafe_allow_html=True)
     st.caption("Top 3 diverse combinations per leg count, ranked by combined EV%.")
 
     if not ranked or not any(auto_parlays.values()):
