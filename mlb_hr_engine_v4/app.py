@@ -1119,52 +1119,11 @@ def main():
     _min_ev   = float(st.session_state.get("min_ev",   config.MIN_EV_PCT))
     _min_edge = float(st.session_state.get("min_edge", config.MIN_EDGE_PCT))
 
-    # ── Title ─────────────────────────────────────────────────────────────────
-    st.markdown("""
-    <div style='
-        text-align:center; padding:40px 0 28px 0;
-        background: radial-gradient(ellipse at 50% 0%, rgba(198,1,31,0.18) 0%, transparent 65%);
-        border-bottom: 1px solid #1a0000;
-        margin-bottom: 4px;
-    '>
-      <div style='
-        font-size:10px; font-weight:800; color:#C6011F; letter-spacing:8px;
-        text-transform:uppercase; margin-bottom:14px;
-        text-shadow: 0 0 15px rgba(198,1,31,0.9);
-      '>⚾ &nbsp;&nbsp; MLB HOME RUN INTELLIGENCE &nbsp;&nbsp; ⚾</div>
-
-      <div style='
-        font-size:4.2rem; font-weight:900; letter-spacing:6px;
-        background: linear-gradient(110deg, #FF0000 0%, #FF5555 25%, #FFD700 50%, #FF5555 75%, #FF0000 100%);
-        background-size: 300% auto;
-        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-        background-clip: text;
-        margin: 0 0 4px 0; text-transform: uppercase; line-height: 1.05;
-        filter: drop-shadow(0 0 40px rgba(200,0,30,0.55));
-      '>26JIG23</div>
-
-      <div style='
-        font-size:1.55rem; font-weight:900; letter-spacing:10px;
-        color:#CC0018; text-transform:uppercase;
-        text-shadow: 0 0 20px rgba(198,1,31,0.5);
-        margin-bottom:16px;
-      '>PROP BETTING ENGINE</div>
-
-      <div style='
-        display:inline-flex; gap:24px; align-items:center;
-        font-size:9px; font-weight:700; color:#444444;
-        letter-spacing:4px; text-transform:uppercase;
-      '>
-        <span style="color:#C6011F;">▸</span> STATCAST POWERED
-        <span style="color:#333;">|</span>
-        <span style="color:#C6011F;">▸</span> REAL-TIME ODDS
-        <span style="color:#333;">|</span>
-        <span style="color:#C6011F;">▸</span> POISSON MODEL
-      </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-    st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+    # ── Banner ────────────────────────────────────────────────────────────────
+    _banner = Path(__file__).parent / "assets" / "banner.png"
+    if _banner.exists():
+        st.image(str(_banner), use_container_width=True)
+    st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
     tab1, tab2, tab3 = st.tabs([
         "📋  TODAY'S PICKS",
         "🎰  PARLAYS",
