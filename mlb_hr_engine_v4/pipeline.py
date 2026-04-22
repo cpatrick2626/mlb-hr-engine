@@ -34,7 +34,13 @@ def _build_player_profile(
 
     raw_rate   = prob.base_hr_rate(season_stats, recent_stats)
     power_mult = statcast_client.batter_power_multiplier(player_id, batter_data, batter_bb_data)
-    hr_rate    = prob.statcast_blended_rate(raw_rate, power_mult, season_pa)
+    sc_stats   = dict(batter_data.get(player_id) or {})
+    sc_pa      = sc_stats.get("pa", 0)
+    sc_source  = sc_stats.get("statcast_source", "current")
+    hr_rate    = prob.statcast_blended_rate(
+        raw_rate, power_mult, season_pa,
+        statcast_pa=sc_pa, statcast_source=sc_source,
+    )
     sc_summary = statcast_client.statcast_summary(player_id, batter_data, batter_bb_data)
 
     streak_fac = prob.hot_streak_factor(short_form, season_stats)
@@ -111,7 +117,9 @@ def _build_player_profile(
         "season_pa": season_pa, "season_hr": int(season_stats.get("homeRuns", 0)),
         "recent_pa": recent_pa, "hr_rate": round(hr_rate, 5),
         "raw_hr_rate": round(raw_rate, 5), "statcast_power_mult": power_mult,
-        "has_statcast": player_id in batter_data,
+        "has_statcast": (player_id in batter_data
+                         and batter_data[player_id].get("statcast_source", "current") == "current"),
+        "statcast_source": sc_source,
         "barrel_pct": sc_summary["barrel_pct"],
         "exit_velo": sc_summary["exit_velo"], "hard_hit": sc_summary["hard_hit"],
         "sweet_spot_pct": sc_summary["sweet_spot_pct"],

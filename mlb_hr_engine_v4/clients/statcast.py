@@ -46,6 +46,10 @@ _SESSION.headers.update({
     "Referer": "https://baseballsavant.mlb.com/",
 })
 
+# ── Prior-year fallback constants ─────────────────────────────────────────────
+PRIOR_YEAR_TRUST    = 0.85   # shrink composite deviation from 1.0 for prior-year-only data
+MIN_CURRENT_YEAR_PA = 30     # below this, blend current + prior year Statcast signals
+
 # ── League averages (2024 MLB) ─────────────────────────────────────────────────
 LEAGUE_AVG_BARREL_RATE = 0.052    # barrel% per PA
 LEAGUE_AVG_EXIT_VELO   = 88.9     # mph average exit velocity
@@ -67,15 +71,47 @@ BARREL_TO_HR_RATE      = 0.57     # ~57% of barrels become HRs
 def get_batter_statcast(year: int = None) -> dict[int, dict]:
     """
     Full batter dataset: statcast + batted-ball + expected stats merged per player_id.
-    Current year primary; prior year fills players not yet in current-year data.
+
+    Three-tier prior-year coverage (runs every call regardless of curr size):
+      Tier 1 — current-year data with >= MIN_CURRENT_YEAR_PA: full trust, no flag
+      Tier 2 — current-year data but sparse (< MIN_CURRENT_YEAR_PA PA): signals
+               linearly blended with prior-year; statcast_source = "blended"
+      Tier 3 — no current-year data at all: use prior-year with trust discount;
+               statcast_source = "prior"
     """
     year  = year or config.CURRENT_SEASON
     curr  = _merge_batter_sources(year)
-    if len(curr) < 200:
-        prior = _merge_batter_sources(year - 1)
-        for pid, stats in prior.items():
-            if pid not in curr:
-                curr[pid] = {**stats, "season": year - 1}
+    prior = _merge_batter_sources(year - 1)
+
+    _BLEND_KEYS = (
+        "barrel_rate", "exit_velocity_avg", "hard_hit_pct",
+        "sweet_spot_pct", "xslg", "fb_pct", "gb_pct",
+        "ld_pct", "pull_pct",
+    )
+
+    # Tier 3: player has zero current-year data
+    for pid, stats in prior.items():
+        if pid not in curr:
+            curr[pid] = {**stats, "season": year - 1, "statcast_source": "prior"}
+
+    # Tier 2: player has current-year data but PA count is too small to fully trust
+    for pid in list(curr.keys()):
+        if curr[pid].get("statcast_source"):
+            continue   # already flagged as prior
+        curr_pa = curr[pid].get("pa", 0)
+        if 0 < curr_pa < MIN_CURRENT_YEAR_PA and pid in prior:
+            trust   = curr_pa / MIN_CURRENT_YEAR_PA   # 0..1 over 0..30 PA
+            blended = dict(curr[pid])
+            for key in _BLEND_KEYS:
+                cv = curr[pid].get(key)
+                pv = prior[pid].get(key)
+                if cv is not None and pv is not None:
+                    blended[key] = cv * trust + pv * (1.0 - trust)
+                elif pv is not None:
+                    blended[key] = pv
+            blended["statcast_source"] = "blended"
+            curr[pid] = blended
+
     return curr
 
 
@@ -148,9 +184,17 @@ def batter_power_multiplier(
         + hard_hit_mult   * 0.10
         + ev_mult         * 0.05
     )
-    # Lower composite floor (0.45) lets true zero-barrel profiles read lower without
-    # affecting players already above the threshold. Cap unchanged at 1.75.
-    return round(_clamp(composite, 0.45, 1.75), 3)
+    raw_composite = _clamp(composite, 0.45, 1.75)
+
+    # Prior-year-only data: shrink the deviation from 1.0 by PRIOR_YEAR_TRUST.
+    # Year-to-year correlation on power metrics is ~0.75-0.80; 0.85 is slightly
+    # optimistic but avoids under-predicting established power hitters.
+    # "blended" source already has signals weighted by current/prior PA mix — no extra discount.
+    source = stats.get("statcast_source", "current")
+    if source == "prior":
+        raw_composite = 1.0 + PRIOR_YEAR_TRUST * (raw_composite - 1.0)
+
+    return round(_clamp(raw_composite, 0.45, 1.75), 3)
 
 
 def pitcher_contact_suppressor(
@@ -225,6 +269,7 @@ def statcast_summary(
         "pull_pct":        _pct("pull_pct"),
         "oppo_pct":        _pct("oppo_pct"),
         "season":          stats.get("season", config.CURRENT_SEASON),
+        "statcast_source": stats.get("statcast_source", "current"),
     }
 
 
@@ -272,7 +317,7 @@ def _fetch_leaderboard(player_type: str, year: int) -> dict[int, dict]:
         resp = _SESSION.get(url, timeout=25)
         if resp.status_code != 200:
             return {}
-        return _parse_statcast_csv(resp.text)
+        return _parse_statcast_csv(resp.text, year=year)
     except Exception as e:
         print(f"[statcast] leaderboard fetch failed ({player_type} {year}): {e}")
         return {}
@@ -312,7 +357,8 @@ def _fetch_expected_stats(player_type: str, year: int) -> dict[int, dict]:
 
 # ── CSV parsers ────────────────────────────────────────────────────────────────
 
-def _parse_statcast_csv(raw: str) -> dict[int, dict]:
+def _parse_statcast_csv(raw: str, year: int = None) -> dict[int, dict]:
+    _year = year or config.CURRENT_SEASON
     result: dict[int, dict] = {}
     reader = csv.DictReader(io.StringIO(raw.lstrip("\ufeff")))
 
@@ -343,7 +389,7 @@ def _parse_statcast_csv(raw: str) -> dict[int, dict]:
             xslg        = _f(row, "xslg", "expected_slg", "xSLG")
             pa          = _f(row, "pa", "attempts")
 
-            row_out: dict = {"season": config.CURRENT_SEASON}
+            row_out: dict = {"season": _year}
             if barrel_rate is not None: row_out["barrel_rate"]       = barrel_rate
             if barrel_bip  is not None: row_out["barrel_bip_rate"]   = barrel_bip
             if ev          is not None: row_out["exit_velocity_avg"] = ev

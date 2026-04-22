@@ -84,10 +84,15 @@ def run_model(batters: list[dict], sc_data: dict[int, dict]) -> list[dict]:
 
         raw_rate   = prob.base_hr_rate(ss, rs)
         power_mult = statcast_client.batter_power_multiplier(pid, sc_data)
-        model_rate = prob.statcast_blended_rate(raw_rate, power_mult, b["pa"])
+        sc_stats   = sc_data.get(pid, {})
+        sc_pa      = sc_stats.get("pa", 0)
+        sc_source  = sc_stats.get("statcast_source", "current")
+        model_rate = prob.statcast_blended_rate(
+            raw_rate, power_mult, b["pa"],
+            statcast_pa=sc_pa, statcast_source=sc_source,
+        )
 
-        has_sc   = pid in sc_data
-        sc_stats = sc_data.get(pid, {})
+        has_sc = (pid in sc_data and sc_source == "current")
 
         results.append({
             **b,

@@ -55,7 +55,13 @@ def base_hr_rate(season_stats: dict, recent_stats: dict) -> float:
     return max(rate, 0.001)
 
 
-def statcast_blended_rate(raw_rate: float, statcast_power_mult: float, season_pa: int) -> float:
+def statcast_blended_rate(
+    raw_rate: float,
+    statcast_power_mult: float,
+    season_pa: int,
+    statcast_pa: int = 0,
+    statcast_source: str = "current",
+) -> float:
     """
     Blend raw HR/PA with Statcast power adjustment.
     When sample is small (early season), weight Statcast more — it stabilizes in ~50 PA.
@@ -63,11 +69,20 @@ def statcast_blended_rate(raw_rate: float, statcast_power_mult: float, season_pa
     extra weight so true contact/speed players get pulled down more aggressively.
     This is one-sided — we don't amplify the upside here, as the adaptive regression
     already lets large-sample power hitters rise closer to their true rate.
+
+    statcast_pa: PA count in the Statcast source (0 = unknown or prior-year full season).
+    statcast_source: "current", "blended", or "prior".
+      - "current" with statcast_pa < 30: halve Statcast weight — multiplier built from
+        too few batted balls to trust fully.
+      - "prior" or "blended": prior-year data is a full season; use full base weight.
     """
     pa_weight = max(0.15, 1.0 - (season_pa / 350.0))
-    # One-sided boost: only raise Statcast weight when the multiplier signals
-    # suppression (mult < 1). This pulls true contact/speed players down harder
-    # without amplifying elite HR hitters who already benefit from adaptive regression.
+
+    # Reduce Statcast weight when current-year sample is sparse.
+    # Prior/blended data is a full season — it earns full base weight.
+    if statcast_source == "current" and 0 < statcast_pa < 30:
+        pa_weight *= 0.50
+
     suppression_signal = max(0.0, 1.0 - statcast_power_mult)
     boost = min(0.20, 0.40 * suppression_signal)
     statcast_weight = min(0.65, pa_weight + boost)
