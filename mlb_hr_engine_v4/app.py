@@ -17,6 +17,34 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# PWA + mobile home-screen support
+# iOS: "Add to Home Screen" in Safari makes this launch full-screen, no browser chrome
+# Android: Chrome will prompt "Install App" automatically with these tags
+st.markdown("""
+<head>
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="26JIG23">
+<meta name="theme-color" content="#0d0d0d">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<link rel="apple-touch-icon" href="https://em-content.zobj.net/source/apple/354/baseball_26be.png">
+<link rel="manifest" href="data:application/json,{
+  &quot;name&quot;: &quot;26JIG23 Prop Engine&quot;,
+  &quot;short_name&quot;: &quot;26JIG23&quot;,
+  &quot;start_url&quot;: &quot;/&quot;,
+  &quot;display&quot;: &quot;standalone&quot;,
+  &quot;background_color&quot;: &quot;#0d0d0d&quot;,
+  &quot;theme_color&quot;: &quot;#0d0d0d&quot;,
+  &quot;icons&quot;: [{
+    &quot;src&quot;: &quot;https://em-content.zobj.net/source/apple/354/baseball_26be.png&quot;,
+    &quot;sizes&quot;: &quot;192x192&quot;,
+    &quot;type&quot;: &quot;image/png&quot;
+  }]
+}">
+</head>
+""", unsafe_allow_html=True)
+
 sys.path.insert(0, str(Path(__file__).parent))
 
 import config
@@ -905,6 +933,25 @@ def main():
                     )
                 except Exception as e:
                     st.error(f"Error: {e}")
+
+        st.divider()
+
+        with st.expander("📱 Add to Home Screen"):
+            st.markdown("""
+**iPhone (Safari)**
+1. Open the app URL in Safari
+2. Tap the **Share** button (box with arrow)
+3. Scroll down → tap **Add to Home Screen**
+4. Tap **Add** — done
+
+**Android (Chrome)**
+1. Open the app URL in Chrome
+2. Tap the **⋮** menu (top-right)
+3. Tap **Add to Home screen**
+4. Tap **Add** — done
+
+The app will open full-screen like a native app.
+""")
 
         st.divider()
         # API key status indicator
