@@ -593,31 +593,128 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
             },
         )
 
-    st.markdown('<div class="section-header">All Players — Model Probabilities</div>',
-                unsafe_allow_html=True)
+    st.markdown(
+        '<div class="section-header" title="'
+        "Raw model output for every starting batter today, ranked by HR probability. "
+        "No EV or market filter — this is pure model signal. "
+        "Use it to find matchup targets before odds are posted, or to cross-check "
+        "why a player did or didn't make the qualified picks list."
+        '">'
+        "All Players \u2014 Model Probabilities"
+        "&nbsp;<span style='font-size:13px; opacity:0.45; cursor:help;'>&#9432;</span>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
     all_by_model = data.get("all_by_model", [])
     if all_by_model:
-        model_rows = []
-        for p in all_by_model[:30]:
-            pit_fac  = p.get("pitcher_factor", 1.0)
-            plat_fac = p.get("platoon_factor", 1.0)
-            model_rows.append({
-                "Player":   p.get("player_name", ""),
-                "Team":     p.get("team", ""),
-                "Spot":     _spot_label(p.get("lineup_spot"), plat_fac),
-                "Vs":       _pitcher_label(p.get("pitcher_name", "TBD"), pit_fac, plat_fac),
-                "Model%":   f"{p.get('model_prob',0)*100:.1f}%",
-                "Brl%":     p.get("barrel_pct", "--"),
-                "SwSp%":    p.get("sweet_spot_pct", "--"),
-                "FB%":      p.get("fb_pct", "--"),
-                "GB%":      p.get("gb_pct", "--"),
-                "Pull%":    p.get("pull_pct", "--"),
-                "Exit Velo":p.get("exit_velo", "--"),
-                "PwrMult":  f"{p.get('statcast_power_mult',1):.2f}",
-                "Park":     f"{p.get('park_factor',1):.2f}",
-                "Pitcher":  f"{p.get('pitcher_factor',1):.2f}",
-            })
-        st.dataframe(pd.DataFrame(model_rows), use_container_width=True, hide_index=True)
+        PRIME_FLOOR = 0.15   # 15%+ = model sees genuine elevated HR probability
+
+        def _model_rows(players):
+            rows = []
+            for p in players:
+                pit_fac  = p.get("pitcher_factor", 1.0)
+                plat_fac = p.get("platoon_factor", 1.0)
+                rows.append({
+                    "Player":    p.get("player_name", ""),
+                    "Team":      p.get("team", ""),
+                    "Spot":      _spot_label(p.get("lineup_spot"), plat_fac),
+                    "Vs":        _pitcher_label(p.get("pitcher_name", "TBD"), pit_fac, plat_fac),
+                    "Model%":    f"{p.get('model_prob',0)*100:.1f}%",
+                    "Brl%":      p.get("barrel_pct", "--"),
+                    "SwSp%":     p.get("sweet_spot_pct", "--"),
+                    "FB%":       p.get("fb_pct", "--"),
+                    "GB%":       p.get("gb_pct", "--"),
+                    "Pull%":     p.get("pull_pct", "--"),
+                    "Exit Velo": p.get("exit_velo", "--"),
+                    "PwrMult":   f"{p.get('statcast_power_mult',1):.2f}",
+                    "Park":      f"{p.get('park_factor',1):.2f}",
+                    "Pitcher":   f"{p.get('pitcher_factor',1):.2f}",
+                })
+            return rows
+
+        _col_cfg = {
+            "Model%":    st.column_config.TextColumn("Model%",
+                help="Poisson HR probability for today's game: P(HR≥1) = 1−e^(−λ). "
+                     "Accounts for batter power, park, pitcher, weather, and platoon."),
+            "Brl%":      st.column_config.TextColumn("Brl%",
+                help="Barrel rate (Statcast). Balls hit 98+ mph at 26-30° launch angle. "
+                     "League avg ~8%. Strong predictor of HR power."),
+            "SwSp%":     st.column_config.TextColumn("SwSp%",
+                help="Sweet spot rate — balls hit at 8-32° launch angle. "
+                     "League avg ~34%. Higher = more balls in the HR window."),
+            "FB%":       st.column_config.TextColumn("FB%",
+                help="Fly ball rate (% of batted balls). League avg ~36%. "
+                     "More fly balls = more HR opportunities."),
+            "GB%":       st.column_config.TextColumn("GB%",
+                help="Ground ball rate. High GB% suppresses HR output — grounders don't leave the park."),
+            "Pull%":     st.column_config.TextColumn("Pull%",
+                help="Pull rate. League avg ~40%. Pull hitters access the short porch and gain from wind."),
+            "Exit Velo": st.column_config.TextColumn("Exit Velo",
+                help="Average exit velocity (mph). League avg ~88 mph. "
+                     "90+ is above average; 95+ is elite power territory."),
+            "PwrMult":   st.column_config.TextColumn("PwrMult",
+                help="Statcast composite power multiplier (0.45–1.75). "
+                     "Blends barrel%, FB%, xSLG, pull%, sweet spot, hard-hit%, and exit velo. "
+                     "1.0 = league average. Above 1.0 = above-average power profile."),
+            "Park":      st.column_config.TextColumn("Park",
+                help="Park HR factor for today's stadium. 1.0 = neutral. "
+                     "Coors = 1.28, Petco = 0.89. Applied to batter's fly-ball tendency."),
+            "Pitcher":   st.column_config.TextColumn("Pitcher",
+                help="Combined pitcher HR factor (0.55–1.60). "
+                     "Blends HR/FB rate, Statcast contact quality allowed, K%, and GB%. "
+                     "Above 1.0 = pitcher allows more HRs than average."),
+        }
+
+        prime = [p for p in all_by_model if p.get("model_prob", 0) >= PRIME_FLOOR]
+        watch = [p for p in all_by_model if p.get("model_prob", 0) < PRIME_FLOOR][:20]
+
+        if prime:
+            st.markdown(
+                '<div style="margin:10px 0 4px 0;" '
+                'title="'
+                "PRIME TARGETS are players where the model computes a 15%+ HR probability for today's game. "
+                "This means multiple factors are stacking in their favor: strong power metrics (barrel%, exit velo, FB%), "
+                "a hitter-friendly park, a pitcher who gives up fly balls, and/or a favorable platoon split. "
+                "These are the names to prioritize when shopping for HR prop lines. "
+                "Not all will have listed odds — some may only appear in the WATCH LIST if the market hasn't priced them yet."
+                '">'
+                "<span style='font-size:14px; font-weight:800; color:#FFD700; letter-spacing:1.5px;'>"
+                "&#11088; PRIME TARGETS</span>"
+                "&nbsp;&nbsp;<span style='font-size:11px; color:#888; font-style:italic;'>"
+                f"Model HR probability \u226515% \u00b7 {len(prime)} players \u00b7 hover for details"
+                "</span></div>",
+                unsafe_allow_html=True,
+            )
+            st.dataframe(
+                pd.DataFrame(_model_rows(prime)),
+                use_container_width=True, hide_index=True,
+                column_config=_col_cfg,
+            )
+
+        if watch:
+            st.markdown(
+                '<div style="margin:14px 0 4px 0;" '
+                'title="'
+                "WATCH LIST players have a model HR probability below 15%. "
+                "The model sees a plausible scenario — manageable pitcher, decent park, some power — "
+                "but the profile is limited by a weak power metric (low barrel%, high GB%), a small sample size, "
+                "or a neutral park suppressing the ceiling. "
+                "Long-shot value plays often live here: the odds can be +1000 or better on a player "
+                "the model gives 8-12%, which creates big EV if the market is sleeping on a matchup."
+                '">'
+                "<span style='font-size:14px; font-weight:800; color:#9E9E9E; letter-spacing:1.5px;'>"
+                "&#128203; WATCH LIST</span>"
+                "&nbsp;&nbsp;<span style='font-size:11px; color:#666; font-style:italic;'>"
+                f"Model HR probability &lt;15% \u00b7 {len(watch)} players shown \u00b7 hover for details"
+                "</span></div>",
+                unsafe_allow_html=True,
+            )
+            st.dataframe(
+                pd.DataFrame(_model_rows(watch)),
+                use_container_width=True, hide_index=True,
+                column_config=_col_cfg,
+            )
 
 
 # ══════════════════════════════════════════════════════════════════════════════
