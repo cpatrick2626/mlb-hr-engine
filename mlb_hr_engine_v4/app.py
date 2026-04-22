@@ -219,12 +219,16 @@ div[data-testid="stSelectbox"] label { font-size: 12px; color: #666; }
 # ── Rating helpers ─────────────────────────────────────────────────────────────
 
 def _pick_rating(ev_pct: float, edge_pct: float, model_prob: float, confidence: float) -> str:
-    if ev_pct >= 45 or (ev_pct >= 35 and edge_pct >= 20 and confidence >= 80):
+    # Tiers calibrated to realistic HR prop market edge distribution:
+    #   5-10% EV  → bread-and-butter (book mildly mispriced, ~1-3pp model edge)
+    #   10-15% EV → strong edge (meaningful mispricing, ~3-5pp model edge)
+    #   15%+ EV   → once in a lifetime (5pp+ edge, truly rare vs sharp lines)
+    if ev_pct >= 15 or (ev_pct >= 12 and edge_pct >= 7 and confidence >= 75):
         return "🌟 ONCE IN A LIFETIME"
-    if ev_pct >= 20 and edge_pct >= 10:
-        return "🔥 AMAZING"
-    if ev_pct >= 10 and edge_pct >= 5:
-        return "✅ GOOD"
+    if ev_pct >= 10 and edge_pct >= 4:
+        return "🔥 STRONG EDGE"
+    if ev_pct >= 5 and edge_pct >= 2:
+        return "✅ BREAD AND BUTTER"
     return "📊 MARGINAL"
 
 
@@ -518,7 +522,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
             hide_index=True,
             column_config={
                 "Rating":  st.column_config.TextColumn("Rating",
-                    help="🌟 Once in a lifetime (EV≥45%, or EV≥35%+Edge≥20%+Conf≥80) | 🔥 Amazing (EV≥20%) | ✅ Good (EV≥10%) | 📊 Marginal"),
+                    help="🌟 Once in a lifetime (EV≥15%) | 🔥 Strong edge (EV≥10%) | ✅ Bread & butter (EV≥5%) | 📊 Marginal"),
                 "#":       st.column_config.TextColumn("#",
                     help="Composite rank: 40% EV% + 35% Edge% + 25% Confidence"),
                 "Player":  st.column_config.TextColumn("Player"),

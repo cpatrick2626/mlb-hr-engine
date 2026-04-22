@@ -46,21 +46,24 @@ def no_vig_prob_two_sided(over_american: int, under_american: int) -> tuple[floa
     return p_over / total, p_under / total
 
 
-def no_vig_prob_one_sided(prices: Sequence[int], vig_factor: float = 0.045) -> float:
+def no_vig_prob_one_sided(prices: Sequence[int], vig_factor: float = 0.075) -> float:
     """
     Remove vig from a one-sided market (HR yes only, no listed 'no HR' line).
-    Strategy: use the consensus best-available price and back out a ~4.5% vig.
+    Strategy: use the best-available price and back out the vig.
 
-    vig_factor 0.045 ≈ typical juice on MLB player props.
+    vig_factor 0.075 = 7.5% — empirically measured on FanDuel/DraftKings HR props.
+    (Retail sportsbooks charge 7-10% on player props vs ~4.5% on sides/totals.)
+    Using the correct vig is critical: understating it inflates the no-vig prob,
+    which deflates our edge and hides real +EV plays.
     """
     if not prices:
         return 0.0
-    # Best price for bettor = lowest implied probability = highest payout odds
+    # Best price for bettor = highest payout = lowest implied probability
     best_implied = min(implied_prob(p) for p in prices)
     return best_implied / (1.0 + vig_factor)
 
 
-def consensus_no_vig(prices: Sequence[int], vig_factor: float = 0.045) -> float:
+def consensus_no_vig(prices: Sequence[int], vig_factor: float = 0.075) -> float:
     """Average implied probability across books, then remove vig."""
     if not prices:
         return 0.0

@@ -26,8 +26,8 @@ MAX_BET_PCT: float = 0.05      # Hard cap at 5% of bankroll per bet
 MIN_BET_DOLLARS: float = 5.0
 
 # ── Filter Thresholds ─────────────────────────────────────────────────────────
-MIN_EV_PCT: float = 3.0
-MIN_EDGE_PCT: float = 1.5
+MIN_EV_PCT: float = 5.0    # Bread-and-butter floor; anything below is noise
+MIN_EDGE_PCT: float = 2.0  # Minimum model-vs-market edge to surface a play
 MIN_PA_THRESHOLD: float = 3.5
 MAX_PARK_PENALTY: float = 0.85     # Skip if park_factor < this
 MAX_WEATHER_PENALTY: float = 0.88  # Skip if weather_factor < this
