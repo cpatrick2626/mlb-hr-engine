@@ -277,9 +277,11 @@ def game_hr_probability(
     pk_factor: float = 1.0, pitcher_fac: float = 1.0,
     w_factor: float = 1.0, plat_factor: float = 1.0,
 ) -> float:
-    # Cap combined multiplier — prevents extreme stacking of park + pitcher + weather + platoon
+    # Cap combined multiplier — prevents extreme stacking of park + pitcher + weather + platoon.
+    # 1.60 ceiling: Coors (1.28) + favorable pitcher + platoon + warm weather can still reach 1.55-1.60,
+    # but the old 1.82 cap was too permissive and allowed unrealistic compounding.
     combined = pk_factor * pitcher_fac * w_factor * plat_factor
-    combined = max(0.42, min(1.82, combined))
+    combined = max(0.42, min(1.60, combined))
     lam = hr_rate * combined * exp_pa
     return max(0.001, min(0.999, 1.0 - math.exp(-lam)))
 

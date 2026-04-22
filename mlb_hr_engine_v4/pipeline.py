@@ -98,6 +98,10 @@ def _build_player_profile(
         pk_factor=pk_factor, pitcher_fac=pit_factor,
         w_factor=w_factor, plat_factor=plat_factor,
     )
+    # When lineup hasn't been posted (spot is None), the player may not start.
+    # 0.82 discount ≈ 82% probability of actually being in the lineup.
+    if not lineup_spot:
+        model_prob = round(model_prob * 0.82, 4)
 
     return {
         "player_id": player_id, "player_name": player_name,

@@ -247,14 +247,16 @@ div[data-testid="stSelectbox"] label { font-size: 12px; color: #666; }
 # ── Rating helpers ─────────────────────────────────────────────────────────────
 
 def _pick_rating(ev_pct: float, edge_pct: float, model_prob: float, confidence: float) -> str:
-    # Tiers calibrated to realistic HR prop market edge distribution:
-    #   5-10% EV  → bread-and-butter (book mildly mispriced, ~1-3pp model edge)
-    #   10-15% EV → strong edge (meaningful mispricing, ~3-5pp model edge)
-    #   15%+ EV   → once in a lifetime (5pp+ edge, truly rare vs sharp lines)
-    if ev_pct >= 15 or (ev_pct >= 12 and edge_pct >= 7 and confidence >= 75):
+    # ONCE IN A LIFETIME: genuinely rare — needs high EV + meaningful edge + confident model.
+    # High odds (e.g. +2000) can produce huge EV% mathematically even on slim edge;
+    # requiring edge >= 12 and confidence >= 65 filters those out.
+    if ev_pct >= 50 and edge_pct >= 12 and confidence >= 65:
         return "🌟 ONCE IN A LIFETIME"
-    if ev_pct >= 10 and edge_pct >= 4:
+    # STRONG EDGE: clear mispricing with a confident model signal.
+    if (ev_pct >= 30 and edge_pct >= 8 and confidence >= 50) or \
+       (ev_pct >= 15 and edge_pct >= 5 and confidence >= 50):
         return "🔥 STRONG EDGE"
+    # BREAD AND BUTTER: any positive EV with minimum edge — bread-and-butter plays.
     if ev_pct >= 5 and edge_pct >= 2:
         return "✅ BREAD AND BUTTER"
     return "📊 MARGINAL"
