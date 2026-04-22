@@ -249,7 +249,7 @@ div[data-testid="stSelectbox"] label { font-size: 12px; color: #666; }
 def _pick_rating(ev_pct: float, edge_pct: float, model_prob: float, confidence: float) -> str:
     # EV% is capped at ~45% max (model prob capped at 1.4x market before calculation).
     # Thresholds calibrated to that compressed scale:
-    #   5-15% EV  → bread-and-butter (model sees modest mispricing)
+    #   5-15% EV  → solid play (model sees modest mispricing)
     #   15-30% EV → strong edge (clear disagreement with confident signal)
     #   30%+ EV   → once in a lifetime (rare: high EV + big edge + high confidence)
     if ev_pct >= 30 and edge_pct >= 12 and confidence >= 65:
@@ -258,7 +258,7 @@ def _pick_rating(ev_pct: float, edge_pct: float, model_prob: float, confidence: 
        (ev_pct >= 12 and edge_pct >= 5 and confidence >= 50):
         return "🔥 STRONG EDGE"
     if ev_pct >= 5 and edge_pct >= 2:
-        return "✅ BREAD AND BUTTER"
+        return "✅ SOLID PLAY"
     return "📊 MARGINAL"
 
 
@@ -555,7 +555,20 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
             hide_index=True,
             column_config={
                 "Rating":  st.column_config.TextColumn("Rating",
-                    help="🌟 Once in a lifetime (EV≥15%) | 🔥 Strong edge (EV≥10%) | ✅ Bread & butter (EV≥5%) | 📊 Marginal"),
+                    help=(
+                        "Pick quality tier based on EV%, Edge%, and model Confidence.\n\n"
+                        "🌟 ONCE IN A LIFETIME — EV ≥30% + Edge ≥12% + Conf ≥65. "
+                        "Rare: the model sees a large, confident mispricing vs the market. "
+                        "Expect 1–3 per day at most.\n\n"
+                        "🔥 STRONG EDGE — EV ≥18% + Edge ≥7% + Conf ≥50. "
+                        "Clear disagreement between model and market with solid confidence. "
+                        "Core betting targets most days.\n\n"
+                        "✅ SOLID PLAY — EV ≥5% + Edge ≥2%. "
+                        "Positive expected value with a real model edge — worth playing "
+                        "at reasonable stakes. The bulk of qualified picks land here.\n\n"
+                        "📊 MARGINAL — Passes filters but edge or EV is thin. "
+                        "Skip unless odds improve or you have strong conviction."
+                    )),
                 "#":       st.column_config.TextColumn("#",
                     help="Composite rank: 40% EV% + 35% Edge% + 25% Confidence"),
                 "Player":  st.column_config.TextColumn("Player"),
