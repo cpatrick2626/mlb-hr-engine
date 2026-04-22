@@ -304,6 +304,29 @@ def get_pitcher_recent_stats(pitcher_id: int, days: int = 30) -> dict:
         return {}
 
 
+def get_pitcher_days_rest(pitcher_id: int) -> int:
+    """Days since pitcher's last start. Returns 5 (standard rotation) if unknown."""
+    try:
+        data = _get(f"/people/{pitcher_id}/stats", {
+            "stats": "gameLog", "group": "pitching",
+            "season": config.CURRENT_SEASON,
+            "limit": 162,
+        })
+        splits = data.get("stats", [{}])[0].get("splits", [])
+        splits = sorted(splits, key=lambda s: s.get("date", ""), reverse=True)
+        if not splits:
+            return 5
+        last_date_str = splits[0].get("date", "")
+        if not last_date_str:
+            return 5
+        from datetime import date as _date
+        last_date = _date.fromisoformat(last_date_str)
+        today = _date.fromisoformat(config.TARGET_DATE) if config.TARGET_DATE else _date.today()
+        return max(0, (today - last_date).days)
+    except Exception:
+        return 5
+
+
 def get_player_info(player_id: int) -> dict:
     """Minimal bio â€” bats, position, full name."""
     try:

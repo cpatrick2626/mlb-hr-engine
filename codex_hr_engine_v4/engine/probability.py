@@ -124,6 +124,22 @@ def pitcher_recent_factor(recent_pitcher_stats: dict) -> float:
     return round(max(0.80, min(1.20, 1.0 + trust * (direction - 1.0))), 3)
 
 
+def pitcher_fatigue_factor(days_rest: int) -> float:
+    """
+    Adjusts pitcher HR allowance based on days since last start.
+    Short rest → more HRs; standard 5-day rest → baseline.
+    """
+    if days_rest <= 2:
+        return 1.08
+    if days_rest == 3:
+        return 1.04
+    if days_rest == 4:
+        return 1.01
+    if days_rest == 5:
+        return 1.00
+    return max(0.97, 1.0 - 0.01 * (days_rest - 5))
+
+
 def pitcher_hr_factor(pitcher_stats: dict) -> float:
     """
     v2: HR/FB composite (blends HR/9 with HR per fly ball).

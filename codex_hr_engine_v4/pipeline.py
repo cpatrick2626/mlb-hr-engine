@@ -65,9 +65,11 @@ def _build_player_profile(
     pitcher_hand = ""
     pitcher_stats = {}
     recent_pitcher_stats = {}
+    pitcher_days_rest = 5
     if pitcher_id:
         pitcher_stats        = mlb_stats.get_pitcher_season_stats(pitcher_id)
         recent_pitcher_stats = mlb_stats.get_pitcher_recent_stats(pitcher_id)
+        pitcher_days_rest    = mlb_stats.get_pitcher_days_rest(pitcher_id)
         info = mlb_stats.get_player_info(pitcher_id)
         pitcher_hand = info.get("pitchHand", {}).get("code", "")
 
@@ -77,6 +79,8 @@ def _build_player_profile(
     pit_factor     = prob.pitcher_combined_factor(hr_fb_fac, sc_pit_fac, k_gb_fac)
     recent_pit_fac = prob.pitcher_recent_factor(recent_pitcher_stats)
     pit_factor     = max(0.55, min(1.60, pit_factor * recent_pit_fac))
+    fatigue_fac    = prob.pitcher_fatigue_factor(pitcher_days_rest)
+    pit_factor     = max(0.55, min(1.60, pit_factor * fatigue_fac))
 
     # Pitcher HR/9 for confidence threshold flag
     pit_ip_str = pitcher_stats.get("inningsPitched", "0.0")
@@ -137,6 +141,7 @@ def _build_player_profile(
         "ld_pct": sc_summary["ld_pct"], "pull_pct": sc_summary["pull_pct"],
         "oppo_pct": sc_summary["oppo_pct"],
         "park_factor": round(pk_factor, 3), "pitcher_factor": round(pit_factor, 3),
+        "pitcher_days_rest": pitcher_days_rest, "fatigue_factor": round(fatigue_fac, 3),
         "weather_factor": round(w_factor, 3), "platoon_factor": round(plat_factor, 3),
         "model_prob": round(model_prob, 4), "weather": weather,
         "pitcher_hr9": pitcher_hr9,
