@@ -20,7 +20,7 @@ copy .env.example .env
 
 Then edit `.env` and add:
 - `ODDS_API_KEY` — get a free key at https://the-odds-api.com (500 req/month free tier)
-- `BANKROLL` — your betting bankroll in dollars (default: 1000)
+- `BANKROLL` — your betting bankroll in dollars (default: 100)
 
 The engine works without an Odds API key — it will still show model probabilities for all batters, but EV%, Edge%, and bet sizing require market odds.
 
