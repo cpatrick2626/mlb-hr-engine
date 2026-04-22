@@ -421,6 +421,9 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
     n_batters = len(data.get("batter_data", {}))
     scale     = _bankroll_scale()
 
+    st.markdown('<div class="section-header">&#9889; TODAY\'S QUALIFIED PICKS</div>',
+                unsafe_allow_html=True)
+
     st.markdown(
         f"<div style='color:#888888; font-size:12px; margin-bottom:16px; "
         f"background:#110000; border:1px solid #330000; border-radius:6px; padding:8px 14px;'>"
