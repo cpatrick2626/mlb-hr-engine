@@ -608,63 +608,117 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
 
     all_by_model = data.get("all_by_model", [])
     if all_by_model:
-        PRIME_FLOOR = 0.15   # 15%+ = model sees genuine elevated HR probability
+        PRIME_FLOOR = 0.15
+
+        # ── All available columns (name -> extractor) ─────────────────────────
+        _FIXED_COLS   = ["Player", "Team", "Spot", "Vs", "Model%"]
+        _TOGGLE_COLS  = [
+            "Brl%", "SwSp%", "FB%", "GB%", "LD%", "Pull%", "Oppo%",
+            "Hard Hit%", "Exit Velo", "Launch Angle",
+            "PwrMult", "Park", "Pitcher", "Weather", "Platoon",
+            "Season PA", "Season HR", "Recent PA", "HR Rate",
+            "Streak", "K Factor", "Pitcher HR/9", "Exp PA",
+            "Odds", "Mkt%", "Edge%", "EV%", "Confidence",
+        ]
+        _ALL_COLS = _FIXED_COLS + _TOGGLE_COLS
+
+        def _extract(col, p, pit_fac, plat_fac):
+            m = p.get
+            if col == "Player":       return m("player_name", "")
+            if col == "Team":         return m("team", "")
+            if col == "Spot":         return _spot_label(m("lineup_spot"), plat_fac)
+            if col == "Vs":           return _pitcher_label(m("pitcher_name", "TBD"), pit_fac, plat_fac)
+            if col == "Model%":       return f"{m('model_prob',0)*100:.1f}%"
+            if col == "Brl%":         return m("barrel_pct", "--")
+            if col == "SwSp%":        return m("sweet_spot_pct", "--")
+            if col == "FB%":          return m("fb_pct", "--")
+            if col == "GB%":          return m("gb_pct", "--")
+            if col == "LD%":          return m("ld_pct", "--")
+            if col == "Pull%":        return m("pull_pct", "--")
+            if col == "Oppo%":        return m("oppo_pct", "--")
+            if col == "Hard Hit%":    return m("hard_hit", "--")
+            if col == "Exit Velo":    return m("exit_velo", "--")
+            if col == "Launch Angle": return m("avg_launch_angle", "--")
+            if col == "PwrMult":      return f"{m('statcast_power_mult', 1):.2f}"
+            if col == "Park":         return f"{m('park_factor', 1):.2f}"
+            if col == "Pitcher":      return f"{m('pitcher_factor', 1):.2f}"
+            if col == "Weather":      return f"{m('weather_factor', 1):.2f}"
+            if col == "Platoon":      return f"{m('platoon_factor', 1):.2f}"
+            if col == "Season PA":    return m("season_pa", "--")
+            if col == "Season HR":    return m("season_hr", "--")
+            if col == "Recent PA":    return m("recent_pa", "--")
+            if col == "HR Rate":      return f"{m('hr_rate',0)*100:.2f}%"
+            if col == "Streak":       return f"{m('streak_factor', 1):.2f}"
+            if col == "K Factor":     return f"{m('k_factor', 1):.2f}"
+            if col == "Pitcher HR/9": return f"{m('pitcher_hr9', 0):.2f}"
+            if col == "Exp PA":       return f"{m('expected_pa', 3.8):.1f}"
+            if col == "Odds":         return _fmt_american(m("best_american")) if m("best_american") else "--"
+            if col == "Mkt%":         return f"{m('market_no_vig_prob',0)*100:.1f}%" if m("market_no_vig_prob") else "--"
+            if col == "Edge%":        return f"{m('edge_pct',0):+.1f}%" if m("edge_pct") is not None else "--"
+            if col == "EV%":          return f"{m('ev_pct',0):+.1f}%" if m("ev_pct") is not None else "--"
+            if col == "Confidence":   return f"{m('confidence',0):.0f}" if m("confidence") is not None else "--"
+            return "--"
+
+        _COL_HELP = {
+            "Model%":       "Poisson HR probability for today's game: P(HR≥1) = 1−e^(−λ). Accounts for batter power, park, pitcher, weather, and platoon.",
+            "Brl%":         "Barrel rate (Statcast). Balls hit 98+ mph at 26-30° launch angle. League avg ~8%. Strong predictor of HR power.",
+            "SwSp%":        "Sweet spot rate — balls hit at 8-32° launch angle. League avg ~34%. Higher = more balls in the HR window.",
+            "FB%":          "Fly ball rate (% of batted balls). League avg ~36%. More fly balls = more HR opportunities.",
+            "GB%":          "Ground ball rate. High GB% suppresses HR output — grounders don't leave the park. League avg ~44%.",
+            "LD%":          "Line drive rate. League avg ~21%. Line drives don't go for HRs often but signal solid contact.",
+            "Pull%":        "Pull rate. League avg ~40%. Pull hitters access the short porch and benefit more from wind.",
+            "Oppo%":        "Opposite-field rate. Low pull%, high oppo% = contact hitter profile; harder to hit HRs to the deep part of the park.",
+            "Hard Hit%":    "Hard-hit rate — balls hit 95+ mph exit velocity. League avg ~38%. Correlates with power output.",
+            "Exit Velo":    "Average exit velocity (mph). League avg ~88 mph. 90+ is above average; 95+ is elite power territory.",
+            "Launch Angle": "Average launch angle (degrees). Optimal HR zone is 25-35°. Too low = grounders; too high = pop-ups.",
+            "PwrMult":      "Statcast composite power multiplier (0.45–1.75). Blends barrel%, FB%, xSLG, pull%, sweet spot, hard-hit%, and exit velo. 1.0 = league average.",
+            "Park":         "Park HR factor for today's stadium. 1.0 = neutral. Coors = 1.28, Petco = 0.89. Applied to batter's fly-ball tendency.",
+            "Pitcher":      "Combined pitcher HR factor (0.55–1.60). Blends HR/FB rate, Statcast contact quality allowed, K%, and GB%. Above 1.0 = pitcher allows more HRs than average.",
+            "Weather":      "Weather factor (0.80–1.20). Combines temperature (hot air = ball carries) and wind (blowing out = HR boost). 1.0 = neutral conditions.",
+            "Platoon":      "Platoon split factor. Bayesian-shrunk HR rate vs this pitcher's handedness divided by overall rate. Above 1.0 = batter has a platoon advantage today.",
+            "Season PA":    "Plate appearances this season. Larger sample = more reliable HR rate estimate.",
+            "Season HR":    "Home runs hit this season.",
+            "Recent PA":    "Plate appearances in the last 20 games. Used to weight recent form vs full-season rate.",
+            "HR Rate":      "Final blended HR/PA rate used as model input. Combines Bayesian-regressed season rate with Statcast power multiplier.",
+            "Streak":       "Hot/cold streak factor (0.93–1.08). Compares last 10-game HR rate to season average. Capped at ±8% influence.",
+            "K Factor":     "Batter strikeout suppressor (0.85–1.00). High K% reduces balls in play and HR opportunities. One-sided — never boosts contact hitters.",
+            "Pitcher HR/9": "Pitcher's HR allowed per 9 innings this season. League avg = 1.35. Above 1.5 = HR-prone; below 1.0 = HR suppressor.",
+            "Exp PA":       "Expected plate appearances today based on lineup spot. Top of order = ~4.5 PA; bottom = ~3.2 PA. Unknown lineup = 3.8 default.",
+            "Odds":         "Best available American odds across all tracked books. Higher number = longer shot = bigger payout if correct.",
+            "Mkt%":         "No-vig market implied probability — raw implied prob divided by (1 + 7.5% vig). Represents the book's true estimated HR probability.",
+            "Edge%":        "Model probability minus market no-vig probability. Positive edge means the model sees more HR probability than the market is pricing.",
+            "EV%":          "Expected value percentage: [p × (decimal odds − 1) − (1 − p)] × 100. Positive EV = profitable long-run bet at these odds.",
+            "Confidence":   "Model confidence score (0–100). Based on sample size (season + recent PA), edge signal-to-noise ratio, Statcast data availability, barrel rate, and pitcher HR/9.",
+        }
+
+        _col_cfg = {
+            c: st.column_config.TextColumn(c, help=_COL_HELP[c])
+            for c in _COL_HELP
+        }
+
+        # ── Column selector ───────────────────────────────────────────────────
+        default_visible = st.session_state.get(
+            "model_visible_cols",
+            ["Brl%", "SwSp%", "FB%", "GB%", "Pull%", "Exit Velo", "PwrMult", "Park", "Pitcher"],
+        )
+        with st.expander("⚙️ Customize columns", expanded=False):
+            selected_toggle = st.multiselect(
+                "Add or remove stat columns (Player / Team / Spot / Vs / Model% always shown):",
+                options=_TOGGLE_COLS,
+                default=default_visible,
+                key="model_col_picker",
+            )
+            st.session_state["model_visible_cols"] = selected_toggle
+
+        visible_cols = _FIXED_COLS + selected_toggle
 
         def _model_rows(players):
             rows = []
             for p in players:
                 pit_fac  = p.get("pitcher_factor", 1.0)
                 plat_fac = p.get("platoon_factor", 1.0)
-                rows.append({
-                    "Player":    p.get("player_name", ""),
-                    "Team":      p.get("team", ""),
-                    "Spot":      _spot_label(p.get("lineup_spot"), plat_fac),
-                    "Vs":        _pitcher_label(p.get("pitcher_name", "TBD"), pit_fac, plat_fac),
-                    "Model%":    f"{p.get('model_prob',0)*100:.1f}%",
-                    "Brl%":      p.get("barrel_pct", "--"),
-                    "SwSp%":     p.get("sweet_spot_pct", "--"),
-                    "FB%":       p.get("fb_pct", "--"),
-                    "GB%":       p.get("gb_pct", "--"),
-                    "Pull%":     p.get("pull_pct", "--"),
-                    "Exit Velo": p.get("exit_velo", "--"),
-                    "PwrMult":   f"{p.get('statcast_power_mult',1):.2f}",
-                    "Park":      f"{p.get('park_factor',1):.2f}",
-                    "Pitcher":   f"{p.get('pitcher_factor',1):.2f}",
-                })
+                rows.append({c: _extract(c, p, pit_fac, plat_fac) for c in visible_cols})
             return rows
-
-        _col_cfg = {
-            "Model%":    st.column_config.TextColumn("Model%",
-                help="Poisson HR probability for today's game: P(HR≥1) = 1−e^(−λ). "
-                     "Accounts for batter power, park, pitcher, weather, and platoon."),
-            "Brl%":      st.column_config.TextColumn("Brl%",
-                help="Barrel rate (Statcast). Balls hit 98+ mph at 26-30° launch angle. "
-                     "League avg ~8%. Strong predictor of HR power."),
-            "SwSp%":     st.column_config.TextColumn("SwSp%",
-                help="Sweet spot rate — balls hit at 8-32° launch angle. "
-                     "League avg ~34%. Higher = more balls in the HR window."),
-            "FB%":       st.column_config.TextColumn("FB%",
-                help="Fly ball rate (% of batted balls). League avg ~36%. "
-                     "More fly balls = more HR opportunities."),
-            "GB%":       st.column_config.TextColumn("GB%",
-                help="Ground ball rate. High GB% suppresses HR output — grounders don't leave the park."),
-            "Pull%":     st.column_config.TextColumn("Pull%",
-                help="Pull rate. League avg ~40%. Pull hitters access the short porch and gain from wind."),
-            "Exit Velo": st.column_config.TextColumn("Exit Velo",
-                help="Average exit velocity (mph). League avg ~88 mph. "
-                     "90+ is above average; 95+ is elite power territory."),
-            "PwrMult":   st.column_config.TextColumn("PwrMult",
-                help="Statcast composite power multiplier (0.45–1.75). "
-                     "Blends barrel%, FB%, xSLG, pull%, sweet spot, hard-hit%, and exit velo. "
-                     "1.0 = league average. Above 1.0 = above-average power profile."),
-            "Park":      st.column_config.TextColumn("Park",
-                help="Park HR factor for today's stadium. 1.0 = neutral. "
-                     "Coors = 1.28, Petco = 0.89. Applied to batter's fly-ball tendency."),
-            "Pitcher":   st.column_config.TextColumn("Pitcher",
-                help="Combined pitcher HR factor (0.55–1.60). "
-                     "Blends HR/FB rate, Statcast contact quality allowed, K%, and GB%. "
-                     "Above 1.0 = pitcher allows more HRs than average."),
-        }
 
         prime = [p for p in all_by_model if p.get("model_prob", 0) >= PRIME_FLOOR]
         watch = [p for p in all_by_model if p.get("model_prob", 0) < PRIME_FLOOR][:20]
