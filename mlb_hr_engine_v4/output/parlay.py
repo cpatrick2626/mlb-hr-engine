@@ -195,18 +195,19 @@ def build_profile_parlays(
             c["combo_rank"] = 0.60 * ev_norm + 0.40 * ps_norm
         scored_combos.sort(key=lambda x: x["combo_rank"], reverse=True)
 
-        # Pick diverse top-N (≥1 different player between any two selected combos)
+        # Pick diverse top-N — zero player overlap between any two selected combos.
+        # Combo 1 = best group; Combo 2 shares no players with Combo 1;
+        # Combo 3 shares no players with Combo 1 or 2.
         selected: list[dict] = []
+        used_player_ids: set = set()
         for candidate in scored_combos:
             if len(selected) >= n_combos:
                 break
             cids = {leg["player_id"] for leg in candidate["legs"]}
-            too_similar = any(
-                len(cids & {leg["player_id"] for leg in sel["legs"]}) == leg_size
-                for sel in selected
-            )
-            if not too_similar:
-                selected.append(candidate)
+            if cids & used_player_ids:   # any overlap → skip
+                continue
+            selected.append(candidate)
+            used_player_ids |= cids
 
         results.append({**profile, "score_fn": None, "combos": selected})
 

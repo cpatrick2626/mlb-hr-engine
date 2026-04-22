@@ -916,7 +916,7 @@ def tab_parlays(data: dict):
     profile_parlays = data.get("profile_parlays", [])
 
     # ── Profile-based parlays ──────────────────────────────────────────────────
-    st.markdown('<div class="section-header">🎯 PROFILE-BASED PARLAYS</div>',
+    st.markdown('<div class="section-header">🎯 AUTO-BASED PARLAYS</div>',
                 unsafe_allow_html=True)
     st.caption(
         "Each section builds the best 3-leg combos for a specific power profile. "
@@ -961,29 +961,6 @@ def tab_parlays(data: dict):
                     )
                     html = html.rstrip().rstrip("</div>") + ps_line + "</div>"
                     st.markdown(html, unsafe_allow_html=True)
-
-    st.divider()
-
-    # ── Legacy leg-count parlays ───────────────────────────────────────────────
-    st.markdown('<div class="section-header">⚡ AUTO PARLAYS (BY LEG COUNT)</div>',
-                unsafe_allow_html=True)
-    st.caption("Top 3 diverse combinations per leg count, ranked by combined EV%.")
-
-    if not ranked or not any(auto_parlays.values()):
-        st.warning("Not enough qualified picks with odds to build auto parlays.")
-    else:
-        col2, col3, col4 = st.columns(3)
-        for col, n_legs, label in [
-            (col2, 2, "2 LEG"), (col3, 3, "3 LEG"), (col4, 4, "4 LEG")
-        ]:
-            with col:
-                st.markdown(f"### {label}")
-                combos = auto_parlays.get(n_legs, [])
-                if not combos:
-                    st.caption("Not enough picks for this leg count.")
-                else:
-                    for i, combo in enumerate(combos, 1):
-                        st.markdown(_combo_html(combo, f"Combo {i}"), unsafe_allow_html=True)
 
     st.divider()
 
