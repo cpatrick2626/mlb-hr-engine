@@ -280,13 +280,20 @@ def build_auto_parlays(
 def _evaluate_parlay(legs: list[dict]) -> dict:
     combined_prob = 1.0
     combined_decimal = 1.0
+    combined_ev_prob = 1.0  # per-leg cap mirrors single-pick EV cap in pipeline
 
     for leg in legs:
-        combined_prob *= leg["model_prob"]
+        model_p = leg["model_prob"]
+        market_p = leg.get("market_no_vig_prob", 0)
+        # Same 1.4x cap applied to single picks: prevents long-shot odds
+        # from amplifying a small probability gap into absurd EV values.
+        ev_model_p = min(model_p, market_p * 1.4) if market_p > 0 else model_p
+        combined_prob *= model_p
+        combined_ev_prob *= ev_model_p
         combined_decimal *= american_to_decimal(leg["best_american"])
 
     # Parlay pays combined_decimal − 1 on a win
-    ev_pct = expected_value_pct(combined_prob, combined_decimal)
+    ev_pct = expected_value_pct(combined_ev_prob, combined_decimal)
     combined_american = decimal_to_american(combined_decimal)
 
     return {

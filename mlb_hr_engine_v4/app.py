@@ -12,7 +12,7 @@ from streamlit_autorefresh import st_autorefresh
 
 st.set_page_config(
     page_title="Codex HR Engine",
-    page_icon="âš¾",
+    page_icon="⚾",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -253,45 +253,45 @@ def _pick_rating(ev_pct: float, edge_pct: float, model_prob: float, confidence: 
     #   15-30% EV â†’ strong edge (clear disagreement with confident signal)
     #   30%+ EV   â†’ once in a lifetime (rare: high EV + big edge + high confidence)
     if ev_pct >= 30 and edge_pct >= 12 and confidence >= 65:
-        return "ðŸŒŸ ONCE IN A LIFETIME"
+        return "🌟 ONCE IN A LIFETIME"
     if (ev_pct >= 18 and edge_pct >= 7 and confidence >= 50) or \
        (ev_pct >= 12 and edge_pct >= 5 and confidence >= 50):
-        return "ðŸ”¥ STRONG EDGE"
+        return "🔥 STRONG EDGE"
     if ev_pct >= 5 and edge_pct >= 2:
-        return "âœ… SOLID PLAY"
-    return "ðŸ“Š MARGINAL"
+        return "✅ SOLID PLAY"
+    return "📊 MARGINAL"
 
 
 def _pitcher_label(name: str, pitcher_factor: float, platoon_factor: float) -> str:
     """
     Color-code pitcher by matchup difficulty.
     Red = batter will struggle. Green = pitcher is a target.
-    âš¡ = batter has platoon edge (faces pitcher from opposite hand).
+    ⚡ = batter has platoon edge (faces pitcher from opposite hand).
     """
-    platoon = " âš¡" if platoon_factor and platoon_factor > 1.06 else ""
+    platoon = " ⚡" if platoon_factor and platoon_factor > 1.06 else ""
     if pitcher_factor < 0.80:
-        return f"ðŸ”´ {name}{platoon}"   # Elite suppressor â€” avoid
+        return f"🔴 {name}{platoon}"   # Elite suppressor â€” avoid
     if pitcher_factor < 0.92:
-        return f"ðŸŸ  {name}{platoon}"   # Tough matchup
+        return f"🟠 {name}{platoon}"   # Tough matchup
     if pitcher_factor <= 1.08:
-        return f"â¬œ {name}{platoon}"   # Neutral
+        return f"⬜ {name}{platoon}"   # Neutral
     if pitcher_factor <= 1.20:
-        return f"ðŸŸ¡ {name}{platoon}"   # Favorable â€” homer-prone
-    return f"ðŸŸ¢ {name}{platoon}"       # Elite HR target
+        return f"🟡 {name}{platoon}"   # Favorable â€” homer-prone
+    return f"🟢 {name}{platoon}"       # Elite HR target
 
 
 def _spot_label(spot, platoon_factor: float) -> str:
     """Color-code lineup spot by expected PA value."""
-    edge = "âš¡" if platoon_factor and platoon_factor > 1.06 else ""
+    edge = "⚡" if platoon_factor and platoon_factor > 1.06 else ""
     if spot is None:
         return f"?{edge}"
     spot = int(spot)
     if spot <= 4:
-        icon = "ðŸŸ¢"
+        icon = "🟢"
     elif spot <= 6:
-        icon = "ðŸŸ¡"
+        icon = "🟡"
     else:
-        icon = "ðŸ”´"
+        icon = "🔴"
     return f"{icon}{spot}{edge}"
 
 
@@ -313,7 +313,7 @@ def get_data():
     stale = age > _SESSION_TTL or st.session_state.get("cache_key") != target_date
 
     if "data" not in st.session_state or stale:
-        with st.spinner("âš¾ Loading today's games, odds, and player profilesâ€¦ (2-4 min first load)"):
+        with st.spinner("⚾ Loading today's games, odds, and player profilesâ€¦ (2-4 min first load)"):
             try:
                 data = _load_data(target_date)
                 st.session_state["data"]           = data
@@ -427,7 +427,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
     st.markdown(
         f"<div style='color:#888888; font-size:12px; margin-bottom:16px; "
         f"background:#110000; border:1px solid #330000; border-radius:6px; padding:8px 14px;'>"
-        f"ðŸ“… {data.get('date','')} &nbsp;|&nbsp; "
+        f"📅 {data.get('date','')} &nbsp;|&nbsp; "
         f"Games: <b style='color:#f0f0f0'>{stats.get('games',0)}</b> &nbsp;|&nbsp; "
         f"Players: <b style='color:#f0f0f0'>{stats.get('players',0)}</b> &nbsp;|&nbsp; "
         f"Qualified: <b style='color:#FF3333'>{len(ranked)}</b> "
@@ -525,7 +525,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
             for k, v in range_items
         )
         st.markdown(
-            f"<div class='range-bar'>ðŸ“Š Today's ranges â€” {range_html}</div>",
+            f"<div class='range-bar'>📊 Today's ranges â€” {range_html}</div>",
             unsafe_allow_html=True,
         )
 
@@ -533,9 +533,9 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
         st.markdown(
             "<div style='font-size:11px; color:#888888; margin-bottom:8px;'>"
             "<b style='color:#f0f0f0'>Pitcher:</b> "
-            "ðŸ”´ Elite suppressor &nbsp; ðŸŸ  Tough &nbsp; â¬œ Neutral &nbsp; ðŸŸ¡ Favorable &nbsp; ðŸŸ¢ HR target &nbsp; âš¡ Platoon edge"
+            "🔴 Elite suppressor &nbsp; 🟠 Tough &nbsp; ⬜ Neutral &nbsp; 🟡 Favorable &nbsp; 🟢 HR target &nbsp; ⚡ Platoon edge"
             "&nbsp;&nbsp;&nbsp;<b style='color:#f0f0f0'>Spot:</b> "
-            "ðŸŸ¢ Premium (1-4) &nbsp; ðŸŸ¡ Mid (5-6) &nbsp; ðŸ”´ Bottom (7-9)"
+            "🟢 Premium (1-4) &nbsp; 🟡 Mid (5-6) &nbsp; 🔴 Bottom (7-9)"
             "</div>",
             unsafe_allow_html=True,
         )
@@ -557,16 +557,16 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
                 "Rating":  st.column_config.TextColumn("Rating",
                     help=(
                         "Pick quality tier based on EV%, Edge%, and model Confidence.\n\n"
-                        "ðŸŒŸ ONCE IN A LIFETIME â€” EV â‰¥30% + Edge â‰¥12% + Conf â‰¥65. "
+                        "🌟 ONCE IN A LIFETIME â€” EV â‰¥30% + Edge â‰¥12% + Conf â‰¥65. "
                         "Rare: the model sees a large, confident mispricing vs the market. "
                         "Expect 1â€“3 per day at most.\n\n"
-                        "ðŸ”¥ STRONG EDGE â€” EV â‰¥18% + Edge â‰¥7% + Conf â‰¥50. "
+                        "🔥 STRONG EDGE â€” EV â‰¥18% + Edge â‰¥7% + Conf â‰¥50. "
                         "Clear disagreement between model and market with solid confidence. "
                         "Core betting targets most days.\n\n"
-                        "âœ… SOLID PLAY â€” EV â‰¥5% + Edge â‰¥2%. "
+                        "✅ SOLID PLAY â€” EV â‰¥5% + Edge â‰¥2%. "
                         "Positive expected value with a real model edge â€” worth playing "
                         "at reasonable stakes. The bulk of qualified picks land here.\n\n"
-                        "ðŸ“Š MARGINAL â€” Passes filters but edge or EV is thin. "
+                        "📊 MARGINAL â€” Passes filters but edge or EV is thin. "
                         "Skip unless odds improve or you have strong conviction."
                     )),
                 "#":       st.column_config.TextColumn("#",
@@ -575,9 +575,9 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
                 "Team":    st.column_config.TextColumn("Team"),
                 "Opp":     st.column_config.TextColumn("Opp"),
                 "Spot":    st.column_config.TextColumn("Spot",
-                    help="Lineup spot. ðŸŸ¢=premium PA (1-4), ðŸŸ¡=mid (5-6), ðŸ”´=bottom (7-9). âš¡=platoon edge vs this pitcher."),
+                    help="Lineup spot. 🟢=premium PA (1-4), 🟡=mid (5-6), 🔴=bottom (7-9). ⚡=platoon edge vs this pitcher."),
                 "Pitcher": st.column_config.TextColumn("Pitcher",
-                    help="ðŸ”´=elite suppressor, ðŸŸ =tough, â¬œ=neutral, ðŸŸ¡=favorable, ðŸŸ¢=HR target. âš¡=batter has platoon edge."),
+                    help="🔴=elite suppressor, 🟠=tough, ⬜=neutral, 🟡=favorable, 🟢=HR target. ⚡=batter has platoon edge."),
                 "Odds":    st.column_config.TextColumn("Odds",
                     help="Best American odds across all books for HR (0.5+)"),
                 "Model%":  st.column_config.TextColumn("Model%",
@@ -833,7 +833,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
             "model_visible_cols",
             ["Brl%", "SwSp%", "FB%", "GB%", "Pull%", "Exit Velo", "PwrMult", "Park", "Pitcher"],
         )
-        with st.expander("âš™ï¸ Customize columns", expanded=False):
+        with st.expander("⚙️ Customize columns", expanded=False):
             st.caption("Each option shows the full stat name, description, and how it affects the model. "
                        "Player Â· Team Â· Spot Â· Vs Â· Model% are always shown.")
             selected_toggle = st.multiselect(
@@ -964,7 +964,7 @@ def tab_parlays(data: dict):
 
     st.divider()
 
-    st.markdown('<div class="section-header">ðŸ› ï¸ MANUAL PARLAY BUILDER</div>',
+    st.markdown('<div class="section-header">🛠️ MANUAL PARLAY BUILDER</div>',
                 unsafe_allow_html=True)
     st.caption("Select a team for each leg â€” best pick auto-fills, or choose from the dropdown.")
 
@@ -1057,12 +1057,12 @@ def tab_performance():
         f"<div style='font-size:11px; color:#888888; margin-bottom:12px; "
         f"background:#110000; border:1px solid #330000; border-radius:6px; padding:8px 14px;'>"
         f"Storage: <b style='color:{'#4ade80' if backend=='sheets' else '#FFD700'}'>"
-        f"{'â˜ï¸ Google Sheets â€” persistent across deploys' if backend=='sheets' else 'ðŸ’¾ Local CSV â€” resets on redeploy'}"
+        f"{'☁️ Google Sheets â€” persistent across deploys' if backend=='sheets' else '💾 Local CSV â€” resets on redeploy'}"
         f"</b></div>",
         unsafe_allow_html=True,
     )
 
-    st.markdown('<div class="section-header">ðŸ“Š Running P&L</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header">📊 Running P&L</div>', unsafe_allow_html=True)
     try:
         summary = pnl_tracker.pnl_summary()
         clv     = clv_tracker.clv_summary()
@@ -1086,17 +1086,17 @@ def tab_performance():
         st.info("No results logged yet. Picks are auto-logged when Today's Picks tab loads.")
 
     if clv:
-        st.markdown('<div class="section-header">ðŸŽ¯ Closing Line Value</div>',
+        st.markdown('<div class="section-header">🎯 Closing Line Value</div>',
                     unsafe_allow_html=True)
         verdict = clv.get("verdict", "N/A")
-        v_icon  = {"SHARP": "ðŸŸ¢", "NEUTRAL": "ðŸŸ¡", "SOFT": "ðŸ”´"}.get(verdict, "âšª")
+        v_icon  = {"SHARP": "🟢", "NEUTRAL": "🟡", "SOFT": "🔴"}.get(verdict, "âšª")
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("CLV Picks",  clv.get("picks_with_clv", 0))
         c2.metric("Avg CLV",    f"{clv.get('avg_clv_pct',0):+.2f}%")
         c3.metric("Beat Close", f"{clv.get('pct_beating_close',0):.1f}%")
         c4.metric("Verdict",    f"{v_icon} {verdict}")
 
-    st.markdown('<div class="section-header">ðŸ“‹ Picks Log</div>', unsafe_allow_html=True)
+    st.markdown('<div class="section-header">📋 Picks Log</div>', unsafe_allow_html=True)
     try:
         rows = pnl_tracker.get_picks_log()
         if rows:
@@ -1125,9 +1125,9 @@ def main():
         st.image(str(_banner), use_container_width=True)
     st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
     tab1, tab2, tab3 = st.tabs([
-        "ðŸ“‹  TODAY'S PICKS",
+        "📋  TODAY'S PICKS",
         "ðŸŽ°  PARLAYS",
-        "ðŸ“Š  PERFORMANCE",
+        "📊  PERFORMANCE",
     ])
 
     with tab1:
@@ -1148,7 +1148,7 @@ def main():
           background: linear-gradient(180deg, rgba(198,1,31,0.18) 0%, transparent 100%);
           border-bottom: 2px solid #C6011F; margin-bottom:4px;'>
           <div style='font-size:26px; font-weight:900; color:#C6011F;
-            letter-spacing:3px; text-shadow:0 0 20px rgba(198,1,31,0.7);'>âš¾ Codex HR Engine</div>
+            letter-spacing:3px; text-shadow:0 0 20px rgba(198,1,31,0.7);'>⚾ Codex HR Engine</div>
           <div style='font-size:8px; font-weight:800; color:#555; letter-spacing:5px;
             text-transform:uppercase; margin-top:5px;'>PROP BETTING ENGINE</div>
         </div>
@@ -1171,7 +1171,7 @@ def main():
 
         st.divider()
 
-        st.markdown("#### ðŸŽ¯ Filter Thresholds")
+        st.markdown("#### 🎯 Filter Thresholds")
         _min_ev = st.slider(
             "Min EV%",
             min_value=-10.0, max_value=15.0,
@@ -1199,7 +1199,7 @@ def main():
 
         st.divider()
 
-        if st.button("âœ… Update Yesterday's Results", use_container_width=True):
+        if st.button("✅ Update Yesterday's Results", use_container_width=True):
             with st.spinner("Fetching outcomes from MLBâ€¦"):
                 try:
                     result = pnl_tracker.update_yesterday()
@@ -1236,14 +1236,14 @@ The app will open full-screen like a native app.
             f"<div style='font-size:12px; padding:6px 10px; border-radius:6px; "
             f"background:{'#0a2a14' if key_set else '#2a0a0a'}; "
             f"border:1px solid {'#2ea043' if key_set else '#da3633'};'>"
-            f"{'âœ… Odds API key detected' if key_set else 'âŒ Odds API key MISSING â€” set in Streamlit secrets'}"
+            f"{'✅ Odds API key detected' if key_set else '❌ Odds API key MISSING â€” set in Streamlit secrets'}"
             f"</div>",
             unsafe_allow_html=True,
         )
         st.caption(f"Active EV filter: {_min_ev:.1f}%")
         st.caption(f"Active Edge filter: {_min_edge:.1f}%")
         backend = pnl_tracker.storage_backend()
-        st.caption(f"Storage: {'â˜ï¸ Sheets' if backend == 'sheets' else 'ðŸ’¾ Local CSV'}")
+        st.caption(f"Storage: {'☁️ Sheets' if backend == 'sheets' else '💾 Local CSV'}")
         st.caption(f"Auto-refresh: every 60 min")
 
 
