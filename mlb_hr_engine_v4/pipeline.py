@@ -175,11 +175,14 @@ def _match_odds(player, all_props):
     prices  = [p["price"] for p in matches]
     summary = mkt.market_summary(prices)
     best    = max(matches, key=lambda x: x["price"])
+    fd_matches = [p for p in matches if p.get("bookmaker") == "fanduel"]
+    fd_odds = max(fd_matches, key=lambda x: x["price"])["price"] if fd_matches else None
     player.update({
         "best_american": best["price"], "best_bookmaker": best.get("bookmaker", ""),
         "all_prices": prices, "n_books": summary.get("n_books", 1),
         "market_no_vig_prob": round(summary.get("no_vig_prob_best", 0), 4),
         "market_implied_avg": round(summary.get("implied_prob_avg", 0), 4),
+        "fanduel_american": fd_odds,
     })
     return player
 

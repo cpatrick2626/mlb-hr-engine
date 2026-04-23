@@ -4,6 +4,7 @@ Codex HR Engine — Streamlit Dashboard
 
 import sys
 import time
+import urllib.parse
 from pathlib import Path
 
 import streamlit as st
@@ -380,6 +381,13 @@ def _combo_html(parlay: dict, label: str) -> str:
     &nbsp;|&nbsp; EV: <span class="ev-badge {ev_cls}">{ev_sign}{ev:.1f}%</span>
   </div>
 </div>"""
+
+
+def _fanduel_url(player_name: str = "") -> str:
+    if player_name:
+        q = urllib.parse.quote_plus(player_name + " home run")
+        return f"https://sportsbook.fanduel.com/search?q={q}"
+    return "https://sportsbook.fanduel.com/baseball/mlb?tab=player-home-runs"
 
 
 def _bankroll_scale() -> float:
@@ -1188,6 +1196,77 @@ def main():
         )
         st.session_state["min_ev"]    = _min_ev
         st.session_state["min_edge"]  = _min_edge
+
+        st.divider()
+
+        # ── FanDuel Slip ──────────────────────────────────────────────────────
+        st.markdown("#### 🎰 FanDuel Slip")
+        _slip_data = st.session_state.get("data")
+        if _slip_data:
+            _odds_players = sorted(
+                [p for p in _slip_data.get("all_players", []) if p.get("best_american")],
+                key=lambda x: x.get("score", 0), reverse=True,
+            )
+
+            def _slip_label(p):
+                odds = p.get("fanduel_american") or p.get("best_american")
+                return f"{p['player_name']} ({p.get('team', '')}) {_fmt_american(odds)}"
+
+            _slip_opts = [_slip_label(p) for p in _odds_players]
+            _slip_map  = {_slip_label(p): p for p in _odds_players}
+            _current   = [s for s in st.session_state.get("fd_slip", []) if s in _slip_opts]
+
+            _selected = st.multiselect(
+                "Add to slip",
+                options=_slip_opts,
+                default=_current,
+                placeholder="Search players…",
+                label_visibility="collapsed",
+                key="fd_slip_select",
+            )
+            st.session_state["fd_slip"] = _selected
+
+            if _selected:
+                for s in _selected:
+                    p = _slip_map[s]
+                    fd_odds   = p.get("fanduel_american")
+                    best_odds = p.get("best_american")
+                    odds_val  = fd_odds if fd_odds else best_odds
+                    odds_lbl  = "FD" if fd_odds else "Best"
+                    ev        = p.get("ev_pct", 0)
+                    ev_color  = "#4ade80" if ev >= 0 else "#f87171"
+                    url       = _fanduel_url(p["player_name"])
+                    st.markdown(
+                        f"<div style='background:#0a0a1a; border:1px solid #1a1a3a; "
+                        f"border-radius:6px; padding:7px 10px; margin-bottom:5px; font-size:12px;'>"
+                        f"<div style='display:flex; justify-content:space-between; align-items:center;'>"
+                        f"<span><b style='color:#f0f0f0'>{p['player_name']}</b> "
+                        f"<span style='color:#555; font-size:11px'>{p.get('team','')}</span></span>"
+                        f"<a href='{url}' target='_blank' "
+                        f"style='color:#4488ff; font-size:11px; background:#0d0d2a; "
+                        f"padding:2px 8px; border-radius:4px; border:1px solid #1a2a66; "
+                        f"text-decoration:none;'>Open FD →</a>"
+                        f"</div>"
+                        f"<div style='color:#888; margin-top:3px;'>"
+                        f"{odds_lbl}: <b style='color:#FF6666'>{_fmt_american(odds_val)}</b>"
+                        f" &nbsp;|&nbsp; EV: <b style='color:{ev_color}'>{ev:+.1f}%</b>"
+                        f"</div></div>",
+                        unsafe_allow_html=True,
+                    )
+                st.link_button(
+                    "📲 FanDuel HR Props", _fanduel_url(),
+                    use_container_width=True, type="primary",
+                )
+                if st.button("🗑️ Clear Slip", use_container_width=True, key="clear_fd_slip"):
+                    st.session_state["fd_slip"] = []
+                    st.session_state.pop("fd_slip_select", None)
+                    st.rerun()
+            else:
+                st.caption("Search above to add players to your slip.")
+                st.link_button("📲 Browse FanDuel HR Props", _fanduel_url(), use_container_width=True)
+        else:
+            st.caption("Refresh data to build your slip.")
+            st.link_button("📲 Browse FanDuel HR Props", _fanduel_url(), use_container_width=True)
 
         st.divider()
 
