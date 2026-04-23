@@ -385,7 +385,7 @@ def _combo_html(parlay: dict, label: str) -> str:
 
 def _fanduel_url(player_name: str = "") -> str:
     if player_name:
-        q = urllib.parse.quote_plus(player_name + " home run")
+        q = urllib.parse.quote(player_name)
         return f"https://sportsbook.fanduel.com/search?q={q}"
     return "https://sportsbook.fanduel.com/baseball/mlb?tab=player-home-runs"
 
