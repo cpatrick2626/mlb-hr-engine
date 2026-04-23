@@ -1286,6 +1286,17 @@ def main():
                         f"</div></div>",
                         unsafe_allow_html=True,
                     )
+                if st.button("📋 Log to My Bets", use_container_width=True,
+                             key="log_fd_slip"):
+                    slip_players = [_slip_map[s] for s in _selected]
+                    try:
+                        n = pnl_tracker.log_slip_picks(slip_players)
+                        if n:
+                            st.success(f"Logged {n} pick{'s' if n != 1 else ''} to My Bets!")
+                        else:
+                            st.info("All selected players already in My Bets today.")
+                    except Exception as e:
+                        st.error(f"Log failed: {e}")
                 st.link_button(
                     "📲 FanDuel HR Props", _fanduel_url(),
                     use_container_width=True, type="primary",

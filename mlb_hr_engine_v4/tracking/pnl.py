@@ -59,6 +59,34 @@ def log_picks(picks: list[dict], model_version: str = "v4") -> int:
     return len(rows)
 
 
+def log_slip_picks(picks: list[dict], model_version: str = "v4") -> int:
+    """
+    Log manually-selected slip picks, skipping any already logged today.
+    Unlike log_picks(), this does not gate on the whole day — only on
+    individual player duplicates (same player_name + date).
+    Returns count of newly added rows.
+    """
+    today = date.today().isoformat()
+    if _sheets.available():
+        existing = {r.get("player_name", "") for r in _sheets.read_rows("picks_log")
+                    if r.get("date") == today}
+        new_rows = [_pick_row(p, today, model_version) for p in picks
+                    if p.get("player_name", "") not in existing]
+        if new_rows:
+            _sheets.append_rows("picks_log", LOG_FIELDS, new_rows)
+    else:
+        existing: set[str] = set()
+        if LOG_PATH.exists():
+            with open(LOG_PATH, newline="", encoding="utf-8") as f:
+                existing = {r.get("player_name", "") for r in csv.DictReader(f)
+                            if r.get("date") == today}
+        new_rows = [_pick_row(p, today, model_version) for p in picks
+                    if p.get("player_name", "") not in existing]
+        if new_rows:
+            _append_csv(LOG_PATH, LOG_FIELDS, new_rows)
+    return len(new_rows)
+
+
 def update_yesterday() -> dict:
     """
     Fetch yesterday's HR outcomes from MLB Stats API and settle picks.
