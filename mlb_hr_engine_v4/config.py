@@ -15,7 +15,7 @@ def _secret(key: str, default: str = "") -> str:
 ODDS_API_KEY: str = _secret("ODDS_API_KEY")
 
 # ── Bankroll ──────────────────────────────────────────────────────────────────
-BANKROLL: float = float(_secret("BANKROLL", "1000"))
+BANKROLL: float = float(_secret("BANKROLL", "100"))
 
 # ── Date Override ─────────────────────────────────────────────────────────────
 TARGET_DATE: str | None = os.getenv("TARGET_DATE")   # None = use today
@@ -26,7 +26,7 @@ MAX_BET_PCT: float = 0.05      # Hard cap at 5% of bankroll per bet
 MIN_BET_DOLLARS: float = 5.0
 
 # ── Filter Thresholds ─────────────────────────────────────────────────────────
-MIN_EV_PCT: float = 5.0    # Bread-and-butter floor; anything below is noise
+MIN_EV_PCT: float = 3.0    # Bread-and-butter floor; anything below is noise
 MIN_EDGE_PCT: float = 2.0  # Minimum model-vs-market edge to surface a play
 MIN_PA_THRESHOLD: float = 3.5
 MAX_PARK_PENALTY: float = 0.85     # Skip if park_factor < this
