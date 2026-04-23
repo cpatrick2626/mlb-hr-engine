@@ -1,5 +1,5 @@
 ﻿"""
-Codex HR Engine â€” Streamlit Dashboard
+Codex HR Engine — Streamlit Dashboard
 """
 
 import sys
@@ -249,9 +249,9 @@ div[data-testid="stSelectbox"] label { font-size: 12px; color: #666; }
 def _pick_rating(ev_pct: float, edge_pct: float, model_prob: float, confidence: float) -> str:
     # EV% is capped at ~45% max (model prob capped at 1.4x market before calculation).
     # Thresholds calibrated to that compressed scale:
-    #   5-15% EV  â†’ solid play (model sees modest mispricing)
-    #   15-30% EV â†’ strong edge (clear disagreement with confident signal)
-    #   30%+ EV   â†’ once in a lifetime (rare: high EV + big edge + high confidence)
+    #   5-15% EV  → solid play (model sees modest mispricing)
+    #   15-30% EV → strong edge (clear disagreement with confident signal)
+    #   30%+ EV   → once in a lifetime (rare: high EV + big edge + high confidence)
     if ev_pct >= 30 and edge_pct >= 12 and confidence >= 65:
         return "🌟 ONCE IN A LIFETIME"
     if (ev_pct >= 18 and edge_pct >= 7 and confidence >= 50) or \
@@ -270,13 +270,13 @@ def _pitcher_label(name: str, pitcher_factor: float, platoon_factor: float) -> s
     """
     platoon = " ⚡" if platoon_factor and platoon_factor > 1.06 else ""
     if pitcher_factor < 0.80:
-        return f"🔴 {name}{platoon}"   # Elite suppressor â€” avoid
+        return f"🔴 {name}{platoon}"   # Elite suppressor — avoid
     if pitcher_factor < 0.92:
         return f"🟠 {name}{platoon}"   # Tough matchup
     if pitcher_factor <= 1.08:
         return f"⬜ {name}{platoon}"   # Neutral
     if pitcher_factor <= 1.20:
-        return f"🟡 {name}{platoon}"   # Favorable â€” homer-prone
+        return f"🟡 {name}{platoon}"   # Favorable — homer-prone
     return f"🟢 {name}{platoon}"       # Elite HR target
 
 
@@ -302,7 +302,7 @@ def _load_data(target_date: str):
     return load_game_data(target_date=target_date, progress_cb=[].append)
 
 
-_SESSION_TTL = 3300  # seconds â€” must match cache TTL so autorefresh always gets fresh data
+_SESSION_TTL = 3300  # seconds — must match cache TTL so autorefresh always gets fresh data
 
 
 def get_data():
@@ -313,7 +313,7 @@ def get_data():
     stale = age > _SESSION_TTL or st.session_state.get("cache_key") != target_date
 
     if "data" not in st.session_state or stale:
-        with st.spinner("⚾ Loading today's games, odds, and player profilesâ€¦ (2-4 min first load)"):
+        with st.spinner("⚾ Loading today's games, odds, and player profiles… (2-4 min first load)"):
             try:
                 data = _load_data(target_date)
                 st.session_state["data"]           = data
@@ -411,7 +411,7 @@ def _apply_ui_filters(players: list, min_ev: float, min_edge: float) -> list:
 
 
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-# TAB 1 â€” TODAY'S PICKS
+# TAB 1 — TODAY'S PICKS
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 def tab_picks(data: dict, min_ev: float, min_edge: float):
     all_players = data.get("all_players", [])
@@ -431,7 +431,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
         f"Games: <b style='color:#f0f0f0'>{stats.get('games',0)}</b> &nbsp;|&nbsp; "
         f"Players: <b style='color:#f0f0f0'>{stats.get('players',0)}</b> &nbsp;|&nbsp; "
         f"Qualified: <b style='color:#FF3333'>{len(ranked)}</b> "
-        f"<span style='color:#555'>(EVâ‰¥{min_ev:.0f}% Edgeâ‰¥{min_edge:.1f}%)</span> &nbsp;|&nbsp; "
+        f"<span style='color:#555'>(EV≥{min_ev:.0f}% Edge≥{min_edge:.1f}%)</span> &nbsp;|&nbsp; "
         f"Odds: <b style='color:#f0f0f0'>{source}</b> &nbsp;|&nbsp; "
         f"Statcast: <b style='color:#f0f0f0'>{n_batters}</b> batters"
         f"</div>",
@@ -441,7 +441,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
     if not ranked:
         with_odds = [p for p in all_players if p.get("best_american")]
         if not with_odds:
-            st.warning("No market odds available today â€” check API key or try Force Refresh.")
+            st.warning("No market odds available today — check API key or try Force Refresh.")
             st.info(f"Pipeline found {len(all_players)} players total. 0 matched to odds lines.")
         else:
             evs   = sorted((p.get("ev_pct", -999) for p in with_odds), reverse=True)
@@ -449,14 +449,14 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
             best_ev   = evs[0]   if evs   else -999
             best_edge = edges[0] if edges else -999
             st.warning(
-                f"No picks pass current filters (EV â‰¥ {min_ev:.1f}%, Edge â‰¥ {min_edge:.1f}%). "
+                f"No picks pass current filters (EV ≥ {min_ev:.1f}%, Edge ≥ {min_edge:.1f}%). "
                 f"Slide **both sliders left** in the sidebar to see picks."
             )
             st.info(
                 f"Pool: **{len(all_players)}** players total | "
                 f"**{len(with_odds)}** have odds | "
                 f"Best EV: **{best_ev:+.1f}%** | Best Edge: **{best_edge:+.1f}%**\n\n"
-                f"Set Min EV â‰¤ {best_ev:.1f}% and Min Edge â‰¤ {best_edge:.1f}% to see the top pick."
+                f"Set Min EV ≤ {best_ev:.1f}% and Min Edge ≤ {best_edge:.1f}% to see the top pick."
             )
     else:
         rows = []
@@ -501,7 +501,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
                 return "N/A"
             lo, hi = min(clean), max(clean)
             pfx = "+" if sign else ""
-            return f"{lo:{pfx+fmt}}{suffix} â†’ {hi:{pfx+fmt}}{suffix}"
+            return f"{lo:{pfx+fmt}}{suffix} → {hi:{pfx+fmt}}{suffix}"
 
         evs    = [p.get("ev_pct", 0) for p in ranked]
         edges  = [p.get("edge_pct", 0) for p in ranked]
@@ -516,7 +516,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
             ("Mkt%",   _rng(mkts, suffix="%")),
             ("Edge",   _rng(edges, sign=True, suffix="%")),
             ("EV%",    _rng(evs, sign=True, suffix="%")),
-            ("Bet $",  f"${min(bets):.0f} â†’ ${max(bets):.0f}" if bets else "N/A"),
+            ("Bet $",  f"${min(bets):.0f} → ${max(bets):.0f}" if bets else "N/A"),
             ("Conf",   _rng(confs, fmt=".0f")),
         ]
         range_html = " &nbsp;|&nbsp; ".join(
@@ -525,7 +525,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
             for k, v in range_items
         )
         st.markdown(
-            f"<div class='range-bar'>📊 Today's ranges â€” {range_html}</div>",
+            f"<div class='range-bar'>📊 Today's ranges — {range_html}</div>",
             unsafe_allow_html=True,
         )
 
@@ -544,7 +544,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
         edge_rng  = _rng(edges, sign=True, suffix="%")
         model_rng = _rng(models, suffix="%")
         mkt_rng   = _rng(mkts, suffix="%")
-        bet_rng   = f"${min(bets):.0f} â†’ ${max(bets):.0f}" if bets else "N/A"
+        bet_rng   = f"${min(bets):.0f} → ${max(bets):.0f}" if bets else "N/A"
         conf_rng  = _rng(confs, fmt=".0f")
         score_rng = _rng(scores, fmt=".1f")
 
@@ -557,16 +557,16 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
                 "Rating":  st.column_config.TextColumn("Rating",
                     help=(
                         "Pick quality tier based on EV%, Edge%, and model Confidence.\n\n"
-                        "🌟 ONCE IN A LIFETIME â€” EV â‰¥30% + Edge â‰¥12% + Conf â‰¥65. "
+                        "🌟 ONCE IN A LIFETIME — EV ≥30% + Edge ≥12% + Conf ≥65. "
                         "Rare: the model sees a large, confident mispricing vs the market. "
-                        "Expect 1â€“3 per day at most.\n\n"
-                        "🔥 STRONG EDGE â€” EV â‰¥18% + Edge â‰¥7% + Conf â‰¥50. "
+                        "Expect 1–3 per day at most.\n\n"
+                        "🔥 STRONG EDGE — EV ≥18% + Edge ≥7% + Conf ≥50. "
                         "Clear disagreement between model and market with solid confidence. "
                         "Core betting targets most days.\n\n"
-                        "✅ SOLID PLAY â€” EV â‰¥5% + Edge â‰¥2%. "
-                        "Positive expected value with a real model edge â€” worth playing "
+                        "✅ SOLID PLAY — EV ≥5% + Edge ≥2%. "
+                        "Positive expected value with a real model edge — worth playing "
                         "at reasonable stakes. The bulk of qualified picks land here.\n\n"
-                        "📊 MARGINAL â€” Passes filters but edge or EV is thin. "
+                        "📊 MARGINAL — Passes filters but edge or EV is thin. "
                         "Skip unless odds improve or you have strong conviction."
                     )),
                 "#":       st.column_config.TextColumn("#",
@@ -581,21 +581,21 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
                 "Odds":    st.column_config.TextColumn("Odds",
                     help="Best American odds across all books for HR (0.5+)"),
                 "Model%":  st.column_config.TextColumn("Model%",
-                    help=f"Poisson HR probability â€” Statcast + park + pitcher + weather + platoon.\nRange: {model_rng}"),
+                    help=f"Poisson HR probability — Statcast + park + pitcher + weather + platoon.\nRange: {model_rng}"),
                 "Mkt%":    st.column_config.TextColumn("Mkt%",
                     help=f"Market no-vig implied probability.\nRange: {mkt_rng}"),
                 "Edge":    st.column_config.TextColumn("Edge",
-                    help=f"Model% âˆ’ Market%. Active threshold +{min_edge:.1f}%.\nRange: {edge_rng}"),
+                    help=f"Model% − Market%. Active threshold +{min_edge:.1f}%.\nRange: {edge_rng}"),
                 "EV%":     st.column_config.TextColumn("EV%",
                     help=f"Expected value per $100 wagered. Active threshold +{min_ev:.0f}%.\nRange: {ev_rng}"),
                 "Bet $":   st.column_config.TextColumn("Bet $",
                     help=f"Quarter-Kelly sizing on ${session_br:,.0f} bankroll (5% cap = ${session_br*config.MAX_BET_PCT:.0f} max).\nRange: {bet_rng}"),
                 "Conf":    st.column_config.TextColumn("Conf",
-                    help=f"Confidence 0â€“100: sample size + Statcast availability + model/market agreement.\nRange: {conf_rng}"),
+                    help=f"Confidence 0–100: sample size + Statcast availability + model/market agreement.\nRange: {conf_rng}"),
                 "Brl%":    st.column_config.TextColumn("Brl%",
                     help="Statcast barrel rate. League avg ~5.2%. Higher = more true HR power."),
                 "SwSp%":   st.column_config.TextColumn("SwSp%",
-                    help="Sweet spot rate (LA 8-32Â°). League avg ~34%. The exact HR angle band."),
+                    help="Sweet spot rate (LA 8-32°). League avg ~34%. The exact HR angle band."),
                 "EV mph":  st.column_config.TextColumn("EV mph",
                     help="Average exit velocity. League avg ~88.9 mph."),
                 "FB%":     st.column_config.TextColumn("FB%",
@@ -612,7 +612,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
     st.markdown(
         '<div class="section-header" title="'
         "Raw model output for every starting batter today, ranked by HR probability. "
-        "No EV or market filter â€” this is pure model signal. "
+        "No EV or market filter — this is pure model signal. "
         "Use it to find matchup targets before odds are posted, or to cross-check "
         "why a player did or didn't make the qualified picks list."
         '">'
@@ -676,35 +676,35 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
             return "--"
 
         _COL_HELP = {
-            "Model%":       "Poisson HR probability for today's game: P(HRâ‰¥1) = 1âˆ’e^(âˆ’Î»). Accounts for batter power, park, pitcher, weather, and platoon.",
-            "Brl%":         "Barrel rate (Statcast). Balls hit 98+ mph at 26-30Â° launch angle. League avg ~8%. Strong predictor of HR power.",
-            "SwSp%":        "Sweet spot rate â€” balls hit at 8-32Â° launch angle. League avg ~34%. Higher = more balls in the HR window.",
+            "Model%":       "Poisson HR probability for today's game: P(HR≥1) = 1−e^(−λ). Accounts for batter power, park, pitcher, weather, and platoon.",
+            "Brl%":         "Barrel rate (Statcast). Balls hit 98+ mph at 26-30° launch angle. League avg ~8%. Strong predictor of HR power.",
+            "SwSp%":        "Sweet spot rate — balls hit at 8-32° launch angle. League avg ~34%. Higher = more balls in the HR window.",
             "FB%":          "Fly ball rate (% of batted balls). League avg ~36%. More fly balls = more HR opportunities.",
-            "GB%":          "Ground ball rate. High GB% suppresses HR output â€” grounders don't leave the park. League avg ~44%.",
+            "GB%":          "Ground ball rate. High GB% suppresses HR output — grounders don't leave the park. League avg ~44%.",
             "LD%":          "Line drive rate. League avg ~21%. Line drives don't go for HRs often but signal solid contact.",
             "Pull%":        "Pull rate. League avg ~40%. Pull hitters access the short porch and benefit more from wind.",
             "Oppo%":        "Opposite-field rate. Low pull%, high oppo% = contact hitter profile; harder to hit HRs to the deep part of the park.",
-            "Hard Hit%":    "Hard-hit rate â€” balls hit 95+ mph exit velocity. League avg ~38%. Correlates with power output.",
+            "Hard Hit%":    "Hard-hit rate — balls hit 95+ mph exit velocity. League avg ~38%. Correlates with power output.",
             "Exit Velo":    "Average exit velocity (mph). League avg ~88 mph. 90+ is above average; 95+ is elite power territory.",
-            "Launch Angle": "Average launch angle (degrees). Optimal HR zone is 25-35Â°. Too low = grounders; too high = pop-ups.",
-            "PwrMult":      "Statcast composite power multiplier (0.45â€“1.75). Blends barrel%, FB%, xSLG, pull%, sweet spot, hard-hit%, and exit velo. 1.0 = league average.",
+            "Launch Angle": "Average launch angle (degrees). Optimal HR zone is 25-35°. Too low = grounders; too high = pop-ups.",
+            "PwrMult":      "Statcast composite power multiplier (0.45–1.75). Blends barrel%, FB%, xSLG, pull%, sweet spot, hard-hit%, and exit velo. 1.0 = league average.",
             "Park":         "Park HR factor for today's stadium. 1.0 = neutral. Coors = 1.28, Petco = 0.89. Applied to batter's fly-ball tendency.",
-            "Pitcher":      "Combined pitcher HR factor (0.55â€“1.60). Blends HR/FB rate, Statcast contact quality allowed, K%, and GB%. Above 1.0 = pitcher allows more HRs than average.",
-            "Weather":      "Weather factor (0.80â€“1.20). Combines temperature (hot air = ball carries) and wind (blowing out = HR boost). 1.0 = neutral conditions.",
+            "Pitcher":      "Combined pitcher HR factor (0.55–1.60). Blends HR/FB rate, Statcast contact quality allowed, K%, and GB%. Above 1.0 = pitcher allows more HRs than average.",
+            "Weather":      "Weather factor (0.80–1.20). Combines temperature (hot air = ball carries) and wind (blowing out = HR boost). 1.0 = neutral conditions.",
             "Platoon":      "Platoon split factor. Bayesian-shrunk HR rate vs this pitcher's handedness divided by overall rate. Above 1.0 = batter has a platoon advantage today.",
             "Season PA":    "Plate appearances this season. Larger sample = more reliable HR rate estimate.",
             "Season HR":    "Home runs hit this season.",
             "Recent PA":    "Plate appearances in the last 20 games. Used to weight recent form vs full-season rate.",
             "HR Rate":      "Final blended HR/PA rate used as model input. Combines Bayesian-regressed season rate with Statcast power multiplier.",
-            "Streak":       "Hot/cold streak factor (0.93â€“1.08). Compares last 10-game HR rate to season average. Capped at Â±8% influence.",
-            "K Factor":     "Batter strikeout suppressor (0.85â€“1.00). High K% reduces balls in play and HR opportunities. One-sided â€” never boosts contact hitters.",
+            "Streak":       "Hot/cold streak factor (0.93–1.08). Compares last 10-game HR rate to season average. Capped at ±8% influence.",
+            "K Factor":     "Batter strikeout suppressor (0.85–1.00). High K% reduces balls in play and HR opportunities. One-sided — never boosts contact hitters.",
             "Pitcher HR/9": "Pitcher's HR allowed per 9 innings this season. League avg = 1.35. Above 1.5 = HR-prone; below 1.0 = HR suppressor.",
             "Exp PA":       "Expected plate appearances today based on lineup spot. Top of order = ~4.5 PA; bottom = ~3.2 PA. Unknown lineup = 3.8 default.",
             "Odds":         "Best available American odds across all tracked books. Higher number = longer shot = bigger payout if correct.",
-            "Mkt%":         "No-vig market implied probability â€” raw implied prob divided by (1 + 7.5% vig). Represents the book's true estimated HR probability.",
+            "Mkt%":         "No-vig market implied probability — raw implied prob divided by (1 + 7.5% vig). Represents the book's true estimated HR probability.",
             "Edge%":        "Model probability minus market no-vig probability. Positive edge means the model sees more HR probability than the market is pricing.",
-            "EV%":          "Expected value percentage: [p Ã— (decimal odds âˆ’ 1) âˆ’ (1 âˆ’ p)] Ã— 100. Positive EV = profitable long-run bet at these odds.",
-            "Confidence":   "Model confidence score (0â€“100). Based on sample size (season + recent PA), edge signal-to-noise ratio, Statcast data availability, barrel rate, and pitcher HR/9.",
+            "EV%":          "Expected value percentage: [p × (decimal odds − 1) − (1 − p)] × 100. Positive EV = profitable long-run bet at these odds.",
+            "Confidence":   "Model confidence score (0–100). Based on sample size (season + recent PA), edge signal-to-noise ratio, Statcast data availability, barrel rate, and pitcher HR/9.",
         }
 
         _col_cfg = {
@@ -715,117 +715,117 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
         # Full names + descriptions shown in the dropdown for each toggleable column
         _COL_FULL = {
             "Brl%":
-                "Brl%  Â·  Barrel Rate â€” % of batted balls hit 98+ mph at 26-30Â° launch angle. "
+                "Brl%  ·  Barrel Rate — % of batted balls hit 98+ mph at 26-30° launch angle. "
                 "League avg ~8%. Single strongest Statcast predictor of HR power. "
-                "Effect: higher barrel% â†’ larger power multiplier â†’ higher model probability.",
+                "Effect: higher barrel% → larger power multiplier → higher model probability.",
             "SwSp%":
-                "SwSp%  Â·  Sweet Spot Rate â€” % of batted balls hit at 8-32Â° launch angle. "
+                "SwSp%  ·  Sweet Spot Rate — % of batted balls hit at 8-32° launch angle. "
                 "League avg ~34%. More balls in this optimal window = more HR opportunities. "
                 "Effect: contributes 10% weight to the Statcast power multiplier.",
             "FB%":
-                "FB%  Â·  Fly Ball Rate â€” % of batted balls that are fly balls. "
+                "FB%  ·  Fly Ball Rate — % of batted balls that are fly balls. "
                 "League avg ~36%. Only fly balls can leave the park. "
                 "Effect: 15% weight in power multiplier; also scales how much park factor applies to this batter.",
             "GB%":
-                "GB%  Â·  Ground Ball Rate â€” % of batted balls that are grounders. "
+                "GB%  ·  Ground Ball Rate — % of batted balls that are grounders. "
                 "League avg ~44%. Grounders almost never become HRs. "
                 "Effect: high GB% suppresses the power multiplier and limits park factor benefit.",
             "LD%":
-                "LD%  Â·  Line Drive Rate â€” % of batted balls that are line drives. "
+                "LD%  ·  Line Drive Rate — % of batted balls that are line drives. "
                 "League avg ~21%. Signals solid contact quality but not HR trajectory. "
-                "Effect: informational only â€” not directly used in the HR probability model.",
+                "Effect: informational only — not directly used in the HR probability model.",
             "Pull%":
-                "Pull%  Â·  Pull Rate â€” % of batted balls pulled to the strong side. "
+                "Pull%  ·  Pull Rate — % of batted balls pulled to the strong side. "
                 "League avg ~40%. Pull hitters access the shorter porch and benefit more from wind. "
                 "Effect: 8% weight in the power multiplier.",
             "Oppo%":
-                "Oppo%  Â·  Opposite-Field Rate â€” % of batted balls hit to the weak side. "
+                "Oppo%  ·  Opposite-Field Rate — % of batted balls hit to the weak side. "
                 "High oppo% signals a contact/gap hitter, not a HR profile. "
-                "Effect: informational â€” model uses pull%, not oppo%, in the power multiplier.",
+                "Effect: informational — model uses pull%, not oppo%, in the power multiplier.",
             "Hard Hit%":
-                "Hard Hit%  Â·  Hard-Hit Rate â€” % of batted balls hit 95+ mph exit velocity. "
+                "Hard Hit%  ·  Hard-Hit Rate — % of batted balls hit 95+ mph exit velocity. "
                 "League avg ~38%. Strong correlation with HR output and overall power. "
                 "Effect: 10% weight in the Statcast power multiplier.",
             "Exit Velo":
-                "Exit Velo  Â·  Average Exit Velocity (mph) â€” how hard the batter hits the ball. "
+                "Exit Velo  ·  Average Exit Velocity (mph) — how hard the batter hits the ball. "
                 "League avg ~88 mph. 90+ = above average; 95+ = elite power hitter. "
                 "Effect: 5% weight in the power multiplier; also gates how much barrel% is trusted.",
             "Launch Angle":
-                "Launch Angle  Â·  Average Launch Angle (degrees) â€” upward trajectory of batted balls. "
-                "Optimal HR zone: 25-35Â°. Too low = grounders; too high = pop-ups. "
-                "Effect: informational â€” not directly in the model but correlates strongly with barrel%.",
+                "Launch Angle  ·  Average Launch Angle (degrees) — upward trajectory of batted balls. "
+                "Optimal HR zone: 25-35°. Too low = grounders; too high = pop-ups. "
+                "Effect: informational — not directly in the model but correlates strongly with barrel%.",
             "PwrMult":
-                "PwrMult  Â·  Statcast Power Multiplier (0.45â€“1.75) â€” composite of all 7 Statcast signals: "
+                "PwrMult  ·  Statcast Power Multiplier (0.45–1.75) — composite of all 7 Statcast signals: "
                 "barrel% (38%), FB% (15%), xSLG (14%), sweet spot (10%), hard-hit% (10%), pull% (8%), exit velo (5%). "
                 "1.0 = league average. Effect: multiplied into the batter's HR rate before park/pitcher adjustments.",
             "Park":
-                "Park  Â·  Park HR Factor â€” historical HR rate at today's stadium vs league average. "
+                "Park  ·  Park HR Factor — historical HR rate at today's stadium vs league average. "
                 "1.0 = neutral. Coors = 1.28 (most HR-friendly). Petco = 0.89 (most suppressive). Oracle = 0.83. "
                 "Effect: multiplied into the combined factor; scaled by this batter's fly-ball tendency.",
             "Pitcher":
-                "Pitcher  Â·  Pitcher HR Factor (0.55â€“1.60) â€” how homer-prone today's starter is. "
+                "Pitcher  ·  Pitcher HR Factor (0.55–1.60) — how homer-prone today's starter is. "
                 "Blends HR/FB rate (40%), Statcast contact quality allowed (40%), K%+GB% suppressor (20%). "
                 "Effect: multiplied into the combined factor. Above 1.0 = pitcher gives up more HRs than average.",
             "Weather":
-                "Weather  Â·  Weather Factor (0.80â€“1.20) â€” impact of temperature and wind on HR probability. "
+                "Weather  ·  Weather Factor (0.80–1.20) — impact of temperature and wind on HR probability. "
                 "Hot air is thinner = ball carries farther. Wind blowing out = strong boost; in = suppressor. "
                 "Effect: multiplied into the combined factor. Dome teams always receive 1.0.",
             "Platoon":
-                "Platoon  Â·  Platoon Split Factor â€” batter's HR rate vs this pitcher's hand vs their overall rate. "
+                "Platoon  ·  Platoon Split Factor — batter's HR rate vs this pitcher's hand vs their overall rate. "
                 "Bayesian-shrunk using actual split PA counts (50-PA standard constant). "
                 "Effect: multiplied into the combined factor. Above 1.0 = batter has a platoon advantage today.",
             "Season PA":
-                "Season PA  Â·  Season Plate Appearances â€” total PA this season. "
+                "Season PA  ·  Season Plate Appearances — total PA this season. "
                 "Effect: drives how much the model regresses toward league average. "
-                "Low PA â†’ heavy regression toward 0.033 HR/PA; high PA â†’ model trusts the actual rate.",
+                "Low PA → heavy regression toward 0.033 HR/PA; high PA → model trusts the actual rate.",
             "Season HR":
-                "Season HR  Â·  Season Home Runs â€” total HRs hit this season. "
+                "Season HR  ·  Season Home Runs — total HRs hit this season. "
                 "Combined with Season PA to compute the raw season HR/PA rate before Bayesian adjustment.",
             "Recent PA":
-                "Recent PA  Â·  Recent Plate Appearances â€” PA in the last 20 games. "
+                "Recent PA  ·  Recent Plate Appearances — PA in the last 20 games. "
                 "Effect: determines whether recent form gets blended into the rate. "
-                "Requires â‰¥20 recent PA for the recent rate to carry any weight (30% weight, season 70%).",
+                "Requires ≥20 recent PA for the recent rate to carry any weight (30% weight, season 70%).",
             "HR Rate":
-                "HR Rate  Â·  Blended HR/PA Rate â€” the model's final adjusted rate before game-day factors. "
+                "HR Rate  ·  Blended HR/PA Rate — the model's final adjusted rate before game-day factors. "
                 "Combines Bayesian-regressed season rate, recent form blend, and Statcast power multiplier. "
-                "Effect: this is Î» before being multiplied by park, pitcher, weather, platoon, and expected PA.",
+                "Effect: this is λ before being multiplied by park, pitcher, weather, platoon, and expected PA.",
             "Streak":
-                "Streak  Â·  Hot/Cold Streak Factor (0.93â€“1.08) â€” last 10-game HR rate vs full-season average. "
-                "Capped at Â±8% to avoid overreacting to small samples. Requires â‰¥8 recent PA and â‰¥30 season PA. "
+                "Streak  ·  Hot/Cold Streak Factor (0.93–1.08) — last 10-game HR rate vs full-season average. "
+                "Capped at ±8% to avoid overreacting to small samples. Requires ≥8 recent PA and ≥30 season PA. "
                 "Effect: multiplied into the adjusted rate before the Poisson calculation.",
             "K Factor":
-                "K Factor  Â·  Strikeout Suppressor (0.85â€“1.00) â€” high K% = fewer balls in play = fewer HR chances. "
+                "K Factor  ·  Strikeout Suppressor (0.85–1.00) — high K% = fewer balls in play = fewer HR chances. "
                 "One-sided: only suppresses above league avg K% (22.5%). Never boosts contact hitters. "
-                "Effect: multiplied into the adjusted rate. Max suppression is âˆ’15% at very high K%.",
+                "Effect: multiplied into the adjusted rate. Max suppression is −15% at very high K%.",
             "Pitcher HR/9":
-                "Pitcher HR/9  Â·  HRs Allowed per 9 Innings â€” season figure for today's starter. "
+                "Pitcher HR/9  ·  HRs Allowed per 9 Innings — season figure for today's starter. "
                 "League avg = 1.35. Above 1.5 = HR-prone target. Below 1.0 = strong HR suppressor. "
                 "Effect: feeds into the pitcher HR factor; also triggers a +4pt confidence bonus if > 1.4.",
             "Exp PA":
-                "Exp PA  Â·  Expected Plate Appearances â€” how many times this batter will bat today. "
+                "Exp PA  ·  Expected Plate Appearances — how many times this batter will bat today. "
                 "Lineup spot 1 = ~4.5 PA. Spot 9 = ~3.2 PA. Unknown lineup = 3.8 default. "
-                "Effect: directly scales Î» â€” more PA = higher HR probability even at the same HR/PA rate.",
+                "Effect: directly scales λ — more PA = higher HR probability even at the same HR/PA rate.",
             "Odds":
-                "Odds  Â·  Best Available American Odds â€” highest payout line across all tracked sportsbooks. "
+                "Odds  ·  Best Available American Odds — highest payout line across all tracked sportsbooks. "
                 "Higher number = longer shot = bigger payout if the bet wins. "
                 "Effect: determines the decimal odds used in the EV% calculation.",
             "Mkt%":
-                "Mkt%  Â·  Market No-Vig Probability â€” the book's true estimated HR probability after vig removal. "
-                "Formula: raw implied prob Ã· (1 + 7.5% vig). HR props carry 7-10% juice on retail books. "
+                "Mkt%  ·  Market No-Vig Probability — the book's true estimated HR probability after vig removal. "
+                "Formula: raw implied prob ÷ (1 + 7.5% vig). HR props carry 7-10% juice on retail books. "
                 "Effect: used as the baseline. Model probability above this = positive edge.",
             "Edge%":
-                "Edge%  Â·  Model Edge â€” model probability minus market no-vig probability. "
+                "Edge%  ·  Model Edge — model probability minus market no-vig probability. "
                 "Uses the full model probability (not the EV-capped version). "
                 "Effect: primary odds-independent signal. Positive edge = model sees a mispriced line.",
             "EV%":
-                "EV%  Â·  Expected Value % â€” [p Ã— (decimal oddsâˆ’1) âˆ’ (1âˆ’p)] Ã— 100. "
-                "Capped: model prob is limited to 1.4Ã— market before calculation, preventing long-shot odds "
+                "EV%  ·  Expected Value % — [p × (decimal odds−1) − (1−p)] × 100. "
+                "Capped: model prob is limited to 1.4× market before calculation, preventing long-shot odds "
                 "from inflating EV into the hundreds. Max ~45%. Positive EV = profitable long-run.",
             "Confidence":
-                "Confidence  Â·  Model Confidence Score (0â€“100) â€” how much to trust this probability estimate. "
+                "Confidence  ·  Model Confidence Score (0–100) — how much to trust this probability estimate. "
                 "Built from: sample size (35 pts), recent PA (20 pts), edge signal-to-noise (28 pts), "
                 "Statcast availability (+8), barrel >12% (+5), pitcher HR/9 >1.4 (+4). "
-                "Effect: gates the OIAL and STRONG EDGE ratings â€” low confidence can't achieve top tiers.",
+                "Effect: gates the OIAL and STRONG EDGE ratings — low confidence can't achieve top tiers.",
         }
 
         # â”€â”€ Column selector â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -835,7 +835,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
         )
         with st.expander("⚙️ Customize columns", expanded=False):
             st.caption("Each option shows the full stat name, description, and how it affects the model. "
-                       "Player Â· Team Â· Spot Â· Vs Â· Model% are always shown.")
+                       "Player · Team · Spot · Vs · Model% are always shown.")
             selected_toggle = st.multiselect(
                 "Select columns to display:",
                 options=_TOGGLE_COLS,
@@ -866,7 +866,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
                 "This means multiple factors are stacking in their favor: strong power metrics (barrel%, exit velo, FB%), "
                 "a hitter-friendly park, a pitcher who gives up fly balls, and/or a favorable platoon split. "
                 "These are the names to prioritize when shopping for HR prop lines. "
-                "Not all will have listed odds â€” some may only appear in the WATCH LIST if the market hasn't priced them yet."
+                "Not all will have listed odds — some may only appear in the WATCH LIST if the market hasn't priced them yet."
                 '">'
                 "<span style='font-size:14px; font-weight:800; color:#FFD700; letter-spacing:1.5px;'>"
                 "&#11088; PRIME TARGETS</span>"
@@ -886,7 +886,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
                 '<div style="margin:14px 0 4px 0;" '
                 'title="'
                 "WATCH LIST players have a model HR probability below 15%. "
-                "The model sees a plausible scenario â€” manageable pitcher, decent park, some power â€” "
+                "The model sees a plausible scenario — manageable pitcher, decent park, some power — "
                 "but the profile is limited by a weak power metric (low barrel%, high GB%), a small sample size, "
                 "or a neutral park suppressing the ceiling. "
                 "Long-shot value plays often live here: the odds can be +1000 or better on a player "
@@ -907,7 +907,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
 
 
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-# TAB 2 â€” PARLAYS
+# TAB 2 — PARLAYS
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 def tab_parlays(data: dict):
     ranked          = data.get("ranked", [])
@@ -966,11 +966,11 @@ def tab_parlays(data: dict):
 
     st.markdown('<div class="section-header">🛠️ MANUAL PARLAY BUILDER</div>',
                 unsafe_allow_html=True)
-    st.caption("Select a team for each leg â€” best pick auto-fills, or choose from the dropdown.")
+    st.caption("Select a team for each leg — best pick auto-fills, or choose from the dropdown.")
 
     teams_list = sorted(team_players.keys())
     if not teams_list:
-        st.warning("No team data available â€” refresh data first.")
+        st.warning("No team data available — refresh data first.")
         return
 
     def manual_column(col, n_legs: int, key_prefix: str):
@@ -1049,7 +1049,7 @@ def tab_parlays(data: dict):
 
 
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-# TAB 3 â€” PERFORMANCE
+# TAB 3 — PERFORMANCE
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 def tab_performance():
     backend = pnl_tracker.storage_backend()
@@ -1057,7 +1057,7 @@ def tab_performance():
         f"<div style='font-size:11px; color:#888888; margin-bottom:12px; "
         f"background:#110000; border:1px solid #330000; border-radius:6px; padding:8px 14px;'>"
         f"Storage: <b style='color:{'#4ade80' if backend=='sheets' else '#FFD700'}'>"
-        f"{'☁️ Google Sheets â€” persistent across deploys' if backend=='sheets' else '💾 Local CSV â€” resets on redeploy'}"
+        f"{'☁️ Google Sheets — persistent across deploys' if backend=='sheets' else '💾 Local CSV — resets on redeploy'}"
         f"</b></div>",
         unsafe_allow_html=True,
     )
@@ -1102,7 +1102,7 @@ def tab_performance():
         if rows:
             st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
         else:
-            st.caption("No picks logged yet â€” open Today's Picks tab to auto-log.")
+            st.caption("No picks logged yet — open Today's Picks tab to auto-log.")
     except Exception as e:
         st.error(f"Could not load picks log: {e}")
 
@@ -1200,7 +1200,7 @@ def main():
         st.divider()
 
         if st.button("✅ Update Yesterday's Results", use_container_width=True):
-            with st.spinner("Fetching outcomes from MLBâ€¦"):
+            with st.spinner("Fetching outcomes from MLB…"):
                 try:
                     result = pnl_tracker.update_yesterday()
                     st.success(
@@ -1217,14 +1217,14 @@ def main():
 **iPhone (Safari)**
 1. Open the app URL in Safari
 2. Tap the **Share** button (box with arrow)
-3. Scroll down â†’ tap **Add to Home Screen**
-4. Tap **Add** â€” done
+3. Scroll down → tap **Add to Home Screen**
+4. Tap **Add** — done
 
 **Android (Chrome)**
 1. Open the app URL in Chrome
 2. Tap the **â‹®** menu (top-right)
 3. Tap **Add to Home screen**
-4. Tap **Add** â€” done
+4. Tap **Add** — done
 
 The app will open full-screen like a native app.
 """)
@@ -1236,7 +1236,7 @@ The app will open full-screen like a native app.
             f"<div style='font-size:12px; padding:6px 10px; border-radius:6px; "
             f"background:{'#0a2a14' if key_set else '#2a0a0a'}; "
             f"border:1px solid {'#2ea043' if key_set else '#da3633'};'>"
-            f"{'✅ Odds API key detected' if key_set else '❌ Odds API key MISSING â€” set in Streamlit secrets'}"
+            f"{'✅ Odds API key detected' if key_set else '❌ Odds API key MISSING — set in Streamlit secrets'}"
             f"</div>",
             unsafe_allow_html=True,
         )
