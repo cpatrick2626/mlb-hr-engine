@@ -1126,7 +1126,7 @@ def main():
     st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
     tab1, tab2, tab3 = st.tabs([
         "📋  TODAY'S PICKS",
-        "ðŸŽ°  PARLAYS",
+        "🎰  PARLAYS",
         "📊  PERFORMANCE",
     ])
 
@@ -1155,7 +1155,7 @@ def main():
         """, unsafe_allow_html=True)
 
         # Bankroll input
-        st.markdown("#### ðŸ’° Bankroll")
+        st.markdown("#### 💰 Bankroll")
         default_br = int(st.session_state.get("bankroll_override", config.BANKROLL))
         new_br = st.number_input(
             "Set your bankroll ($)",
@@ -1191,7 +1191,7 @@ def main():
 
         st.divider()
 
-        if st.button("ðŸ”„ Force Refresh Data", use_container_width=True):
+        if st.button("🔄 Force Refresh Data", use_container_width=True):
             st.cache_data.clear()
             for k in ["data", "cache_key", "data_loaded_at"]:
                 st.session_state.pop(k, None)
@@ -1212,7 +1212,7 @@ def main():
 
         st.divider()
 
-        with st.expander("ðŸ“± Add to Home Screen"):
+        with st.expander("📱 Add to Home Screen"):
             st.markdown("""
 **iPhone (Safari)**
 1. Open the app URL in Safari
