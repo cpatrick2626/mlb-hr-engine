@@ -390,6 +390,21 @@ def _fanduel_url(player_name: str = "") -> str:
     return "https://sportsbook.fanduel.com/baseball/mlb?tab=player-home-runs"
 
 
+def _add_legs_to_fd_slip(legs: list[dict]) -> int:
+    """Merge parlay legs into the FanDuel slip. Returns count of newly added players."""
+    current = list(st.session_state.get("fd_slip", []))
+    added = 0
+    for p in legs:
+        odds = p.get("fanduel_american") or p.get("best_american")
+        label = f"{p['player_name']} ({p.get('team', '')}) {_fmt_american(odds)}"
+        if label not in current:
+            current.append(label)
+            added += 1
+    st.session_state["fd_slip"] = current
+    st.session_state["fd_slip_select"] = current
+    return added
+
+
 def _bankroll_scale() -> float:
     """Scale factor for bet sizing based on user's session bankroll vs config default."""
     session_br = st.session_state.get("bankroll_override", config.BANKROLL)
@@ -936,7 +951,7 @@ def tab_parlays(data: dict):
         st.warning("Not enough players with odds + Statcast data for profile parlays. "
                    "Refresh data after lineups post.")
     else:
-        for profile in profile_parlays:
+        for pi, profile in enumerate(profile_parlays):
             pname    = profile.get("name", "")
             subtitle = profile.get("subtitle", "")
             desc     = profile.get("desc", "")
@@ -958,17 +973,19 @@ def tab_parlays(data: dict):
             cols = st.columns(len(combos))
             for col, combo, i in zip(cols, combos, range(1, len(combos) + 1)):
                 with col:
-                    # Show profile score alongside combo label
                     ps = combo.get("profile_score", 0)
                     label = f"Combo {i}"
                     html = _combo_html(combo, label)
-                    # Inject profile score line before closing div
                     ps_line = (
                         f'<div style="margin-top:4px; font-size:10px; color:#666666;">'
                         f'Profile fit: <b style="color:#888888">{ps:.2f}</b></div>'
                     )
                     html = html.rstrip().rstrip("</div>") + ps_line + "</div>"
                     st.markdown(html, unsafe_allow_html=True)
+                    if st.button("🎰 Add to FD Slip", key=f"fd_prof_{pi}_{i}",
+                                 use_container_width=True):
+                        n = _add_legs_to_fd_slip(combo["legs"])
+                        st.success(f"+{n} player{'s' if n != 1 else ''} added to FanDuel slip!")
 
     st.divider()
 
@@ -1025,8 +1042,24 @@ def tab_parlays(data: dict):
                     )
                     legs_built.append(sel)
 
-            if st.button(f"Build {n_legs}-Leg Parlay", key=f"{key_prefix}_build",
-                         type="primary", use_container_width=True):
+            btn_col, fd_col = st.columns([3, 2])
+            with btn_col:
+                build_clicked = st.button(f"Build {n_legs}-Leg Parlay",
+                                          key=f"{key_prefix}_build",
+                                          type="primary", use_container_width=True)
+            with fd_col:
+                fd_clicked = st.button("🎰 Add to FD Slip",
+                                       key=f"{key_prefix}_fd",
+                                       use_container_width=True)
+
+            if fd_clicked:
+                if len(legs_built) == n_legs:
+                    n = _add_legs_to_fd_slip(legs_built)
+                    st.success(f"+{n} player{'s' if n != 1 else ''} added to FanDuel slip!")
+                else:
+                    st.error(f"Select all {n_legs} legs first.")
+
+            if build_clicked:
                 if len(legs_built) == n_legs:
                     scale  = _bankroll_scale()
                     parlay = _evaluate_parlay(legs_built)
