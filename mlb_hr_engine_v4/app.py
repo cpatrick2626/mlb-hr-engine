@@ -9,6 +9,7 @@ from pathlib import Path
 
 import streamlit as st
 import pandas as pd
+import numpy as np
 
 st.set_page_config(
     page_title="Codex HR Engine",
@@ -680,8 +681,14 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
         score_rng = _rng(scores, fmt=".1f")
 
         session_br = st.session_state.get("bankroll_override", config.BANKROLL)
+
+        # Replace NaN/None values before displaying
+        df = pd.DataFrame(rows)
+        df = df.fillna("--")  # Replace NaN and None with "--"
+        df = df.replace([np.nan, np.inf, -np.inf, float('inf'), -float('inf')], "--")  # Replace NaN/infinity values
+
         st.dataframe(
-            pd.DataFrame(rows),
+            df,
             width='stretch',
             hide_index=True,
             column_config={
@@ -1022,8 +1029,12 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
                 "</span></div>",
                 unsafe_allow_html=True,
             )
+            # Clean NaN values before display
+            df_prime = pd.DataFrame(_model_rows(prime))
+            df_prime = df_prime.fillna("--")
+            df_prime = df_prime.replace([np.nan, np.inf, -np.inf, float('inf'), -float('inf')], "--")
             st.dataframe(
-                pd.DataFrame(_model_rows(prime)),
+                df_prime,
                 width='stretch', hide_index=True,
                 column_config=_col_cfg,
             )
@@ -1046,8 +1057,12 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
                 "</span></div>",
                 unsafe_allow_html=True,
             )
+            # Clean NaN values before display
+            df_watch = pd.DataFrame(_model_rows(watch))
+            df_watch = df_watch.fillna("--")
+            df_watch = df_watch.replace([np.nan, np.inf, -np.inf, float('inf'), -float('inf')], "--")
             st.dataframe(
-                pd.DataFrame(_model_rows(watch)),
+                df_watch,
                 width='stretch', hide_index=True,
                 column_config=_col_cfg,
             )
@@ -1294,7 +1309,11 @@ def tab_performance():
     try:
         rows = pnl_tracker.get_picks_log()
         if rows:
-            st.dataframe(pd.DataFrame(rows), width='stretch', hide_index=True)
+            # Clean NaN values before display
+            df_log = pd.DataFrame(rows)
+            df_log = df_log.fillna("--")
+            df_log = df_log.replace([np.nan, np.inf, -np.inf, float('inf'), -float('inf')], "--")
+            st.dataframe(df_log, width='stretch', hide_index=True)
         else:
             st.caption("No picks logged yet — open Today's Picks tab to auto-log.")
     except Exception as e:
