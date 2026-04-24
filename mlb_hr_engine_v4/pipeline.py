@@ -159,20 +159,43 @@ def _build_player_profile(
     }
 
 
-def _match_odds(player, all_props):
+def _build_odds_lookup(all_props):
+    """Pre-build a lookup structure for O(1) odds matching."""
     if not all_props:
+        return {}, []
+
+    # Group props by player name
+    odds_by_player = {}
+    for prop in all_props:
+        name = prop["player_name"]
+        if name not in odds_by_player:
+            odds_by_player[name] = []
+        odds_by_player[name].append(prop)
+
+    # Create list of unique player names for fuzzy matching
+    unique_names = list(odds_by_player.keys())
+
+    return odds_by_player, unique_names
+
+
+def _match_odds(player, odds_lookup, unique_names):
+    """Match odds using pre-built lookup structure (O(1) after fuzzy match)."""
+    if not odds_lookup:
         return player
-    prop_names = [p["player_name"] for p in all_props]
+
+    # Fuzzy match against unique names only (much smaller list)
     match = fuzz_process.extractOne(
-        player["player_name"], prop_names,
+        player["player_name"], unique_names,
         scorer=fuzz.token_sort_ratio, score_cutoff=82,
     )
     if not match:
         return player
+
     matched_name = match[0]
-    matches = [p for p in all_props if p["player_name"] == matched_name]
+    matches = odds_lookup.get(matched_name, [])
     if not matches:
         return player
+
     prices  = [p["price"] for p in matches]
     summary = mkt.market_summary(prices)
     best    = max(matches, key=lambda x: x["price"])
@@ -300,8 +323,12 @@ def load_game_data(
                 all_players.append(p)
 
     _cb("Computing EV...")
+    # Pre-build odds lookup structure once (O(n))
+    odds_lookup, unique_names = _build_odds_lookup(all_props)
+
+    # Now match each player using the pre-built structure (O(1) per player)
     for p in all_players:
-        _match_odds(p, all_props)
+        _match_odds(p, odds_lookup, unique_names)
         _enrich_with_ev(p)
 
     qualified = []
