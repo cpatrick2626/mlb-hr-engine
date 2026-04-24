@@ -1261,7 +1261,10 @@ def main():
     # ── Banner ────────────────────────────────────────────────────────────────
     _banner = Path(__file__).parent / "assets" / "banner.png"
     if _banner.exists():
-        st.image(str(_banner), use_container_width=True)
+        try:
+            st.image(str(_banner), width="stretch")
+        except Exception:
+            st.image(str(_banner), use_container_width=True)
     st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
     tab1, tab2, tab3 = st.tabs([
         "📋  TODAY'S PICKS",
@@ -1481,5 +1484,9 @@ The app will open full-screen like a native app.
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except Exception as _top_e:
+        st.error(f"App crash: {_top_e}")
+        st.code(_tb.format_exc())
 
