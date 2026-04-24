@@ -1130,7 +1130,7 @@ def tab_performance():
         st.markdown('<div class="section-header">🎯 Closing Line Value</div>',
                     unsafe_allow_html=True)
         verdict = clv.get("verdict", "N/A")
-        v_icon  = {"SHARP": "🟢", "NEUTRAL": "🟡", "SOFT": "🔴"}.get(verdict, "âšª")
+        v_icon  = {"SHARP": "🟢", "NEUTRAL": "🟡", "SOFT": "🔴"}.get(verdict, "⚪")
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("CLV Picks",  clv.get("picks_with_clv", 0))
         c2.metric("Avg CLV",    f"{clv.get('avg_clv_pct',0):+.2f}%")
@@ -1345,7 +1345,7 @@ def main():
 
 **Android (Chrome)**
 1. Open the app URL in Chrome
-2. Tap the **â‹®** menu (top-right)
+2. Tap the **⋮** menu (top-right)
 3. Tap **Add to Home screen**
 4. Tap **Add** — done
 

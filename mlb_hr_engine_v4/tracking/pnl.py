@@ -25,7 +25,7 @@ LOG_PATH     = Path(__file__).parent / "picks_log.csv"
 RESULTS_PATH = Path(__file__).parent / "results.csv"
 
 LOG_FIELDS = [
-    "date", "model_version", "player_name", "team", "opponent",
+    "date", "model_version", "player_id", "player_name", "team", "opponent",
     "pitcher", "lineup_spot", "model_prob_pct", "market_prob_pct",
     "ev_pct", "edge_pct", "american_odds", "bet_dollars",
     "park_factor", "pitcher_factor", "weather_factor",
@@ -192,6 +192,7 @@ def _pick_row(p: dict, today: str, model_version: str) -> dict:
     return {
         "date":            today,
         "model_version":   model_version,
+        "player_id":       p.get("player_id", ""),
         "player_name":     p.get("player_name", ""),
         "team":            p.get("team", ""),
         "opponent":        p.get("opponent", ""),
