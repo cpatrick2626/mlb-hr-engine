@@ -29,22 +29,23 @@ _SESSION = requests.Session()
 # Public interface
 # ──────────────────────────────────────────────────────────────────────────────
 
-def get_hr_odds_all_games() -> tuple[list[dict], str]:
+def get_hr_odds_all_games() -> tuple[list[dict], str, dict]:
     """
     Try the API first; fall back to manual_odds.csv if blocked.
-    Returns (props_list, source_label).
+    Returns (props_list, source_label, quota_dict).
+    quota_dict keys: 'used', 'remaining' (ints, or None if unavailable).
     """
     if config.ODDS_API_KEY:
-        props = _try_api()
+        props, quota = _try_api()
         if props:
-            return props, "The Odds API"
+            return props, "The Odds API", quota
 
     # Fall back to manual CSV
     manual = load_manual_odds()
     if manual:
-        return manual, "manual_odds.csv"
+        return manual, "manual_odds.csv", {"used": None, "remaining": None}
 
-    return [], "none"
+    return [], "none", {"used": None, "remaining": None}
 
 
 def load_manual_odds() -> list[dict]:
@@ -103,10 +104,25 @@ def write_shopping_list(top_players: list[dict]) -> None:
 # API internals
 # ──────────────────────────────────────────────────────────────────────────────
 
-def _try_api() -> list[dict]:
+_last_quota: dict = {"used": None, "remaining": None}
+
+
+def _parse_quota(resp) -> None:
+    try:
+        used = resp.headers.get("x-requests-used")
+        remaining = resp.headers.get("x-requests-remaining")
+        if used is not None:
+            _last_quota["used"] = int(used)
+        if remaining is not None:
+            _last_quota["remaining"] = int(remaining)
+    except (ValueError, AttributeError):
+        pass
+
+
+def _try_api() -> tuple[list[dict], dict]:
     events = _get_events()
     if not events:
-        return []
+        return [], dict(_last_quota)
     all_props: list[dict] = []
     for event in events:
         props = _get_event_props(event["id"])
@@ -114,7 +130,7 @@ def _try_api() -> list[dict]:
             p["home_team"] = event.get("home_team", "")
             p["away_team"] = event.get("away_team", "")
         all_props.extend(props)
-    return all_props
+    return all_props, dict(_last_quota)
 
 
 def _get_events() -> list[dict]:
@@ -124,6 +140,7 @@ def _get_events() -> list[dict]:
             params={"apiKey": config.ODDS_API_KEY, "dateFormat": "iso"},
             timeout=12,
         )
+        _parse_quota(resp)
         if resp.status_code != 200:
             return []
         return resp.json()
@@ -143,6 +160,7 @@ def _get_event_props(event_id: str) -> list[dict]:
             },
             timeout=12,
         )
+        _parse_quota(resp)
         if resp.status_code != 200:
             return []
         data = resp.json()

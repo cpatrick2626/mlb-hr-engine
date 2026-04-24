@@ -300,9 +300,9 @@ def load_game_data(
 
         # Collect odds result with error handling
         try:
-            all_props, odds_source = future_odds.result()
+            all_props, odds_source, odds_quota = future_odds.result()
         except Exception:
-            all_props, odds_source = [], "none"
+            all_props, odds_source, odds_quota = [], "none", {"used": None, "remaining": None}
 
     # Collect all player and pitcher IDs from lineups first (for Statcast filtering)
     _cb("Collecting lineup players...")
@@ -441,6 +441,7 @@ def load_game_data(
         "qualified":    qualified,  # Add for main.py compatibility
         "ranked":       ranked,
         "odds_source":   odds_source,
+        "odds_quota":    odds_quota,
         "batter_data":  batter_data,  # Add for main.py compatibility
         "batter_count":  len(batter_data),
         "team_players":  team_players,

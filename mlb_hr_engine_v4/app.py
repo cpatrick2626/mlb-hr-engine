@@ -549,8 +549,23 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
     ranked    = _apply_ui_filters(all_players, min_ev, min_edge)
     stats     = data.get("stats", {})
     source    = data.get("odds_source", "none")
+    quota     = data.get("odds_quota", {})
     n_batters = data.get("batter_count", 0)
     scale     = _bankroll_scale()
+
+    # Build odds quota display
+    q_used      = quota.get("used")
+    q_remaining = quota.get("remaining")
+    if q_used is not None and q_remaining is not None:
+        q_total = q_used + q_remaining
+        odds_label = (
+            f"<b style='color:#f0f0f0'>{q_used}</b>"
+            f"<span style='color:#555'>/{q_total} used</span> "
+            f"<b style='color:#{'FF6666' if q_remaining < 50 else 'f0f0f0'}'>{q_remaining}</b>"
+            f"<span style='color:#555'> left</span>"
+        )
+    else:
+        odds_label = f"<b style='color:#f0f0f0'>{source}</b>"
 
     st.markdown('<div class="section-header">&#9889; TODAY\'S QUALIFIED PICKS</div>',
                 unsafe_allow_html=True)
@@ -563,7 +578,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
         f"Players: <b style='color:#f0f0f0'>{stats.get('players',0)}</b> &nbsp;|&nbsp; "
         f"Qualified: <b style='color:#FF3333'>{len(ranked)}</b> "
         f"<span style='color:#555'>(EV≥{min_ev:.0f}% Edge≥{min_edge:.1f}%)</span> &nbsp;|&nbsp; "
-        f"Odds: <b style='color:#f0f0f0'>{source}</b> &nbsp;|&nbsp; "
+        f"Odds: {odds_label} &nbsp;|&nbsp; "
         f"Statcast: <b style='color:#f0f0f0'>{n_batters}</b> batters"
         f"</div>",
         unsafe_allow_html=True,
