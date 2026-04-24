@@ -64,7 +64,7 @@ def analyze_historical_correlation(
 
 def find_correlated_parlays(
     players: List[dict],
-    max_legs: int = 4,
+    max_legs: int = 3,
     min_correlation: float = 0.15,
     min_individual_prob: float = 0.08,
 ) -> List[dict]:
@@ -81,8 +81,10 @@ def find_correlated_parlays(
     if not correlations:
         return []
 
-    candidates = [p for p in players if p.get("model_prob", 0) >= min_individual_prob
-                  and p.get("best_american")]
+    # Cap to top 25 by model_prob to keep combination count manageable
+    all_candidates = [p for p in players if p.get("model_prob", 0) >= min_individual_prob
+                      and p.get("best_american")]
+    candidates = sorted(all_candidates, key=lambda p: p.get("model_prob", 0), reverse=True)[:25]
 
     parlays = []
 

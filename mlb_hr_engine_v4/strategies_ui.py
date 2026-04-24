@@ -76,14 +76,19 @@ def tab_advanced_strategies(data: dict):
 
         if strategy_type == "Correlation Parlays":
             st.markdown("### 🔗 Correlation-Based Parlays")
-            st.info("Players who historically hit HRs on the same days - smarter parlay construction")
+            st.info("Same-team players facing the same pitcher — correlation bonus applied to EV")
 
-            corr_parlays = find_correlated_parlays(
-                players=all_players,
-                max_legs=4,
-                min_correlation=0.15,
-                min_individual_prob=0.08
-            )
+            @st.cache_data(ttl=3600, show_spinner=False)
+            def _cached_corr_parlays(player_ids: tuple):
+                return find_correlated_parlays(
+                    players=all_players,
+                    max_legs=3,
+                    min_correlation=0.15,
+                    min_individual_prob=0.08,
+                )
+
+            _cache_key = tuple(p.get("player_name", "") for p in all_players)
+            corr_parlays = _cached_corr_parlays(_cache_key)
 
             if corr_parlays:
                 for i, parlay in enumerate(corr_parlays[:5], 1):
@@ -122,13 +127,18 @@ def tab_advanced_strategies(data: dict):
             st.markdown("### 🏟️ Team Stack Parlays")
             st.info("Multiple players from same team - capitalize on offensive explosions")
 
-            stacks = build_team_stacks(
-                players=all_players,
-                min_team_size=2,
-                max_stack_size=4,
-                min_individual_prob=0.08,
-                min_stack_ev=10.0
-            )
+            @st.cache_data(ttl=3600, show_spinner=False)
+            def _cached_stacks(player_ids: tuple):
+                return build_team_stacks(
+                    players=all_players,
+                    min_team_size=2,
+                    max_stack_size=3,
+                    min_individual_prob=0.08,
+                    min_stack_ev=10.0,
+                )
+
+            _stack_key = tuple(p.get("player_name", "") for p in all_players)
+            stacks = _cached_stacks(_stack_key)
 
             if stacks:
                 for i, stack in enumerate(stacks[:8], 1):
