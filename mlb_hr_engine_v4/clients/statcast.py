@@ -31,6 +31,7 @@ import csv
 import requests
 from functools import lru_cache
 from typing import Optional
+from concurrent.futures import ThreadPoolExecutor
 
 import config
 
@@ -83,9 +84,15 @@ def get_batter_statcast(year: int = None, player_ids: set[int] = None) -> dict[i
       Tier 3 — no current-year data at all: use prior-year with trust discount;
                statcast_source = "prior"
     """
-    year  = year or config.CURRENT_SEASON
-    curr  = _merge_batter_sources(year, player_ids)
-    prior = _merge_batter_sources(year - 1, player_ids)
+    year = year or config.CURRENT_SEASON
+
+    # Fetch current and prior year data in parallel for better performance
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        future_curr = executor.submit(_merge_batter_sources, year, player_ids)
+        future_prior = executor.submit(_merge_batter_sources, year - 1, player_ids)
+
+        curr = future_curr.result()
+        prior = future_prior.result()
 
     _BLEND_KEYS = (
         "barrel_rate", "exit_velocity_avg", "hard_hit_pct",
@@ -128,8 +135,10 @@ def get_pitcher_statcast(year: int = None, player_ids: set[int] = None) -> dict[
         year: Season year (defaults to current)
         player_ids: Optional set of player IDs to filter (for performance)
     """
-    year  = year or config.CURRENT_SEASON
-    curr  = _merge_pitcher_sources(year, player_ids)
+    year = year or config.CURRENT_SEASON
+    curr = _merge_pitcher_sources(year, player_ids)
+
+    # If we have sparse current data, fetch prior year in parallel
     if len(curr) < 50:
         prior = _merge_pitcher_sources(year - 1, player_ids)
         for pid, stats in prior.items():
@@ -292,9 +301,19 @@ def _merge_batter_sources(year: int, player_ids: set[int] = None) -> dict[int, d
     """
     # Convert set to frozenset for caching
     frozen_ids = frozenset(player_ids) if player_ids else None
-    sc  = _fetch_leaderboard("batter", year, frozen_ids)
-    bb  = _fetch_batted_ball("batter", year, frozen_ids)
-    xst = _fetch_expected_stats("batter", year, frozen_ids)
+
+    # Fetch all three sources in parallel for improved performance
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        # Submit all fetch tasks concurrently
+        future_sc = executor.submit(_fetch_leaderboard, "batter", year, frozen_ids)
+        future_bb = executor.submit(_fetch_batted_ball, "batter", year, frozen_ids)
+        future_xst = executor.submit(_fetch_expected_stats, "batter", year, frozen_ids)
+
+        # Collect results as they complete
+        sc = future_sc.result()
+        bb = future_bb.result()
+        xst = future_xst.result()
+
     merged: dict[int, dict] = {}
 
     # If filtering, only merge requested players
@@ -321,8 +340,17 @@ def _merge_pitcher_sources(year: int, player_ids: set[int] = None) -> dict[int, 
     """
     # Convert set to frozenset for caching
     frozen_ids = frozenset(player_ids) if player_ids else None
-    sc = _fetch_leaderboard("pitcher", year, frozen_ids)
-    bb = _fetch_batted_ball("pitcher", year, frozen_ids)
+
+    # Fetch both sources in parallel for improved performance
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        # Submit both fetch tasks concurrently
+        future_sc = executor.submit(_fetch_leaderboard, "pitcher", year, frozen_ids)
+        future_bb = executor.submit(_fetch_batted_ball, "pitcher", year, frozen_ids)
+
+        # Collect results as they complete
+        sc = future_sc.result()
+        bb = future_bb.result()
+
     merged: dict[int, dict] = {}
 
     # If filtering, only merge requested players

@@ -5,7 +5,7 @@ Call load_game_data() once per session. It fetches everything and returns
 a single dict that both the CLI display and the Streamlit UI can consume.
 """
 
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, timedelta
 from rapidfuzz import fuzz, process as fuzz_process
 
@@ -267,14 +267,21 @@ def load_game_data(
 
     game_date = target_date or (config.TARGET_DATE or date.today().strftime("%Y-%m-%d"))
 
-    _cb("Fetching schedule...")
-    games = mlb_stats.get_today_schedule(game_date)
+    # Fetch schedule and odds in parallel for improved performance
+    _cb("Fetching schedule and odds concurrently...")
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        # Submit both fetch tasks concurrently
+        future_schedule = executor.submit(mlb_stats.get_today_schedule, game_date)
+        future_odds = executor.submit(odds_api.get_hr_odds_all_games)
 
-    _cb("Fetching odds...")
-    try:
-        all_props, odds_source = odds_api.get_hr_odds_all_games()
-    except Exception:
-        all_props, odds_source = [], "none"
+        # Collect schedule result
+        games = future_schedule.result()
+
+        # Collect odds result with error handling
+        try:
+            all_props, odds_source = future_odds.result()
+        except Exception:
+            all_props, odds_source = [], "none"
 
     # Collect all player and pitcher IDs from lineups first (for Statcast filtering)
     _cb("Collecting lineup players...")
@@ -304,16 +311,34 @@ def load_game_data(
                         if player.get("id"):
                             batter_ids.add(player["id"])
 
-    _cb(f"Loading Statcast for {len(batter_ids)} batters, {len(pitcher_ids)} pitchers...")
-    batter_data   = statcast_client.get_batter_statcast(player_ids=batter_ids)
-    pitcher_data  = statcast_client.get_pitcher_statcast(player_ids=pitcher_ids)
-    batter_bb     = statcast_client.get_batter_batted_ball()
-    pitcher_bb    = statcast_client.get_pitcher_batted_ball()
+    # Fetch Statcast and MLB stats in parallel for maximum efficiency
+    _cb(f"Loading data for {len(batter_ids)} batters, {len(pitcher_ids)} pitchers...")
+    with ThreadPoolExecutor(max_workers=6) as executor:
+        # Submit all data fetch tasks concurrently
+        futures = {
+            executor.submit(statcast_client.get_batter_statcast, player_ids=batter_ids): "batter_statcast",
+            executor.submit(statcast_client.get_pitcher_statcast, player_ids=pitcher_ids): "pitcher_statcast",
+            executor.submit(statcast_client.get_batter_batted_ball): "batter_bb",
+            executor.submit(statcast_client.get_pitcher_batted_ball): "pitcher_bb",
+            executor.submit(mlb_stats.bulk_fetch_player_stats, batter_ids): "mlb_player_stats",
+            executor.submit(mlb_stats.bulk_fetch_pitcher_stats, pitcher_ids): "mlb_pitcher_stats",
+        }
 
-    # Bulk fetch MLB stats for all players to minimize API calls
-    _cb("Bulk fetching MLB stats...")
-    mlb_stats.bulk_fetch_player_stats(batter_ids)
-    mlb_stats.bulk_fetch_pitcher_stats(pitcher_ids)
+        # Collect results as they complete
+        results = {}
+        for future in as_completed(futures):
+            key = futures[future]
+            try:
+                results[key] = future.result()
+            except Exception as e:
+                print(f"Error fetching {key}: {e}")
+                results[key] = {} if "statcast" in key or "bb" in key else None
+
+    # Unpack results
+    batter_data = results.get("batter_statcast", {})
+    pitcher_data = results.get("pitcher_statcast", {})
+    batter_bb = results.get("batter_bb", {})
+    pitcher_bb = results.get("pitcher_bb", {})
 
     # Collect tasks first so roster fallbacks run before the parallel phase.
     tasks: list[tuple] = []
