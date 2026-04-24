@@ -58,6 +58,7 @@ try:
     from output.parlay import _evaluate_parlay, parlay_bet_size
     from output.ranker import rank_picks as _rank_picks
     from tracking import pnl as pnl_tracker, clv as clv_tracker
+    from strategies_ui import tab_advanced_strategies
 except ImportError as e:
     print(f"Import error: {e}")
     print(f"Current directory: {current_dir}")
@@ -78,6 +79,13 @@ except ImportError as e:
     from engine.ev import expected_value_pct
     from output.ranker import rank_picks as _rank_picks
     from tracking import pnl as pnl_tracker, clv as clv_tracker
+    # Try to import strategies UI
+    try:
+        from strategies_ui import tab_advanced_strategies
+    except:
+        # Create a placeholder function if import fails
+        def tab_advanced_strategies(data):
+            st.info("Advanced strategies module is being loaded...")
 
 # â"€â"€ Styling â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 st.markdown("""
@@ -1336,10 +1344,11 @@ def main():
         except Exception:
             st.image(str(_banner), use_container_width=True)
     st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
-    tab1, tab2, tab3 = st.tabs([
+    tab1, tab2, tab3, tab4 = st.tabs([
         "📋  TODAY'S PICKS",
         "🎰  PARLAYS",
         "📊  PERFORMANCE",
+        "🎯  ADVANCED STRATEGIES",
     ])
 
     with tab1:
@@ -1363,6 +1372,14 @@ def main():
             tab_performance()
         except Exception as _e:
             st.error(f"Performance tab error: {_e}")
+            st.code(_tb.format_exc())
+
+    with tab4:
+        try:
+            data = get_data()
+            tab_advanced_strategies(data)
+        except Exception as _e:
+            st.error(f"Advanced strategies tab error: {_e}")
             st.code(_tb.format_exc())
 
     # â"€â"€ Sidebar â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
