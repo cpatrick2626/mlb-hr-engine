@@ -310,6 +310,11 @@ def load_game_data(
     batter_bb     = statcast_client.get_batter_batted_ball()
     pitcher_bb    = statcast_client.get_pitcher_batted_ball()
 
+    # Bulk fetch MLB stats for all players to minimize API calls
+    _cb("Bulk fetching MLB stats...")
+    mlb_stats.bulk_fetch_player_stats(batter_ids)
+    mlb_stats.bulk_fetch_pitcher_stats(pitcher_ids)
+
     # Collect tasks first so roster fallbacks run before the parallel phase.
     tasks: list[tuple] = []
     for game in games:

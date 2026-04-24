@@ -23,6 +23,11 @@ _GAME_LOG_CACHE: dict[int, list] = {}
 # get_pitcher_days_rest(), which previously made identical requests independently.
 _PITCHER_GAME_LOG_CACHE: dict[int, list] = {}
 
+# Bulk stats caches - populated by bulk fetch operations
+_BULK_SEASON_STATS_CACHE: dict[int, dict] = {}
+_BULK_RECENT_STATS_CACHE: dict[int, dict] = {}
+_BULK_PITCHER_STATS_CACHE: dict[int, dict] = {}
+
 
 def _pitcher_game_log_splits(pitcher_id: int) -> list:
     if pitcher_id not in _PITCHER_GAME_LOG_CACHE:
@@ -145,6 +150,17 @@ def get_player_season_stats(player_id: int) -> dict:
     Hitting stats for the current season.
     Falls back to prior season if current season has < 30 PA (early season noise).
     """
+    # Check bulk cache first
+    if player_id in _BULK_SEASON_STATS_CACHE:
+        stats = _BULK_SEASON_STATS_CACHE[player_id]
+        pa = int(stats.get("plateAppearances", 0))
+        if pa < 30:
+            prior = _get_prior_season_stats(player_id)
+            if prior:
+                return prior
+        return stats
+
+    # Fall back to individual fetch
     try:
         data = _get(f"/people/{player_id}/stats", {
             "stats": "season",
@@ -181,6 +197,11 @@ def _get_prior_season_stats(player_id: int) -> dict:
 
 def get_player_recent_stats(player_id: int) -> dict:
     """Aggregate hitting stats over last RECENT_GAMES games (newest-first, game-count window)."""
+    # Check bulk cache first
+    if player_id in _BULK_RECENT_STATS_CACHE:
+        return _BULK_RECENT_STATS_CACHE[player_id]
+
+    # Fall back to individual fetch
     splits = _game_log_splits(player_id)  # already sorted newest-first
     recent = splits[:config.RECENT_GAMES]
     totals = {"homeRuns": 0, "plateAppearances": 0, "atBats": 0,
@@ -207,9 +228,24 @@ def get_player_recent_stats(player_id: int) -> dict:
 @lru_cache(maxsize=256)
 def get_pitcher_season_stats(pitcher_id: int) -> dict:
     """
-    Pitching stats â€” current season with prior-year fallback.
+    Pitching stats — current season with prior-year fallback.
     Includes airOuts for HR/FB calculation (v2 enhancement).
     """
+    # Check bulk cache first
+    if pitcher_id in _BULK_PITCHER_STATS_CACHE:
+        stats = _BULK_PITCHER_STATS_CACHE[pitcher_id]
+        # Check if pitcher has < 5 IP this season
+        ip_str = stats.get("inningsPitched", "0.0")
+        try:
+            parts = str(ip_str).split(".")
+            ip = int(parts[0]) + int(parts[1]) / 3.0 if len(parts) > 1 else float(ip_str)
+        except Exception:
+            ip = 0.0
+        if ip < 5:
+            return _get_prior_pitcher_stats(pitcher_id) or stats
+        return stats
+
+    # Fall back to individual fetch
     try:
         data = _get(f"/people/{pitcher_id}/stats", {
             "stats": "season",
@@ -373,4 +409,198 @@ def _first_splits(data: dict) -> Optional[dict]:
         return None
     splits = stats_list[0].get("splits", [])
     return splits[0] if splits else None
+
+
+# ── Bulk fetch functions for optimization ────────────────────────────────────
+
+def bulk_fetch_player_stats(player_ids: set[int]) -> None:
+    """
+    Pre-fetch and cache stats for multiple players in bulk.
+    Dramatically reduces API calls by using hydrated requests.
+
+    Args:
+        player_ids: Set of player IDs to fetch stats for
+    """
+    if not player_ids:
+        return
+
+    # Clear previous bulk caches
+    _BULK_SEASON_STATS_CACHE.clear()
+    _BULK_RECENT_STATS_CACHE.clear()
+
+    # Convert to list and batch process (MLB API has URL length limits)
+    player_list = list(player_ids)
+    batch_size = 50  # Process 50 players at a time to avoid URL limits
+
+    for i in range(0, len(player_list), batch_size):
+        batch = player_list[i:i + batch_size]
+        _fetch_batch_stats(batch)
+
+
+def _fetch_batch_stats(player_ids: list[int]) -> None:
+    """Fetch stats for a batch of players using hydrated requests."""
+
+    # Build comma-separated list of player IDs
+    player_ids_str = ",".join(str(pid) for pid in player_ids)
+
+    try:
+        # Fetch season and game log stats in a single hydrated request
+        data = _get(f"/people", {
+            "personIds": player_ids_str,
+            "hydrate": f"stats(group=[hitting],type=[season,gameLog],season={config.CURRENT_SEASON}),currentTeam"
+        })
+
+        people = data.get("people", [])
+
+        for person in people:
+            player_id = person.get("id")
+            if not player_id:
+                continue
+
+            stats_list = person.get("stats", [])
+
+            # Extract season stats
+            season_stats = {}
+            game_logs = []
+
+            for stat_group in stats_list:
+                stat_type = stat_group.get("type", {}).get("displayName", "")
+
+                if stat_type == "season":
+                    splits = stat_group.get("splits", [])
+                    if splits:
+                        season_stats = splits[0].get("stat", {})
+
+                elif stat_type == "gameLog":
+                    game_logs = stat_group.get("splits", [])
+                    # Sort game logs by date (newest first)
+                    game_logs = sorted(game_logs, key=lambda s: s.get("date", ""), reverse=True)
+
+            # Cache season stats
+            _BULK_SEASON_STATS_CACHE[player_id] = season_stats
+
+            # Calculate recent stats from game logs (last 30 days)
+            if game_logs:
+                _GAME_LOG_CACHE[player_id] = game_logs
+                recent_stats = _calculate_recent_from_logs(game_logs, days=30)
+                _BULK_RECENT_STATS_CACHE[player_id] = recent_stats
+            else:
+                _BULK_RECENT_STATS_CACHE[player_id] = {}
+
+    except Exception as e:
+        # Fall back to individual fetching if bulk fails
+        print(f"[mlb_stats] Bulk fetch failed for batch, falling back: {e}")
+
+
+def _calculate_recent_from_logs(game_logs: list, days: int = 30) -> dict:
+    """Calculate aggregate stats from game logs for the last N days."""
+    from datetime import datetime, timedelta
+
+    cutoff_date = datetime.now() - timedelta(days=days)
+    recent_logs = []
+
+    for log in game_logs:
+        try:
+            game_date = datetime.strptime(log.get("date", ""), "%Y-%m-%d")
+            if game_date >= cutoff_date:
+                recent_logs.append(log.get("stat", {}))
+        except:
+            continue
+
+    if not recent_logs:
+        return {}
+
+    # Aggregate stats
+    totals = {
+        "plateAppearances": 0,
+        "atBats": 0,
+        "hits": 0,
+        "homeRuns": 0,
+        "doubles": 0,
+        "triples": 0,
+        "walks": 0,
+        "strikeOuts": 0,
+        "rbi": 0,
+        "runs": 0,
+    }
+
+    for stat in recent_logs:
+        for key in totals:
+            totals[key] += int(stat.get(key, 0))
+
+    # Calculate percentages
+    if totals["atBats"] > 0:
+        totals["avg"] = round(totals["hits"] / totals["atBats"], 3)
+        total_bases = (totals["hits"] - totals["doubles"] - totals["triples"] - totals["homeRuns"] +
+                      2 * totals["doubles"] + 3 * totals["triples"] + 4 * totals["homeRuns"])
+        totals["sluggingPercentage"] = round(total_bases / totals["atBats"], 3)
+    else:
+        totals["avg"] = 0.0
+        totals["sluggingPercentage"] = 0.0
+
+    if totals["plateAppearances"] > 0:
+        totals["onBasePercentage"] = round((totals["hits"] + totals["walks"]) / totals["plateAppearances"], 3)
+        totals["ops"] = totals["onBasePercentage"] + totals["sluggingPercentage"]
+    else:
+        totals["onBasePercentage"] = 0.0
+        totals["ops"] = 0.0
+
+    return totals
+
+
+def bulk_fetch_pitcher_stats(pitcher_ids: set[int]) -> None:
+    """
+    Pre-fetch and cache stats for multiple pitchers in bulk.
+
+    Args:
+        pitcher_ids: Set of pitcher IDs to fetch stats for
+    """
+    if not pitcher_ids:
+        return
+
+    _BULK_PITCHER_STATS_CACHE.clear()
+
+    pitcher_list = list(pitcher_ids)
+    batch_size = 50
+
+    for i in range(0, len(pitcher_list), batch_size):
+        batch = pitcher_list[i:i + batch_size]
+        _fetch_batch_pitcher_stats(batch)
+
+
+def _fetch_batch_pitcher_stats(pitcher_ids: list[int]) -> None:
+    """Fetch stats for a batch of pitchers."""
+
+    pitcher_ids_str = ",".join(str(pid) for pid in pitcher_ids)
+
+    try:
+        data = _get(f"/people", {
+            "personIds": pitcher_ids_str,
+            "hydrate": f"stats(group=[pitching],type=[season,gameLog],season={config.CURRENT_SEASON})"
+        })
+
+        people = data.get("people", [])
+
+        for person in people:
+            pitcher_id = person.get("id")
+            if not pitcher_id:
+                continue
+
+            stats_list = person.get("stats", [])
+
+            for stat_group in stats_list:
+                stat_type = stat_group.get("type", {}).get("displayName", "")
+
+                if stat_type == "season":
+                    splits = stat_group.get("splits", [])
+                    if splits:
+                        _BULK_PITCHER_STATS_CACHE[pitcher_id] = splits[0].get("stat", {})
+
+                elif stat_type == "gameLog":
+                    game_logs = stat_group.get("splits", [])
+                    game_logs = sorted(game_logs, key=lambda s: s.get("date", ""), reverse=True)
+                    _PITCHER_GAME_LOG_CACHE[pitcher_id] = game_logs
+
+    except Exception as e:
+        print(f"[mlb_stats] Bulk pitcher fetch failed for batch: {e}")
 
