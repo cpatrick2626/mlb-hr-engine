@@ -9,7 +9,6 @@ from pathlib import Path
 
 import streamlit as st
 import pandas as pd
-from streamlit_autorefresh import st_autorefresh
 
 st.set_page_config(
     page_title="Codex HR Engine",
@@ -303,23 +302,18 @@ def _load_data(target_date: str):
     return load_game_data(target_date=target_date, progress_cb=[].append)
 
 
-_SESSION_TTL = 3300  # seconds — must match cache TTL so autorefresh always gets fresh data
 
 
 def get_data():
     from datetime import date as _date
     target_date = config.TARGET_DATE or _date.today().strftime("%Y-%m-%d")
-    now = time.time()
-    age = now - st.session_state.get("data_loaded_at", 0)
-    stale = age > _SESSION_TTL or st.session_state.get("cache_key") != target_date
 
-    if "data" not in st.session_state or stale:
+    if "data" not in st.session_state or st.session_state.get("cache_key") != target_date:
         with st.spinner("⚾ Loading today's games, odds, and player profiles… (2-4 min first load)"):
             try:
                 data = _load_data(target_date)
-                st.session_state["data"]           = data
-                st.session_state["cache_key"]      = target_date
-                st.session_state["data_loaded_at"] = now
+                st.session_state["data"]      = data
+                st.session_state["cache_key"] = target_date
 
                 ranked = data.get("ranked", [])
                 if ranked:
@@ -342,8 +336,7 @@ def get_data():
                     "odds_source": "error", "batter_data": {},
                     "all_by_model": [], "team_players": {}, "auto_parlays": {},
                 }
-                st.session_state["cache_key"]      = target_date
-                st.session_state["data_loaded_at"] = now
+                st.session_state["cache_key"] = target_date
 
     return st.session_state["data"]
 
@@ -353,6 +346,86 @@ def _fmt_american(odds) -> str:
     if odds is None:
         return "--"
     return f"+{odds}" if int(odds) > 0 else str(odds)
+
+
+# ── Stat color coding ──────────────────────────────────────────────────────────
+_DARK_GREEN = "background-color:#14532d; color:#f0f0f0"
+_GREEN      = "background-color:#166534; color:#f0f0f0"
+_RED        = "background-color:#7f1d1d; color:#f0f0f0"
+_DARK_RED   = "background-color:#450a0a; color:#f0f0f0"
+
+def _stat_css(col: str, val) -> str:
+    """Return CSS style string for a stat cell based on column name and value."""
+    try:
+        raw = float(str(val).replace("%", "").replace("+", "").replace("$", "").strip())
+    except (ValueError, TypeError):
+        return ""
+    if col == "Brl%":
+        if raw >= 10:  return _DARK_GREEN
+        if raw >= 5.2: return _GREEN
+        if raw >= 3:   return _RED
+        return _DARK_RED
+    if col == "SwSp%":
+        if raw >= 40:  return _DARK_GREEN
+        if raw >= 34:  return _GREEN
+        if raw >= 28:  return _RED
+        return _DARK_RED
+    if col in ("EV mph", "Exit Velo"):
+        if raw >= 95:   return _DARK_GREEN
+        if raw >= 88.9: return _GREEN
+        if raw >= 85:   return _RED
+        return _DARK_RED
+    if col == "FB%":
+        if raw >= 40: return _DARK_GREEN
+        if raw >= 36: return _GREEN
+        if raw >= 30: return _RED
+        return _DARK_RED
+    if col == "GB%":
+        if raw < 36:  return _DARK_GREEN
+        if raw < 44:  return _GREEN
+        if raw < 50:  return _RED
+        return _DARK_RED
+    if col in ("EV%",):
+        if raw >= 20: return _DARK_GREEN
+        if raw >= 10: return _GREEN
+        if raw >= 3:  return ""
+        return _RED
+    if col in ("Edge", "Edge%"):
+        if raw >= 10: return _DARK_GREEN
+        if raw >= 5:  return _GREEN
+        if raw >= 2:  return ""
+        return _RED
+    if col == "Model%":
+        if raw >= 25: return _DARK_GREEN
+        if raw >= 15: return _GREEN
+        if raw >= 8:  return ""
+        return _RED
+    if col == "Conf":
+        if raw >= 70: return _DARK_GREEN
+        if raw >= 50: return _GREEN
+        if raw >= 30: return ""
+        return _RED
+    if col == "PwrMult":
+        if raw >= 1.40: return _DARK_GREEN
+        if raw >= 1.10: return _GREEN
+        if raw >= 0.90: return ""
+        if raw >= 0.70: return _RED
+        return _DARK_RED
+    return ""
+
+_COLOR_COLS = {"Brl%", "SwSp%", "EV mph", "FB%", "GB%", "EV%", "Edge", "Edge%",
+               "Model%", "Conf", "PwrMult", "Exit Velo"}
+
+def _style_df(df: pd.DataFrame) -> "pd.io.formats.style.Styler":
+    """Apply stat-based background colors to a picks DataFrame."""
+    style = df.style
+    for col in _COLOR_COLS:
+        if col in df.columns:
+            style = style.apply(
+                lambda s, c=col: [_stat_css(c, v) for v in s],
+                subset=[col],
+            )
+    return style
 
 
 def _combo_html(parlay: dict, label: str) -> str:
@@ -573,7 +646,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
 
         session_br = st.session_state.get("bankroll_override", config.BANKROLL)
         st.dataframe(
-            pd.DataFrame(rows),
+            _style_df(pd.DataFrame(rows)),
             use_container_width=True,
             hide_index=True,
             column_config={
@@ -899,7 +972,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
                 unsafe_allow_html=True,
             )
             st.dataframe(
-                pd.DataFrame(_model_rows(prime)),
+                _style_df(pd.DataFrame(_model_rows(prime))),
                 use_container_width=True, hide_index=True,
                 column_config=_col_cfg,
             )
@@ -923,7 +996,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
                 unsafe_allow_html=True,
             )
             st.dataframe(
-                pd.DataFrame(_model_rows(watch)),
+                _style_df(pd.DataFrame(_model_rows(watch))),
                 use_container_width=True, hide_index=True,
                 column_config=_col_cfg,
             )
@@ -1112,30 +1185,58 @@ def tab_performance():
         return
 
     if summary:
+        def _pnl_box(label: str, value: str, css: str) -> str:
+            return (
+                f"<div style='background:{css};border-radius:8px;padding:10px 14px;"
+                f"text-align:center;margin:2px;'>"
+                f"<div style='font-size:11px;color:#ccc;margin-bottom:4px;'>{label}</div>"
+                f"<div style='font-size:20px;font-weight:800;color:#fff;'>{value}</div>"
+                f"</div>"
+            )
+
+        win_rate  = summary.get("win_rate", 0) * 100
+        roi       = summary.get("roi_pct", 0)
+        net_pnl   = summary.get("total_profit", 0)
+        wins      = summary.get("wins", 0)
+        losses    = summary.get("losses", 0)
+
+        win_css = ("#14532d" if win_rate >= 60 else "#166534" if win_rate >= 50
+                   else "#7f1d1d" if win_rate >= 40 else "#450a0a")
+        roi_css = ("#14532d" if roi >= 20 else "#166534" if roi > 0
+                   else "#7f1d1d" if roi >= -10 else "#450a0a")
+        pnl_css = ("#14532d" if net_pnl >= 20 else "#166534" if net_pnl > 0
+                   else "#7f1d1d" if net_pnl >= -20 else "#450a0a")
+        wl_css  = ("#14532d" if wins > losses else "#166534" if wins == losses
+                   else "#7f1d1d" if losses <= wins * 1.5 else "#450a0a")
+
         c1, c2, c3, c4, c5 = st.columns(5)
-        c1.metric("Total Picks",   summary.get("total_picks", 0))
-        c2.metric("Win Rate",      f"{summary.get('win_rate',0)*100:.1f}%")
-        c3.metric("Total Wagered", f"${summary.get('total_wagered',0):,.2f}")
-        c4.metric("Net P&L",       f"${summary.get('total_profit',0):+,.2f}")
-        c5.metric("ROI",           f"{summary.get('roi_pct',0):+.1f}%")
+        c1.markdown(_pnl_box("Total Picks",   str(summary.get("total_picks", 0)), "#1a1a2e"), unsafe_allow_html=True)
+        c2.markdown(_pnl_box("Win Rate",      f"{win_rate:.1f}%",                 win_css),  unsafe_allow_html=True)
+        c3.markdown(_pnl_box("Total Wagered", f"${summary.get('total_wagered',0):,.0f}", "#1a1a2e"), unsafe_allow_html=True)
+        c4.markdown(_pnl_box("Net P&L",       f"${net_pnl:+,.2f}",               pnl_css),  unsafe_allow_html=True)
+        c5.markdown(_pnl_box("ROI",           f"{roi:+.1f}%",                     roi_css),  unsafe_allow_html=True)
 
         col_w, col_l, col_p = st.columns(3)
-        col_w.metric("Wins",    summary.get("wins", 0))
-        col_l.metric("Losses",  summary.get("losses", 0))
-        col_p.metric("Pending", summary.get("pending", 0))
+        col_w.markdown(_pnl_box("Wins",    str(wins),                      "#14532d" if wins > 0 else "#1a1a2e"), unsafe_allow_html=True)
+        col_l.markdown(_pnl_box("Losses",  str(losses),                    "#7f1d1d" if losses > 0 else "#1a1a2e"), unsafe_allow_html=True)
+        col_p.markdown(_pnl_box("Pending", str(summary.get("pending", 0)), "#1a1a2e"), unsafe_allow_html=True)
     else:
         st.info("No results logged yet. Picks are auto-logged when Today's Picks tab loads.")
 
     if clv:
         st.markdown('<div class="section-header">🎯 Closing Line Value</div>',
                     unsafe_allow_html=True)
-        verdict = clv.get("verdict", "N/A")
-        v_icon  = {"SHARP": "🟢", "NEUTRAL": "🟡", "SOFT": "🔴"}.get(verdict, "⚪")
+        verdict   = clv.get("verdict", "N/A")
+        avg_clv   = clv.get("avg_clv_pct", 0)
+        beat_close = clv.get("pct_beating_close", 0)
+        clv_css   = "#14532d" if avg_clv >= 1 else "#166534" if avg_clv > 0 else "#7f1d1d" if avg_clv >= -0.5 else "#450a0a"
+        beat_css  = "#14532d" if beat_close >= 60 else "#166534" if beat_close >= 50 else "#7f1d1d" if beat_close >= 40 else "#450a0a"
+        v_css     = {"SHARP": "#14532d", "NEUTRAL": "#1a1a2e", "SOFT": "#450a0a"}.get(verdict, "#1a1a2e")
         c1, c2, c3, c4 = st.columns(4)
-        c1.metric("CLV Picks",  clv.get("picks_with_clv", 0))
-        c2.metric("Avg CLV",    f"{clv.get('avg_clv_pct',0):+.2f}%")
-        c3.metric("Beat Close", f"{clv.get('pct_beating_close',0):.1f}%")
-        c4.metric("Verdict",    f"{v_icon} {verdict}")
+        c1.markdown(_pnl_box("CLV Picks",  str(clv.get("picks_with_clv", 0)), "#1a1a2e"), unsafe_allow_html=True)
+        c2.markdown(_pnl_box("Avg CLV",    f"{avg_clv:+.2f}%",               clv_css),   unsafe_allow_html=True)
+        c3.markdown(_pnl_box("Beat Close", f"{beat_close:.1f}%",             beat_css),  unsafe_allow_html=True)
+        c4.markdown(_pnl_box("Verdict",    verdict,                           v_css),     unsafe_allow_html=True)
 
     st.markdown('<div class="section-header">📋 Picks Log</div>', unsafe_allow_html=True)
     try:
@@ -1152,10 +1253,6 @@ def tab_performance():
 # MAIN
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 def main():
-    # Auto-refresh every 60 minutes. Session TTL (3300s) guarantees cache
-    # is expired when the rerun fires, so fresh data is always fetched.
-    st_autorefresh(interval=3_600_000, key="hourly_refresh")
-
     # Read filter thresholds from session state first (sidebar sets them on each rerun)
     _min_ev   = float(st.session_state.get("min_ev",   config.MIN_EV_PCT))
     _min_edge = float(st.session_state.get("min_edge", config.MIN_EDGE_PCT))
