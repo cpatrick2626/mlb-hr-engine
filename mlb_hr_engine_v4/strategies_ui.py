@@ -141,7 +141,21 @@ def tab_advanced_strategies(data: dict):
             stacks = _cached_stacks(_stack_key)
 
             if stacks:
-                for i, stack in enumerate(stacks[:8], 1):
+                all_stack_teams = sorted({s["team"] for s in stacks})
+                team_filter = st.selectbox(
+                    "Filter by team",
+                    ["All Teams"] + all_stack_teams,
+                    key="stack_team_filter",
+                )
+                filtered_stacks = (
+                    stacks if team_filter == "All Teams"
+                    else [s for s in stacks if s["team"] == team_filter]
+                )
+            else:
+                filtered_stacks = []
+
+            if filtered_stacks:
+                for i, stack in enumerate(filtered_stacks[:8], 1):
                     with st.expander(f"{stack['team']} Stack: {stack['size']} players - EV: {stack['ev_pct']:+.1f}%"):
                         col1, col2 = st.columns(2)
                         with col1:

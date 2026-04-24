@@ -60,8 +60,14 @@ def build_team_stacks(
                     stack["strategy"] = "team_stack"
                     stacks.append(stack)
 
-    # Sort by EV
-    return sorted(stacks, key=lambda x: x["ev_pct"], reverse=True)[:15]
+    # Keep best 2 stacks per team, then sort overall by EV
+    seen: dict = defaultdict(int)
+    diverse = []
+    for s in sorted(stacks, key=lambda x: x["ev_pct"], reverse=True):
+        if seen[s["team"]] < 2:
+            diverse.append(s)
+            seen[s["team"]] += 1
+    return diverse[:15]
 
 
 def evaluate_stack(
