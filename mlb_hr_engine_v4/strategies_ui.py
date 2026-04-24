@@ -3,6 +3,7 @@
 # ═══════════════════════════════════════════════════════════════════════════
 def tab_advanced_strategies(data: dict):
     """Advanced betting strategies tab with correlation parlays, hedging, stacks, etc."""
+    import urllib.parse
     import streamlit as st
     import traceback as _tb
     import math
@@ -10,6 +11,39 @@ def tab_advanced_strategies(data: dict):
     from pathlib import Path
     sys.path.insert(0, str(Path(__file__).parent))
     import config
+
+    def _fd_url(player_name: str = "") -> str:
+        if player_name:
+            q = urllib.parse.quote(player_name)
+            return f"https://sportsbook.fanduel.com/search?q={q}"
+        return "https://sportsbook.fanduel.com/baseball/mlb?tab=player-home-runs"
+
+    def _fd_link(player_name: str) -> str:
+        url = _fd_url(player_name)
+        return (
+            f"<a href='{url}' target='_blank' "
+            f"style='color:#4488ff; font-size:11px; background:#0d0d2a; "
+            f"padding:2px 8px; border-radius:4px; border:1px solid #1a2a66; "
+            f"text-decoration:none; white-space:nowrap;'>Open FD →</a>"
+        )
+
+    def _add_to_fd_slip(player_names: list, all_players: list) -> int:
+        player_map = {p["player_name"]: p for p in all_players if p.get("player_name")}
+        current = list(st.session_state.get("fd_slip", []))
+        added = 0
+        for name in player_names:
+            p = player_map.get(name)
+            if not p:
+                continue
+            odds = p.get("fanduel_american") or p.get("best_american")
+            from app import _fmt_american
+            label = f"{p['player_name']} ({p.get('team', '')}) {_fmt_american(odds)}"
+            if label not in current:
+                current.append(label)
+                added += 1
+        if added:
+            st.session_state["fd_slip"] = current
+        return added
 
     st.markdown('<div class="section-header">🎯 ADVANCED BETTING STRATEGIES</div>', unsafe_allow_html=True)
 
@@ -21,7 +55,6 @@ def tab_advanced_strategies(data: dict):
     )
 
     try:
-        # Import strategies module
         from strategies import (
             find_correlated_parlays,
             build_team_stacks,
@@ -38,7 +71,6 @@ def tab_advanced_strategies(data: dict):
             st.markdown("### 🔗 Correlation-Based Parlays")
             st.info("Players who historically hit HRs on the same days - smarter parlay construction")
 
-            # Find correlation parlays
             corr_parlays = find_correlated_parlays(
                 players=all_players,
                 max_legs=4,
@@ -61,15 +93,33 @@ def tab_advanced_strategies(data: dict):
 
                         st.write("**Players:**")
                         for player, team in zip(parlay['legs'], parlay['teams']):
-                            st.write(f"• {player} ({team})")
+                            st.markdown(
+                                f"<div style='display:flex; justify-content:space-between; "
+                                f"align-items:center; padding:3px 0;'>"
+                                f"<span>• <b>{player}</b> <span style='color:#888'>({team})</span></span>"
+                                f"{_fd_link(player)}</div>",
+                                unsafe_allow_html=True,
+                            )
+
+                        fd_col, _ = st.columns([1, 2])
+                        with fd_col:
+                            if st.button(f"📲 Add All to FD Slip", key=f"fd_corr_{i}"):
+                                try:
+                                    n = _add_to_fd_slip(parlay['legs'], all_players)
+                                    if n:
+                                        st.success(f"+{n} player{'s' if n != 1 else ''} added to FD Slip!")
+                                    else:
+                                        st.info("Already in slip.")
+                                except Exception:
+                                    st.link_button("📲 Browse FanDuel HR Props", _fd_url())
             else:
                 st.warning("No correlation parlays found with current criteria")
+                st.link_button("📲 Browse FanDuel HR Props", _fd_url())
 
         elif strategy_type == "Team Stacks":
             st.markdown("### 🏟️ Team Stack Parlays")
             st.info("Multiple players from same team - capitalize on offensive explosions")
 
-            # Build team stacks
             stacks = build_team_stacks(
                 players=all_players,
                 min_team_size=2,
@@ -94,9 +144,28 @@ def tab_advanced_strategies(data: dict):
                         st.write("**Players (Lineup Spot):**")
                         for player, spot in zip(stack['players'], stack['lineup_spots']):
                             spot_str = f"#{spot}" if spot else "?"
-                            st.write(f"• {player} ({spot_str})")
+                            st.markdown(
+                                f"<div style='display:flex; justify-content:space-between; "
+                                f"align-items:center; padding:3px 0;'>"
+                                f"<span>• <b>{player}</b> <span style='color:#888'>({spot_str})</span></span>"
+                                f"{_fd_link(player)}</div>",
+                                unsafe_allow_html=True,
+                            )
+
+                        fd_col, _ = st.columns([1, 2])
+                        with fd_col:
+                            if st.button(f"📲 Add All to FD Slip", key=f"fd_stack_{i}"):
+                                try:
+                                    n = _add_to_fd_slip(stack['players'], all_players)
+                                    if n:
+                                        st.success(f"+{n} player{'s' if n != 1 else ''} added to FD Slip!")
+                                    else:
+                                        st.info("Already in slip.")
+                                except Exception:
+                                    st.link_button("📲 Browse FanDuel HR Props", _fd_url())
             else:
                 st.warning("No profitable team stacks found")
+                st.link_button("📲 Browse FanDuel HR Props", _fd_url())
 
         elif strategy_type == "Hedge Calculator":
             st.markdown("### 🛡️ Hedge Betting Calculator")
@@ -126,6 +195,9 @@ def tab_advanced_strategies(data: dict):
                 with col3:
                     st.metric("Guaranteed Profit", f"${hedge['guaranteed_profit']:+.2f}")
                     st.metric("Hedge ROI", f"{hedge['hedge_roi']:.1f}%")
+
+            st.divider()
+            st.link_button("📲 Browse FanDuel HR Props", _fd_url(), use_container_width=True)
 
         elif strategy_type == "Progressive Staking":
             st.markdown("### 📈 Progressive Staking Systems")
@@ -163,6 +235,9 @@ def tab_advanced_strategies(data: dict):
                                              streak_length, bankroll)
                     st.metric("Next Stake", f"${stake:.2f}")
                     st.caption("Goal: Win 1 unit per session. Keep stakes same in losses, increase in wins.")
+
+            st.divider()
+            st.link_button("📲 Browse FanDuel HR Props", _fd_url(), use_container_width=True)
 
     except ImportError as e:
         st.error("Advanced strategies module not found. Strategies are being developed.")
