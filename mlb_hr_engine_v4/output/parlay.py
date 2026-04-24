@@ -214,13 +214,13 @@ def build_profile_parlays(
     return results
 
 
-def build_best_parlay(ranked_picks: list[dict]) -> dict | None:
+def build_best_parlay(ranked_picks: list[dict]) -> Optional[dict]:
     """Single best parlay across all leg counts (used by CLI display)."""
     pool = [p for p in ranked_picks[:config.PARLAY_CANDIDATE_POOL]
             if p.get("best_american") and p.get("model_prob", 0) > 0]
     if len(pool) < config.PARLAY_MIN_LEGS:
         return None
-    best: dict | None = None
+    best: Optional[dict] = None
     best_ev = float("-inf")
     for n_legs in range(config.PARLAY_MIN_LEGS, config.PARLAY_MAX_LEGS + 1):
         for combo in itertools.combinations(pool, n_legs):

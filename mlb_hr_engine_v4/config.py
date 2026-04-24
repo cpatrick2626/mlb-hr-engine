@@ -1,4 +1,5 @@
 import os
+from typing import Optional
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -18,7 +19,7 @@ ODDS_API_KEY: str = _secret("ODDS_API_KEY")
 BANKROLL: float = float(_secret("BANKROLL", "100"))
 
 # ── Date Override ─────────────────────────────────────────────────────────────
-TARGET_DATE: str | None = os.getenv("TARGET_DATE")   # None = use today
+TARGET_DATE: Optional[str] = os.getenv("TARGET_DATE")   # None = use today
 
 # ── Bet Sizing ────────────────────────────────────────────────────────────────
 KELLY_FRACTION: float = 0.25   # Quarter-Kelly for real-world sizing

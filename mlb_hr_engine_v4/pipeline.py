@@ -5,7 +5,7 @@ Call load_game_data() once per session. It fetches everything and returns
 a single dict that both the CLI display and the Streamlit UI can consume.
 """
 
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, timedelta
 from rapidfuzz import fuzz, process as fuzz_process
 
@@ -49,10 +49,22 @@ def _build_player_profile(
     xba_raw    = sc_stats.get("xba")
     xslg_raw   = sc_stats.get("xslg")
     actual_slg = float(season_stats.get("sluggingPercentage", 0) or 0)
-    xiso       = (round(float(xslg_raw) - float(xba_raw), 3)
-                  if (xslg_raw is not None and xba_raw is not None) else None)
-    xslg_diff  = (round(float(xslg_raw) - actual_slg, 3)
-                  if xslg_raw is not None else None)
+
+    # Safe conversion for xslg and xba which may contain '--' strings
+    try:
+        xba_float = float(xba_raw) if xba_raw and str(xba_raw) != '--' else None
+    except (ValueError, TypeError):
+        xba_float = None
+
+    try:
+        xslg_float = float(xslg_raw) if xslg_raw and str(xslg_raw) != '--' else None
+    except (ValueError, TypeError):
+        xslg_float = None
+
+    xiso       = (round(xslg_float - xba_float, 3)
+                  if (xslg_float is not None and xba_float is not None) else None)
+    xslg_diff  = (round(xslg_float - actual_slg, 3)
+                  if xslg_float is not None else None)
 
     streak_fac = prob.hot_streak_factor(short_form, season_stats)
     k_fac      = prob.batter_k_suppressor(season_stats)
@@ -159,20 +171,43 @@ def _build_player_profile(
     }
 
 
-def _match_odds(player, all_props):
+def _build_odds_lookup(all_props):
+    """Pre-build a lookup structure for O(1) odds matching."""
     if not all_props:
+        return {}, []
+
+    # Group props by player name
+    odds_by_player = {}
+    for prop in all_props:
+        name = prop["player_name"]
+        if name not in odds_by_player:
+            odds_by_player[name] = []
+        odds_by_player[name].append(prop)
+
+    # Create list of unique player names for fuzzy matching
+    unique_names = list(odds_by_player.keys())
+
+    return odds_by_player, unique_names
+
+
+def _match_odds(player, odds_lookup, unique_names):
+    """Match odds using pre-built lookup structure (O(1) after fuzzy match)."""
+    if not odds_lookup:
         return player
-    prop_names = [p["player_name"] for p in all_props]
+
+    # Fuzzy match against unique names only (much smaller list)
     match = fuzz_process.extractOne(
-        player["player_name"], prop_names,
+        player["player_name"], unique_names,
         scorer=fuzz.token_sort_ratio, score_cutoff=82,
     )
     if not match:
         return player
+
     matched_name = match[0]
-    matches = [p for p in all_props if p["player_name"] == matched_name]
+    matches = odds_lookup.get(matched_name, [])
     if not matches:
         return player
+
     prices  = [p["price"] for p in matches]
     summary = mkt.market_summary(prices)
     best    = max(matches, key=lambda x: x["price"])
@@ -206,8 +241,17 @@ def _enrich_with_ev(player):
     player["ev_pct"] = ev_engine.expected_value_pct(ev_model_p, dec_odds)
 
     # Extract raw barrel rate for threshold bonus
-    barrel_raw  = float(str(player.get("barrel_pct", "0")).replace("%", "") or 0) / 100.0
-    pitcher_hr9 = float(player.get("pitcher_hr9", 0) or 0)
+    # Handle non-numeric values like '--' gracefully
+    barrel_pct_str = str(player.get("barrel_pct", "0")).replace("%", "")
+    try:
+        barrel_raw = float(barrel_pct_str) / 100.0 if barrel_pct_str and barrel_pct_str != '--' else 0.0
+    except (ValueError, TypeError):
+        barrel_raw = 0.0
+
+    try:
+        pitcher_hr9 = float(player.get("pitcher_hr9", 0) or 0)
+    except (ValueError, TypeError):
+        pitcher_hr9 = 0.0
 
     player["confidence"] = prob.confidence_score(
         player.get("season_pa", 0), player.get("recent_pa", 0),
@@ -244,20 +288,78 @@ def load_game_data(
 
     game_date = target_date or (config.TARGET_DATE or date.today().strftime("%Y-%m-%d"))
 
-    _cb("Fetching schedule...")
-    games = mlb_stats.get_today_schedule(game_date)
+    # Fetch schedule and odds in parallel for improved performance
+    _cb("Fetching schedule and odds concurrently...")
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        # Submit both fetch tasks concurrently
+        future_schedule = executor.submit(mlb_stats.get_today_schedule, game_date)
+        future_odds = executor.submit(odds_api.get_hr_odds_all_games)
 
-    _cb("Fetching odds...")
-    try:
-        all_props, odds_source = odds_api.get_hr_odds_all_games()
-    except Exception:
-        all_props, odds_source = [], "none"
+        # Collect schedule result
+        games = future_schedule.result()
 
-    _cb("Loading Statcast...")
-    batter_data   = statcast_client.get_batter_statcast()
-    pitcher_data  = statcast_client.get_pitcher_statcast()
-    batter_bb     = statcast_client.get_batter_batted_ball()
-    pitcher_bb    = statcast_client.get_pitcher_batted_ball()
+        # Collect odds result with error handling
+        try:
+            all_props, odds_source = future_odds.result()
+        except Exception:
+            all_props, odds_source = [], "none"
+
+    # Collect all player and pitcher IDs from lineups first (for Statcast filtering)
+    _cb("Collecting lineup players...")
+    batter_ids = set()
+    pitcher_ids = set()
+
+    # Pre-scan games to collect all player IDs
+    for game in games:
+        # Add starting pitchers
+        if game.get("home_pitcher", {}).get("id"):
+            pitcher_ids.add(game["home_pitcher"]["id"])
+        if game.get("away_pitcher", {}).get("id"):
+            pitcher_ids.add(game["away_pitcher"]["id"])
+
+        # Add batters from lineups
+        for lineup in [game.get("home_lineup", []), game.get("away_lineup", [])]:
+            if lineup:
+                for batter in lineup:
+                    if batter.get("id"):
+                        batter_ids.add(batter["id"])
+            else:
+                # If no lineup, we'll need to fetch roster (but can't pre-filter those)
+                team_id = game.get("home_team_id") if lineup == game.get("home_lineup") else game.get("away_team_id")
+                if team_id:
+                    roster = mlb_stats.get_team_active_roster(team_id)
+                    for player in roster:
+                        if player.get("id"):
+                            batter_ids.add(player["id"])
+
+    # Fetch Statcast and MLB stats in parallel for maximum efficiency
+    _cb(f"Loading data for {len(batter_ids)} batters, {len(pitcher_ids)} pitchers...")
+    with ThreadPoolExecutor(max_workers=6) as executor:
+        # Submit all data fetch tasks concurrently
+        futures = {
+            executor.submit(statcast_client.get_batter_statcast, player_ids=batter_ids): "batter_statcast",
+            executor.submit(statcast_client.get_pitcher_statcast, player_ids=pitcher_ids): "pitcher_statcast",
+            executor.submit(statcast_client.get_batter_batted_ball): "batter_bb",
+            executor.submit(statcast_client.get_pitcher_batted_ball): "pitcher_bb",
+            executor.submit(mlb_stats.bulk_fetch_player_stats, batter_ids): "mlb_player_stats",
+            executor.submit(mlb_stats.bulk_fetch_pitcher_stats, pitcher_ids): "mlb_pitcher_stats",
+        }
+
+        # Collect results as they complete
+        results = {}
+        for future in as_completed(futures):
+            key = futures[future]
+            try:
+                results[key] = future.result()
+            except Exception as e:
+                print(f"Error fetching {key}: {e}")
+                results[key] = {} if "statcast" in key or "bb" in key else None
+
+    # Unpack results
+    batter_data = results.get("batter_statcast", {})
+    pitcher_data = results.get("pitcher_statcast", {})
+    batter_bb = results.get("batter_bb", {})
+    pitcher_bb = results.get("pitcher_bb", {})
 
     # Collect tasks first so roster fallbacks run before the parallel phase.
     tasks: list[tuple] = []
@@ -300,8 +402,12 @@ def load_game_data(
                 all_players.append(p)
 
     _cb("Computing EV...")
+    # Pre-build odds lookup structure once (O(n))
+    odds_lookup, unique_names = _build_odds_lookup(all_props)
+
+    # Now match each player using the pre-built structure (O(1) per player)
     for p in all_players:
-        _match_odds(p, all_props)
+        _match_odds(p, odds_lookup, unique_names)
         _enrich_with_ev(p)
 
     qualified = []
@@ -332,8 +438,10 @@ def load_game_data(
         "games":        games,
         "all_players":  all_players,
         "all_by_model": all_by_model,
+        "qualified":    qualified,  # Add for main.py compatibility
         "ranked":       ranked,
         "odds_source":   odds_source,
+        "batter_data":  batter_data,  # Add for main.py compatibility
         "batter_count":  len(batter_data),
         "team_players":  team_players,
         "auto_parlays":    auto_parlays,

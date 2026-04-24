@@ -9,6 +9,7 @@ from pathlib import Path
 
 import streamlit as st
 import pandas as pd
+import numpy as np
 
 st.set_page_config(
     page_title="Codex HR Engine",
@@ -45,14 +46,46 @@ st.markdown("""
 </head>
 """, unsafe_allow_html=True)
 
-sys.path.insert(0, str(Path(__file__).parent))
+# Fix path for both local and Streamlit Cloud
+current_dir = Path(__file__).parent
+sys.path.insert(0, str(current_dir))
 
-import config
-from engine.market import american_to_decimal, decimal_to_american
-from engine.ev import expected_value_pct
-from output.parlay import _evaluate_parlay, parlay_bet_size
-from output.ranker import rank_picks as _rank_picks
-from tracking import pnl as pnl_tracker, clv as clv_tracker
+# Debug module loading for Streamlit Cloud
+try:
+    import config
+    from engine.market import american_to_decimal, decimal_to_american
+    from engine.ev import expected_value_pct
+    from output.parlay import _evaluate_parlay, parlay_bet_size
+    from output.ranker import rank_picks as _rank_picks
+    from tracking import pnl as pnl_tracker, clv as clv_tracker
+    from strategies_ui import tab_advanced_strategies
+except ImportError as e:
+    print(f"Import error: {e}")
+    print(f"Current directory: {current_dir}")
+    print(f"Directory exists: {current_dir.exists()}")
+    print(f"sys.path: {sys.path[:3]}")
+    # Try alternative import method
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("output.parlay", current_dir / "output" / "parlay.py")
+    if spec and spec.loader:
+        parlay_module = importlib.util.module_from_spec(spec)
+        sys.modules["output.parlay"] = parlay_module
+        spec.loader.exec_module(parlay_module)
+        _evaluate_parlay = parlay_module._evaluate_parlay
+        parlay_bet_size = parlay_module.parlay_bet_size
+    # Import the rest normally after fixing parlay
+    import config
+    from engine.market import american_to_decimal, decimal_to_american
+    from engine.ev import expected_value_pct
+    from output.ranker import rank_picks as _rank_picks
+    from tracking import pnl as pnl_tracker, clv as clv_tracker
+    # Try to import strategies UI
+    try:
+        from strategies_ui import tab_advanced_strategies
+    except:
+        # Create a placeholder function if import fails
+        def tab_advanced_strategies(data):
+            st.info("Advanced strategies module is being loaded...")
 
 # â"€â"€ Styling â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 st.markdown("""
@@ -568,6 +601,15 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
             spot      = p.get("lineup_spot")
             bet       = p.get("bet_dollars", 0) * scale
 
+            # Helper to safely convert values, handling NaN/None
+            def safe_val(v, default="--"):
+                if v is None:
+                    return default
+                import math
+                if isinstance(v, float) and (math.isnan(v) or math.isinf(v)):
+                    return default
+                return v
+
             rows.append({
                 "Rating":   _pick_rating(ev, edge, model_p, conf),
                 "#":        str(p.get("rank", "")),
@@ -583,12 +625,12 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
                 "EV%":      _stat_badge("EV%", f"{ev:+.1f}%"),
                 "Bet $":    f"${bet:.0f}",
                 "Conf":     _stat_badge("Conf", f"{conf:.0f}"),
-                "Brl%":     _stat_badge("Brl%", p.get("barrel_pct", "--")),
-                "SwSp%":    _stat_badge("SwSp%", p.get("sweet_spot_pct", "--")),
-                "EV mph":   _stat_badge("EV mph", p.get("exit_velo", "--")),
-                "FB%":      _stat_badge("FB%", p.get("fb_pct", "--")),
-                "GB%":      _stat_badge("GB%", p.get("gb_pct", "--")),
-                "Pull%":    str(p.get("pull_pct") or "--"),
+                "Brl%":     _stat_badge("Brl%", str(safe_val(p.get("barrel_pct"), "--"))),
+                "SwSp%":    _stat_badge("SwSp%", str(safe_val(p.get("sweet_spot_pct"), "--"))),
+                "EV mph":   _stat_badge("EV mph", str(safe_val(p.get("exit_velo"), "--"))),
+                "FB%":      _stat_badge("FB%", str(safe_val(p.get("fb_pct"), "--"))),
+                "GB%":      _stat_badge("GB%", str(safe_val(p.get("gb_pct"), "--"))),
+                "Pull%":    str(safe_val(p.get("pull_pct"), "--")),
                 "Score":    f"{p.get('score',0):.1f}",
             })
 
@@ -647,8 +689,14 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
         score_rng = _rng(scores, fmt=".1f")
 
         session_br = st.session_state.get("bankroll_override", config.BANKROLL)
+
+        # Replace NaN/None values before displaying
+        df = pd.DataFrame(rows)
+        df = df.fillna("--")  # Replace NaN and None with "--"
+        df = df.replace([np.nan, np.inf, -np.inf, float('inf'), -float('inf')], "--")  # Replace NaN/infinity values
+
         st.dataframe(
-            pd.DataFrame(rows),
+            df,
             width='stretch',
             hide_index=True,
             column_config={
@@ -989,8 +1037,12 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
                 "</span></div>",
                 unsafe_allow_html=True,
             )
+            # Clean NaN values before display
+            df_prime = pd.DataFrame(_model_rows(prime))
+            df_prime = df_prime.fillna("--")
+            df_prime = df_prime.replace([np.nan, np.inf, -np.inf, float('inf'), -float('inf')], "--")
             st.dataframe(
-                pd.DataFrame(_model_rows(prime)),
+                df_prime,
                 width='stretch', hide_index=True,
                 column_config=_col_cfg,
             )
@@ -1013,8 +1065,12 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
                 "</span></div>",
                 unsafe_allow_html=True,
             )
+            # Clean NaN values before display
+            df_watch = pd.DataFrame(_model_rows(watch))
+            df_watch = df_watch.fillna("--")
+            df_watch = df_watch.replace([np.nan, np.inf, -np.inf, float('inf'), -float('inf')], "--")
             st.dataframe(
-                pd.DataFrame(_model_rows(watch)),
+                df_watch,
                 width='stretch', hide_index=True,
                 column_config=_col_cfg,
             )
@@ -1261,7 +1317,11 @@ def tab_performance():
     try:
         rows = pnl_tracker.get_picks_log()
         if rows:
-            st.dataframe(pd.DataFrame(rows), width='stretch', hide_index=True)
+            # Clean NaN values before display
+            df_log = pd.DataFrame(rows)
+            df_log = df_log.fillna("--")
+            df_log = df_log.replace([np.nan, np.inf, -np.inf, float('inf'), -float('inf')], "--")
+            st.dataframe(df_log, width='stretch', hide_index=True)
         else:
             st.caption("No picks logged yet — open Today's Picks tab to auto-log.")
     except Exception as e:
@@ -1284,10 +1344,11 @@ def main():
         except Exception:
             st.image(str(_banner), use_container_width=True)
     st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
-    tab1, tab2, tab3 = st.tabs([
+    tab1, tab2, tab3, tab4 = st.tabs([
         "📋  TODAY'S PICKS",
         "🎰  PARLAYS",
         "📊  PERFORMANCE",
+        "🎯  ADVANCED STRATEGIES",
     ])
 
     with tab1:
@@ -1311,6 +1372,14 @@ def main():
             tab_performance()
         except Exception as _e:
             st.error(f"Performance tab error: {_e}")
+            st.code(_tb.format_exc())
+
+    with tab4:
+        try:
+            data = get_data()
+            tab_advanced_strategies(data)
+        except Exception as _e:
+            st.error(f"Advanced strategies tab error: {_e}")
             st.code(_tb.format_exc())
 
     # â"€â"€ Sidebar â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
