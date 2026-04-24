@@ -568,6 +568,15 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
             spot      = p.get("lineup_spot")
             bet       = p.get("bet_dollars", 0) * scale
 
+            # Helper to safely convert values, handling NaN/None
+            def safe_val(v, default="--"):
+                if v is None:
+                    return default
+                import math
+                if isinstance(v, float) and (math.isnan(v) or math.isinf(v)):
+                    return default
+                return v
+
             rows.append({
                 "Rating":   _pick_rating(ev, edge, model_p, conf),
                 "#":        str(p.get("rank", "")),
@@ -583,12 +592,12 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
                 "EV%":      _stat_badge("EV%", f"{ev:+.1f}%"),
                 "Bet $":    f"${bet:.0f}",
                 "Conf":     _stat_badge("Conf", f"{conf:.0f}"),
-                "Brl%":     _stat_badge("Brl%", p.get("barrel_pct", "--")),
-                "SwSp%":    _stat_badge("SwSp%", p.get("sweet_spot_pct", "--")),
-                "EV mph":   _stat_badge("EV mph", p.get("exit_velo", "--")),
-                "FB%":      _stat_badge("FB%", p.get("fb_pct", "--")),
-                "GB%":      _stat_badge("GB%", p.get("gb_pct", "--")),
-                "Pull%":    str(p.get("pull_pct") or "--"),
+                "Brl%":     _stat_badge("Brl%", str(safe_val(p.get("barrel_pct"), "--"))),
+                "SwSp%":    _stat_badge("SwSp%", str(safe_val(p.get("sweet_spot_pct"), "--"))),
+                "EV mph":   _stat_badge("EV mph", str(safe_val(p.get("exit_velo"), "--"))),
+                "FB%":      _stat_badge("FB%", str(safe_val(p.get("fb_pct"), "--"))),
+                "GB%":      _stat_badge("GB%", str(safe_val(p.get("gb_pct"), "--"))),
+                "Pull%":    str(safe_val(p.get("pull_pct"), "--")),
                 "Score":    f"{p.get('score',0):.1f}",
             })
 
