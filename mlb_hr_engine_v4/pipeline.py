@@ -332,7 +332,6 @@ def load_game_data(
         "games":        games,
         "all_players":  all_players,
         "all_by_model": all_by_model,
-        "qualified":    qualified,
         "ranked":       ranked,
         "odds_source":   odds_source,
         "batter_count":  len(batter_data),

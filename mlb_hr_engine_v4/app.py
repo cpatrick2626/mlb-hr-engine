@@ -297,6 +297,7 @@ def _spot_label(spot, platoon_factor: float) -> str:
 
 # ── Data loading ──────────────────────────────────────────────────────────────
 def get_data():
+    import gc
     from datetime import date as _date
     from pipeline import load_game_data
     target_date = config.TARGET_DATE or _date.today().strftime("%Y-%m-%d")
@@ -309,6 +310,7 @@ def get_data():
                     print(f"[pipeline] {msg}")
 
                 data = load_game_data(target_date=target_date, progress_cb=_cb)
+                gc.collect()  # free statcast/HTTP memory before rendering
                 st.session_state["data"]      = data
                 st.session_state["cache_key"] = target_date
                 _status.update(
@@ -336,7 +338,7 @@ def get_data():
                 st.error(f"Failed to load game data: {e}")
                 st.code(_tb.format_exc())
                 st.session_state["data"] = {
-                    "ranked": [], "qualified": [], "date": target_date, "stats": {},
+                    "ranked": [], "date": target_date, "stats": {},
                     "odds_source": "error", "batter_count": 0,
                     "all_by_model": [], "all_players": [], "games": [],
                     "team_players": {}, "auto_parlays": {}, "profile_parlays": [],
@@ -951,7 +953,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
                 rows.append({c: _extract(c, p, pit_fac, plat_fac) for c in visible_cols})
             return rows
 
-        prime = [p for p in all_by_model if p.get("model_prob", 0) >= PRIME_FLOOR]
+        prime = [p for p in all_by_model if p.get("model_prob", 0) >= PRIME_FLOOR][:60]
         watch = [p for p in all_by_model if p.get("model_prob", 0) < PRIME_FLOOR][:20]
 
         if prime:
