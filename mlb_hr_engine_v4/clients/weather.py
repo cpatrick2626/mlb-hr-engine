@@ -10,7 +10,7 @@ _SESSION = requests.Session()
 _CACHE: dict[str, dict] = {}
 
 
-def get_game_weather(lat: float, lon: float, game_hour_utc: int = 18) -> dict:
+def get_game_weather(lat: float, lon: float, game_hour_utc: int = 19) -> dict:
     """
     Return weather conditions for a stadium location.
     game_hour_utc: approximate game start hour in UTC (default 6 PM ET ≈ 22 UTC, but we'll use local noon as fallback).

@@ -6,6 +6,7 @@ Docs: https://statsapi.mlb.com/docs/
 import sys
 import requests
 from datetime import date, timedelta
+from functools import lru_cache
 from typing import Optional
 
 import config
@@ -17,6 +18,27 @@ _SESSION.headers.update({"User-Agent": "Codex-HR-Engine/1.0"})
 # Session-level cache for game logs â€” avoids duplicate API calls when
 # get_player_recent_stats() and get_player_short_form() are both called.
 _GAME_LOG_CACHE: dict[int, list] = {}
+
+# Pitcher game log cache — shared by get_pitcher_recent_stats() and
+# get_pitcher_days_rest(), which previously made identical requests independently.
+_PITCHER_GAME_LOG_CACHE: dict[int, list] = {}
+
+
+def _pitcher_game_log_splits(pitcher_id: int) -> list:
+    if pitcher_id not in _PITCHER_GAME_LOG_CACHE:
+        try:
+            data = _get(f"/people/{pitcher_id}/stats", {
+                "stats": "gameLog", "group": "pitching",
+                "season": config.CURRENT_SEASON,
+                "limit": 162,
+            })
+            splits = data.get("stats", [{}])[0].get("splits", [])
+            _PITCHER_GAME_LOG_CACHE[pitcher_id] = sorted(
+                splits, key=lambda s: s.get("date", ""), reverse=True
+            )
+        except Exception:
+            _PITCHER_GAME_LOG_CACHE[pitcher_id] = []
+    return _PITCHER_GAME_LOG_CACHE[pitcher_id]
 
 
 def _game_log_splits(player_id: int) -> list:
@@ -117,6 +139,7 @@ def _parse_pitcher(pitcher: dict) -> dict:
     }
 
 
+@lru_cache(maxsize=512)
 def get_player_season_stats(player_id: int) -> dict:
     """
     Hitting stats for the current season.
@@ -181,6 +204,7 @@ def get_player_recent_stats(player_id: int) -> dict:
     return totals
 
 
+@lru_cache(maxsize=256)
 def get_pitcher_season_stats(pitcher_id: int) -> dict:
     """
     Pitching stats â€” current season with prior-year fallback.
@@ -239,6 +263,7 @@ def get_player_short_form(player_id: int, days: int = 14) -> dict:
     return totals
 
 
+@lru_cache(maxsize=512)
 def get_player_platoon_splits(player_id: int) -> dict:
     """
     L/R platoon HR splits for a batter.
@@ -273,60 +298,44 @@ def get_pitcher_recent_stats(pitcher_id: int, days: int = 30) -> dict:
     Game-count window is more consistent than calendar days.
     The `days` param is kept for backward compatibility but not used.
     """
-    try:
-        data = _get(f"/people/{pitcher_id}/stats", {
-            "stats": "gameLog", "group": "pitching",
-            "season": config.CURRENT_SEASON,
-            "limit": 162,
-        })
-        splits = data.get("stats", [{}])[0].get("splits", [])
-        # Newest-first, take last N starts
-        splits = sorted(splits, key=lambda s: s.get("date", ""), reverse=True)
-        recent = splits[:config.PITCHER_RECENT_GAMES]
-        totals: dict = {"homeRuns": 0, "inningsPitched": 0.0, "battersFaced": 0,
-                        "strikeOuts": 0, "groundOuts": 0, "airOuts": 0}
-        for split in recent:
-            st = split.get("stat", {})
-            totals["homeRuns"]     += int(st.get("homeRuns", 0))
-            totals["battersFaced"] += int(st.get("battersFaced", 0))
-            totals["strikeOuts"]   += int(st.get("strikeOuts", 0))
-            totals["groundOuts"]   += int(st.get("groundOuts", 0))
-            totals["airOuts"]      += int(st.get("airOuts", 0))
-            ip_str = str(st.get("inningsPitched", "0.0"))
-            try:
-                parts = ip_str.split(".")
-                ip = int(parts[0]) + int(parts[1]) / 3.0 if len(parts) > 1 else float(ip_str)
-            except Exception:
-                ip = 0.0
-            totals["inningsPitched"] += ip
-        return totals
-    except Exception:
-        return {}
+    splits = _pitcher_game_log_splits(pitcher_id)
+    recent = splits[:config.PITCHER_RECENT_GAMES]
+    totals: dict = {"homeRuns": 0, "inningsPitched": 0.0, "battersFaced": 0,
+                    "strikeOuts": 0, "groundOuts": 0, "airOuts": 0}
+    for split in recent:
+        st = split.get("stat", {})
+        totals["homeRuns"]     += int(st.get("homeRuns", 0))
+        totals["battersFaced"] += int(st.get("battersFaced", 0))
+        totals["strikeOuts"]   += int(st.get("strikeOuts", 0))
+        totals["groundOuts"]   += int(st.get("groundOuts", 0))
+        totals["airOuts"]      += int(st.get("airOuts", 0))
+        ip_str = str(st.get("inningsPitched", "0.0"))
+        try:
+            parts = ip_str.split(".")
+            ip = int(parts[0]) + int(parts[1]) / 3.0 if len(parts) > 1 else float(ip_str)
+        except Exception:
+            ip = 0.0
+        totals["inningsPitched"] += ip
+    return totals
 
 
 def get_pitcher_days_rest(pitcher_id: int) -> int:
     """Days since pitcher's last start. Returns 5 (standard rotation) if unknown."""
+    splits = _pitcher_game_log_splits(pitcher_id)
+    if not splits:
+        return 5
+    last_date_str = splits[0].get("date", "")
+    if not last_date_str:
+        return 5
     try:
-        data = _get(f"/people/{pitcher_id}/stats", {
-            "stats": "gameLog", "group": "pitching",
-            "season": config.CURRENT_SEASON,
-            "limit": 162,
-        })
-        splits = data.get("stats", [{}])[0].get("splits", [])
-        splits = sorted(splits, key=lambda s: s.get("date", ""), reverse=True)
-        if not splits:
-            return 5
-        last_date_str = splits[0].get("date", "")
-        if not last_date_str:
-            return 5
-        from datetime import date as _date
-        last_date = _date.fromisoformat(last_date_str)
-        today = _date.fromisoformat(config.TARGET_DATE) if config.TARGET_DATE else _date.today()
+        last_date = date.fromisoformat(last_date_str)
+        today = date.fromisoformat(config.TARGET_DATE) if config.TARGET_DATE else date.today()
         return max(0, (today - last_date).days)
     except Exception:
         return 5
 
 
+@lru_cache(maxsize=512)
 def get_player_info(player_id: int) -> dict:
     """Minimal bio â€” bats, position, full name."""
     try:

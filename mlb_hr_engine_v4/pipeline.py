@@ -5,6 +5,7 @@ Call load_game_data() once per session. It fetches everything and returns
 a single dict that both the CLI display and the Streamlit UI can consume.
 """
 
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 from rapidfuzz import fuzz, process as fuzz_process
 
@@ -258,7 +259,8 @@ def load_game_data(
     batter_bb     = statcast_client.get_batter_batted_ball()
     pitcher_bb    = statcast_client.get_pitcher_batted_ball()
 
-    all_players = []
+    # Collect tasks first so roster fallbacks run before the parallel phase.
+    tasks: list[tuple] = []
     for game in games:
         home, away = game["home_team"], game["away_team"]
         for lineup, team, opp, team_id, opp_pitcher in [
@@ -266,7 +268,6 @@ def load_game_data(
             (game["away_lineup"], away, home, game.get("away_team_id"), game.get("home_pitcher", {})),
         ]:
             if not lineup:
-                # Lineup not posted yet — fall back to active roster
                 if team_id:
                     lineup = mlb_stats.get_team_active_roster(team_id)
                 if not lineup:
@@ -276,19 +277,27 @@ def load_game_data(
                 name = batter.get("name", "Unknown")
                 if not pid:
                     continue
-                _cb(f"Profiling {name}...")
-                try:
-                    p = _build_player_profile(
-                        pid, name, batter.get("lineup_spot"),
-                        team, opp, home, opp_pitcher,
-                        batter_data, pitcher_data,
-                        batter_bb_data=batter_bb,
-                        pitcher_bb_data=pitcher_bb,
-                    )
-                    if p:
-                        all_players.append(p)
-                except Exception:
-                    pass
+                tasks.append((pid, name, batter.get("lineup_spot"), team, opp, home, opp_pitcher))
+
+    _cb(f"Building profiles for {len(tasks)} players...")
+
+    def _profile(args: tuple):
+        pid, name, spot, team, opp, home_team, opp_pitcher = args
+        try:
+            return _build_player_profile(
+                pid, name, spot, team, opp, home_team, opp_pitcher,
+                batter_data, pitcher_data,
+                batter_bb_data=batter_bb,
+                pitcher_bb_data=pitcher_bb,
+            )
+        except Exception:
+            return None
+
+    all_players = []
+    with ThreadPoolExecutor(max_workers=16) as executor:
+        for p in executor.map(_profile, tasks):
+            if p:
+                all_players.append(p)
 
     _cb("Computing EV...")
     for p in all_players:
