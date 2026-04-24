@@ -337,7 +337,7 @@ def get_data():
                 st.code(_tb.format_exc())
                 st.session_state["data"] = {
                     "ranked": [], "qualified": [], "date": target_date, "stats": {},
-                    "odds_source": "error", "batter_data": {},
+                    "odds_source": "error", "batter_count": 0,
                     "all_by_model": [], "all_players": [], "games": [],
                     "team_players": {}, "auto_parlays": {}, "profile_parlays": [],
                 }
@@ -514,7 +514,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
     ranked    = _apply_ui_filters(all_players, min_ev, min_edge)
     stats     = data.get("stats", {})
     source    = data.get("odds_source", "none")
-    n_batters = len(data.get("batter_data", {}))
+    n_batters = data.get("batter_count", 0)
     scale     = _bankroll_scale()
 
     st.markdown('<div class="section-header">&#9889; TODAY\'S QUALIFIED PICKS</div>',

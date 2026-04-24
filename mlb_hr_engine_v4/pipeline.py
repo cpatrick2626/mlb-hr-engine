@@ -334,10 +334,9 @@ def load_game_data(
         "all_by_model": all_by_model,
         "qualified":    qualified,
         "ranked":       ranked,
-        "odds_source":  odds_source,
-        "all_props":    all_props,
-        "batter_data":  batter_data,
-        "team_players": team_players,
+        "odds_source":   odds_source,
+        "batter_count":  len(batter_data),
+        "team_players":  team_players,
         "auto_parlays":    auto_parlays,
         "profile_parlays": profile_parlays,
         "stats": {
