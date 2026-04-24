@@ -438,8 +438,10 @@ def load_game_data(
         "games":        games,
         "all_players":  all_players,
         "all_by_model": all_by_model,
+        "qualified":    qualified,  # Add for main.py compatibility
         "ranked":       ranked,
         "odds_source":   odds_source,
+        "batter_data":  batter_data,  # Add for main.py compatibility
         "batter_count":  len(batter_data),
         "team_players":  team_players,
         "auto_parlays":    auto_parlays,

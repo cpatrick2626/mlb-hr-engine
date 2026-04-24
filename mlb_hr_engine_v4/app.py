@@ -45,14 +45,38 @@ st.markdown("""
 </head>
 """, unsafe_allow_html=True)
 
-sys.path.insert(0, str(Path(__file__).parent))
+# Fix path for both local and Streamlit Cloud
+current_dir = Path(__file__).parent
+sys.path.insert(0, str(current_dir))
 
-import config
-from engine.market import american_to_decimal, decimal_to_american
-from engine.ev import expected_value_pct
-from output.parlay import _evaluate_parlay, parlay_bet_size
-from output.ranker import rank_picks as _rank_picks
-from tracking import pnl as pnl_tracker, clv as clv_tracker
+# Debug module loading for Streamlit Cloud
+try:
+    import config
+    from engine.market import american_to_decimal, decimal_to_american
+    from engine.ev import expected_value_pct
+    from output.parlay import _evaluate_parlay, parlay_bet_size
+    from output.ranker import rank_picks as _rank_picks
+    from tracking import pnl as pnl_tracker, clv as clv_tracker
+except ImportError as e:
+    print(f"Import error: {e}")
+    print(f"Current directory: {current_dir}")
+    print(f"Directory exists: {current_dir.exists()}")
+    print(f"sys.path: {sys.path[:3]}")
+    # Try alternative import method
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("output.parlay", current_dir / "output" / "parlay.py")
+    if spec and spec.loader:
+        parlay_module = importlib.util.module_from_spec(spec)
+        sys.modules["output.parlay"] = parlay_module
+        spec.loader.exec_module(parlay_module)
+        _evaluate_parlay = parlay_module._evaluate_parlay
+        parlay_bet_size = parlay_module.parlay_bet_size
+    # Import the rest normally after fixing parlay
+    import config
+    from engine.market import american_to_decimal, decimal_to_american
+    from engine.ev import expected_value_pct
+    from output.ranker import rank_picks as _rank_picks
+    from tracking import pnl as pnl_tracker, clv as clv_tracker
 
 # â"€â"€ Styling â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 st.markdown("""

@@ -16,6 +16,7 @@ import csv
 import os
 from datetime import date, timedelta
 from pathlib import Path
+from typing import Optional
 
 import requests
 
@@ -265,7 +266,7 @@ def _read_existing_dates(path: Path) -> set[str]:
         return {row.get("date", "") for row in csv.DictReader(f)}
 
 
-def _mlb_hr_result(player_id: int, date_str: str) -> bool | None:
+def _mlb_hr_result(player_id: int, date_str: str) -> Optional[bool]:
     try:
         resp = requests.get(
             f"https://statsapi.mlb.com/api/v1/people/{player_id}/stats",
