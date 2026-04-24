@@ -260,7 +260,7 @@ def statcast_summary(
         "hard_hit":        _pct("hard_hit_pct"),
         "sweet_spot_pct":  _pct("sweet_spot_pct"),
         "avg_launch_angle": round(float(stats["avg_launch_angle"]), 1)
-                            if stats.get("avg_launch_angle") is not None else None,
+                            if stats.get("avg_launch_angle") is not None else "--",
         "xslg":            round(float(stats["xslg"]), 3)
                             if stats.get("xslg") is not None else None,
         "fb_pct":          _pct("fb_pct"),

@@ -570,7 +570,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
 
             rows.append({
                 "Rating":   _pick_rating(ev, edge, model_p, conf),
-                "#":        p.get("rank", ""),
+                "#":        str(p.get("rank", "")),
                 "Player":   p.get("player_name", ""),
                 "Team":     p.get("team", ""),
                 "Opp":      p.get("opponent", ""),
@@ -588,7 +588,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
                 "EV mph":   _stat_badge("EV mph", p.get("exit_velo", "--")),
                 "FB%":      _stat_badge("FB%", p.get("fb_pct", "--")),
                 "GB%":      _stat_badge("GB%", p.get("gb_pct", "--")),
-                "Pull%":    p.get("pull_pct", "--"),
+                "Pull%":    str(p.get("pull_pct") or "--"),
                 "Score":    f"{p.get('score',0):.1f}",
             })
 
@@ -736,38 +736,54 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
         ]
         _ALL_COLS = _FIXED_COLS + _TOGGLE_COLS
 
+        def _safe(v, default="--"):
+            """Return string; map None/NaN/non-finite to default."""
+            if v is None:
+                return default
+            try:
+                import math
+                if isinstance(v, float) and (math.isnan(v) or math.isinf(v)):
+                    return default
+            except Exception:
+                pass
+            return str(v)
+
         def _extract(col, p, pit_fac, plat_fac):
             m = p.get
-            if col == "Player":       return m("player_name", "")
-            if col == "Team":         return m("team", "")
+            if col == "Player":       return _safe(m("player_name"), "")
+            if col == "Team":         return _safe(m("team"), "")
             if col == "Spot":         return _spot_label(m("lineup_spot"), plat_fac)
             if col == "Vs":           return _pitcher_label(m("pitcher_name", "TBD"), pit_fac, plat_fac)
-            if col == "Model%":       return _stat_badge("Model%", f"{m('model_prob',0)*100:.1f}%")
-            if col == "Brl%":         return _stat_badge("Brl%", m("barrel_pct", "--"))
-            if col == "SwSp%":        return _stat_badge("SwSp%", m("sweet_spot_pct", "--"))
-            if col == "FB%":          return _stat_badge("FB%", m("fb_pct", "--"))
-            if col == "GB%":          return _stat_badge("GB%", m("gb_pct", "--"))
-            if col == "LD%":          return m("ld_pct", "--")
-            if col == "Pull%":        return m("pull_pct", "--")
-            if col == "Oppo%":        return m("oppo_pct", "--")
-            if col == "Hard Hit%":    return m("hard_hit", "--")
-            if col == "Exit Velo":    return _stat_badge("Exit Velo", m("exit_velo", "--"))
-            if col == "Launch Angle": return m("avg_launch_angle", "--")
-            if col == "PwrMult":      return _stat_badge("PwrMult", f"{m('statcast_power_mult', 1):.2f}")
-            if col == "Park":         return f"{m('park_factor', 1):.2f}"
-            if col == "Pitcher":      return f"{m('pitcher_factor', 1):.2f}"
-            if col == "Weather":      return f"{m('weather_factor', 1):.2f}"
-            if col == "Platoon":      return f"{m('platoon_factor', 1):.2f}"
-            if col == "Season PA":    return m("season_pa", "--")
-            if col == "Season HR":    return m("season_hr", "--")
-            if col == "Recent PA":    return m("recent_pa", "--")
-            if col == "HR Rate":      return f"{m('hr_rate',0)*100:.2f}%"
-            if col == "Streak":       return f"{m('streak_factor', 1):.2f}"
-            if col == "K Factor":     return f"{m('k_factor', 1):.2f}"
-            if col == "Pitcher HR/9": return f"{m('pitcher_hr9', 0):.2f}"
-            if col == "Exp PA":       return f"{m('expected_pa', 3.8):.1f}"
+            if col == "Model%":       return _stat_badge("Model%", f"{(m('model_prob') or 0)*100:.1f}%")
+            if col == "Brl%":         return _stat_badge("Brl%", _safe(m("barrel_pct")))
+            if col == "SwSp%":        return _stat_badge("SwSp%", _safe(m("sweet_spot_pct")))
+            if col == "FB%":          return _stat_badge("FB%", _safe(m("fb_pct")))
+            if col == "GB%":          return _stat_badge("GB%", _safe(m("gb_pct")))
+            if col == "LD%":          return _safe(m("ld_pct"))
+            if col == "Pull%":        return _safe(m("pull_pct"))
+            if col == "Oppo%":        return _safe(m("oppo_pct"))
+            if col == "Hard Hit%":    return _safe(m("hard_hit"))
+            if col == "Exit Velo":    return _stat_badge("Exit Velo", _safe(m("exit_velo")))
+            if col == "Launch Angle":
+                v = m("avg_launch_angle")
+                return f"{v:.1f}" if isinstance(v, (int, float)) and v == v else "--"
+            if col == "PwrMult":
+                v = m("statcast_power_mult") or 1.0
+                return _stat_badge("PwrMult", f"{v:.2f}")
+            if col == "Park":         return f"{m('park_factor') or 1:.3f}"
+            if col == "Pitcher":      return f"{m('pitcher_factor') or 1:.3f}"
+            if col == "Weather":      return f"{m('weather_factor') or 1:.3f}"
+            if col == "Platoon":      return f"{m('platoon_factor') or 1:.3f}"
+            if col == "Season PA":    return _safe(m("season_pa"), "0")
+            if col == "Season HR":    return _safe(m("season_hr"), "0")
+            if col == "Recent PA":    return _safe(m("recent_pa"), "0")
+            if col == "HR Rate":      return f"{(m('hr_rate') or 0)*100:.2f}%"
+            if col == "Streak":       return f"{m('streak_factor') or 1:.3f}"
+            if col == "K Factor":     return f"{m('k_factor') or 1:.3f}"
+            if col == "Pitcher HR/9": return f"{m('pitcher_hr9') or 0:.2f}"
+            if col == "Exp PA":       return f"{m('expected_pa') or 3.8:.1f}"
             if col == "Odds":         return _fmt_american(m("best_american")) if m("best_american") else "--"
-            if col == "Mkt%":         return f"{m('market_no_vig_prob',0)*100:.1f}%" if m("market_no_vig_prob") else "--"
+            if col == "Mkt%":         return f"{(m('market_no_vig_prob') or 0)*100:.1f}%" if m("market_no_vig_prob") else "--"
             if col == "Edge%":        return f"{m('edge_pct',0):+.1f}%" if m("edge_pct") is not None else "--"
             if col == "EV%":          return f"{m('ev_pct',0):+.1f}%" if m("ev_pct") is not None else "--"
             if col == "Confidence":   return f"{m('confidence',0):.0f}" if m("confidence") is not None else "--"
