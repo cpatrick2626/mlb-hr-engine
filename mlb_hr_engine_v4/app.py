@@ -297,7 +297,7 @@ def _spot_label(spot, platoon_factor: float) -> str:
 
 
 # â”€â”€ Data loading â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-@st.cache_data(ttl=3300, show_spinner=False)
+@st.cache_data(show_spinner=False)
 def _load_data(target_date: str):
     from pipeline import load_game_data
     return load_game_data(target_date=target_date, progress_cb=[].append)
