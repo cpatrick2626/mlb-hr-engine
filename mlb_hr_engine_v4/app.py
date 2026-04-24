@@ -413,19 +413,14 @@ def _stat_css(col: str, val) -> str:
         return _DARK_RED
     return ""
 
-_COLOR_COLS = {"Brl%", "SwSp%", "EV mph", "FB%", "GB%", "EV%", "Edge", "Edge%",
-               "Model%", "Conf", "PwrMult", "Exit Velo"}
-
-def _style_df(df: pd.DataFrame) -> "pd.io.formats.style.Styler":
-    """Apply stat-based background colors to a picks DataFrame."""
-    style = df.style
-    for col in _COLOR_COLS:
-        if col in df.columns:
-            style = style.apply(
-                lambda s, c=col: [_stat_css(c, v) for v in s],
-                subset=[col],
-            )
-    return style
+def _stat_badge(col: str, val) -> str:
+    """Return emoji-prefixed value so quality shows without Styler (works with column_config)."""
+    css = _stat_css(col, val)
+    if css == _DARK_GREEN: return f"💚 {val}"
+    if css == _GREEN:      return f"🟢 {val}"
+    if css == _RED:        return f"🔴 {val}"
+    if css == _DARK_RED:   return f"⛔ {val}"
+    return str(val)
 
 
 def _combo_html(parlay: dict, label: str) -> str:
@@ -575,17 +570,17 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
                 "Spot":     _spot_label(spot, plat_fac),
                 "Pitcher":  _pitcher_label(p.get("pitcher_name", "TBD"), pit_fac, plat_fac),
                 "Odds":     _fmt_american(p.get("best_american")),
-                "Model%":   f"{model_p*100:.1f}%",
+                "Model%":   _stat_badge("Model%", f"{model_p*100:.1f}%"),
                 "Mkt%":     f"{p.get('market_no_vig_prob',0)*100:.1f}%",
-                "Edge":     f"{edge:+.1f}%",
-                "EV%":      f"{ev:+.1f}%",
+                "Edge":     _stat_badge("Edge", f"{edge:+.1f}%"),
+                "EV%":      _stat_badge("EV%", f"{ev:+.1f}%"),
                 "Bet $":    f"${bet:.0f}",
-                "Conf":     f"{conf:.0f}",
-                "Brl%":     p.get("barrel_pct", "--"),
-                "SwSp%":    p.get("sweet_spot_pct", "--"),
-                "EV mph":   p.get("exit_velo", "--"),
-                "FB%":      p.get("fb_pct", "--"),
-                "GB%":      p.get("gb_pct", "--"),
+                "Conf":     _stat_badge("Conf", f"{conf:.0f}"),
+                "Brl%":     _stat_badge("Brl%", p.get("barrel_pct", "--")),
+                "SwSp%":    _stat_badge("SwSp%", p.get("sweet_spot_pct", "--")),
+                "EV mph":   _stat_badge("EV mph", p.get("exit_velo", "--")),
+                "FB%":      _stat_badge("FB%", p.get("fb_pct", "--")),
+                "GB%":      _stat_badge("GB%", p.get("gb_pct", "--")),
                 "Pull%":    p.get("pull_pct", "--"),
                 "Score":    f"{p.get('score',0):.1f}",
             })
@@ -646,7 +641,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
 
         session_br = st.session_state.get("bankroll_override", config.BANKROLL)
         st.dataframe(
-            _style_df(pd.DataFrame(rows)),
+            pd.DataFrame(rows),
             width='stretch',
             hide_index=True,
             column_config={
@@ -740,18 +735,18 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
             if col == "Team":         return m("team", "")
             if col == "Spot":         return _spot_label(m("lineup_spot"), plat_fac)
             if col == "Vs":           return _pitcher_label(m("pitcher_name", "TBD"), pit_fac, plat_fac)
-            if col == "Model%":       return f"{m('model_prob',0)*100:.1f}%"
-            if col == "Brl%":         return m("barrel_pct", "--")
-            if col == "SwSp%":        return m("sweet_spot_pct", "--")
-            if col == "FB%":          return m("fb_pct", "--")
-            if col == "GB%":          return m("gb_pct", "--")
+            if col == "Model%":       return _stat_badge("Model%", f"{m('model_prob',0)*100:.1f}%")
+            if col == "Brl%":         return _stat_badge("Brl%", m("barrel_pct", "--"))
+            if col == "SwSp%":        return _stat_badge("SwSp%", m("sweet_spot_pct", "--"))
+            if col == "FB%":          return _stat_badge("FB%", m("fb_pct", "--"))
+            if col == "GB%":          return _stat_badge("GB%", m("gb_pct", "--"))
             if col == "LD%":          return m("ld_pct", "--")
             if col == "Pull%":        return m("pull_pct", "--")
             if col == "Oppo%":        return m("oppo_pct", "--")
             if col == "Hard Hit%":    return m("hard_hit", "--")
-            if col == "Exit Velo":    return m("exit_velo", "--")
+            if col == "Exit Velo":    return _stat_badge("Exit Velo", m("exit_velo", "--"))
             if col == "Launch Angle": return m("avg_launch_angle", "--")
-            if col == "PwrMult":      return f"{m('statcast_power_mult', 1):.2f}"
+            if col == "PwrMult":      return _stat_badge("PwrMult", f"{m('statcast_power_mult', 1):.2f}")
             if col == "Park":         return f"{m('park_factor', 1):.2f}"
             if col == "Pitcher":      return f"{m('pitcher_factor', 1):.2f}"
             if col == "Weather":      return f"{m('weather_factor', 1):.2f}"
@@ -972,7 +967,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
                 unsafe_allow_html=True,
             )
             st.dataframe(
-                _style_df(pd.DataFrame(_model_rows(prime))),
+                pd.DataFrame(_model_rows(prime)),
                 width='stretch', hide_index=True,
                 column_config=_col_cfg,
             )
@@ -996,7 +991,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
                 unsafe_allow_html=True,
             )
             st.dataframe(
-                _style_df(pd.DataFrame(_model_rows(watch))),
+                pd.DataFrame(_model_rows(watch)),
                 width='stretch', hide_index=True,
                 column_config=_col_cfg,
             )
@@ -1166,6 +1161,15 @@ def tab_parlays(data: dict):
 # TAB 3 — PERFORMANCE
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 def tab_performance():
+    def _pnl_box(label: str, value: str, css: str) -> str:
+        return (
+            f"<div style='background:{css};border-radius:8px;padding:10px 14px;"
+            f"text-align:center;margin:2px;'>"
+            f"<div style='font-size:11px;color:#ccc;margin-bottom:4px;'>{label}</div>"
+            f"<div style='font-size:20px;font-weight:800;color:#fff;'>{value}</div>"
+            f"</div>"
+        )
+
     backend = pnl_tracker.storage_backend()
     st.markdown(
         f"<div style='font-size:11px; color:#888888; margin-bottom:12px; "
@@ -1185,14 +1189,6 @@ def tab_performance():
         return
 
     if summary:
-        def _pnl_box(label: str, value: str, css: str) -> str:
-            return (
-                f"<div style='background:{css};border-radius:8px;padding:10px 14px;"
-                f"text-align:center;margin:2px;'>"
-                f"<div style='font-size:11px;color:#ccc;margin-bottom:4px;'>{label}</div>"
-                f"<div style='font-size:20px;font-weight:800;color:#fff;'>{value}</div>"
-                f"</div>"
-            )
 
         win_rate  = summary.get("win_rate", 0) * 100
         roi       = summary.get("roi_pct", 0)
@@ -1253,6 +1249,14 @@ def tab_performance():
 # MAIN
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 def main():
+    import traceback as _tb
+    try:
+     _main()
+    except Exception as _e:
+     st.error(f"CRASH: {_e}")
+     st.code(_tb.format_exc())
+
+def _main():
     # Read filter thresholds from session state first (sidebar sets them on each rerun)
     _min_ev   = float(st.session_state.get("min_ev",   config.MIN_EV_PCT))
     _min_edge = float(st.session_state.get("min_edge", config.MIN_EDGE_PCT))
@@ -1260,7 +1264,7 @@ def main():
     # ── Banner ────────────────────────────────────────────────────────────────
     _banner = Path(__file__).parent / "assets" / "banner.png"
     if _banner.exists():
-        st.image(str(_banner), width='stretch')
+        st.image(str(_banner), use_container_width=True)
     st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
     tab1, tab2, tab3 = st.tabs([
         "📋  TODAY'S PICKS",
