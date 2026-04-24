@@ -647,7 +647,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
         session_br = st.session_state.get("bankroll_override", config.BANKROLL)
         st.dataframe(
             _style_df(pd.DataFrame(rows)),
-            use_container_width=True,
+            width='stretch',
             hide_index=True,
             column_config={
                 "Rating":  st.column_config.TextColumn("Rating",
@@ -973,7 +973,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
             )
             st.dataframe(
                 _style_df(pd.DataFrame(_model_rows(prime))),
-                use_container_width=True, hide_index=True,
+                width='stretch', hide_index=True,
                 column_config=_col_cfg,
             )
 
@@ -997,7 +997,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
             )
             st.dataframe(
                 _style_df(pd.DataFrame(_model_rows(watch))),
-                use_container_width=True, hide_index=True,
+                width='stretch', hide_index=True,
                 column_config=_col_cfg,
             )
 
@@ -1056,7 +1056,7 @@ def tab_parlays(data: dict):
                     html = html.rstrip().rstrip("</div>") + ps_line + "</div>"
                     st.markdown(html, unsafe_allow_html=True)
                     if st.button("🎰 Add to FD Slip", key=f"fd_prof_{pi}_{i}",
-                                 use_container_width=True):
+                                 width='stretch'):
                         n = _add_legs_to_fd_slip(combo["legs"])
                         st.success(f"+{n} player{'s' if n != 1 else ''} added to FanDuel slip!")
 
@@ -1119,11 +1119,11 @@ def tab_parlays(data: dict):
             with btn_col:
                 build_clicked = st.button(f"Build {n_legs}-Leg Parlay",
                                           key=f"{key_prefix}_build",
-                                          type="primary", use_container_width=True)
+                                          type="primary", width='stretch')
             with fd_col:
                 fd_clicked = st.button("🎰 Add to FD Slip",
                                        key=f"{key_prefix}_fd",
-                                       use_container_width=True)
+                                       width='stretch')
 
             if fd_clicked:
                 if len(legs_built) == n_legs:
@@ -1242,7 +1242,7 @@ def tab_performance():
     try:
         rows = pnl_tracker.get_picks_log()
         if rows:
-            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(rows), width='stretch', hide_index=True)
         else:
             st.caption("No picks logged yet — open Today's Picks tab to auto-log.")
     except Exception as e:
@@ -1260,7 +1260,7 @@ def main():
     # ── Banner ────────────────────────────────────────────────────────────────
     _banner = Path(__file__).parent / "assets" / "banner.png"
     if _banner.exists():
-        st.image(str(_banner), use_container_width=True)
+        st.image(str(_banner), width='stretch')
     st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
     tab1, tab2, tab3 = st.tabs([
         "📋  TODAY'S PICKS",
@@ -1383,7 +1383,7 @@ def main():
                         f"</div></div>",
                         unsafe_allow_html=True,
                     )
-                if st.button("📋 Log to Picks Tracker", use_container_width=True,
+                if st.button("📋 Log to Picks Tracker", width='stretch',
                              key="log_fd_slip"):
                     slip_players = [_slip_map[s] for s in _selected]
                     try:
@@ -1396,22 +1396,22 @@ def main():
                         st.error(f"Log failed: {e}")
                 st.link_button(
                     "📲 FanDuel HR Props", _fanduel_url(),
-                    use_container_width=True, type="primary",
+                    width='stretch', type="primary",
                 )
-                if st.button("🗑️ Clear Slip", use_container_width=True, key="clear_fd_slip"):
+                if st.button("🗑️ Clear Slip", width='stretch', key="clear_fd_slip"):
                     st.session_state["fd_slip"] = []
                     st.session_state.pop("fd_slip_select", None)
                     st.rerun()
             else:
                 st.caption("Search above to add players to your slip.")
-                st.link_button("📲 Browse FanDuel HR Props", _fanduel_url(), use_container_width=True)
+                st.link_button("📲 Browse FanDuel HR Props", _fanduel_url(), width='stretch')
         else:
             st.caption("Refresh data to build your slip.")
-            st.link_button("📲 Browse FanDuel HR Props", _fanduel_url(), use_container_width=True)
+            st.link_button("📲 Browse FanDuel HR Props", _fanduel_url(), width='stretch')
 
         st.divider()
 
-        if st.button("🔄 Force Refresh Data", use_container_width=True):
+        if st.button("🔄 Force Refresh Data", width='stretch'):
             st.cache_data.clear()
             for k in ["data", "cache_key", "data_loaded_at"]:
                 st.session_state.pop(k, None)
@@ -1419,7 +1419,7 @@ def main():
 
         st.divider()
 
-        if st.button("✅ Update Yesterday's Results", use_container_width=True):
+        if st.button("✅ Update Yesterday's Results", width='stretch'):
             with st.spinner("Fetching outcomes from MLB…"):
                 try:
                     result = pnl_tracker.update_yesterday()
