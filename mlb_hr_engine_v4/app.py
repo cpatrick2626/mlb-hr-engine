@@ -1537,7 +1537,7 @@ The app will open full-screen like a native app.
         st.caption(f"Active Edge filter: {_min_edge:.1f}%")
         backend = pnl_tracker.storage_backend()
         st.caption(f"Storage: {'☁️ Sheets' if backend == 'sheets' else '💾 Local CSV'}")
-        st.caption(f"Auto-refresh: every 60 min")
+
 
     # ── Banner ────────────────────────────────────────────────────────────────
     _banner = Path(__file__).parent / "assets" / "banner.png"
