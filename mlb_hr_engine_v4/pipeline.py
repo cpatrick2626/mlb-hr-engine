@@ -49,10 +49,22 @@ def _build_player_profile(
     xba_raw    = sc_stats.get("xba")
     xslg_raw   = sc_stats.get("xslg")
     actual_slg = float(season_stats.get("sluggingPercentage", 0) or 0)
-    xiso       = (round(float(xslg_raw) - float(xba_raw), 3)
-                  if (xslg_raw is not None and xba_raw is not None) else None)
-    xslg_diff  = (round(float(xslg_raw) - actual_slg, 3)
-                  if xslg_raw is not None else None)
+
+    # Safe conversion for xslg and xba which may contain '--' strings
+    try:
+        xba_float = float(xba_raw) if xba_raw and str(xba_raw) != '--' else None
+    except (ValueError, TypeError):
+        xba_float = None
+
+    try:
+        xslg_float = float(xslg_raw) if xslg_raw and str(xslg_raw) != '--' else None
+    except (ValueError, TypeError):
+        xslg_float = None
+
+    xiso       = (round(xslg_float - xba_float, 3)
+                  if (xslg_float is not None and xba_float is not None) else None)
+    xslg_diff  = (round(xslg_float - actual_slg, 3)
+                  if xslg_float is not None else None)
 
     streak_fac = prob.hot_streak_factor(short_form, season_stats)
     k_fac      = prob.batter_k_suppressor(season_stats)
@@ -229,8 +241,17 @@ def _enrich_with_ev(player):
     player["ev_pct"] = ev_engine.expected_value_pct(ev_model_p, dec_odds)
 
     # Extract raw barrel rate for threshold bonus
-    barrel_raw  = float(str(player.get("barrel_pct", "0")).replace("%", "") or 0) / 100.0
-    pitcher_hr9 = float(player.get("pitcher_hr9", 0) or 0)
+    # Handle non-numeric values like '--' gracefully
+    barrel_pct_str = str(player.get("barrel_pct", "0")).replace("%", "")
+    try:
+        barrel_raw = float(barrel_pct_str) / 100.0 if barrel_pct_str and barrel_pct_str != '--' else 0.0
+    except (ValueError, TypeError):
+        barrel_raw = 0.0
+
+    try:
+        pitcher_hr9 = float(player.get("pitcher_hr9", 0) or 0)
+    except (ValueError, TypeError):
+        pitcher_hr9 = 0.0
 
     player["confidence"] = prob.confidence_score(
         player.get("season_pa", 0), player.get("recent_pa", 0),
