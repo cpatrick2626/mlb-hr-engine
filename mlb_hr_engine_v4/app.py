@@ -1351,51 +1351,6 @@ def main():
     _min_ev   = float(st.session_state.get("min_ev",   config.MIN_EV_PCT))
     _min_edge = float(st.session_state.get("min_edge", config.MIN_EDGE_PCT))
 
-    # ── Banner ────────────────────────────────────────────────────────────────
-    _banner = Path(__file__).parent / "assets" / "banner.png"
-    if _banner.exists():
-        try:
-            st.image(str(_banner), width="stretch")
-        except Exception:
-            st.image(str(_banner), use_container_width=True)
-    st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
-    tab1, tab2, tab3, tab4 = st.tabs([
-        "📋  TODAY'S PICKS",
-        "🎰  PARLAYS",
-        "📊  PERFORMANCE",
-        "🎯  ADVANCED STRATEGIES",
-    ])
-
-    with tab1:
-        try:
-            data = get_data()
-            tab_picks(data, _min_ev, _min_edge)
-        except Exception as _e:
-            st.error(f"Picks tab error: {_e}")
-            st.code(_tb.format_exc())
-
-    with tab2:
-        try:
-            data = get_data()
-            tab_parlays(data)
-        except Exception as _e:
-            st.error(f"Parlays tab error: {_e}")
-            st.code(_tb.format_exc())
-
-    with tab3:
-        try:
-            tab_performance()
-        except Exception as _e:
-            st.error(f"Performance tab error: {_e}")
-            st.code(_tb.format_exc())
-
-    with tab4:
-        try:
-            data = get_data()
-            tab_advanced_strategies(data)
-        except Exception as _e:
-            st.error(f"Advanced strategies tab error: {_e}")
-            st.code(_tb.format_exc())
 
     # â"€â"€ Sidebar â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
     with st.sidebar:
@@ -1583,6 +1538,53 @@ The app will open full-screen like a native app.
         backend = pnl_tracker.storage_backend()
         st.caption(f"Storage: {'☁️ Sheets' if backend == 'sheets' else '💾 Local CSV'}")
         st.caption(f"Auto-refresh: every 60 min")
+
+    # ── Banner ────────────────────────────────────────────────────────────────
+    _banner = Path(__file__).parent / "assets" / "banner.png"
+    if _banner.exists():
+        try:
+            st.image(str(_banner), width="stretch")
+        except Exception:
+            st.image(str(_banner), use_container_width=True)
+    st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "📋  TODAY'S PICKS",
+        "🎰  PARLAYS",
+        "📊  PERFORMANCE",
+        "🎯  ADVANCED STRATEGIES",
+    ])
+
+    with tab1:
+        try:
+            data = get_data()
+            tab_picks(data, _min_ev, _min_edge)
+        except Exception as _e:
+            st.error(f"Picks tab error: {_e}")
+            st.code(_tb.format_exc())
+
+    with tab2:
+        try:
+            data = get_data()
+            tab_parlays(data)
+        except Exception as _e:
+            st.error(f"Parlays tab error: {_e}")
+            st.code(_tb.format_exc())
+
+    with tab3:
+        try:
+            tab_performance()
+        except Exception as _e:
+            st.error(f"Performance tab error: {_e}")
+            st.code(_tb.format_exc())
+
+    with tab4:
+        try:
+            data = get_data()
+            tab_advanced_strategies(data)
+        except Exception as _e:
+            st.error(f"Advanced strategies tab error: {_e}")
+            st.code(_tb.format_exc())
+
 
 
 if __name__ == "__main__":
