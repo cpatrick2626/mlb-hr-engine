@@ -1270,15 +1270,27 @@ def main():
     ])
 
     with tab1:
-        data = get_data()
-        tab_picks(data, _min_ev, _min_edge)
+        try:
+            data = get_data()
+            tab_picks(data, _min_ev, _min_edge)
+        except Exception as _e:
+            st.error(f"Picks tab error: {_e}")
+            st.code(_tb.format_exc())
 
     with tab2:
-        data = get_data()
-        tab_parlays(data)
+        try:
+            data = get_data()
+            tab_parlays(data)
+        except Exception as _e:
+            st.error(f"Parlays tab error: {_e}")
+            st.code(_tb.format_exc())
 
     with tab3:
-        tab_performance()
+        try:
+            tab_performance()
+        except Exception as _e:
+            st.error(f"Performance tab error: {_e}")
+            st.code(_tb.format_exc())
 
     # â"€â"€ Sidebar â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
     with st.sidebar:
