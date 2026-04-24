@@ -499,7 +499,7 @@ def _fanduel_url(player_name: str = "") -> str:
 
 
 def _add_legs_to_fd_slip(legs: list[dict]) -> int:
-    """Merge parlay legs into the FanDuel slip. Returns count of newly added players."""
+    """Merge parlay legs into the FanDuel slip and force sidebar rerender."""
     current = list(st.session_state.get("fd_slip", []))
     added = 0
     for p in legs:
@@ -510,6 +510,9 @@ def _add_legs_to_fd_slip(legs: list[dict]) -> int:
             added += 1
     st.session_state["fd_slip"] = current
     st.session_state.pop("fd_slip_select", None)
+    if added:
+        st.toast(f"✅ {added} player{'s' if added != 1 else ''} added to FD Slip!")
+        st.rerun()
     return added
 
 
@@ -1146,8 +1149,7 @@ def tab_parlays(data: dict):
                     st.markdown(html, unsafe_allow_html=True)
                     if st.button("🎰 Add to FD Slip", key=f"fd_prof_{pi}_{i}",
                                  width='stretch'):
-                        n = _add_legs_to_fd_slip(combo["legs"])
-                        st.success(f"+{n} player{'s' if n != 1 else ''} added to FanDuel slip!")
+                        _add_legs_to_fd_slip(combo["legs"])
 
     st.divider()
 
@@ -1216,8 +1218,7 @@ def tab_parlays(data: dict):
 
             if fd_clicked:
                 if len(legs_built) == n_legs:
-                    n = _add_legs_to_fd_slip(legs_built)
-                    st.success(f"+{n} player{'s' if n != 1 else ''} added to FanDuel slip!")
+                    _add_legs_to_fd_slip(legs_built)
                 else:
                     st.error(f"Select all {n_legs} legs first.")
 

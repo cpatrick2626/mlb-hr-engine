@@ -48,6 +48,8 @@ def tab_advanced_strategies(data: dict):
         if added:
             st.session_state["fd_slip"] = current
             st.session_state.pop("fd_slip_select", None)
+            st.toast(f"✅ {added} player{'s' if added != 1 else ''} added to FD Slip!")
+            st.rerun()
         return added
 
     st.markdown('<div class="section-header">🎯 ADVANCED BETTING STRATEGIES</div>', unsafe_allow_html=True)
@@ -110,9 +112,7 @@ def tab_advanced_strategies(data: dict):
                         with fd_col:
                             if st.button(f"📲 Add All to FD Slip", key=f"fd_corr_{i}"):
                                 n = _add_to_fd_slip(parlay['legs'], all_players)
-                                if n:
-                                    st.success(f"+{n} player{'s' if n != 1 else ''} added to FD Slip!")
-                                else:
+                                if not n:
                                     st.info("Already in slip.")
             else:
                 st.warning("No correlation parlays found with current criteria")
