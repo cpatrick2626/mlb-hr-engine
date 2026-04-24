@@ -209,7 +209,7 @@ def calculate_stack_confidence(players: List[dict], team_factor: float) -> float
     confidence = (avg_conf * 0.7) + (team_factor * 30)
 
     # Bonus for consecutive lineup spots
-    lineup_spots = sorted([p.get("lineup_spot", 9) for p in players])
+    lineup_spots = sorted([p.get("lineup_spot") or 9 for p in players])
     if len(lineup_spots) > 1:
         consecutive = all(
             lineup_spots[i+1] - lineup_spots[i] <= 2
