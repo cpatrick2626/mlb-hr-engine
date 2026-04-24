@@ -276,9 +276,37 @@ def load_game_data(
     except Exception:
         all_props, odds_source = [], "none"
 
-    _cb("Loading Statcast...")
-    batter_data   = statcast_client.get_batter_statcast()
-    pitcher_data  = statcast_client.get_pitcher_statcast()
+    # Collect all player and pitcher IDs from lineups first (for Statcast filtering)
+    _cb("Collecting lineup players...")
+    batter_ids = set()
+    pitcher_ids = set()
+
+    # Pre-scan games to collect all player IDs
+    for game in games:
+        # Add starting pitchers
+        if game.get("home_pitcher", {}).get("id"):
+            pitcher_ids.add(game["home_pitcher"]["id"])
+        if game.get("away_pitcher", {}).get("id"):
+            pitcher_ids.add(game["away_pitcher"]["id"])
+
+        # Add batters from lineups
+        for lineup in [game.get("home_lineup", []), game.get("away_lineup", [])]:
+            if lineup:
+                for batter in lineup:
+                    if batter.get("id"):
+                        batter_ids.add(batter["id"])
+            else:
+                # If no lineup, we'll need to fetch roster (but can't pre-filter those)
+                team_id = game.get("home_team_id") if lineup == game.get("home_lineup") else game.get("away_team_id")
+                if team_id:
+                    roster = mlb_stats.get_team_active_roster(team_id)
+                    for player in roster:
+                        if player.get("id"):
+                            batter_ids.add(player["id"])
+
+    _cb(f"Loading Statcast for {len(batter_ids)} batters, {len(pitcher_ids)} pitchers...")
+    batter_data   = statcast_client.get_batter_statcast(player_ids=batter_ids)
+    pitcher_data  = statcast_client.get_pitcher_statcast(player_ids=pitcher_ids)
     batter_bb     = statcast_client.get_batter_batted_ball()
     pitcher_bb    = statcast_client.get_pitcher_batted_ball()
 

@@ -68,9 +68,13 @@ BARREL_TO_HR_RATE      = 0.57     # ~57% of barrels become HRs
 
 # ── Public API ─────────────────────────────────────────────────────────────────
 
-def get_batter_statcast(year: int = None) -> dict[int, dict]:
+def get_batter_statcast(year: int = None, player_ids: set[int] = None) -> dict[int, dict]:
     """
     Full batter dataset: statcast + batted-ball + expected stats merged per player_id.
+
+    Args:
+        year: Season year (defaults to current)
+        player_ids: Optional set of player IDs to filter (for performance)
 
     Three-tier prior-year coverage (runs every call regardless of curr size):
       Tier 1 — current-year data with >= MIN_CURRENT_YEAR_PA: full trust, no flag
@@ -80,8 +84,8 @@ def get_batter_statcast(year: int = None) -> dict[int, dict]:
                statcast_source = "prior"
     """
     year  = year or config.CURRENT_SEASON
-    curr  = _merge_batter_sources(year)
-    prior = _merge_batter_sources(year - 1)
+    curr  = _merge_batter_sources(year, player_ids)
+    prior = _merge_batter_sources(year - 1, player_ids)
 
     _BLEND_KEYS = (
         "barrel_rate", "exit_velocity_avg", "hard_hit_pct",
@@ -115,15 +119,19 @@ def get_batter_statcast(year: int = None) -> dict[int, dict]:
     return curr
 
 
-def get_pitcher_statcast(year: int = None) -> dict[int, dict]:
+def get_pitcher_statcast(year: int = None, player_ids: set[int] = None) -> dict[int, dict]:
     """
     Full pitcher dataset: statcast + batted-ball merged per player_id.
     Current year primary; prior year fills missing pitchers.
+
+    Args:
+        year: Season year (defaults to current)
+        player_ids: Optional set of player IDs to filter (for performance)
     """
     year  = year or config.CURRENT_SEASON
-    curr  = _merge_pitcher_sources(year)
+    curr  = _merge_pitcher_sources(year, player_ids)
     if len(curr) < 50:
-        prior = _merge_pitcher_sources(year - 1)
+        prior = _merge_pitcher_sources(year - 1, player_ids)
         for pid, stats in prior.items():
             if pid not in curr:
                 curr[pid] = {**stats, "season": year - 1}
@@ -275,13 +283,26 @@ def statcast_summary(
 
 # ── Internal merge helpers ─────────────────────────────────────────────────────
 
-def _merge_batter_sources(year: int) -> dict[int, dict]:
-    """Merge statcast + batted-ball + expected stats for batters."""
-    sc  = _fetch_leaderboard("batter", year)
-    bb  = _fetch_batted_ball("batter", year)
-    xst = _fetch_expected_stats("batter", year)
+def _merge_batter_sources(year: int, player_ids: set[int] = None) -> dict[int, dict]:
+    """Merge statcast + batted-ball + expected stats for batters.
+
+    Args:
+        year: Season year
+        player_ids: Optional set of player IDs to filter (for performance)
+    """
+    # Convert set to frozenset for caching
+    frozen_ids = frozenset(player_ids) if player_ids else None
+    sc  = _fetch_leaderboard("batter", year, frozen_ids)
+    bb  = _fetch_batted_ball("batter", year, frozen_ids)
+    xst = _fetch_expected_stats("batter", year, frozen_ids)
     merged: dict[int, dict] = {}
-    for pid in set(sc) | set(bb) | set(xst):
+
+    # If filtering, only merge requested players
+    pids_to_merge = set(sc) | set(bb) | set(xst)
+    if player_ids:
+        pids_to_merge &= player_ids
+
+    for pid in pids_to_merge:
         row: dict = {}
         row.update(xst.get(pid) or {})   # lowest priority
         row.update(bb.get(pid)  or {})   # batted-ball fills direction stats
@@ -291,12 +312,25 @@ def _merge_batter_sources(year: int) -> dict[int, dict]:
     return merged
 
 
-def _merge_pitcher_sources(year: int) -> dict[int, dict]:
-    """Merge statcast + batted-ball for pitchers."""
-    sc = _fetch_leaderboard("pitcher", year)
-    bb = _fetch_batted_ball("pitcher", year)
+def _merge_pitcher_sources(year: int, player_ids: set[int] = None) -> dict[int, dict]:
+    """Merge statcast + batted-ball for pitchers.
+
+    Args:
+        year: Season year
+        player_ids: Optional set of player IDs to filter (for performance)
+    """
+    # Convert set to frozenset for caching
+    frozen_ids = frozenset(player_ids) if player_ids else None
+    sc = _fetch_leaderboard("pitcher", year, frozen_ids)
+    bb = _fetch_batted_ball("pitcher", year, frozen_ids)
     merged: dict[int, dict] = {}
-    for pid in set(sc) | set(bb):
+
+    # If filtering, only merge requested players
+    pids_to_merge = set(sc) | set(bb)
+    if player_ids:
+        pids_to_merge &= player_ids
+
+    for pid in pids_to_merge:
         row: dict = {}
         row.update(bb.get(pid) or {})
         row.update(sc.get(pid) or {})
@@ -308,7 +342,14 @@ def _merge_pitcher_sources(year: int) -> dict[int, dict]:
 # ── Cached fetch functions ─────────────────────────────────────────────────────
 
 @lru_cache(maxsize=12)
-def _fetch_leaderboard(player_type: str, year: int) -> dict[int, dict]:
+def _fetch_leaderboard(player_type: str, year: int, player_ids: frozenset[int] = None) -> dict[int, dict]:
+    """Fetch leaderboard data with optional filtering.
+
+    Args:
+        player_type: "batter" or "pitcher"
+        year: Season year
+        player_ids: Optional frozenset of player IDs to filter (must be frozenset for caching)
+    """
     url = (
         "https://baseballsavant.mlb.com/leaderboard/statcast"
         f"?type={player_type}&year={year}&position=&team=&min=1&csv=true"
@@ -317,14 +358,21 @@ def _fetch_leaderboard(player_type: str, year: int) -> dict[int, dict]:
         resp = _SESSION.get(url, timeout=25)
         if resp.status_code != 200:
             return {}
-        return _parse_statcast_csv(resp.text, year=year)
+        return _parse_statcast_csv(resp.text, year=year, player_ids=player_ids)
     except Exception as e:
         print(f"[statcast] leaderboard fetch failed ({player_type} {year}): {e}")
         return {}
 
 
 @lru_cache(maxsize=12)
-def _fetch_batted_ball(player_type: str, year: int) -> dict[int, dict]:
+def _fetch_batted_ball(player_type: str, year: int, player_ids: frozenset[int] = None) -> dict[int, dict]:
+    """Fetch batted ball data with optional filtering.
+
+    Args:
+        player_type: "batter" or "pitcher"
+        year: Season year
+        player_ids: Optional frozenset of player IDs to filter (must be frozenset for caching)
+    """
     url = (
         "https://baseballsavant.mlb.com/leaderboard/batted-ball"
         f"?type={player_type}&year={year}&min=1&csv=true"
@@ -333,14 +381,21 @@ def _fetch_batted_ball(player_type: str, year: int) -> dict[int, dict]:
         resp = _SESSION.get(url, timeout=25)
         if resp.status_code != 200:
             return {}
-        return _parse_batted_ball_csv(resp.text)
+        return _parse_batted_ball_csv(resp.text, player_ids=player_ids)
     except Exception as e:
         print(f"[statcast] batted-ball fetch failed ({player_type} {year}): {e}")
         return {}
 
 
 @lru_cache(maxsize=12)
-def _fetch_expected_stats(player_type: str, year: int) -> dict[int, dict]:
+def _fetch_expected_stats(player_type: str, year: int, player_ids: frozenset[int] = None) -> dict[int, dict]:
+    """Fetch expected stats data with optional filtering.
+
+    Args:
+        player_type: "batter" or "pitcher"
+        year: Season year
+        player_ids: Optional frozenset of player IDs to filter (must be frozenset for caching)
+    """
     url = (
         "https://baseballsavant.mlb.com/leaderboard/expected_statistics"
         f"?type={player_type}&year={year}&min=1&csv=true"
@@ -349,7 +404,7 @@ def _fetch_expected_stats(player_type: str, year: int) -> dict[int, dict]:
         resp = _SESSION.get(url, timeout=25)
         if resp.status_code != 200:
             return {}
-        return _parse_expected_stats_csv(resp.text)
+        return _parse_expected_stats_csv(resp.text, player_ids=player_ids)
     except Exception as e:
         print(f"[statcast] expected-stats fetch failed ({player_type} {year}): {e}")
         return {}
@@ -357,7 +412,14 @@ def _fetch_expected_stats(player_type: str, year: int) -> dict[int, dict]:
 
 # ── CSV parsers ────────────────────────────────────────────────────────────────
 
-def _parse_statcast_csv(raw: str, year: int = None) -> dict[int, dict]:
+def _parse_statcast_csv(raw: str, year: int = None, player_ids: frozenset[int] = None) -> dict[int, dict]:
+    """Parse Statcast CSV with optional filtering.
+
+    Args:
+        raw: Raw CSV text
+        year: Season year
+        player_ids: Optional frozenset of player IDs to filter
+    """
     _year = year or config.CURRENT_SEASON
     result: dict[int, dict] = {}
     reader = csv.DictReader(io.StringIO(raw.lstrip("\ufeff")))
@@ -377,6 +439,10 @@ def _parse_statcast_csv(raw: str, year: int = None) -> dict[int, dict]:
         try:
             pid = int(row.get("player_id") or 0)
             if not pid:
+                continue
+
+            # Early filter: skip players not in the filter set
+            if player_ids and pid not in player_ids:
                 continue
 
             barrel_rate = _f(row, "brl_pa",           div=100.0)
@@ -406,7 +472,13 @@ def _parse_statcast_csv(raw: str, year: int = None) -> dict[int, dict]:
     return result
 
 
-def _parse_batted_ball_csv(raw: str) -> dict[int, dict]:
+def _parse_batted_ball_csv(raw: str, player_ids: frozenset[int] = None) -> dict[int, dict]:
+    """Parse batted ball CSV with optional filtering.
+
+    Args:
+        raw: Raw CSV text
+        player_ids: Optional frozenset of player IDs to filter
+    """
     result: dict[int, dict] = {}
     reader = csv.DictReader(io.StringIO(raw.lstrip("\ufeff")))
 
@@ -431,6 +503,11 @@ def _parse_batted_ball_csv(raw: str) -> dict[int, dict]:
             pid = int(row.get("player_id") or row.get("id") or 0)
             if not pid:
                 continue
+
+            # Early filter: skip players not in the filter set
+            if player_ids and pid not in player_ids:
+                continue
+
             row_out = {
                 # Current column names (*_rate, decimal 0-1); legacy names as fallback
                 "gb_pct":   _pct(row, "gb_rate",       "gb_percent",           "gb"),
@@ -449,7 +526,13 @@ def _parse_batted_ball_csv(raw: str) -> dict[int, dict]:
     return result
 
 
-def _parse_expected_stats_csv(raw: str) -> dict[int, dict]:
+def _parse_expected_stats_csv(raw: str, player_ids: frozenset[int] = None) -> dict[int, dict]:
+    """Parse expected stats CSV with optional filtering.
+
+    Args:
+        raw: Raw CSV text
+        player_ids: Optional frozenset of player IDs to filter
+    """
     result: dict[int, dict] = {}
     reader = csv.DictReader(io.StringIO(raw.lstrip("\ufeff")))
 
@@ -468,6 +551,11 @@ def _parse_expected_stats_csv(raw: str) -> dict[int, dict]:
             pid = int(row.get("player_id") or 0)
             if not pid:
                 continue
+
+            # Early filter: skip players not in the filter set
+            if player_ids and pid not in player_ids:
+                continue
+
             xslg  = _f(row, "xslg",  "x_slg",  "expected_slg")
             xwoba = _f(row, "xwoba", "x_woba")
             xba   = _f(row, "xba",   "x_ba")
