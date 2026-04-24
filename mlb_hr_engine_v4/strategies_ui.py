@@ -47,6 +47,7 @@ def tab_advanced_strategies(data: dict):
                 added += 1
         if added:
             st.session_state["fd_slip"] = current
+            st.session_state.pop("fd_slip_select", None)
         return added
 
     st.markdown('<div class="section-header">🎯 ADVANCED BETTING STRATEGIES</div>', unsafe_allow_html=True)

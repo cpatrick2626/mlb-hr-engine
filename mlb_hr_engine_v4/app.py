@@ -509,6 +509,7 @@ def _add_legs_to_fd_slip(legs: list[dict]) -> int:
             current.append(label)
             added += 1
     st.session_state["fd_slip"] = current
+    st.session_state.pop("fd_slip_select", None)
     return added
 
 
