@@ -421,9 +421,10 @@ def _stat_css(col: str, val) -> str:
         if raw >= 30: return _RED
         return _DARK_RED
     if col == "GB%":
-        if raw < 36:  return _DARK_GREEN
-        if raw < 44:  return _GREEN
-        if raw < 50:  return _RED
+        if raw <= 20: return _DARK_GREEN
+        if raw <= 24: return _GREEN
+        if raw <= 29: return ""
+        if raw <= 40: return _RED
         return _DARK_RED
     if col in ("EV%",):
         if raw >= 20: return _DARK_GREEN
