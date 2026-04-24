@@ -192,22 +192,64 @@ def tab_advanced_strategies(data: dict):
 
         elif strategy_type == "Hedge Calculator":
             st.markdown("### 🛡️ Hedge Betting Calculator")
-            st.info("Calculate optimal hedge bets to guarantee profit or minimize loss")
+            st.info("Pick a player to pre-fill their odds, or enter manually")
+
+            # Player quick-fill
+            odds_players = sorted(
+                [p for p in all_players if p.get("best_american")],
+                key=lambda p: p.get("model_prob", 0), reverse=True,
+            )
+            player_opts = ["-- Enter manually --"] + [
+                f"{p['player_name']} ({p.get('team','')})  {_fmt_american(p.get('best_american'))}"
+                for p in odds_players
+            ]
+            player_map = {
+                f"{p['player_name']} ({p.get('team','')})  {_fmt_american(p.get('best_american'))}": p
+                for p in odds_players
+            }
+            selected_player_label = st.selectbox(
+                "Quick-fill from today's players",
+                player_opts,
+                key="hedge_player_select",
+            )
+            selected_player = player_map.get(selected_player_label)
+            prefill_odds = int(selected_player["best_american"]) if selected_player else 400
 
             col1, col2 = st.columns(2)
             with col1:
-                original_stake = st.number_input("Original Stake ($)", min_value=1.0, value=100.0, step=10.0)
-                original_odds = st.number_input("Original Odds", min_value=-10000, max_value=10000, value=400)
+                original_stake = st.number_input(
+                    "Original Stake ($)", min_value=1.0,
+                    value=float(st.session_state.get("hedge_stake", 100.0)), step=10.0,
+                    key="hedge_stake",
+                )
+                original_odds = st.number_input(
+                    "Original Odds", min_value=-10000, max_value=10000,
+                    value=prefill_odds, key="hedge_orig_odds",
+                )
+                if selected_player:
+                    st.caption(
+                        f"Model prob: **{selected_player.get('model_prob',0)*100:.1f}%** "
+                        f"&nbsp;|&nbsp; EV: **{selected_player.get('ev_pct',0):+.1f}%**"
+                    )
             with col2:
-                hedge_odds = st.number_input("Current Hedge Odds", min_value=-10000, max_value=10000, value=-150,
-                                           help="Odds to bet opposite outcome")
-                target_profit = st.number_input("Target Profit ($)", min_value=0.0, value=0.0,
-                                               help="0 = break even")
+                hedge_odds = st.number_input(
+                    "Current Hedge Odds", min_value=-10000, max_value=10000,
+                    value=int(st.session_state.get("hedge_hedge_odds", -150)),
+                    help="Odds to bet the opposite outcome (no HR)",
+                    key="hedge_hedge_odds",
+                )
+                target_profit = st.number_input(
+                    "Target Profit ($)", min_value=0.0,
+                    value=float(st.session_state.get("hedge_target", 0.0)),
+                    help="0 = break even",
+                    key="hedge_target",
+                )
 
-            if st.button("Calculate Hedge"):
-                hedge = calculate_hedge_bet(original_stake, original_odds, hedge_odds,
-                                           target_profit if target_profit > 0 else None)
-
+            if st.button("Calculate Hedge", type="primary"):
+                hedge = calculate_hedge_bet(
+                    original_stake, original_odds, hedge_odds,
+                    target_profit if target_profit > 0 else None,
+                )
                 col1, col2, col3 = st.columns(3)
                 with col1:
                     st.metric("Hedge Stake", f"${hedge['hedge_stake']:.2f}")
@@ -220,43 +262,129 @@ def tab_advanced_strategies(data: dict):
                     st.metric("Hedge ROI", f"{hedge['hedge_roi']:.1f}%")
 
             st.divider()
-            st.link_button("📲 Browse FanDuel HR Props", _fd_url(), use_container_width=True)
+            if selected_player:
+                st.link_button(
+                    f"📲 Open {selected_player['player_name']} on FanDuel",
+                    _fd_url(selected_player["player_name"]),
+                    use_container_width=True,
+                )
+            else:
+                st.link_button("📲 Browse FanDuel HR Props", _fd_url(), use_container_width=True)
 
         elif strategy_type == "Progressive Staking":
             st.markdown("### 📈 Progressive Staking Systems")
-            st.info("Alternative staking strategies beyond Kelly Criterion")
+            st.info("Alternative staking strategies beyond Kelly Criterion — session state persists across reruns")
 
             col1, col2 = st.columns(2)
             with col1:
                 system = st.selectbox(
                     "Staking System",
                     ["Fibonacci", "D'Alembert", "Oscar's Grind"],
-                    help="Select a progressive staking system"
+                    key="staking_system",
+                    help="Select a progressive staking system",
                 )
-                base_unit = st.number_input("Base Unit ($)", min_value=1.0, value=10.0, step=5.0)
+                base_unit = st.number_input(
+                    "Base Unit ($)", min_value=1.0, step=5.0,
+                    value=float(st.session_state.get("staking_base_unit", 10.0)),
+                    key="staking_base_unit",
+                )
                 bankroll = st.session_state.get("bankroll_override", config.BANKROLL)
 
             with col2:
                 if system == "Fibonacci":
-                    loss_streak = st.number_input("Current Loss Streak", min_value=0, max_value=10, value=0)
+                    loss_streak = st.number_input(
+                        "Current Loss Streak", min_value=0, max_value=10,
+                        value=int(st.session_state.get("staking_fib_streak", 0)),
+                        key="staking_fib_streak",
+                    )
                     stake = fibonacci_stake(base_unit, loss_streak, bankroll)
                     st.metric("Next Stake", f"${stake:.2f}")
+                    bcol1, bcol2 = st.columns(2)
+                    with bcol1:
+                        if st.button("✅ Win", key="fib_win"):
+                            new_streak = max(0, loss_streak - 2)
+                            st.session_state["staking_fib_streak"] = new_streak
+                            st.rerun()
+                    with bcol2:
+                        if st.button("❌ Loss", key="fib_loss"):
+                            st.session_state["staking_fib_streak"] = loss_streak + 1
+                            st.rerun()
                     st.caption("After loss: move to next Fibonacci number. After win: move back two.")
 
                 elif system == "D'Alembert":
-                    wins = st.number_input("Session Wins", min_value=0, value=0)
-                    losses = st.number_input("Session Losses", min_value=0, value=0)
+                    wins = st.number_input(
+                        "Session Wins", min_value=0,
+                        value=int(st.session_state.get("staking_dal_wins", 0)),
+                        key="staking_dal_wins",
+                    )
+                    losses = st.number_input(
+                        "Session Losses", min_value=0,
+                        value=int(st.session_state.get("staking_dal_losses", 0)),
+                        key="staking_dal_losses",
+                    )
                     stake = dalembert_stake(base_unit, wins, losses, bankroll)
                     st.metric("Next Stake", f"${stake:.2f}")
+                    bcol1, bcol2, bcol3 = st.columns(3)
+                    with bcol1:
+                        if st.button("✅ Win", key="dal_win"):
+                            st.session_state["staking_dal_wins"] = wins + 1
+                            st.rerun()
+                    with bcol2:
+                        if st.button("❌ Loss", key="dal_loss"):
+                            st.session_state["staking_dal_losses"] = losses + 1
+                            st.rerun()
+                    with bcol3:
+                        if st.button("🔄 Reset", key="dal_reset"):
+                            st.session_state["staking_dal_wins"] = 0
+                            st.session_state["staking_dal_losses"] = 0
+                            st.rerun()
                     st.caption("Increase by 1 unit after loss, decrease after win.")
 
                 elif system == "Oscar's Grind":
-                    session_profit = st.number_input("Session P&L ($)", value=0.0)
-                    streak_type = st.selectbox("Current Streak", ["win", "loss"])
-                    streak_length = st.number_input("Streak Length", min_value=0, value=0)
-                    stake = oscar_grind_stake(base_unit, session_profit, streak_type,
-                                             streak_length, bankroll)
+                    session_profit = st.number_input(
+                        "Session P&L ($)",
+                        value=float(st.session_state.get("staking_og_profit", 0.0)),
+                        key="staking_og_profit",
+                    )
+                    streak_type = st.selectbox(
+                        "Current Streak", ["win", "loss"],
+                        index=["win", "loss"].index(
+                            st.session_state.get("staking_og_streak_type", "win")
+                        ),
+                        key="staking_og_streak_type",
+                    )
+                    streak_length = st.number_input(
+                        "Streak Length", min_value=0,
+                        value=int(st.session_state.get("staking_og_streak_len", 0)),
+                        key="staking_og_streak_len",
+                    )
+                    stake = oscar_grind_stake(
+                        base_unit, session_profit, streak_type, streak_length, bankroll,
+                    )
                     st.metric("Next Stake", f"${stake:.2f}")
+                    bcol1, bcol2, bcol3 = st.columns(3)
+                    with bcol1:
+                        if st.button("✅ Win", key="og_win"):
+                            st.session_state["staking_og_profit"] = session_profit + stake
+                            st.session_state["staking_og_streak_type"] = "win"
+                            st.session_state["staking_og_streak_len"] = (
+                                streak_length + 1 if streak_type == "win" else 1
+                            )
+                            st.rerun()
+                    with bcol2:
+                        if st.button("❌ Loss", key="og_loss"):
+                            st.session_state["staking_og_profit"] = session_profit - stake
+                            st.session_state["staking_og_streak_type"] = "loss"
+                            st.session_state["staking_og_streak_len"] = (
+                                streak_length + 1 if streak_type == "loss" else 1
+                            )
+                            st.rerun()
+                    with bcol3:
+                        if st.button("🔄 Reset", key="og_reset"):
+                            st.session_state["staking_og_profit"] = 0.0
+                            st.session_state["staking_og_streak_type"] = "win"
+                            st.session_state["staking_og_streak_len"] = 0
+                            st.rerun()
                     st.caption("Goal: Win 1 unit per session. Keep stakes same in losses, increase in wins.")
 
             st.divider()
