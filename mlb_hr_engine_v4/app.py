@@ -3,7 +3,7 @@ Codex HR Engine — Streamlit Dashboard
 """
 
 import sys
-import time
+import traceback as _tb
 import urllib.parse
 from pathlib import Path
 
@@ -54,12 +54,12 @@ from output.parlay import _evaluate_parlay, parlay_bet_size
 from output.ranker import rank_picks as _rank_picks
 from tracking import pnl as pnl_tracker, clv as clv_tracker
 
-# â”€â”€ Styling â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€ Styling â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;700;900&display=swap');
 
-/* â”€â”€ Animations â”€â”€ */
+/* â"€â"€ Animations â"€â"€ */
 @keyframes glow-pulse {
     0%,100% { box-shadow: 0 0 12px rgba(198,1,31,0.5), 0 0 30px rgba(198,1,31,0.2); }
     50%      { box-shadow: 0 0 25px rgba(255,50,50,0.8), 0 0 60px rgba(198,1,31,0.4); }
@@ -73,7 +73,7 @@ st.markdown("""
     50%      { border-color: #FF6666; }
 }
 
-/* â”€â”€ Base â”€â”€ */
+/* â"€â"€ Base â"€â"€ */
 .stApp {
     background-color: #040404;
     background-image:
@@ -89,7 +89,7 @@ st.markdown("""
 }
 [data-testid="stSidebar"] * { color: #f0f0f0 !important; }
 
-/* â”€â”€ Tabs â”€â”€ */
+/* â"€â"€ Tabs â"€â"€ */
 .stTabs [data-baseweb="tab-list"] {
     gap: 5px;
     background-color: #040404;
@@ -124,7 +124,7 @@ st.markdown("""
 }
 .stTabs [data-baseweb="tab-panel"] { padding-top: 24px; }
 
-/* â”€â”€ Cards â”€â”€ */
+/* â"€â"€ Cards â"€â"€ */
 .combo-card {
     background: linear-gradient(135deg, #130000 0%, #090000 100%);
     border: 1px solid #C6011F;
@@ -154,7 +154,7 @@ st.markdown("""
 .ev-pos { background: #062014; border: 1px solid #2ea043; color: #4ade80; }
 .ev-neg { background: #200808; border: 1px solid #cc2222; color: #f87171; }
 
-/* â”€â”€ Section headers â”€â”€ */
+/* â"€â"€ Section headers â"€â"€ */
 .section-header {
     font-size: 17px; font-weight: 900; color: #FF4444;
     border-left: 5px solid #FFD700;
@@ -166,7 +166,7 @@ st.markdown("""
     background: linear-gradient(90deg, rgba(198,1,31,0.10) 0%, transparent 65%);
 }
 
-/* â”€â”€ Range bar â”€â”€ */
+/* â"€â"€ Range bar â"€â"€ */
 .range-bar {
     font-size: 12px;
     background: linear-gradient(90deg, #110000 0%, #090000 100%);
@@ -176,13 +176,13 @@ st.markdown("""
     box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
 }
 
-/* â”€â”€ Rating badges â”€â”€ */
+/* â"€â"€ Rating badges â"€â"€ */
 .r-goat { color:#FFD700; font-weight:900; font-size:14px; text-shadow: 0 0 8px rgba(255,215,0,0.6); }
 .r-fire { color:#FF5500; font-weight:900; font-size:14px; text-shadow: 0 0 8px rgba(255,85,0,0.5); }
 .r-good { color:#4ade80; font-weight:800; font-size:13px; }
 .r-marg { color:#666666; font-weight:400; font-size:12px; }
 
-/* â”€â”€ Metrics â”€â”€ */
+/* â"€â"€ Metrics â"€â"€ */
 [data-testid="stMetric"] {
     background: linear-gradient(135deg, #120000 0%, #080000 100%);
     border: 1px solid #380000;
@@ -199,13 +199,13 @@ st.markdown("""
     font-size: 1.8rem !important;
 }
 
-/* â”€â”€ Dataframe â”€â”€ */
+/* â"€â"€ Dataframe â"€â"€ */
 [data-testid="stDataFrame"] {
     border: 1px solid #2a0000; border-radius: 8px;
     box-shadow: 0 6px 24px rgba(0,0,0,0.6);
 }
 
-/* â”€â”€ Buttons â”€â”€ */
+/* â"€â"€ Buttons â"€â"€ */
 .stButton button {
     background: linear-gradient(135deg, #C6011F 0%, #8B0000 100%) !important;
     color: #ffffff !important;
@@ -224,7 +224,7 @@ st.markdown("""
     transform: translateY(-2px) !important;
 }
 
-/* â”€â”€ Inputs â”€â”€ */
+/* â"€â"€ Inputs â"€â"€ */
 [data-testid="stNumberInput"] input {
     background: #0f0000 !important; border: 1px solid #440000 !important;
     color: #FFD700 !important; font-weight: 800 !important; font-size: 16px !important;
@@ -232,19 +232,19 @@ st.markdown("""
 }
 [data-testid="stSlider"] [data-testid="stTickBar"] { color: #555; }
 
-/* â”€â”€ Divider â”€â”€ */
+/* â"€â"€ Divider â"€â"€ */
 hr { border-color: #1e0000 !important; margin: 12px 0 !important; }
 
-/* â”€â”€ Selectbox â”€â”€ */
+/* â"€â"€ Selectbox â"€â"€ */
 div[data-testid="stSelectbox"] label { font-size: 12px; color: #666; }
 
-/* â”€â”€ Alert boxes â”€â”€ */
+/* â"€â"€ Alert boxes â"€â"€ */
 [data-testid="stAlert"] { border-radius: 8px !important; border-left-width: 4px !important; }
 </style>
 """, unsafe_allow_html=True)
 
 
-# â”€â”€ Rating helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€ Rating helpers â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 def _pick_rating(ev_pct: float, edge_pct: float, model_prob: float, confidence: float) -> str:
     # EV% is capped at ~45% max (model prob capped at 1.4x market before calculation).
@@ -295,25 +295,27 @@ def _spot_label(spot, platoon_factor: float) -> str:
     return f"{icon}{spot}{edge}"
 
 
-# â”€â”€ Data loading â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-@st.cache_data(show_spinner=False)
-def _load_data(target_date: str):
-    from pipeline import load_game_data
-    return load_game_data(target_date=target_date, progress_cb=[].append)
-
-
-
-
+# ── Data loading ──────────────────────────────────────────────────────────────
 def get_data():
     from datetime import date as _date
+    from pipeline import load_game_data
     target_date = config.TARGET_DATE or _date.today().strftime("%Y-%m-%d")
 
     if "data" not in st.session_state or st.session_state.get("cache_key") != target_date:
-        with st.spinner("⚾ Loading today's games, odds, and player profiles… (2-4 min first load)"):
+        with st.status("⚾ Loading MLB data — first load takes 2-4 min…", expanded=True) as _status:
             try:
-                data = _load_data(target_date)
+                def _cb(msg: str):
+                    _status.write(msg)
+                    print(f"[pipeline] {msg}")
+
+                data = load_game_data(target_date=target_date, progress_cb=_cb)
                 st.session_state["data"]      = data
                 st.session_state["cache_key"] = target_date
+                _status.update(
+                    label=(f"✅ Loaded — {data['stats'].get('players', 0)} players, "
+                           f"{data['stats'].get('qualified', 0)} qualified"),
+                    state="complete", expanded=False,
+                )
 
                 ranked = data.get("ranked", [])
                 if ranked:
@@ -330,18 +332,21 @@ def get_data():
                     pass
 
             except Exception as e:
+                _status.update(label="❌ Load failed — see error below", state="error")
                 st.error(f"Failed to load game data: {e}")
+                st.code(_tb.format_exc())
                 st.session_state["data"] = {
-                    "ranked": [], "date": target_date, "stats": {},
+                    "ranked": [], "qualified": [], "date": target_date, "stats": {},
                     "odds_source": "error", "batter_data": {},
-                    "all_by_model": [], "team_players": {}, "auto_parlays": {},
+                    "all_by_model": [], "all_players": [], "games": [],
+                    "team_players": {}, "auto_parlays": {}, "profile_parlays": [],
                 }
                 st.session_state["cache_key"] = target_date
 
     return st.session_state["data"]
 
 
-# â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€ Helpers â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 def _fmt_american(odds) -> str:
     if odds is None:
         return "--"
@@ -585,7 +590,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
                 "Score":    f"{p.get('score',0):.1f}",
             })
 
-        # â”€â”€ Range stats bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # â"€â"€ Range stats bar â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
         def _rng(vals, fmt=".1f", suffix="", sign=False):
             clean = [v for v in vals if v is not None]
             if not clean:
@@ -620,7 +625,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
             unsafe_allow_html=True,
         )
 
-        # â”€â”€ Legend â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # â"€â"€ Legend â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
         st.markdown(
             "<div style='font-size:11px; color:#888888; margin-bottom:8px;'>"
             "<b style='color:#f0f0f0'>Pitcher:</b> "
@@ -717,7 +722,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
     if all_by_model:
         PRIME_FLOOR = 0.15
 
-        # â”€â”€ All available columns (name -> extractor) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # â"€â"€ All available columns (name -> extractor) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
         _FIXED_COLS   = ["Player", "Team", "Spot", "Vs", "Model%"]
         _TOGGLE_COLS  = [
             "Brl%", "SwSp%", "FB%", "GB%", "LD%", "Pull%", "Oppo%",
@@ -919,7 +924,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
                 "Effect: gates the OIAL and STRONG EDGE ratings — low confidence can't achieve top tiers.",
         }
 
-        # â”€â”€ Column selector â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        # â"€â"€ Column selector â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
         default_visible = st.session_state.get(
             "model_visible_cols",
             ["Brl%", "SwSp%", "FB%", "GB%", "Pull%", "Exit Velo", "PwrMult", "Park", "Pitcher"],
@@ -1249,14 +1254,6 @@ def tab_performance():
 # MAIN
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 def main():
-    import traceback as _tb
-    try:
-     _main()
-    except Exception as _e:
-     st.error(f"CRASH: {_e}")
-     st.code(_tb.format_exc())
-
-def _main():
     # Read filter thresholds from session state first (sidebar sets them on each rerun)
     _min_ev   = float(st.session_state.get("min_ev",   config.MIN_EV_PCT))
     _min_edge = float(st.session_state.get("min_edge", config.MIN_EDGE_PCT))
@@ -1283,7 +1280,7 @@ def _main():
     with tab3:
         tab_performance()
 
-    # â”€â”€ Sidebar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    # â"€â"€ Sidebar â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
     with st.sidebar:
         st.markdown("""
         <div style='text-align:center; padding:18px 0 14px 0;
