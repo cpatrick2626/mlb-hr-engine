@@ -10,10 +10,12 @@ _SESSION = requests.Session()
 _CACHE: dict[str, dict] = {}
 
 
-def get_game_weather(lat: float, lon: float, game_hour_utc: int = 19) -> dict:
+def get_game_weather(lat: float, lon: float, game_hour_local: int = 19) -> dict:
     """
     Return weather conditions for a stadium location.
-    game_hour_utc: approximate game start hour in UTC (default 6 PM ET ≈ 22 UTC, but we'll use local noon as fallback).
+    game_hour_local: local hour of game start (0-23). Default 19 = 7 PM local time,
+    which covers the majority of MLB evening starts. Open-Meteo is requested with
+    timezone=auto so the hourly array is already in local time — index 19 = 7 PM local.
 
     Returns: temp_f, wind_mph, wind_deg (or defaults if unavailable).
     """
@@ -44,8 +46,7 @@ def get_game_weather(lat: float, lon: float, game_hour_utc: int = 19) -> dict:
         winds = hourly.get("windspeed_10m", [])
         dirs = hourly.get("winddirection_10m", [])
 
-        # Pick the closest hour to game_hour_utc (simple: just grab midday index)
-        idx = min(game_hour_utc, len(temps) - 1) if temps else 0
+        idx = min(game_hour_local, len(temps) - 1) if temps else 0
 
         result = {
             "temp_f": round(temps[idx], 1) if temps else 70.0,

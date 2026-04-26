@@ -11,12 +11,12 @@ missing players for early-season coverage. statcast leaderboard takes precedence
 on any overlapping fields.
 
 Batter power multiplier (7 signals, evidence-based weights):
-  Barrel%      35%  — ~57% of barrels become HRs; the most HR-specific metric
+  Barrel%      38%  — ~57% of barrels become HRs; the most HR-specific metric
   FB%          15%  — HRs require air balls; high FB% = more HR opportunities
-  xSLG         15%  — contact quality proxy; stabilizes in ~50 PA vs ~300 for HR/PA
-  Pull%        10%  — ~43% of MLB HRs are pulled; pull side = short porch
+  xSLG         14%  — contact quality proxy; stabilizes in ~50 PA vs ~300 for HR/PA
   Sweet Spot%  10%  — LA 8-32°: the exact angle band where HRs happen (replaces avg LA)
   Hard Hit%    10%  — EV >95 mph; secondary contact quality signal
+  Pull%         8%  — ~43% of MLB HRs are pulled; pull side = short porch
   Exit Velo     5%  — raw power ceiling
 
 Pitcher contact-quality factor (4 signals):

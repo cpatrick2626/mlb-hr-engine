@@ -1371,6 +1371,99 @@ def tab_performance():
 
 
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ══════════════════════════════════════════════════════════════════════════════
+# TAB 5 — LATE SLATE
+# ══════════════════════════════════════════════════════════════════════════════
+def tab_late_slate(data: dict, min_ev: float, min_edge: float):
+    import datetime as _dt
+    from datetime import timezone, timedelta
+
+    EDT = timezone(timedelta(hours=-4))  # Eastern Daylight Time (Apr–Oct)
+
+    def _to_et(game_time_utc: str):
+        """Return (hour, minute) in ET, or None if unparseable."""
+        if not game_time_utc:
+            return None
+        try:
+            dt_utc = _dt.datetime.fromisoformat(game_time_utc.replace("Z", "+00:00"))
+            dt_et  = dt_utc.astimezone(EDT)
+            return _dt.time(dt_et.hour, dt_et.minute)
+        except Exception:
+            return None
+
+    st.markdown('<div class="section-header">&#128336; LATE SLATE</div>',
+                unsafe_allow_html=True)
+
+    # ── Time picker ──────────────────────────────────────────────────────────
+    cutoff_et = st.time_input(
+        "Show only players in games starting **at or after** (Eastern Time):",
+        value=_dt.time(19, 0),   # default 7 PM ET
+        step=timedelta(minutes=30),
+        key="late_slate_cutoff",
+        help="Adjust to target a specific slate window — e.g. 7 PM ET for evening-only plays, "
+             "10 PM ET for West Coast games only.",
+    )
+
+    # ── Build the set of today's game times for the info bar ─────────────────
+    all_players = data.get("all_players", [])
+    game_slots: dict[str, str] = {}   # game_time_utc -> display string
+    for p in all_players:
+        gtu = p.get("game_time_utc", "")
+        if gtu and gtu not in game_slots:
+            t_et = _to_et(gtu)
+            if t_et:
+                home = p.get("home_team", "")
+                away = p.get("opponent", "") if p.get("team") == home else p.get("team", "")
+                lbl  = t_et.strftime("%-I:%M %p")
+                game_slots[gtu] = lbl
+
+    if game_slots:
+        times_sorted = sorted(set(game_slots.values()))
+        gate_label   = cutoff_et.strftime("%-I:%M %p")
+        st.markdown(
+            f"<div style='color:#888888; font-size:12px; margin-bottom:12px; "
+            f"background:#110000; border:1px solid #330000; border-radius:6px; padding:8px 14px;'>"
+            f"🕐 Game times today (ET): <b style='color:#f0f0f0'>{' &nbsp;·&nbsp; '.join(times_sorted)}</b>"
+            f"&nbsp;&nbsp;|&nbsp;&nbsp; Cutoff: <b style='color:#FF6666'>{gate_label} ET</b>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+
+    # ── Filter players to late-slate games ──────────────────────────────────
+    def _is_late(player: dict) -> bool:
+        t_et = _to_et(player.get("game_time_utc", ""))
+        if t_et is None:
+            return True   # include players whose time is unknown
+        return t_et >= cutoff_et
+
+    late_players     = [p for p in all_players if _is_late(p)]
+    late_by_model    = [p for p in data.get("all_by_model", []) if _is_late(p)]
+    late_team_players: dict[str, list] = {}
+    for p in late_players:
+        if p.get("best_american"):
+            late_team_players.setdefault(p["team"], []).append(p)
+
+    if not late_players:
+        st.warning(
+            f"No players found in games starting at or after **{cutoff_et.strftime('%-I:%M %p')} ET**. "
+            "Try moving the cutoff earlier."
+        )
+        return
+
+    # Reuse tab_picks with a scoped copy of data so all table/parlay logic is identical.
+    late_data = dict(data)
+    late_data["all_players"]   = late_players
+    late_data["all_by_model"]  = late_by_model
+    late_data["team_players"]  = late_team_players
+    late_data["stats"] = {
+        "games":     len({p.get("game_time_utc") for p in late_players if p.get("game_time_utc")}),
+        "players":   len(late_players),
+        "qualified": 0,  # tab_picks recalculates via _apply_ui_filters
+        "filtered":  0,
+    }
+    tab_picks(late_data, min_ev, min_edge)
+
+
 # MAIN
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 def main():
@@ -1574,11 +1667,12 @@ The app will open full-screen like a native app.
         except Exception:
             st.image(str(_banner), use_container_width=True)
     st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
-    tab1, tab2, tab3, tab4 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "📋  TODAY'S PICKS",
         "🎰  PARLAYS",
         "📊  PERFORMANCE",
         "🎯  ADVANCED STRATEGIES",
+        "🕐  LATE SLATE",
     ])
 
     with tab1:
@@ -1610,6 +1704,14 @@ The app will open full-screen like a native app.
             tab_advanced_strategies(data)
         except Exception as _e:
             st.error(f"Advanced strategies tab error: {_e}")
+            st.code(_tb.format_exc())
+
+    with tab5:
+        try:
+            data = get_data()
+            tab_late_slate(data, _min_ev, _min_edge)
+        except Exception as _e:
+            st.error(f"Late slate tab error: {_e}")
             st.code(_tb.format_exc())
 
 

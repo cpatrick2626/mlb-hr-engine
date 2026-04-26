@@ -4,6 +4,7 @@ Docs: https://statsapi.mlb.com/docs/
 """
 
 import sys
+import time
 import requests
 from datetime import date, timedelta
 from functools import lru_cache
@@ -66,9 +67,15 @@ def _game_log_splits(player_id: int) -> list:
 
 def _get(path: str, params: dict = None) -> dict:
     url = f"{MLB_API}{path}"
-    resp = _SESSION.get(url, params=params, timeout=15)
-    resp.raise_for_status()
-    return resp.json()
+    for attempt in range(3):
+        try:
+            resp = _SESSION.get(url, params=params, timeout=15)
+            resp.raise_for_status()
+            return resp.json()
+        except requests.RequestException:
+            if attempt == 2:
+                raise
+            time.sleep(2 ** attempt)  # 1s, then 2s
 
 
 def get_today_schedule(target_date: Optional[str] = None) -> list[dict]:
@@ -109,6 +116,7 @@ def get_today_schedule(target_date: Optional[str] = None) -> list[dict]:
             games.append({
                 "game_pk": g.get("gamePk"),
                 "game_date": game_date,
+                "game_time_utc": g.get("gameDate", ""),  # ISO datetime UTC e.g. "2026-04-26T22:05:00Z"
                 "home_team": home_abbr,
                 "away_team": away_abbr,
                 "home_team_id": home.get("team", {}).get("id"),

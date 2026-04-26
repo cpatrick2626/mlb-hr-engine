@@ -365,6 +365,7 @@ def load_game_data(
     tasks: list[tuple] = []
     for game in games:
         home, away = game["home_team"], game["away_team"]
+        game_time_utc = game.get("game_time_utc", "")
         for lineup, team, opp, team_id, opp_pitcher in [
             (game["home_lineup"], home, away, game.get("home_team_id"), game.get("away_pitcher", {})),
             (game["away_lineup"], away, home, game.get("away_team_id"), game.get("home_pitcher", {})),
@@ -379,19 +380,22 @@ def load_game_data(
                 name = batter.get("name", "Unknown")
                 if not pid:
                     continue
-                tasks.append((pid, name, batter.get("lineup_spot"), team, opp, home, opp_pitcher))
+                tasks.append((pid, name, batter.get("lineup_spot"), team, opp, home, opp_pitcher, game_time_utc))
 
     _cb(f"Building profiles for {len(tasks)} players...")
 
     def _profile(args: tuple):
-        pid, name, spot, team, opp, home_team, opp_pitcher = args
+        pid, name, spot, team, opp, home_team, opp_pitcher, game_time_utc = args
         try:
-            return _build_player_profile(
+            profile = _build_player_profile(
                 pid, name, spot, team, opp, home_team, opp_pitcher,
                 batter_data, pitcher_data,
                 batter_bb_data=batter_bb,
                 pitcher_bb_data=pitcher_bb,
             )
+            if profile:
+                profile["game_time_utc"] = game_time_utc
+            return profile
         except Exception:
             return None
 

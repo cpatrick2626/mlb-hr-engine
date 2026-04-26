@@ -167,12 +167,11 @@ def pitcher_hr_factor(pitcher_stats: dict) -> float:
 
     # HR/FB component
     fly_balls = hrs + air_outs
-    LEAGUE_HR_FB = 0.125
     if fly_balls > 20:
         hr_fb = hrs / fly_balls
         reg_fb = 100
-        reg_hr_fb = (hr_fb * fly_balls + LEAGUE_HR_FB * reg_fb) / (fly_balls + reg_fb)
-        hr_fb_factor = reg_hr_fb / LEAGUE_HR_FB
+        reg_hr_fb = (hr_fb * fly_balls + config.LEAGUE_HR_FB * reg_fb) / (fly_balls + reg_fb)
+        hr_fb_factor = reg_hr_fb / config.LEAGUE_HR_FB
         fb_trust = min(fly_balls / 200.0, 1.0)
         combined = (1.0 - fb_trust) * hr9_factor + fb_trust * hr_fb_factor
     else:

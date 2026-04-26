@@ -52,6 +52,10 @@ MIN_RECENT_PA: int = 20             # Need ≥20 recent PA to trust recent rate
 # League-average HR/9 for pitchers (2024 MLB)
 LEAGUE_AVG_HR9: float = 1.35
 LEAGUE_AVG_ISO: float = 0.155   # ISO = SLG - AVG; 2024 MLB average
+LEAGUE_HR_FB:   float = 0.125   # HR per fly ball (2024 MLB average)
+
+# ── Market / EV ───────────────────────────────────────────────────────────────
+VIG_FACTOR: float = 0.075  # Empirically measured on FanDuel/DraftKings HR props
 
 CURRENT_SEASON: int = 2026
 

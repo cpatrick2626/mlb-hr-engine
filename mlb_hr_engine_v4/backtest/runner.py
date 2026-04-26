@@ -80,7 +80,7 @@ def _score_player(r: dict, batter_data: dict, pitcher_data: dict) -> Optional[di
     home_team  = r.get("home_team", "")
     pk_factor  = get_park(home_team).get("hr_factor", 1.0)
 
-    # Pitcher factor (simplified: no Statcast contact suppressor for speed)
+    # Pitcher factor — full three-component model (HR/FB + Statcast contact + K/GB)
     pitcher_id = r.get("pitcher_id")
     if pitcher_id:
         if pitcher_id not in _pitcher_cache:
@@ -88,8 +88,9 @@ def _score_player(r: dict, batter_data: dict, pitcher_data: dict) -> Optional[di
             time.sleep(0.05)
         pit_stats  = _pitcher_cache[pitcher_id]
         sc_pit_fac = statcast_client.pitcher_contact_suppressor(pitcher_id, pitcher_data)
+        k_gb_fac   = prob.pitcher_k_gb_suppressor(pit_stats)
         pit_factor = prob.pitcher_combined_factor(
-            prob.pitcher_hr_factor(pit_stats), sc_pit_fac
+            prob.pitcher_hr_factor(pit_stats), sc_pit_fac, k_gb_fac
         )
     else:
         pit_factor = 1.0
