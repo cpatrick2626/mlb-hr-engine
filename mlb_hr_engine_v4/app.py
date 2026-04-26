@@ -647,7 +647,9 @@ def _apply_ui_filters(players: list, min_ev: float, min_edge: float) -> list:
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 # TAB 1 — TODAY'S PICKS
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-def tab_picks(data: dict, min_ev: float, min_edge: float, key_suffix: str = ""):
+def tab_picks(data: dict, min_ev: float, min_edge: float):
+    cutoff_et = _slate_time_controls(data, picker_key="picks_cutoff", default_hour=0)
+    data      = _time_gate_data(data, cutoff_et)
     all_players = data.get("all_players", [])
     ranked    = _apply_ui_filters(all_players, min_ev, min_edge)
     stats     = data.get("stats", {})
@@ -1109,8 +1111,8 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, key_suffix: str = ""):
         }
 
         # â"€â"€ Column selector â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-        _vis_key  = f"model_visible_cols{key_suffix}"
-        _pick_key = f"model_col_picker{key_suffix}"
+        _vis_key  = "model_visible_cols"
+        _pick_key = "model_col_picker"
         default_visible = st.session_state.get(
             _vis_key,
             ["Brl%", "SwSp%", "FB%", "GB%", "Pull%", "Exit Velo", "PwrMult", "Park", "Pitcher"],
@@ -1475,34 +1477,6 @@ def tab_performance():
 
 
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-# ══════════════════════════════════════════════════════════════════════════════
-# TAB 5 — LATE SLATE
-# ══════════════════════════════════════════════════════════════════════════════
-def tab_late_slate(data: dict, min_ev: float, min_edge: float):
-    st.markdown('<div class="section-header">&#128336; LATE SLATE</div>',
-                unsafe_allow_html=True)
-
-    cutoff_et = _slate_time_controls(data, picker_key="late_slate_cutoff", default_hour=19)
-    late_data = _time_gate_data(data, cutoff_et)
-
-    if not late_data.get("all_players"):
-        st.warning(
-            f"No players found in games starting at or after "
-            f"**{cutoff_et.strftime('%-I:%M %p')} ET**. "
-            "Try moving the cutoff earlier."
-        )
-        return
-
-    late_data["stats"] = {
-        "games":     len({p.get("game_time_utc") for p in late_data["all_players"]
-                          if p.get("game_time_utc")}),
-        "players":   len(late_data["all_players"]),
-        "qualified": 0,
-        "filtered":  0,
-    }
-    tab_picks(late_data, min_ev, min_edge, key_suffix="_late")
-
-
 # MAIN
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 def main():
@@ -1706,12 +1680,11 @@ The app will open full-screen like a native app.
         except Exception:
             st.image(str(_banner), use_container_width=True)
     st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    tab1, tab2, tab3, tab4 = st.tabs([
         "📋  TODAY'S PICKS",
         "🎰  PARLAYS",
         "📊  PERFORMANCE",
         "🎯  ADVANCED STRATEGIES",
-        "🕐  LATE SLATE",
     ])
 
     with tab1:
@@ -1721,6 +1694,7 @@ The app will open full-screen like a native app.
         except Exception as _e:
             st.error(f"Picks tab error: {_e}")
             st.code(_tb.format_exc())
+
 
     with tab2:
         try:
@@ -1744,14 +1718,6 @@ The app will open full-screen like a native app.
             tab_advanced_strategies(_time_gate_data(data, _adv_cutoff))
         except Exception as _e:
             st.error(f"Advanced strategies tab error: {_e}")
-            st.code(_tb.format_exc())
-
-    with tab5:
-        try:
-            data = get_data()
-            tab_late_slate(data, _min_ev, _min_edge)
-        except Exception as _e:
-            st.error(f"Late slate tab error: {_e}")
             st.code(_tb.format_exc())
 
 
