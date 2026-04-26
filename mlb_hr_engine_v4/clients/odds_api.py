@@ -2,6 +2,11 @@
 The Odds API client — batter_home_runs player props.
 Free tier: 500 requests/month. https://the-odds-api.com
 
+API quota notes:
+- Each _try_api() call costs 1 + N requests (1 events + 1 per game).
+- Results are cached to disk for CACHE_TTL_MINUTES to avoid repeated charges.
+- Events are filtered to today's window only to minimize N.
+
 MANUAL ODDS FALLBACK
 If the API is unreachable (e.g. corporate network), you can enter odds manually:
   1. Run the engine once — it saves codex_hr_engine_v4/manual_odds.csv with today's top players.
@@ -13,8 +18,11 @@ Example row: Aaron Judge, +285, DraftKings
 """
 
 import csv
+import json
 import os
 import requests
+import time
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -22,6 +30,8 @@ import config
 
 BASE = "https://api.the-odds-api.com/v4"
 MANUAL_ODDS_PATH = Path(__file__).parent.parent / "manual_odds.csv"
+_CACHE_PATH = Path(__file__).parent.parent / "data" / "odds_cache.json"
+CACHE_TTL_MINUTES = 45
 _SESSION = requests.Session()
 
 
@@ -36,8 +46,14 @@ def get_hr_odds_all_games() -> tuple[list[dict], str, dict]:
     quota_dict keys: 'used', 'remaining' (ints, or None if unavailable).
     """
     if config.ODDS_API_KEY:
+        cached = _load_cache()
+        if cached is not None:
+            props, quota = cached
+            return props, "The Odds API (cached)", quota
+
         props, quota = _try_api()
         if props:
+            _save_cache(props, quota)
             return props, "The Odds API", quota
 
     # Fall back to manual CSV
@@ -107,6 +123,34 @@ def write_shopping_list(top_players: list[dict]) -> None:
 _last_quota: dict = {"used": None, "remaining": None}
 
 
+# ──────────────────────────────────────────────────────────────────────────────
+# Disk cache
+# ──────────────────────────────────────────────────────────────────────────────
+
+def _load_cache() -> tuple[list[dict], dict] | None:
+    """Return cached (props, quota) if fresh, else None."""
+    try:
+        if not _CACHE_PATH.exists():
+            return None
+        with open(_CACHE_PATH, encoding="utf-8") as f:
+            data = json.load(f)
+        age_minutes = (time.time() - data["timestamp"]) / 60
+        if age_minutes > CACHE_TTL_MINUTES:
+            return None
+        return data["props"], data["quota"]
+    except Exception:
+        return None
+
+
+def _save_cache(props: list[dict], quota: dict) -> None:
+    try:
+        _CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with open(_CACHE_PATH, "w", encoding="utf-8") as f:
+            json.dump({"timestamp": time.time(), "props": props, "quota": quota}, f)
+    except Exception:
+        pass
+
+
 def _parse_quota(resp) -> None:
     try:
         used = resp.headers.get("x-requests-used")
@@ -134,10 +178,19 @@ def _try_api() -> tuple[list[dict], dict]:
 
 
 def _get_events() -> list[dict]:
+    # Only fetch games starting today (midnight to midnight ET, padded ±1 h for UTC offset)
+    now_utc = datetime.now(timezone.utc)
+    today_start = now_utc.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(hours=9)   # ~5 AM ET
+    today_end   = today_start + timedelta(hours=20)  # ~1 AM next-day ET
     try:
         resp = _SESSION.get(
             f"{BASE}/sports/baseball_mlb/events",
-            params={"apiKey": config.ODDS_API_KEY, "dateFormat": "iso"},
+            params={
+                "apiKey": config.ODDS_API_KEY,
+                "dateFormat": "iso",
+                "commenceTimeFrom": today_start.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "commenceTimeTo":   today_end.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            },
             timeout=12,
         )
         _parse_quota(resp)
