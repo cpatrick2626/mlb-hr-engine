@@ -60,18 +60,20 @@ def get_game_weather(lat: float, lon: float, game_hour_local: int = 19) -> dict:
     return result
 
 
-def wind_factor(wind_mph: float, wind_deg: float, is_dome: bool = False) -> float:
+def wind_factor(wind_mph: float, wind_deg: float, is_dome: bool = False, cf_bearing: float = 0.0) -> float:
     """
-    Stage 5 (expert pipeline): continuous wind adjustment.
-    Formula: wind_adj = wind_to_CF_mph * 0.003  (~3% per mph blowing out)
-    wind_to_CF_mph = component of wind blowing toward CF (angle-weighted).
-    Most parks' CF orientation is roughly east-facing (~90°).
+    Stage 5 (expert pipeline): continuous wind adjustment (~3% per mph blowing out to CF).
+    wind_deg: meteorological convention — direction wind is BLOWING FROM (0=N, 90=E, ...).
+    cf_bearing: compass direction FROM home plate TO center field (park-specific).
+    Tailwind (boost) when wind blows FROM the opposite of cf_bearing;
+    headwind (suppress) when wind blows FROM cf_bearing direction.
     """
     import math
     if is_dome or wind_mph < 2:
         return 1.0
-    cf_bearing   = 90.0   # typical park CF direction
-    angle_diff   = abs(((wind_deg - cf_bearing) + 180) % 360 - 180)
+    # A tailwind toward CF occurs when wind comes from (cf_bearing + 180°).
+    opposing     = (cf_bearing + 180) % 360
+    angle_diff   = abs(((wind_deg - opposing) + 180) % 360 - 180)
     wind_to_cf   = wind_mph * math.cos(math.radians(angle_diff))
     adj          = wind_to_cf * 0.003
     return max(0.82, min(1.18, 1.0 + adj))

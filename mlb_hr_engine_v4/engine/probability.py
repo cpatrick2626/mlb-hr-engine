@@ -40,14 +40,15 @@ def base_hr_rate(season_stats: dict, recent_stats: dict) -> float:
         rate = regressed_season
 
     # ISO adjustment: stabilizes in ~150-200 PA vs ~300 PA for HR/PA.
-    # Fades to zero influence once sample is large enough to trust HR/PA directly.
+    # Linear fade: max 20% weight at ≤50 PA, fully phased out by 250 PA.
+    # Aligns with ISO stabilization rate — use it early, drop it once HR/PA is reliable.
     try:
         slg = float(season_stats.get("sluggingPercentage", 0) or 0)
         avg = float(season_stats.get("avg", 0) or 0)
         iso = max(0.0, slg - avg)
         if iso > 0 and season_pa >= 30:
             iso_mult = max(0.70, min(1.50, iso / config.LEAGUE_AVG_ISO))
-            iso_trust = max(0.0, min(0.20, 1.0 - season_pa / 300.0))
+            iso_trust = max(0.0, min(0.20, (250.0 - season_pa) / 1000.0))
             rate = rate * (1.0 - iso_trust) + rate * iso_mult * iso_trust
     except (ValueError, TypeError):
         pass
@@ -295,10 +296,11 @@ def park_factor(home_team: str, batter_is_home: bool) -> float:
 
 def weather_factor(home_team: str) -> tuple[float, dict]:
     park = get_park(home_team)
-    is_dome = home_team in weather_client.DOME_TEAMS
-    weather = weather_client.get_game_weather(park["lat"], park["lon"])
-    t_factor = weather_client.temp_factor(weather["temp_f"])
-    w_factor = weather_client.wind_factor(weather["wind_mph"], weather["wind_deg"], is_dome)
+    is_dome    = home_team in weather_client.DOME_TEAMS
+    cf_bearing = park.get("cf_bearing", 0.0)
+    weather    = weather_client.get_game_weather(park["lat"], park["lon"])
+    t_factor   = weather_client.temp_factor(weather["temp_f"])
+    w_factor   = weather_client.wind_factor(weather["wind_mph"], weather["wind_deg"], is_dome, cf_bearing)
     return max(0.80, min(1.20, t_factor * w_factor)), weather
 
 
@@ -318,7 +320,7 @@ def game_hr_probability(
 
 def hot_streak_factor(short_form: dict, season_stats: dict) -> float:
     """
-    Detect hot/cold form over the last 14 days vs season average.
+    Detect hot/cold form over the last SHORT_FORM_GAMES games vs season average.
     Conservative — capped at ±8% to avoid over-reacting to small samples.
     """
     short_pa = int(short_form.get("plateAppearances", 0))
@@ -360,7 +362,7 @@ def confidence_score(
 
     edge = abs(model_prob - market_prob)
     se   = math.sqrt(model_prob * (1 - model_prob) / max(season_pa, 1))
-    snr  = min(edge / (se + 0.01), 3.0) / 3.0
+    snr  = min(edge / (se + 0.005), 3.0) / 3.0
     edge_conf = snr * 28.0
 
     total = (sample_conf + recent_conf + edge_conf

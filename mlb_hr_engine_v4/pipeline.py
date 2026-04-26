@@ -105,12 +105,13 @@ def _build_player_profile(
     pit_hrs  = int(pitcher_stats.get("homeRuns", 0))
     pitcher_hr9 = round((pit_hrs / pit_ip) * 9.0, 2) if pit_ip >= 5 else 0.0
 
-    park_data = get_park(home_team)
-    is_dome   = home_team in weather_client.DOME_TEAMS
-    weather   = weather_client.get_game_weather(park_data["lat"], park_data["lon"])
-    w_factor  = max(0.80, min(1.20,
+    park_data  = get_park(home_team)
+    is_dome    = home_team in weather_client.DOME_TEAMS
+    cf_bearing = park_data.get("cf_bearing", 0.0)
+    weather    = weather_client.get_game_weather(park_data["lat"], park_data["lon"])
+    w_factor   = max(0.80, min(1.20,
         weather_client.temp_factor(weather["temp_f"])
-        * weather_client.wind_factor(weather["wind_mph"], weather["wind_deg"], is_dome)
+        * weather_client.wind_factor(weather["wind_mph"], weather["wind_deg"], is_dome, cf_bearing)
     ))
 
     batter_info = mlb_stats.get_player_info(player_id)
