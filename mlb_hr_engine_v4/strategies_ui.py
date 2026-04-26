@@ -284,10 +284,10 @@ def tab_advanced_strategies(data: dict):
             @st.cache_data(ttl=3600, show_spinner=False)
             def _cached_power_parlays(player_ids: tuple):
                 def _power_score(p):
-                    brl = p.get("barrel_pct") or p.get("brl_pct") or 0
-                    ev  = p.get("exit_velo") or 0
-                    gb  = p.get("gb_pct") or 50
-                    pf  = p.get("pitcher_factor", 1.0)
+                    brl = float(p.get("barrel_pct") or p.get("brl_pct") or 0)
+                    ev  = float(p.get("exit_velo") or 0)
+                    gb  = float(p.get("gb_pct") or 50)
+                    pf  = float(p.get("pitcher_factor") or 1.0)
                     brl_n = min(brl / 18.0, 1.0)
                     ev_n  = max(0.0, (ev - 85.0) / 15.0)
                     gb_n  = max(0.0, (50.0 - gb) / 30.0)
