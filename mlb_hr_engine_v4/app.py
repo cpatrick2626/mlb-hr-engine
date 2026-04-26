@@ -1313,7 +1313,24 @@ def tab_performance():
         col_l.markdown(_pnl_box("Losses",  str(losses),                    "#7f1d1d" if losses > 0 else "#1a1a2e"), unsafe_allow_html=True)
         col_p.markdown(_pnl_box("Pending", str(summary.get("pending", 0)), "#1a1a2e"), unsafe_allow_html=True)
     else:
-        st.info("No results logged yet. Picks are auto-logged when Today's Picks tab loads.")
+        try:
+            logged = pnl_tracker.get_picks_log()
+        except Exception:
+            logged = []
+        if logged:
+            pending_count = len(logged)
+            backend = pnl_tracker.storage_backend()
+            if backend == "csv":
+                storage_note = "⚠️ Local CSV storage — picks won't survive a Streamlit Cloud restart. Configure Google Sheets for persistence."
+            else:
+                storage_note = f"Storage: Google Sheets"
+            st.info(
+                f"**{pending_count} pick{'s' if pending_count != 1 else ''} logged, no settled results yet.**  \n"
+                f"After yesterday's games finish, use **Update Yesterday** in the sidebar to settle outcomes and populate P&L.  \n"
+                f"{storage_note}"
+            )
+        else:
+            st.info("No picks logged yet. Load the **Today's Picks** tab to auto-log today's selections.")
 
     if clv:
         st.markdown('<div class="section-header">🎯 Closing Line Value</div>',
