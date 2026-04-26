@@ -1620,16 +1620,27 @@ The app will open full-screen like a native app.
 """)
 
         st.divider()
-        # API key status indicator
-        key_set = bool(config.ODDS_API_KEY)
-        st.markdown(
-            f"<div style='font-size:12px; padding:6px 10px; border-radius:6px; "
-            f"background:{'#0a2a14' if key_set else '#2a0a0a'}; "
-            f"border:1px solid {'#2ea043' if key_set else '#da3633'};'>"
-            f"{'✅ Odds API key detected' if key_set else '❌ Odds API key MISSING — set in Streamlit secrets'}"
-            f"</div>",
-            unsafe_allow_html=True,
-        )
+        # API key status + last error
+        from clients.odds_api import get_last_error as _odds_err
+        _api_err = _odds_err()
+        key_set  = bool(config.ODDS_API_KEY)
+        if _api_err:
+            st.markdown(
+                f"<div style='font-size:12px; padding:6px 10px; border-radius:6px; "
+                f"background:#2a0a0a; border:1px solid #da3633;'>"
+                f"⚠️ Odds API error:<br><span style='color:#ff8888'>{_api_err}</span>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown(
+                f"<div style='font-size:12px; padding:6px 10px; border-radius:6px; "
+                f"background:{'#0a2a14' if key_set else '#2a0a0a'}; "
+                f"border:1px solid {'#2ea043' if key_set else '#da3633'};'>"
+                f"{'✅ Odds API key detected' if key_set else '❌ Odds API key MISSING — set ODDS_API_KEY in Streamlit secrets or .env'}"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
         st.caption(f"Active EV filter: {_min_ev:.1f}%")
         st.caption(f"Active Edge filter: {_min_edge:.1f}%")
         backend = pnl_tracker.storage_backend()

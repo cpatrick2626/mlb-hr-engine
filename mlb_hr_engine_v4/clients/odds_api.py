@@ -45,7 +45,12 @@ def get_hr_odds_all_games() -> tuple[list[dict], str, dict]:
     Returns (props_list, source_label, quota_dict).
     quota_dict keys: 'used', 'remaining' (ints, or None if unavailable).
     """
-    if config.ODDS_API_KEY:
+    global _last_error
+    _last_error = ""
+
+    if not config.ODDS_API_KEY:
+        _last_error = "No API key configured. Add ODDS_API_KEY to your .env file or Streamlit secrets."
+    else:
         cached = _load_cache()
         if cached is not None:
             props, quota = cached
@@ -55,6 +60,7 @@ def get_hr_odds_all_games() -> tuple[list[dict], str, dict]:
         if props:
             _save_cache(props, quota)
             return props, "The Odds API", quota
+        # _last_error was set inside _try_api / _get_events on failure
 
     # Fall back to manual CSV
     manual = load_manual_odds()
@@ -121,6 +127,11 @@ def write_shopping_list(top_players: list[dict]) -> None:
 # ──────────────────────────────────────────────────────────────────────────────
 
 _last_quota: dict = {"used": None, "remaining": None}
+_last_error: str  = ""   # human-readable reason the last API call failed
+
+
+def get_last_error() -> str:
+    return _last_error
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -178,6 +189,7 @@ def _try_api() -> tuple[list[dict], dict]:
 
 
 def _get_events() -> list[dict]:
+    global _last_error
     # Only fetch games starting today (midnight to midnight ET, padded ±1 h for UTC offset)
     now_utc = datetime.now(timezone.utc)
     today_start = now_utc.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(hours=9)   # ~5 AM ET
@@ -195,9 +207,23 @@ def _get_events() -> list[dict]:
         )
         _parse_quota(resp)
         if resp.status_code != 200:
+            _KNOWN = {
+                401: "Invalid API key (401). Check your ODDS_API_KEY.",
+                422: "API key missing or malformed (422). Check your ODDS_API_KEY.",
+                429: "Monthly quota exhausted (429). Free tier: 500 req/month. Upgrade at the-odds-api.com.",
+            }
+            msg = _KNOWN.get(resp.status_code, f"API error {resp.status_code}")
+            try:
+                api_msg = resp.json().get("message", "")
+                if api_msg:
+                    msg += f" — {api_msg}"
+            except Exception:
+                pass
+            _last_error = msg
             return []
         return resp.json()
-    except Exception:
+    except Exception as e:
+        _last_error = f"Network error reaching The Odds API: {e}"
         return []
 
 
