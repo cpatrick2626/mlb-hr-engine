@@ -95,6 +95,20 @@ def tab_advanced_strategies(data: dict):
         all_players = data.get("all_players", [])
         ranked = data.get("ranked", [])
 
+        def _diverse_top(parlays: list, max_per_player: int = 2, limit: int = 10) -> list:
+            """Greedy pick so no single player dominates the displayed parlays."""
+            counts: dict = {}
+            result = []
+            for p in parlays:
+                legs = p.get("legs", [])
+                if all(counts.get(name, 0) < max_per_player for name in legs):
+                    result.append(p)
+                    for name in legs:
+                        counts[name] = counts.get(name, 0) + 1
+                    if len(result) >= limit:
+                        break
+            return result
+
         if strategy_type == "Correlation Parlays":
             st.markdown("### 🔗 Correlation-Based Parlays")
             st.info("Same-team players facing the same pitcher — correlation bonus applied to EV")
@@ -242,7 +256,7 @@ def tab_advanced_strategies(data: dict):
                                 "ev_pct": ev * 100,
                                 "n_legs": n_legs,
                             })
-                return sorted(bombs, key=lambda x: x["ev_pct"], reverse=True)[:10]
+                return _diverse_top(sorted(bombs, key=lambda x: x["ev_pct"], reverse=True))
 
             _vb_key = tuple(p.get("player_name", "") for p in all_players)
             bombs = _cached_value_bombs(_vb_key)
@@ -331,7 +345,7 @@ def tab_advanced_strategies(data: dict):
                                 "ev_pct": ev * 100,
                                 "n_legs": n_legs,
                             })
-                return sorted(parlays, key=lambda x: x["ev_pct"], reverse=True)[:10]
+                return _diverse_top(sorted(parlays, key=lambda x: x["ev_pct"], reverse=True))
 
             _pp_key = tuple(p.get("player_name", "") for p in all_players)
             power_parlays = _cached_power_parlays(_pp_key)
@@ -436,7 +450,7 @@ def tab_advanced_strategies(data: dict):
                             "ev_pct": ev * 100,
                         })
 
-                return sorted(parlays, key=lambda x: x["ev_pct"], reverse=True)[:10]
+                return _diverse_top(sorted(parlays, key=lambda x: x["ev_pct"], reverse=True))
 
             _lh_key = tuple(p.get("player_name", "") for p in all_players)
             heart_parlays = _cached_heart_parlays(_lh_key)
@@ -522,7 +536,7 @@ def tab_advanced_strategies(data: dict):
                                 "ev_pct": ev * 100,
                                 "n_legs": n_legs,
                             })
-                return sorted(parlays, key=lambda x: x["ev_pct"], reverse=True)[:10]
+                return _diverse_top(sorted(parlays, key=lambda x: x["ev_pct"], reverse=True))
 
             _park_key = tuple(p.get("player_name", "") for p in all_players)
             park_parlays = _cached_park_parlays(_park_key)
