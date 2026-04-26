@@ -548,7 +548,7 @@ def _apply_ui_filters(players: list, min_ev: float, min_edge: float) -> list:
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 # TAB 1 — TODAY'S PICKS
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-def tab_picks(data: dict, min_ev: float, min_edge: float):
+def tab_picks(data: dict, min_ev: float, min_edge: float, key_suffix: str = ""):
     all_players = data.get("all_players", [])
     ranked    = _apply_ui_filters(all_players, min_ev, min_edge)
     stats     = data.get("stats", {})
@@ -1010,8 +1010,10 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
         }
 
         # â"€â"€ Column selector â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+        _vis_key  = f"model_visible_cols{key_suffix}"
+        _pick_key = f"model_col_picker{key_suffix}"
         default_visible = st.session_state.get(
-            "model_visible_cols",
+            _vis_key,
             ["Brl%", "SwSp%", "FB%", "GB%", "Pull%", "Exit Velo", "PwrMult", "Park", "Pitcher"],
         )
         with st.expander("⚙️ Customize columns", expanded=False):
@@ -1022,9 +1024,9 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
                 options=_TOGGLE_COLS,
                 default=default_visible,
                 format_func=lambda c: _COL_FULL.get(c, c),
-                key="model_col_picker",
+                key=_pick_key,
             )
-            st.session_state["model_visible_cols"] = selected_toggle
+            st.session_state[_vis_key] = selected_toggle
 
         visible_cols = _FIXED_COLS + selected_toggle
 
@@ -1461,7 +1463,7 @@ def tab_late_slate(data: dict, min_ev: float, min_edge: float):
         "qualified": 0,  # tab_picks recalculates via _apply_ui_filters
         "filtered":  0,
     }
-    tab_picks(late_data, min_ev, min_edge)
+    tab_picks(late_data, min_ev, min_edge, key_suffix="_late")
 
 
 # MAIN
