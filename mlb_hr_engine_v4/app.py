@@ -1334,8 +1334,16 @@ def tab_performance():
     try:
         rows = pnl_tracker.get_picks_log()
         if rows:
-            # Clean NaN values before display
-            df_log = pd.DataFrame(rows)
+            def _clean_row(row: dict) -> dict:
+                out = {}
+                for k, v in row.items():
+                    if k is None or (isinstance(k, float) and k != k):
+                        continue  # drop NaN/None column names from blank CSV headers
+                    if isinstance(v, list):
+                        v = ", ".join(str(x) for x in v) if v else ""
+                    out[k] = v
+                return out
+            df_log = pd.DataFrame([_clean_row(r) for r in rows])
             df_log = df_log.fillna("--")
             df_log = df_log.replace([np.nan, np.inf, -np.inf, float('inf'), -float('inf')], "--")
             st.dataframe(df_log, width='stretch', hide_index=True)
