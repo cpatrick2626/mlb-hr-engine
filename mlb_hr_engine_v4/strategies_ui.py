@@ -76,6 +76,12 @@ def tab_advanced_strategies(data: dict):
             "Power Profile Parlays",
             "Lineup Heart Parlays",
             "Park Monster Parlays",
+            "Pitcher Target Parlays",
+            "Platoon Advantage Parlays",
+            "Weather Boost Parlays",
+            "Hot Streak Parlays",
+            "Stars Aligned",
+            "Same-Game Builder",
             "Hedge Calculator",
             "Progressive Staking",
         ],
@@ -570,6 +576,622 @@ def tab_advanced_strategies(data: dict):
             else:
                 st.warning("No park monster parlays found — no games in hitter-friendly parks today")
                 st.link_button("📲 Browse FanDuel HR Props", _fd_url())
+
+        elif strategy_type == "Pitcher Target Parlays":
+            st.markdown("### 🎯 Pitcher Target Parlays")
+            st.info(
+                "Stack multiple hitters against the same HR-prone starting pitcher. "
+                "When a leaky arm is on the mound, the whole opposing lineup benefits — "
+                "and their HRs are correlated through the shared matchup."
+            )
+
+            @st.cache_data(ttl=3600, show_spinner=False)
+            def _cached_pitcher_targets(player_ids: tuple):
+                from collections import defaultdict
+                # Group qualified players (model_prob >= 0.07, has odds) by opponent pitcher
+                by_pitcher = defaultdict(list)
+                for p in all_players:
+                    if p.get("model_prob", 0) < 0.07 or not p.get("best_american"):
+                        continue
+                    pid_name = p.get("pitcher_name", "TBD")
+                    if pid_name and pid_name != "TBD":
+                        by_pitcher[pid_name].append(p)
+
+                parlays = []
+                for pitcher_name, hitters in by_pitcher.items():
+                    if len(hitters) < 2:
+                        continue
+                    # Use the pitcher factor from any hitter facing this pitcher
+                    avg_pit_fac = sum(h.get("pitcher_factor", 1.0) for h in hitters) / len(hitters)
+                    avg_pit_hr9 = sum(h.get("pitcher_hr9", 0.0) for h in hitters) / len(hitters)
+                    if avg_pit_fac < 1.05 and avg_pit_hr9 < 1.2:
+                        continue  # pitcher isn't particularly HR-prone
+
+                    hitters_sorted = sorted(hitters, key=lambda h: h.get("model_prob", 0), reverse=True)
+                    for n_legs in (2, 3):
+                        pool = hitters_sorted[:min(n_legs + 3, len(hitters_sorted))]
+                        for combo in itertools.combinations(pool, n_legs):
+                            base_prob = 1.0
+                            parlay_odds = 1.0
+                            for h in combo:
+                                base_prob *= h.get("model_prob", 0)
+                                parlay_odds *= _ato_d(h["best_american"])
+                            # Same-pitcher correlation boost: 8% per leg above 1
+                            corr_boost = 1.0 + 0.08 * (n_legs - 1)
+                            adj_prob = min(base_prob * corr_boost, 0.30)
+                            ev = (parlay_odds * adj_prob) - 1
+                            if ev > 0:
+                                parlays.append({
+                                    "pitcher_name": pitcher_name,
+                                    "pitcher_factor": round(avg_pit_fac, 3),
+                                    "pitcher_hr9":   round(avg_pit_hr9, 2),
+                                    "legs":          [h["player_name"] for h in combo],
+                                    "teams":         [h.get("team", "") for h in combo],
+                                    "model_probs":   [round(h.get("model_prob", 0) * 100, 1) for h in combo],
+                                    "odds_each":     [h["best_american"] for h in combo],
+                                    "corr_boost":    corr_boost,
+                                    "base_prob":     base_prob,
+                                    "adj_prob":      adj_prob,
+                                    "parlay_odds":   parlay_odds,
+                                    "american_odds": _dta(parlay_odds),
+                                    "ev_pct":        ev * 100,
+                                    "n_legs":        n_legs,
+                                })
+                return _diverse_top(sorted(parlays, key=lambda x: x["ev_pct"], reverse=True))
+
+            _pt_key = tuple(p.get("player_name", "") for p in all_players)
+            pt_parlays = _cached_pitcher_targets(_pt_key)
+
+            if pt_parlays:
+                for i, pt in enumerate(pt_parlays, 1):
+                    pf_color = "#ff5722" if pt["pitcher_factor"] >= 1.20 else "#ff9800"
+                    label = (
+                        f"vs {pt['pitcher_name']}  |  "
+                        f"{pt['n_legs']}-leg  |  "
+                        f"EV {pt['ev_pct']:+.1f}%  |  "
+                        f"Pitcher fac {pt['pitcher_factor']:.2f}x"
+                    )
+                    with st.expander(label):
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("Parlay EV", f"{pt['ev_pct']:+.1f}%")
+                            st.metric("Adj. Probability", f"{pt['adj_prob']*100:.2f}%")
+                        with col2:
+                            st.metric("American Odds", _fmt_american(pt['american_odds']))
+                            st.metric("Corr Boost", f"+{(pt['corr_boost']-1)*100:.0f}%")
+                        with col3:
+                            st.metric("Pitcher HR Factor", f"{pt['pitcher_factor']:.2f}x")
+                            st.metric("Pitcher HR/9", f"{pt['pitcher_hr9']:.2f}")
+                        st.write(f"**Hitters vs {pt['pitcher_name']}:**")
+                        for player, team, mp, odds_e in zip(
+                            pt['legs'], pt['teams'], pt['model_probs'], pt['odds_each']
+                        ):
+                            st.markdown(
+                                f"<div style='display:flex; justify-content:space-between; align-items:center; padding:3px 0;'>"
+                                f"<span>• <b>{player}</b> <span style='color:#888'>({team})</span> "
+                                f"<span style='color:{pf_color}; font-size:11px;'>"
+                                f"Model {mp:.1f}%  {_fmt_american(odds_e)}</span></span>"
+                                f"{_fd_link(player)}</div>",
+                                unsafe_allow_html=True,
+                            )
+                        fd_col, _ = st.columns([1, 2])
+                        with fd_col:
+                            if st.button("📲 Add All to FD Slip", key=f"fd_pt_{i}"):
+                                n = _add_to_fd_slip(pt['legs'], all_players)
+                                if not n:
+                                    st.info("Already in slip.")
+            else:
+                st.warning("No profitable pitcher-target parlays found — try refreshing after lineups post.")
+                st.link_button("📲 Browse FanDuel HR Props", _fd_url())
+
+        elif strategy_type == "Platoon Advantage Parlays":
+            st.markdown("### ⚡ Platoon Advantage Parlays")
+            st.info(
+                "Players with the strongest handedness edge against today's starter. "
+                "A platoon factor above 1.10 means the batter hits for meaningfully more "
+                "power from this side of the plate — a repeatable, book-beating edge."
+            )
+
+            @st.cache_data(ttl=3600, show_spinner=False)
+            def _cached_platoon_parlays(player_ids: tuple):
+                candidates = sorted(
+                    [p for p in all_players
+                     if p.get("platoon_factor", 1.0) >= 1.08
+                     and p.get("model_prob", 0) >= 0.07
+                     and p.get("best_american")],
+                    key=lambda p: p.get("platoon_factor", 1.0) * p.get("model_prob", 0),
+                    reverse=True,
+                )[:20]
+
+                parlays = []
+                for n_legs in (2, 3):
+                    pool = candidates if n_legs == 2 else candidates[:12]
+                    for combo in itertools.combinations(pool, n_legs):
+                        base_prob = 1.0
+                        parlay_odds = 1.0
+                        avg_plat = sum(p.get("platoon_factor", 1.0) for p in combo) / len(combo)
+                        for p in combo:
+                            base_prob *= p.get("model_prob", 0)
+                            parlay_odds *= _ato_d(p["best_american"])
+                        ev = (parlay_odds * base_prob) - 1
+                        if ev > 0:
+                            parlays.append({
+                                "legs":           [p["player_name"] for p in combo],
+                                "teams":          [p.get("team", "") for p in combo],
+                                "platoon_factors":[round(p.get("platoon_factor", 1.0), 3) for p in combo],
+                                "pitchers":       [p.get("pitcher_name", "TBD") for p in combo],
+                                "model_probs":    [round(p.get("model_prob", 0) * 100, 1) for p in combo],
+                                "avg_platoon":    round(avg_plat, 3),
+                                "base_prob":      base_prob,
+                                "parlay_odds":    parlay_odds,
+                                "american_odds":  _dta(parlay_odds),
+                                "ev_pct":         ev * 100,
+                                "n_legs":         n_legs,
+                            })
+                return _diverse_top(sorted(parlays, key=lambda x: x["ev_pct"], reverse=True))
+
+            _plat_key = tuple(p.get("player_name", "") for p in all_players)
+            plat_parlays = _cached_platoon_parlays(_plat_key)
+
+            if plat_parlays:
+                for i, pp in enumerate(plat_parlays, 1):
+                    label = (
+                        f"{pp['n_legs']}-Leg Platoon #{i}  |  "
+                        f"EV {pp['ev_pct']:+.1f}%  |  "
+                        f"Avg Platoon Edge {pp['avg_platoon']:.2f}x"
+                    )
+                    with st.expander(label):
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.metric("Parlay EV", f"{pp['ev_pct']:+.1f}%")
+                            st.metric("Hit Probability", f"{pp['base_prob']*100:.2f}%")
+                        with col2:
+                            st.metric("American Odds", _fmt_american(pp['american_odds']))
+                            st.metric("Avg Platoon Factor", f"{pp['avg_platoon']:.2f}x")
+                        st.write("**Players:**")
+                        for player, team, plat, pitcher, mp in zip(
+                            pp['legs'], pp['teams'], pp['platoon_factors'],
+                            pp['pitchers'], pp['model_probs']
+                        ):
+                            st.markdown(
+                                f"<div style='display:flex; justify-content:space-between; align-items:center; padding:3px 0;'>"
+                                f"<span>• <b>{player}</b> <span style='color:#888'>({team})</span> "
+                                f"<span style='color:#9c27b0; font-size:11px;'>"
+                                f"Platoon {plat:.2f}x  vs {pitcher}  Model {mp:.1f}%</span></span>"
+                                f"{_fd_link(player)}</div>",
+                                unsafe_allow_html=True,
+                            )
+                        fd_col, _ = st.columns([1, 2])
+                        with fd_col:
+                            if st.button("📲 Add All to FD Slip", key=f"fd_plat_{i}"):
+                                n = _add_to_fd_slip(pp['legs'], all_players)
+                                if not n:
+                                    st.info("Already in slip.")
+            else:
+                st.warning("No platoon-advantage parlays found — may need lineups and pitcher hands posted.")
+                st.link_button("📲 Browse FanDuel HR Props", _fd_url())
+
+        elif strategy_type == "Weather Boost Parlays":
+            st.markdown("### ☀️ Weather Boost Parlays")
+            st.info(
+                "Games with favorable conditions — warm temps and wind blowing out to center. "
+                "Hot, thin air lets the ball carry farther. Wind-out adds 3–10% per mph. "
+                "Dome teams always receive a neutral factor."
+            )
+
+            @st.cache_data(ttl=3600, show_spinner=False)
+            def _cached_weather_parlays(player_ids: tuple):
+                MIN_WEATHER = 1.04
+                candidates = sorted(
+                    [p for p in all_players
+                     if p.get("weather_factor", 1.0) >= MIN_WEATHER
+                     and p.get("model_prob", 0) >= 0.07
+                     and p.get("best_american")],
+                    key=lambda p: p.get("weather_factor", 1.0) * p.get("model_prob", 0),
+                    reverse=True,
+                )[:20]
+
+                parlays = []
+                for n_legs in (2, 3):
+                    pool = candidates if n_legs == 2 else candidates[:12]
+                    for combo in itertools.combinations(pool, n_legs):
+                        base_prob = 1.0
+                        parlay_odds = 1.0
+                        avg_wx = sum(p.get("weather_factor", 1.0) for p in combo) / len(combo)
+                        for p in combo:
+                            base_prob *= p.get("model_prob", 0)
+                            parlay_odds *= _ato_d(p["best_american"])
+                        ev = (parlay_odds * base_prob) - 1
+                        if ev > 0:
+                            parlays.append({
+                                "legs":            [p["player_name"] for p in combo],
+                                "teams":           [p.get("team", "") for p in combo],
+                                "weather_factors": [round(p.get("weather_factor", 1.0), 3) for p in combo],
+                                "home_teams":      [p.get("home_team", "") for p in combo],
+                                "avg_weather":     round(avg_wx, 3),
+                                "base_prob":       base_prob,
+                                "parlay_odds":     parlay_odds,
+                                "american_odds":   _dta(parlay_odds),
+                                "ev_pct":          ev * 100,
+                                "n_legs":          n_legs,
+                            })
+                return _diverse_top(sorted(parlays, key=lambda x: x["ev_pct"], reverse=True))
+
+            _wx_key = tuple(p.get("player_name", "") for p in all_players)
+            wx_parlays = _cached_weather_parlays(_wx_key)
+
+            if wx_parlays:
+                for i, wx in enumerate(wx_parlays, 1):
+                    label = (
+                        f"{wx['n_legs']}-Leg Weather #{i}  |  "
+                        f"EV {wx['ev_pct']:+.1f}%  |  "
+                        f"Avg Weather {wx['avg_weather']:.2f}x"
+                    )
+                    with st.expander(label):
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.metric("Parlay EV", f"{wx['ev_pct']:+.1f}%")
+                            st.metric("Hit Probability", f"{wx['base_prob']*100:.2f}%")
+                        with col2:
+                            st.metric("American Odds", _fmt_american(wx['american_odds']))
+                            st.metric("Avg Weather Factor", f"{wx['avg_weather']:.3f}x")
+                        st.write("**Players:**")
+                        for player, team, wf, ht in zip(
+                            wx['legs'], wx['teams'], wx['weather_factors'], wx['home_teams']
+                        ):
+                            st.markdown(
+                                f"<div style='display:flex; justify-content:space-between; align-items:center; padding:3px 0;'>"
+                                f"<span>• <b>{player}</b> <span style='color:#888'>({team} @ {ht})</span> "
+                                f"<span style='color:#03a9f4; font-size:11px;'>Weather {wf:.3f}x</span></span>"
+                                f"{_fd_link(player)}</div>",
+                                unsafe_allow_html=True,
+                            )
+                        fd_col, _ = st.columns([1, 2])
+                        with fd_col:
+                            if st.button("📲 Add All to FD Slip", key=f"fd_wx_{i}"):
+                                n = _add_to_fd_slip(wx['legs'], all_players)
+                                if not n:
+                                    st.info("Already in slip.")
+            else:
+                st.warning("No weather-boost parlays found — no games with strongly favorable conditions today.")
+                st.link_button("📲 Browse FanDuel HR Props", _fd_url())
+
+        elif strategy_type == "Hot Streak Parlays":
+            st.markdown("### 🔥 Hot Streak Parlays")
+            st.info(
+                "Players whose last-10-game HR rate is running above their season average. "
+                "The streak factor is capped at ±8% to avoid noise — these are genuine "
+                "sustained hot spells, not one-game flukes."
+            )
+
+            @st.cache_data(ttl=3600, show_spinner=False)
+            def _cached_streak_parlays(player_ids: tuple):
+                MIN_STREAK = 1.03
+                candidates = sorted(
+                    [p for p in all_players
+                     if p.get("streak_factor", 1.0) >= MIN_STREAK
+                     and p.get("model_prob", 0) >= 0.07
+                     and p.get("best_american")],
+                    key=lambda p: p.get("streak_factor", 1.0) * p.get("model_prob", 0),
+                    reverse=True,
+                )[:20]
+
+                parlays = []
+                for n_legs in (2, 3):
+                    pool = candidates if n_legs == 2 else candidates[:12]
+                    for combo in itertools.combinations(pool, n_legs):
+                        base_prob = 1.0
+                        parlay_odds = 1.0
+                        avg_streak = sum(p.get("streak_factor", 1.0) for p in combo) / len(combo)
+                        for p in combo:
+                            base_prob *= p.get("model_prob", 0)
+                            parlay_odds *= _ato_d(p["best_american"])
+                        ev = (parlay_odds * base_prob) - 1
+                        if ev > 0:
+                            parlays.append({
+                                "legs":           [p["player_name"] for p in combo],
+                                "teams":          [p.get("team", "") for p in combo],
+                                "streak_factors": [round(p.get("streak_factor", 1.0), 3) for p in combo],
+                                "short_hrs":      [p.get("short_form_hr", 0) for p in combo],
+                                "short_pas":      [p.get("short_form_pa", 0) for p in combo],
+                                "model_probs":    [round(p.get("model_prob", 0) * 100, 1) for p in combo],
+                                "avg_streak":     round(avg_streak, 3),
+                                "base_prob":      base_prob,
+                                "parlay_odds":    parlay_odds,
+                                "american_odds":  _dta(parlay_odds),
+                                "ev_pct":         ev * 100,
+                                "n_legs":         n_legs,
+                            })
+                return _diverse_top(sorted(parlays, key=lambda x: x["ev_pct"], reverse=True))
+
+            _str_key = tuple(p.get("player_name", "") for p in all_players)
+            streak_parlays = _cached_streak_parlays(_str_key)
+
+            if streak_parlays:
+                for i, sp in enumerate(streak_parlays, 1):
+                    label = (
+                        f"{sp['n_legs']}-Leg Hot Streak #{i}  |  "
+                        f"EV {sp['ev_pct']:+.1f}%  |  "
+                        f"Avg Streak Factor {sp['avg_streak']:.3f}x"
+                    )
+                    with st.expander(label):
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.metric("Parlay EV", f"{sp['ev_pct']:+.1f}%")
+                            st.metric("Hit Probability", f"{sp['base_prob']*100:.2f}%")
+                        with col2:
+                            st.metric("American Odds", _fmt_american(sp['american_odds']))
+                            st.metric("Avg Streak Factor", f"{sp['avg_streak']:.3f}x")
+                        st.write("**Players (last 10 games):**")
+                        for player, team, sf, shr, spa, mp in zip(
+                            sp['legs'], sp['teams'], sp['streak_factors'],
+                            sp['short_hrs'], sp['short_pas'], sp['model_probs']
+                        ):
+                            recent_str = f"{shr} HR / {spa} PA" if spa > 0 else "recent data N/A"
+                            st.markdown(
+                                f"<div style='display:flex; justify-content:space-between; align-items:center; padding:3px 0;'>"
+                                f"<span>• <b>{player}</b> <span style='color:#888'>({team})</span> "
+                                f"<span style='color:#ff5722; font-size:11px;'>"
+                                f"Streak {sf:.3f}x  |  Last 10: {recent_str}  |  Model {mp:.1f}%</span></span>"
+                                f"{_fd_link(player)}</div>",
+                                unsafe_allow_html=True,
+                            )
+                        fd_col, _ = st.columns([1, 2])
+                        with fd_col:
+                            if st.button("📲 Add All to FD Slip", key=f"fd_str_{i}"):
+                                n = _add_to_fd_slip(sp['legs'], all_players)
+                                if not n:
+                                    st.info("Already in slip.")
+            else:
+                st.warning("No hot-streak parlays found — players may not have 8+ recent PA yet.")
+                st.link_button("📲 Browse FanDuel HR Props", _fd_url())
+
+        elif strategy_type == "Stars Aligned":
+            st.markdown("### ⭐ Stars Aligned")
+            st.info(
+                "Players where every game-day factor is working in their favor: "
+                "hitter-friendly park, HR-prone pitcher, favorable weather, and a platoon edge. "
+                "These are the 'everything is right today' plays — rare but highest-conviction."
+            )
+
+            @st.cache_data(ttl=3600, show_spinner=False)
+            def _cached_stars_aligned(player_ids: tuple):
+                def _alignment_score(p) -> float:
+                    park    = p.get("park_factor",    1.0)
+                    pit     = p.get("pitcher_factor", 1.0)
+                    wx      = p.get("weather_factor", 1.0)
+                    plat    = p.get("platoon_factor", 1.0)
+                    streak  = p.get("streak_factor",  1.0)
+                    # Score = product of all factors > 1.0; penalize any factor < 1.0
+                    raw = (park * pit * wx * plat * streak)
+                    penalty = sum(
+                        max(0.0, 1.0 - f)
+                        for f in [park, pit, wx, plat, streak]
+                    )
+                    return raw - penalty * 0.5
+
+                candidates = sorted(
+                    [p for p in all_players
+                     if p.get("park_factor",    1.0) >= 0.98
+                     and p.get("pitcher_factor", 1.0) >= 1.00
+                     and p.get("weather_factor", 1.0) >= 1.00
+                     and p.get("platoon_factor", 1.0) >= 1.00
+                     and p.get("model_prob",     0.0) >= 0.08
+                     and p.get("best_american")],
+                    key=_alignment_score,
+                    reverse=True,
+                )[:20]
+
+                parlays = []
+                for n_legs in (2, 3):
+                    pool = candidates if n_legs == 2 else candidates[:12]
+                    for combo in itertools.combinations(pool, n_legs):
+                        base_prob = 1.0
+                        parlay_odds = 1.0
+                        for p in combo:
+                            base_prob *= p.get("model_prob", 0)
+                            parlay_odds *= _ato_d(p["best_american"])
+                        ev = (parlay_odds * base_prob) - 1
+                        if ev > 0:
+                            parlays.append({
+                                "legs":     [p["player_name"] for p in combo],
+                                "teams":    [p.get("team", "") for p in combo],
+                                "factors":  [{
+                                    "park":    round(p.get("park_factor",    1.0), 3),
+                                    "pitcher": round(p.get("pitcher_factor", 1.0), 3),
+                                    "weather": round(p.get("weather_factor", 1.0), 3),
+                                    "platoon": round(p.get("platoon_factor", 1.0), 3),
+                                    "streak":  round(p.get("streak_factor",  1.0), 3),
+                                } for p in combo],
+                                "scores":   [round(_alignment_score(p), 3) for p in combo],
+                                "base_prob":     base_prob,
+                                "parlay_odds":   parlay_odds,
+                                "american_odds": _dta(parlay_odds),
+                                "ev_pct":        ev * 100,
+                                "n_legs":        n_legs,
+                            })
+                return _diverse_top(sorted(parlays, key=lambda x: x["ev_pct"], reverse=True))
+
+            _sa_key = tuple(p.get("player_name", "") for p in all_players)
+            sa_parlays = _cached_stars_aligned(_sa_key)
+
+            if sa_parlays:
+                for i, sa in enumerate(sa_parlays, 1):
+                    avg_score = sum(sa["scores"]) / len(sa["scores"])
+                    label = (
+                        f"{sa['n_legs']}-Leg Stars Aligned #{i}  |  "
+                        f"EV {sa['ev_pct']:+.1f}%  |  "
+                        f"Avg Alignment {avg_score:.3f}"
+                    )
+                    with st.expander(label):
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.metric("Parlay EV", f"{sa['ev_pct']:+.1f}%")
+                            st.metric("Hit Probability", f"{sa['base_prob']*100:.2f}%")
+                        with col2:
+                            st.metric("American Odds", _fmt_american(sa['american_odds']))
+                            st.metric("Avg Alignment Score", f"{avg_score:.3f}")
+                        for player, team, fac, score in zip(
+                            sa['legs'], sa['teams'], sa['factors'], sa['scores']
+                        ):
+                            factor_parts = [
+                                f"Park {fac['park']:.2f}x",
+                                f"Pit {fac['pitcher']:.2f}x",
+                                f"Wx {fac['weather']:.2f}x",
+                                f"Plat {fac['platoon']:.2f}x",
+                                f"Streak {fac['streak']:.3f}x",
+                            ]
+                            st.markdown(
+                                f"<div style='display:flex; justify-content:space-between; align-items:center; padding:3px 0;'>"
+                                f"<span>• <b>{player}</b> <span style='color:#888'>({team})</span></span>"
+                                f"{_fd_link(player)}</div>"
+                                f"<div style='font-size:10px; color:#666; padding:0 0 6px 14px;'>"
+                                f"{'  ·  '.join(factor_parts)}</div>",
+                                unsafe_allow_html=True,
+                            )
+                        fd_col, _ = st.columns([1, 2])
+                        with fd_col:
+                            if st.button("📲 Add All to FD Slip", key=f"fd_sa_{i}"):
+                                n = _add_to_fd_slip(sa['legs'], all_players)
+                                if not n:
+                                    st.info("Already in slip.")
+            else:
+                st.warning(
+                    "No stars-aligned plays found — today's games may have mixed conditions "
+                    "(suppressive park, tough pitcher, or bad weather for some players)."
+                )
+                st.link_button("📲 Browse FanDuel HR Props", _fd_url())
+
+        elif strategy_type == "Same-Game Builder":
+            st.markdown("### 🎮 Same-Game Parlay Builder")
+            st.info(
+                "Pick a specific game and build a parlay from its players. "
+                "Same-game parlays carry natural correlation — when the game environment "
+                "is good (warm, wind-out, hittable pitcher), multiple HRs become more likely together."
+            )
+
+            # Group players by game (home_team is the unique game key)
+            from collections import defaultdict
+            by_game: dict = defaultdict(list)
+            for p in all_players:
+                if p.get("best_american"):
+                    home = p.get("home_team", "")
+                    away_team = p.get("opponent", "") if p.get("team") == home else p.get("team", "")
+                    game_label = f"{away_team} @ {home}"
+                    by_game[game_label].append(p)
+
+            if not by_game:
+                st.warning("No players with odds available. Refresh after lineups post.")
+                st.link_button("📲 Browse FanDuel HR Props", _fd_url())
+            else:
+                game_options = sorted(by_game.keys())
+                selected_game = st.selectbox(
+                    "Select a game:",
+                    game_options,
+                    key="sgb_game_select",
+                )
+                game_players = sorted(
+                    by_game.get(selected_game, []),
+                    key=lambda p: p.get("model_prob", 0), reverse=True,
+                )
+
+                if game_players:
+                    # Show game context from first player
+                    gp0 = game_players[0]
+                    home = gp0.get("home_team", "")
+                    wx_fac  = gp0.get("weather_factor", 1.0)
+                    pk_fac  = gp0.get("park_factor",    1.0)
+
+                    meta_parts = [
+                        f"Park: **{pk_fac:.2f}x**",
+                        f"Weather: **{wx_fac:.2f}x**",
+                    ]
+                    weather_dict = gp0.get("weather", {})
+                    if weather_dict:
+                        temp  = weather_dict.get("temp_f", "--")
+                        wind  = weather_dict.get("wind_mph", "--")
+                        st.caption(
+                            f"📍 {selected_game}  |  "
+                            + "  |  ".join(meta_parts)
+                            + f"  |  🌡️ {temp}°F  💨 {wind} mph"
+                        )
+                    else:
+                        st.caption(f"📍 {selected_game}  |  " + "  |  ".join(meta_parts))
+
+                    # Player selector
+                    player_opts  = [p["player_name"] for p in game_players]
+                    player_map   = {p["player_name"]: p for p in game_players}
+                    selected_legs = st.multiselect(
+                        "Select 2–4 players for your parlay:",
+                        options=player_opts,
+                        max_selections=4,
+                        key="sgb_legs",
+                        format_func=lambda n: (
+                            f"{n}  ({player_map[n].get('team','')})"
+                            f"  {_fmt_american(player_map[n].get('best_american'))}"
+                            f"  Model {player_map[n].get('model_prob',0)*100:.1f}%"
+                        ),
+                    )
+
+                    # Quick-reference table
+                    rows = []
+                    for p in game_players:
+                        rows.append({
+                            "Player":   p["player_name"],
+                            "Team":     p.get("team", ""),
+                            "Spot":     f"#{p['lineup_spot']}" if p.get("lineup_spot") else "?",
+                            "Odds":     _fmt_american(p.get("best_american")),
+                            "Model%":   f"{p.get('model_prob',0)*100:.1f}%",
+                            "Pitcher":  p.get("pitcher_name", "TBD"),
+                            "Pit Fac":  f"{p.get('pitcher_factor',1.0):.2f}x",
+                            "Platoon":  f"{p.get('platoon_factor',1.0):.2f}x",
+                            "EV%":      f"{p.get('ev_pct',0):+.1f}%",
+                        })
+
+                    import pandas as pd
+                    st.dataframe(pd.DataFrame(rows), hide_index=True, use_container_width=True)
+
+                    if len(selected_legs) >= 2:
+                        legs = [player_map[n] for n in selected_legs]
+                        base_prob = 1.0
+                        parlay_odds = 1.0
+                        for p in legs:
+                            base_prob *= p.get("model_prob", 0)
+                            parlay_odds *= _ato_d(p["best_american"])
+
+                        # SGP correlation boost: players in same game share environment
+                        n = len(legs)
+                        same_team_pairs = sum(
+                            1 for a, b in itertools.combinations(legs, 2)
+                            if a.get("team") == b.get("team")
+                        )
+                        corr_boost = 1.0 + 0.06 * same_team_pairs + 0.03 * (n - 1)
+                        adj_prob = min(base_prob * corr_boost, 0.35)
+                        ev = (parlay_odds * adj_prob) - 1
+
+                        ev_color = "#4ade80" if ev >= 0 else "#f87171"
+                        sign = "+" if ev >= 0 else ""
+                        st.markdown(
+                            f"<div style='background:#0a0a1a; border:1px solid #1a1a3a; "
+                            f"border-radius:8px; padding:12px 16px; margin-top:12px;'>"
+                            f"<div style='font-size:13px; font-weight:700; color:#f0f0f0; margin-bottom:8px;'>"
+                            f"{'  +  '.join(selected_legs)}</div>"
+                            f"<div style='font-size:12px; color:#888;'>"
+                            f"Combined odds: <b style='color:#FF6666'>{_fmt_american(_dta(parlay_odds))}</b>"
+                            f" &nbsp;|&nbsp; Raw prob: <b style='color:#f0f0f0'>{base_prob*100:.2f}%</b>"
+                            f" &nbsp;|&nbsp; Adj prob: <b style='color:#f0f0f0'>{adj_prob*100:.2f}%</b>"
+                            f" &nbsp;|&nbsp; EV: <b style='color:{ev_color}'>{sign}{ev*100:.1f}%</b>"
+                            f" &nbsp;|&nbsp; Corr boost: +{(corr_boost-1)*100:.0f}%"
+                            f"</div></div>",
+                            unsafe_allow_html=True,
+                        )
+
+                        if st.button("📲 Add All to FD Slip", key="sgb_add_slip"):
+                            n_added = _add_to_fd_slip(selected_legs, all_players)
+                            if not n_added:
+                                st.info("Already in slip.")
+                    elif selected_legs:
+                        st.caption("Select at least 2 players to calculate parlay odds.")
 
         elif strategy_type == "Hedge Calculator":
             st.markdown("### 🛡️ Hedge Betting Calculator")
