@@ -548,7 +548,7 @@ def _time_gate_data(data: dict, cutoff_et: "_dt.time") -> dict:
 
     def _passes(player: dict) -> bool:
         t = _game_time_et(player.get("game_time_utc", ""))
-        return t is None or t >= cutoff_et
+        return t is not None and t >= cutoff_et
 
     min_ev   = float(st.session_state.get("min_ev",   config.MIN_EV_PCT))
     min_edge = float(st.session_state.get("min_edge", config.MIN_EDGE_PCT))
