@@ -1,4 +1,4 @@
-﻿"""
+"""
 Codex HR Engine — Streamlit Dashboard
 """
 
@@ -61,6 +61,7 @@ try:
     from output.ranker import rank_picks as _rank_picks
     from tracking import pnl as pnl_tracker, clv as clv_tracker
     from strategies_ui import tab_advanced_strategies
+    from clients.odds_api import load_manual_odds as _load_manual_odds
 except ImportError as e:
     print(f"Import error: {e}")
     print(f"Current directory: {current_dir}")
@@ -644,6 +645,52 @@ def _apply_ui_filters(players: list, min_ev: float, min_edge: float) -> list:
     return _rank_picks(result)
 
 
+
+def _shopping_list_csv(players: list[dict]) -> str:
+    """Generate manual_odds.csv content as a string for st.download_button."""
+    import csv, io
+    fields = ["player_name", "team", "opponent", "pitcher", "model_prob_pct", "american_odds", "bookmaker"]
+    buf = io.StringIO()
+    w = csv.DictWriter(buf, fieldnames=fields)
+    w.writeheader()
+    for p in players:
+        w.writerow({
+            "player_name":    p.get("player_name", ""),
+            "team":           p.get("team", ""),
+            "opponent":       p.get("opponent", ""),
+            "pitcher":        p.get("pitcher_name", "TBD"),
+            "model_prob_pct": f"{p.get('model_prob', 0)*100:.1f}%",
+            "american_odds":  "?",
+            "bookmaker":      "",
+        })
+    return buf.getvalue()
+
+
+def _parse_uploaded_odds(uploaded_file) -> list[dict]:
+    """Parse a user-filled manual_odds.csv uploaded via st.file_uploader."""
+    import csv, io
+    content = uploaded_file.read().decode("utf-8-sig")
+    reader = csv.DictReader(io.StringIO(content))
+    props = []
+    for row in reader:
+        raw = row.get("american_odds", "").strip()
+        if not raw or raw in ("?", "", "0"):
+            continue
+        try:
+            price = int(raw.replace("+", ""))
+            props.append({
+                "player_name": row.get("player_name", "").strip(),
+                "price":       price,
+                "bookmaker":   row.get("bookmaker", "manual").strip() or "manual",
+                "description": "Over 0.5",
+                "game_id":     "manual",
+                "home_team":   "",
+                "away_team":   "",
+            })
+        except ValueError:
+            continue
+    return props
+
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 # TAB 1 — TODAY'S PICKS
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
@@ -706,8 +753,47 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
         if not ranked:
             with_odds = [p for p in all_players if p.get("best_american")]
             if not with_odds:
-                st.warning("No market odds available today — check API key or try Force Refresh.")
+                st.warning("No market odds available — games may already be in progress, or check your API key.")
                 st.info(f"Pipeline found {len(all_players)} players total. 0 matched to odds lines.")
+
+                _sbm = data.get("all_by_model", [])
+                if _sbm:
+                    st.markdown("**Step 1** — Download your shopping list, fill in odds from FanDuel/DraftKings, then upload it back.")
+                    col_dl, col_ul = st.columns([1, 2])
+                    with col_dl:
+                        csv_bytes = _shopping_list_csv(_sbm).encode("utf-8")
+                        st.download_button(
+                            label="⬇️ Download Shopping List",
+                            data=csv_bytes,
+                            file_name="manual_odds.csv",
+                            mime="text/csv",
+                            use_container_width=True,
+                        )
+                    with col_ul:
+                        uploaded = st.file_uploader(
+                            "Upload filled manual_odds.csv",
+                            type="csv",
+                            key="manual_odds_upload",
+                            label_visibility="collapsed",
+                        )
+                        if uploaded:
+                            _manual_props = _parse_uploaded_odds(uploaded)
+                            if _manual_props:
+                                st.success(f"✓ Loaded {len(_manual_props)} odds entries from uploaded CSV. Click **Force Refresh** in the sidebar to apply.")
+                                from clients.odds_api import MANUAL_ODDS_PATH
+                                import csv as _csv_mod, io as _io_mod
+                                fields = ["player_name", "american_odds", "bookmaker"]
+                                with open(MANUAL_ODDS_PATH, "w", newline="", encoding="utf-8") as _mf:
+                                    _w = _csv_mod.DictWriter(_mf, fieldnames=fields)
+                                    _w.writeheader()
+                                    for _p in _manual_props:
+                                        _w.writerow({
+                                            "player_name":   _p["player_name"],
+                                            "american_odds": str(_p["price"]),
+                                            "bookmaker":     _p["bookmaker"],
+                                        })
+                            else:
+                                st.error("No filled rows found — make sure the american_odds column has values (e.g. +285 or -110).")
             else:
                 evs   = sorted((p.get("ev_pct", -999) for p in with_odds), reverse=True)
                 edges = sorted((p.get("edge_pct", -999) for p in with_odds), reverse=True)
