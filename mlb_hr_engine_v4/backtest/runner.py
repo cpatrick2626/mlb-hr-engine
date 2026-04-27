@@ -86,11 +86,11 @@ def _score_player(r: dict, batter_data: dict, pitcher_data: dict) -> Optional[di
     # K% suppressor + early-season sparse-data discount
     k_fac      = prob.batter_k_suppressor(season_stats)
     early_supp = prob.early_season_suppressor(season_pa, sc_source)
-    hr_rate    = hr_rate * k_fac * early_supp
 
-    # Park factor
+    # Park factor — fly-ball adjusted using Statcast fb_pct (mirrors pipeline.py)
     home_team  = r.get("home_team", "")
     pk_factor  = get_park(home_team).get("hr_factor", 1.0)
+    pk_factor  = prob.fly_ball_adjusted_park_factor(pk_factor, sc_stats.get("fb_pct"))
 
     # Pitcher factor — full three-component model (HR/FB + Statcast contact + K/GB)
     pitcher_id = r.get("pitcher_id")
@@ -105,7 +105,15 @@ def _score_player(r: dict, batter_data: dict, pitcher_data: dict) -> Optional[di
             prob.pitcher_hr_factor(pit_stats), sc_pit_fac, k_gb_fac
         )
     else:
+        sc_pit_fac = 1.0
         pit_factor = 1.0
+
+    # Batter-pitcher interaction: elite power hitter vs hittable pitcher synergy
+    batter_excess  = max(0.0, power_mult - 1.0)
+    pitcher_excess = max(0.0, sc_pit_fac - 1.0)
+    interaction    = batter_excess * pitcher_excess * 0.35
+
+    hr_rate    = hr_rate * k_fac * early_supp * (1.0 + interaction)
 
     exp_pa     = prob.expected_pa(r.get("lineup_spot"))
     model_prob = prob.game_hr_probability(
@@ -114,11 +122,12 @@ def _score_player(r: dict, batter_data: dict, pitcher_data: dict) -> Optional[di
 
     return {
         **r,
-        "model_prob":  round(model_prob, 4),
-        "hr_rate":     round(hr_rate, 5),
-        "season_pa":   season_pa,
-        "sc_source":   sc_source,
+        "model_prob":   round(model_prob, 4),
+        "hr_rate":      round(hr_rate, 5),
+        "season_pa":    season_pa,
+        "sc_source":    sc_source,
         "has_statcast": pid in batter_data,
+        "is_biased":    season_pa > 100,  # current-season stats used; look-ahead risk grows with PA
     }
 
 
