@@ -487,10 +487,9 @@ def _fetch_batch_stats(player_ids: list[int]) -> None:
             # Cache season stats
             _BULK_SEASON_STATS_CACHE[player_id] = season_stats
 
-            # Calculate recent stats from game logs (last 30 days)
             if game_logs:
                 _GAME_LOG_CACHE[player_id] = game_logs
-                recent_stats = _calculate_recent_from_logs(game_logs, days=30)
+                recent_stats = _calculate_recent_from_logs(game_logs)
                 _BULK_RECENT_STATS_CACHE[player_id] = recent_stats
             else:
                 _BULK_RECENT_STATS_CACHE[player_id] = {}
@@ -500,20 +499,9 @@ def _fetch_batch_stats(player_ids: list[int]) -> None:
         print(f"[mlb_stats] Bulk fetch failed for batch, falling back: {e}")
 
 
-def _calculate_recent_from_logs(game_logs: list, days: int = 30) -> dict:
-    """Calculate aggregate stats from game logs for the last N days."""
-    from datetime import datetime, timedelta
-
-    cutoff_date = datetime.now() - timedelta(days=days)
-    recent_logs = []
-
-    for log in game_logs:
-        try:
-            game_date = datetime.strptime(log.get("date", ""), "%Y-%m-%d")
-            if game_date >= cutoff_date:
-                recent_logs.append(log.get("stat", {}))
-        except:
-            continue
+def _calculate_recent_from_logs(game_logs: list) -> dict:
+    """Aggregate stats from the last RECENT_GAMES games (game-count window, not calendar days)."""
+    recent_logs = [log.get("stat", {}) for log in game_logs[:config.RECENT_GAMES]]
 
     if not recent_logs:
         return {}

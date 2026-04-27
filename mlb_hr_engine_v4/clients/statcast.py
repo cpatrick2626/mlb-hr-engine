@@ -56,7 +56,7 @@ LEAGUE_AVG_BARREL_RATE = 0.057    # brl_pa (barrel per PA); Savant league brl_pe
 LEAGUE_AVG_EXIT_VELO   = 89.4     # mph average exit velocity
 LEAGUE_AVG_HARD_HIT    = 0.409    # EV >95 mph rate
 LEAGUE_AVG_XSLG        = 0.410    # expected SLG
-LEAGUE_AVG_SWEET_SPOT  = 0.341    # LA 8-32° sweet spot rate
+LEAGUE_AVG_SWEET_SPOT  = 0.320    # LA 8-32° sweet spot rate (2025 MLB, Baseball Savant)
 # NOTE: Savant fb_rate is pure fly balls (excludes popups). FanGraphs FB% (~34%)
 # combines Savant fb+pu. The Savant CSV fb_rate is used in batter_power_multiplier,
 # so this constant must match Savant's definition.

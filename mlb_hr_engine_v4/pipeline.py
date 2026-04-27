@@ -404,7 +404,8 @@ def load_game_data(
             if profile:
                 profile["game_time_utc"] = game_time_utc
             return profile
-        except Exception:
+        except Exception as e:
+            print(f"[pipeline] profile error for {name} ({pid}): {e}")
             return None
 
     all_players = []
