@@ -22,11 +22,26 @@ from pathlib import Path
 # Use v4 modules
 sys.path.insert(0, str(Path(__file__).parent / "mlb_hr_engine_v4"))
 
-# Patch config to use 2025 data
+# Patch config to use 2025 data and 2025 league constants
 import config as _cfg
 _cfg.CURRENT_SEASON = 2025
+_cfg.LEAGUE_AVG_HR_PA = 0.033   # 2025 MLB actual (full season)
+_cfg.LEAGUE_AVG_ISO   = 0.148   # 2025 MLB actual
+_cfg.LEAGUE_AVG_HR9   = 1.25    # 2025 MLB actual
+_cfg.LEAGUE_HR_FB     = 0.120   # 2025 MLB actual
 
 from clients import statcast as statcast_client
+
+# Patch Statcast league averages to 2025 values
+statcast_client.LEAGUE_AVG_BARREL_RATE = 0.057
+statcast_client.LEAGUE_AVG_EXIT_VELO   = 89.4
+statcast_client.LEAGUE_AVG_HARD_HIT    = 0.409
+statcast_client.LEAGUE_AVG_XSLG        = 0.410
+statcast_client.LEAGUE_AVG_SWEET_SPOT  = 0.320
+statcast_client.LEAGUE_AVG_FB_PCT      = 0.266
+statcast_client.LEAGUE_AVG_GB_PCT      = 0.424
+statcast_client.LEAGUE_AVG_LD_PCT      = 0.239
+statcast_client.LEAGUE_AVG_PULL_PCT    = 0.392
 from engine import probability as prob
 
 MLB_API  = "https://statsapi.mlb.com/api/v1"

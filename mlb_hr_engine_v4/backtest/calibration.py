@@ -53,7 +53,7 @@ def calibration_report(rows: list[dict], date_range: str) -> None:
     hr_count = sum(1 for r in rows if r.get("hit_hr"))
     actual_rate = hr_count / total if total else 0
     biased_count = sum(1 for r in rows if r.get("is_biased"))
-    bias_note = (f"  ⚠ {biased_count} records with season_pa>100 (look-ahead risk)"
+    bias_note = (f"  [!] {biased_count} records with season_pa>100 (look-ahead risk)"
                  if biased_count else "")
 
     console.print(Panel(
@@ -108,8 +108,11 @@ def calibration_report(rows: list[dict], date_range: str) -> None:
 
     console.print(cal_table)
     brier_score = brier_sum / total if total else 0
+    # Theoretical minimum Brier for a calibrated model at ~10% HR rate ≈ 0.090
+    # (p*(1-p)^2 + (1-p)*p^2 = p*(1-p) ≈ 0.095 at p=0.106).
+    # Scores below 0.090 indicate genuine skill above the base-rate model.
     console.print(f"[dim]Brier Score: {brier_score:.4f}  "
-                  f"(lower = better calibration; 0.0 = perfect, ~0.030 = typical for HR props)[/dim]\n")
+                  f"(lower = better; trivial base-rate model ~0.095, skilled model targets <0.090)[/dim]\n")
 
     # ── P&L simulation table ──────────────────────────────────────────────────
     console.print(Panel("[bold white]SIMULATED P&L — Flat $10 per pick at estimated odds[/bold white]",

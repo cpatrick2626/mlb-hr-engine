@@ -64,6 +64,14 @@ def base_hr_rate(
     except (ValueError, TypeError):
         pass
 
+    # Zero-HR evidence suppressor: zero HRs through significant PA is strong contact-hitter
+    # signal the Bayesian regression can't fully capture due to its 55% floor.
+    # Scales from 0.92x at 50 PA down to 0.60x at 250+ PA; has no effect on players
+    # who have already proven they can hit HRs (season_hr > 0).
+    if season_hr == 0 and season_pa >= 50:
+        zero_hr_trust = max(0.60, 1.0 - 0.40 * min(season_pa / 250.0, 1.0))
+        rate = rate * zero_hr_trust
+
     return max(rate, 0.001)
 
 
