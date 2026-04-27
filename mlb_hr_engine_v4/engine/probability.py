@@ -101,8 +101,8 @@ def statcast_blended_rate(
     raw_weight = 1.0 - statcast_weight
 
     # Damp Statcast upside so base pa_weight doesn't double-boost elite power hitters.
-    # By large sample sizes the regression already converges toward their true rate;
-    # only half of (mult - 1) is added. Suppression side is unchanged.
+    # 0.50 factor keeps high-threshold bets selective (tested: better live ROI than 0.75).
+    # Suppression side is unchanged.
     if statcast_power_mult > 1.0:
         effective_mult = 1.0 + (statcast_power_mult - 1.0) * 0.50
     else:
@@ -110,6 +110,21 @@ def statcast_blended_rate(
 
     statcast_rate = raw_rate * effective_mult
     return max(raw_weight * raw_rate + statcast_weight * statcast_rate, 0.001)
+
+
+def early_season_suppressor(season_pa: int, statcast_source: str) -> float:
+    """
+    Reduces HR rate when relying on prior-year Statcast with sparse current-season PA.
+    Without current-year batted-ball validation, prior-year data over-predicts average hitters.
+
+    source="prior"  : 0.80x at 0 PA → 1.0x at 100 PA (pure prior-year, no 2026 signal)
+    source="blended": 0.88x at 0 PA → 1.0x at 100 PA (some current data, less discount)
+    source="current": no discount — player has established 2026 Statcast form
+    """
+    if statcast_source == "current" or season_pa >= 100:
+        return 1.0
+    base = 0.80 if statcast_source == "prior" else 0.88
+    return round(base + (1.0 - base) * min(season_pa / 100.0, 1.0), 3)
 
 
 def batter_k_suppressor(season_stats: dict) -> float:

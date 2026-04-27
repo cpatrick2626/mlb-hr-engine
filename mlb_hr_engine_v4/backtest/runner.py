@@ -71,10 +71,22 @@ def _score_player(r: dict, batter_data: dict, pitcher_data: dict) -> Optional[di
     if season_pa == 0 and recent_pa == 0:
         return None
 
-    # Base HR rate + Statcast adjustment
-    raw_rate   = prob.base_hr_rate(season_stats, recent_stats)
+    # Base HR rate + Statcast adjustment — mirror pipeline.py exactly
+    sc_stats   = dict(batter_data.get(pid) or {})
+    sc_pa      = sc_stats.get("pa", 0)
+    sc_source  = sc_stats.get("statcast_source", "current" if sc_stats else "none")
+
     power_mult = statcast_client.batter_power_multiplier(pid, batter_data)
-    hr_rate    = prob.statcast_blended_rate(raw_rate, power_mult, season_pa)
+    raw_rate   = prob.base_hr_rate(season_stats, recent_stats, statcast_mult=power_mult)
+    hr_rate    = prob.statcast_blended_rate(
+        raw_rate, power_mult, season_pa,
+        statcast_pa=sc_pa, statcast_source=sc_source,
+    )
+
+    # K% suppressor + early-season sparse-data discount
+    k_fac      = prob.batter_k_suppressor(season_stats)
+    early_supp = prob.early_season_suppressor(season_pa, sc_source)
+    hr_rate    = hr_rate * k_fac * early_supp
 
     # Park factor
     home_team  = r.get("home_team", "")
@@ -105,6 +117,7 @@ def _score_player(r: dict, batter_data: dict, pitcher_data: dict) -> Optional[di
         "model_prob":  round(model_prob, 4),
         "hr_rate":     round(hr_rate, 5),
         "season_pa":   season_pa,
+        "sc_source":   sc_source,
         "has_statcast": pid in batter_data,
     }
 

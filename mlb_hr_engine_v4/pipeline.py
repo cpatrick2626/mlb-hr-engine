@@ -128,7 +128,8 @@ def _build_player_profile(
     pitcher_excess = max(0.0, sc_pit_fac - 1.0)
     interaction    = batter_excess * pitcher_excess * 0.35
 
-    adjusted_rate = hr_rate * streak_fac * k_fac * (1.0 + interaction)
+    early_supp    = prob.early_season_suppressor(season_pa, sc_source)
+    adjusted_rate = hr_rate * streak_fac * k_fac * early_supp * (1.0 + interaction)
     model_prob = prob.game_hr_probability(
         adjusted_rate, exp_pa,
         pk_factor=pk_factor, pitcher_fac=pit_factor,
@@ -165,6 +166,7 @@ def _build_player_profile(
         "short_form_hr": int(short_form.get("homeRuns", 0)),
         "streak_factor": round(streak_fac, 3),
         "k_factor": round(k_fac, 3),
+        "early_season_suppressor": round(early_supp, 3),
         "avg_launch_angle": sc_summary.get("avg_launch_angle"),
         "xslg": sc_summary.get("xslg"),
         "xba": xba_raw,
