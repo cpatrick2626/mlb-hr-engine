@@ -29,7 +29,7 @@ PARK_FACTORS: dict[str, dict] = {
     "HOU": {"name": "Minute Maid Park",           "hr_factor": 1.10, "cf_bearing":    5, "lat": 29.7572, "lon":  -95.3555, "tz_offset": -5},
     "KC":  {"name": "Kauffman Stadium",           "hr_factor": 0.96, "cf_bearing":    0, "lat": 39.0517, "lon":  -94.4803, "tz_offset": -5},
     "LAA": {"name": "Angel Stadium",              "hr_factor": 0.97, "cf_bearing":  340, "lat": 33.8003, "lon": -117.8827, "tz_offset": -7},
-    "LAD": {"name": "Dodger Stadium",             "hr_factor": 0.96, "cf_bearing":  355, "lat": 34.0739, "lon": -118.2400, "tz_offset": -7},
+    "LAD": {"name": "Dodger Stadium",             "hr_factor": 0.91, "cf_bearing":  355, "lat": 34.0739, "lon": -118.2400, "tz_offset": -7},
     "MIA": {"name": "loanDepot park",             "hr_factor": 1.02, "cf_bearing":  340, "lat": 25.7779, "lon":  -80.2197, "tz_offset": -4},
     "MIL": {"name": "American Family Field",      "hr_factor": 1.07, "cf_bearing":   10, "lat": 43.0280, "lon":  -87.9712, "tz_offset": -5},
     "MIN": {"name": "Target Field",               "hr_factor": 0.99, "cf_bearing":   15, "lat": 44.9817, "lon":  -93.2778, "tz_offset": -5},

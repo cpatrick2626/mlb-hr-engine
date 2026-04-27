@@ -33,7 +33,6 @@ def _utc_to_local_hour(game_time_utc: str, tz_offset: int) -> int:
 def _build_player_profile(
     player_id, player_name, lineup_spot, team, opponent,
     home_team, pitcher, batter_data, pitcher_data,
-    batter_bb_data=None, pitcher_bb_data=None,
     game_time_utc: str = "",
 ):
     season_stats    = mlb_stats.get_player_season_stats(player_id)
@@ -44,7 +43,7 @@ def _build_player_profile(
     if season_pa == 0 and recent_pa == 0:
         return None
 
-    power_mult = statcast_client.batter_power_multiplier(player_id, batter_data, batter_bb_data)
+    power_mult = statcast_client.batter_power_multiplier(player_id, batter_data)
     sc_stats   = dict(batter_data.get(player_id) or {})
     sc_pa      = sc_stats.get("pa", 0)
     # Default to "current" only when the player IS in batter_data (tier-1 rows have no key set);
@@ -55,7 +54,7 @@ def _build_player_profile(
         raw_rate, power_mult, season_pa,
         statcast_pa=sc_pa, statcast_source=sc_source,
     )
-    sc_summary = statcast_client.statcast_summary(player_id, batter_data, batter_bb_data)
+    sc_summary = statcast_client.statcast_summary(player_id, batter_data)
 
     # Derived contact-quality fields used by profile-based parlay scoring
     xba_raw    = sc_stats.get("xba")
@@ -99,7 +98,7 @@ def _build_player_profile(
         pitcher_hand = info.get("pitchHand", {}).get("code", "")
 
     hr_fb_fac      = prob.pitcher_hr_factor(pitcher_stats)
-    sc_pit_fac     = statcast_client.pitcher_contact_suppressor(pitcher_id or 0, pitcher_data, pitcher_bb_data)
+    sc_pit_fac     = statcast_client.pitcher_contact_suppressor(pitcher_id or 0, pitcher_data)
     k_gb_fac       = prob.pitcher_k_gb_suppressor(pitcher_stats)
     pit_factor     = prob.pitcher_combined_factor(hr_fb_fac, sc_pit_fac, k_gb_fac)
     recent_pit_fac = prob.pitcher_recent_factor(recent_pitcher_stats)
@@ -350,18 +349,14 @@ def load_game_data(
 
     # Fetch Statcast and MLB stats in parallel for maximum efficiency
     _cb(f"Loading data for {len(batter_ids)} batters, {len(pitcher_ids)} pitchers...")
-    with ThreadPoolExecutor(max_workers=6) as executor:
-        # Submit all data fetch tasks concurrently
+    with ThreadPoolExecutor(max_workers=4) as executor:
         futures = {
             executor.submit(statcast_client.get_batter_statcast, player_ids=batter_ids): "batter_statcast",
             executor.submit(statcast_client.get_pitcher_statcast, player_ids=pitcher_ids): "pitcher_statcast",
-            executor.submit(statcast_client.get_batter_batted_ball): "batter_bb",
-            executor.submit(statcast_client.get_pitcher_batted_ball): "pitcher_bb",
             executor.submit(mlb_stats.bulk_fetch_player_stats, batter_ids): "mlb_player_stats",
             executor.submit(mlb_stats.bulk_fetch_pitcher_stats, pitcher_ids): "mlb_pitcher_stats",
         }
 
-        # Collect results as they complete
         results = {}
         for future in as_completed(futures):
             key = futures[future]
@@ -369,13 +364,11 @@ def load_game_data(
                 results[key] = future.result()
             except Exception as e:
                 print(f"Error fetching {key}: {e}")
-                results[key] = {} if "statcast" in key or "bb" in key else None
+                results[key] = {} if "statcast" in key else None
 
-    # Unpack results
+    # Batted-ball data is already merged into batter_data/pitcher_data by get_*_statcast()
     batter_data = results.get("batter_statcast", {})
     pitcher_data = results.get("pitcher_statcast", {})
-    batter_bb = results.get("batter_bb", {})
-    pitcher_bb = results.get("pitcher_bb", {})
 
     # Collect tasks first so roster fallbacks run before the parallel phase.
     tasks: list[tuple] = []
@@ -406,8 +399,6 @@ def load_game_data(
             profile = _build_player_profile(
                 pid, name, spot, team, opp, home_team, opp_pitcher,
                 batter_data, pitcher_data,
-                batter_bb_data=batter_bb,
-                pitcher_bb_data=pitcher_bb,
                 game_time_utc=game_time_utc,
             )
             if profile:
