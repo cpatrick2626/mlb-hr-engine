@@ -312,7 +312,7 @@ def expected_pa(lineup_spot: Optional[int]) -> float:
     return config.DEFAULT_PA
 
 
-_LEAGUE_AVG_FB_PCT = 0.266  # Savant pure fly ball rate (fb_rate, excludes popups) — 2025 MLB
+_LEAGUE_AVG_FB_PCT = 0.265  # Savant pure fly ball rate (fb_rate, excludes popups) — 2026 YTD
 
 def fly_ball_adjusted_park_factor(park_factor: float, statcast_fb_pct: float = None) -> float:
     """

@@ -83,9 +83,18 @@ def _score_player(r: dict, batter_data: dict, pitcher_data: dict) -> Optional[di
         statcast_pa=sc_pa, statcast_source=sc_source,
     )
 
+    # Streak factor (reuses _GAME_LOG_CACHE already populated by get_player_recent_stats)
+    short_form = mlb_stats.get_player_short_form(pid)
+    streak_fac = prob.hot_streak_factor(short_form, season_stats)
+
     # K% suppressor + early-season sparse-data discount
     k_fac      = prob.batter_k_suppressor(season_stats)
     early_supp = prob.early_season_suppressor(season_pa, sc_source)
+
+    # Batter handedness + platoon splits (both lru_cached in mlb_stats)
+    batter_info = mlb_stats.get_player_info(pid)
+    batter_side = batter_info.get("batSide", {}).get("code", "")
+    splits      = mlb_stats.get_player_platoon_splits(pid)
 
     # Park factor — fly-ball adjusted using Statcast fb_pct (mirrors pipeline.py)
     home_team  = r.get("home_team", "")
@@ -93,31 +102,43 @@ def _score_player(r: dict, batter_data: dict, pitcher_data: dict) -> Optional[di
     pk_factor  = prob.fly_ball_adjusted_park_factor(pk_factor, sc_stats.get("fb_pct"))
 
     # Pitcher factor — full three-component model (HR/FB + Statcast contact + K/GB)
-    pitcher_id = r.get("pitcher_id")
+    pitcher_id   = r.get("pitcher_id")
+    pitcher_hand = ""
     if pitcher_id:
         if pitcher_id not in _pitcher_cache:
             _pitcher_cache[pitcher_id] = mlb_stats.get_pitcher_season_stats(pitcher_id)
             time.sleep(0.05)
-        pit_stats  = _pitcher_cache[pitcher_id]
-        sc_pit_fac = statcast_client.pitcher_contact_suppressor(pitcher_id, pitcher_data)
-        k_gb_fac   = prob.pitcher_k_gb_suppressor(pit_stats)
-        pit_factor = prob.pitcher_combined_factor(
+        pit_stats      = _pitcher_cache[pitcher_id]
+        sc_pit_fac     = statcast_client.pitcher_contact_suppressor(pitcher_id, pitcher_data)
+        k_gb_fac       = prob.pitcher_k_gb_suppressor(pit_stats)
+        pit_factor     = prob.pitcher_combined_factor(
             prob.pitcher_hr_factor(pit_stats), sc_pit_fac, k_gb_fac
         )
+        # Recent form (reuses _PITCHER_GAME_LOG_CACHE — no extra network call per pitcher)
+        recent_pit_stats = mlb_stats.get_pitcher_recent_stats(pitcher_id)
+        recent_pit_fac   = prob.pitcher_recent_factor(recent_pit_stats)
+        pit_factor       = max(0.55, min(1.60, pit_factor * recent_pit_fac))
+        # Pitcher handedness for platoon (lru_cached)
+        pitcher_info = mlb_stats.get_player_info(pitcher_id)
+        pitcher_hand = pitcher_info.get("pitchHand", {}).get("code", "")
     else:
         sc_pit_fac = 1.0
         pit_factor = 1.0
+
+    # Platoon factor
+    plat_factor = prob.platoon_factor(splits, pitcher_hand, batter_side, season_pa)
 
     # Batter-pitcher interaction: elite power hitter vs hittable pitcher synergy
     batter_excess  = max(0.0, power_mult - 1.0)
     pitcher_excess = max(0.0, sc_pit_fac - 1.0)
     interaction    = batter_excess * pitcher_excess * 0.35
 
-    hr_rate    = hr_rate * k_fac * early_supp * (1.0 + interaction)
+    hr_rate    = hr_rate * streak_fac * k_fac * early_supp * (1.0 + interaction)
 
     exp_pa     = prob.expected_pa(r.get("lineup_spot"))
     model_prob = prob.game_hr_probability(
         hr_rate, exp_pa, pk_factor=pk_factor, pitcher_fac=pit_factor,
+        plat_factor=plat_factor,
     )
 
     return {

@@ -51,23 +51,23 @@ _SESSION.headers.update({
 PRIOR_YEAR_TRUST    = 0.85   # shrink composite deviation from 1.0 for prior-year-only data
 MIN_CURRENT_YEAR_PA = 30     # below this, blend current + prior year Statcast signals
 
-# ── League averages (2025 MLB, sourced from Baseball Savant league page) ───────
-LEAGUE_AVG_BARREL_RATE = 0.057    # brl_pa (barrel per PA); Savant league brl_percent=8.6%
-LEAGUE_AVG_EXIT_VELO   = 89.4     # mph average exit velocity
-LEAGUE_AVG_HARD_HIT    = 0.409    # EV >95 mph rate
-LEAGUE_AVG_XSLG        = 0.410    # expected SLG
-LEAGUE_AVG_SWEET_SPOT  = 0.320    # LA 8-32° sweet spot rate (2025 MLB, Baseball Savant)
+# ── League averages (2026 MLB YTD Apr — sourced from Baseball Savant, revisit mid-May) ─
+LEAGUE_AVG_BARREL_RATE = 0.055    # brl_pa (barrel per PA); 2026 YTD (was 0.057 in 2025)
+LEAGUE_AVG_EXIT_VELO   = 89.2     # mph average exit velocity (was 89.4)
+LEAGUE_AVG_HARD_HIT    = 0.401    # EV >95 mph rate (was 0.409)
+LEAGUE_AVG_XSLG        = 0.407    # expected SLG (est_slg column; was 0.410)
+LEAGUE_AVG_SWEET_SPOT  = 0.333    # LA 8-32° sweet spot rate (was 0.320 — up in 2026)
 # NOTE: Savant fb_rate is pure fly balls (excludes popups). FanGraphs FB% (~34%)
 # combines Savant fb+pu. The Savant CSV fb_rate is used in batter_power_multiplier,
 # so this constant must match Savant's definition.
-LEAGUE_AVG_FB_PCT      = 0.266    # Savant pure fly ball rate (fb_rate, excludes popups)
-LEAGUE_AVG_GB_PCT      = 0.424    # ground ball rate
-LEAGUE_AVG_LD_PCT      = 0.239    # line drive rate
-LEAGUE_AVG_IFFB_PCT    = 0.071    # infield fly ball (popup) rate — Savant pu_rate
-LEAGUE_AVG_PULL_PCT    = 0.392    # pull rate
-LEAGUE_AVG_STR_PCT     = 0.364    # straightaway/center rate
-LEAGUE_AVG_OPPO_PCT    = 0.245    # opposite field rate
-BARREL_TO_HR_RATE      = 0.57     # ~57% of barrels become HRs
+LEAGUE_AVG_FB_PCT      = 0.265    # Savant pure fly ball rate (fb_rate, excludes popups)
+LEAGUE_AVG_GB_PCT      = 0.430    # ground ball rate (was 0.424)
+LEAGUE_AVG_LD_PCT      = 0.233    # line drive rate (was 0.239)
+LEAGUE_AVG_IFFB_PCT    = 0.073    # infield fly ball (popup) rate — Savant pu_rate
+LEAGUE_AVG_PULL_PCT    = 0.391    # pull rate
+LEAGUE_AVG_STR_PCT     = 0.368    # straightaway/center rate (was 0.364)
+LEAGUE_AVG_OPPO_PCT    = 0.240    # opposite field rate (was 0.245)
+BARREL_TO_HR_RATE      = 0.57     # ~57% of barrels become HRs (stable year-to-year)
 
 
 # ── Public API ─────────────────────────────────────────────────────────────────
@@ -178,16 +178,6 @@ def get_pitcher_statcast(year: int = None, player_ids: set[int] = None) -> dict[
             curr[pid] = blended
 
     return curr
-
-
-def get_batter_batted_ball(year: int = None) -> dict[int, dict]:
-    """Batted-ball direction data. Already merged into get_batter_statcast()."""
-    return _fetch_batted_ball("batter", year or config.CURRENT_SEASON)
-
-
-def get_pitcher_batted_ball(year: int = None) -> dict[int, dict]:
-    """Pitcher batted-ball data. Already merged into get_pitcher_statcast()."""
-    return _fetch_batted_ball("pitcher", year or config.CURRENT_SEASON)
 
 
 def batter_power_multiplier(
