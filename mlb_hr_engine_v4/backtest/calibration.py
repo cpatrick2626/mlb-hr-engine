@@ -52,15 +52,12 @@ def calibration_report(rows: list[dict], date_range: str) -> None:
     total = len(rows)
     hr_count = sum(1 for r in rows if r.get("hit_hr"))
     actual_rate = hr_count / total if total else 0
-    biased_count = sum(1 for r in rows if r.get("is_biased"))
-    bias_note = (f"  [!] {biased_count} records with season_pa>100 (look-ahead risk)"
-                 if biased_count else "")
 
     console.print(Panel(
         f"[bold white]BACKTEST CALIBRATION REPORT[/bold white]\n"
         f"[dim]Date range: {date_range}  |  "
         f"Total batter-games: {total}  |  "
-        f"Actual HR rate: {actual_rate*100:.2f}%{bias_note}[/dim]",
+        f"Actual HR rate: {actual_rate*100:.2f}%[/dim]",
         style="bold blue",
         box=box.DOUBLE_EDGE,
         expand=False,

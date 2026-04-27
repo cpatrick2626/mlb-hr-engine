@@ -363,6 +363,114 @@ def get_pitcher_recent_stats(pitcher_id: int, days: int = 30) -> dict:
     return totals
 
 
+# ── Backtest as-of functions ───────────────────────────────────────────────────
+# These eliminate look-ahead bias by using only game log entries before date_str.
+# The game logs are already cached (fetched for streak/recent factors), so no
+# extra API calls are needed.
+
+def get_player_stats_as_of(player_id: int, date_str: str) -> tuple[dict, dict]:
+    """
+    Return (season_stats, recent_stats) using only games with date < date_str.
+    Falls back to prior-year stats if accumulated PA < 30 (early season).
+    """
+    splits = _game_log_splits(player_id)
+    prior  = [s for s in splits if s.get("date", "") < date_str]
+
+    season = _acc_hitting(prior)
+    if int(season.get("plateAppearances", 0)) < 30:
+        prior_yr = _get_prior_season_stats(player_id)
+        if prior_yr:
+            return prior_yr, {}
+
+    recent = _acc_hitting(prior[:config.RECENT_GAMES])
+    return season, recent
+
+
+def get_pitcher_stats_as_of(pitcher_id: int, date_str: str) -> dict:
+    """Accumulated pitcher stats using only starts with date < date_str."""
+    splits = _pitcher_game_log_splits(pitcher_id)
+    prior  = [s for s in splits if s.get("date", "") < date_str]
+    return _acc_pitching(prior)
+
+
+def get_player_short_form_as_of(player_id: int, date_str: str) -> dict:
+    """Streak stats from last SHORT_FORM_GAMES games before date_str."""
+    splits = _game_log_splits(player_id)
+    prior  = [s for s in splits if s.get("date", "") < date_str]
+    recent = prior[:config.SHORT_FORM_GAMES]
+    totals = {"homeRuns": 0, "plateAppearances": 0, "atBats": 0, "games": 0}
+    for split in recent:
+        st = split.get("stat", {})
+        totals["homeRuns"]          += int(st.get("homeRuns", 0))
+        totals["plateAppearances"]  += int(st.get("plateAppearances", 0))
+        totals["atBats"]            += int(st.get("atBats", 0))
+        totals["games"]             += 1
+    return totals
+
+
+def _acc_hitting(splits: list) -> dict:
+    """Accumulate per-game hitting splits into a season-stats-shaped dict."""
+    keys = ("plateAppearances", "atBats", "hits", "homeRuns",
+            "doubles", "triples", "strikeOuts", "baseOnBalls")
+    totals: dict = {k: 0 for k in keys}
+    for s in splits:
+        st = s.get("stat", {})
+        for k in keys:
+            totals[k] += int(st.get(k, 0))
+
+    ab = totals["atBats"]
+    hr = totals["homeRuns"]
+    db = totals["doubles"]
+    tr = totals["triples"]
+    hi = totals["hits"]
+    bb = totals["baseOnBalls"]
+    pa = totals["plateAppearances"]
+
+    if ab > 0:
+        tb = hi - db - tr - hr + 2*db + 3*tr + 4*hr
+        totals["avg"]                = round(hi / ab, 3)
+        totals["sluggingPercentage"] = round(tb / ab, 3)
+    else:
+        totals["avg"]                = 0.0
+        totals["sluggingPercentage"] = 0.0
+    if pa > 0:
+        totals["onBasePercentage"] = round((hi + bb) / pa, 3)
+    else:
+        totals["onBasePercentage"] = 0.0
+    return totals
+
+
+def get_pitcher_recent_stats_as_of(pitcher_id: int, date_str: str) -> dict:
+    """Recent pitcher stats from last PITCHER_RECENT_GAMES starts before date_str."""
+    splits = _pitcher_game_log_splits(pitcher_id)
+    prior  = [s for s in splits if s.get("date", "") < date_str]
+    recent = prior[:config.PITCHER_RECENT_GAMES]
+    return _acc_pitching(recent)
+
+
+def _acc_pitching(splits: list) -> dict:
+    """Accumulate per-start pitching splits into a pitcher-stats-shaped dict."""
+    totals: dict = {"homeRuns": 0, "inningsPitched": 0.0, "battersFaced": 0,
+                    "strikeOuts": 0, "groundOuts": 0, "airOuts": 0}
+    for s in splits:
+        st = s.get("stat", {})
+        totals["homeRuns"]     += int(st.get("homeRuns", 0))
+        totals["battersFaced"] += int(st.get("battersFaced", 0))
+        totals["strikeOuts"]   += int(st.get("strikeOuts", 0))
+        totals["groundOuts"]   += int(st.get("groundOuts", 0))
+        totals["airOuts"]      += int(st.get("airOuts", 0))
+        ip_str = str(st.get("inningsPitched", "0.0"))
+        try:
+            parts = ip_str.split(".")
+            ip = int(parts[0]) + int(parts[1]) / 3.0 if len(parts) > 1 else float(ip_str)
+        except Exception:
+            ip = 0.0
+        totals["inningsPitched"] += ip
+    # Keep inningsPitched as a float so pitcher_recent_factor can use < comparisons directly.
+    # pitcher_hr_factor also accepts float (handled via isinstance check in probability.py).
+    return totals
+
+
 def get_pitcher_days_rest(pitcher_id: int) -> int:
     """Days since pitcher's last start. Returns 5 (standard rotation) if unknown."""
     splits = _pitcher_game_log_splits(pitcher_id)

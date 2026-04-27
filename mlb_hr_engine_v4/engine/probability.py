@@ -190,10 +190,13 @@ def pitcher_hr_factor(pitcher_stats: dict) -> float:
     HR/FB separates fly ball rate from HR conversion rate — more predictive.
     MLB Stats API: homeRuns + airOuts => fly balls faced.
     """
-    innings_str = pitcher_stats.get("inningsPitched", "0.0")
+    innings_raw = pitcher_stats.get("inningsPitched", "0.0")
     try:
-        parts = str(innings_str).split(".")
-        ip = int(parts[0]) + int(parts[1]) / 3.0 if len(parts) > 1 else float(innings_str)
+        if isinstance(innings_raw, (int, float)):
+            ip = float(innings_raw)
+        else:
+            parts = str(innings_raw).split(".")
+            ip = int(parts[0]) + int(parts[1]) / 3.0 if len(parts) > 1 else float(innings_raw)
     except Exception:
         ip = 0.0
 
