@@ -282,6 +282,15 @@ def pitcher_contact_suppressor(
         + hh_mult   * 0.15
         + ev_mult   * 0.15
     )
+
+    # Mirror batter treatment: shrink prior-year-only pitcher data toward neutral.
+    # Year-to-year correlation on contact quality metrics is ~0.75-0.80; 0.85
+    # is slightly optimistic but avoids under-weighting established suppressors.
+    # "blended" is already PA-weighted — no extra discount needed.
+    source = stats.get("statcast_source", "current")
+    if source == "prior":
+        composite = 1.0 + PRIOR_YEAR_TRUST * (composite - 1.0)
+
     return round(_clamp(composite, 0.55, 1.75), 3)
 
 

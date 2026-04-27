@@ -21,10 +21,20 @@ from output.parlay import build_profile_parlays
 
 # ── Core helpers (same logic as v3 main.py, extracted here) ──────────────────
 
+def _utc_to_local_hour(game_time_utc: str, tz_offset: int) -> int:
+    """Parse game_time_utc ('2026-04-26T22:05:00Z') and return local game hour (0-23)."""
+    try:
+        utc_hour = int(game_time_utc[11:13])
+        return (utc_hour + tz_offset) % 24
+    except (IndexError, ValueError):
+        return 19  # fallback to 7pm local
+
+
 def _build_player_profile(
     player_id, player_name, lineup_spot, team, opponent,
     home_team, pitcher, batter_data, pitcher_data,
     batter_bb_data=None, pitcher_bb_data=None,
+    game_time_utc: str = "",
 ):
     season_stats    = mlb_stats.get_player_season_stats(player_id)
     recent_stats    = mlb_stats.get_player_recent_stats(player_id)
@@ -73,7 +83,7 @@ def _build_player_profile(
 
     exp_pa    = prob.expected_pa(lineup_spot)
     pk_factor = prob.park_factor(home_team, team == home_team)
-    pk_factor = prob.fly_ball_adjusted_park_factor(pk_factor, season_stats)
+    pk_factor = prob.fly_ball_adjusted_park_factor(pk_factor, sc_stats.get("fb_pct"))
 
     pitcher_id   = pitcher.get("id")
     pitcher_name = pitcher.get("name", "TBD")
@@ -110,7 +120,8 @@ def _build_player_profile(
     park_data  = get_park(home_team)
     is_dome    = home_team in weather_client.DOME_TEAMS
     cf_bearing = park_data.get("cf_bearing", 0.0)
-    weather    = weather_client.get_game_weather(park_data["lat"], park_data["lon"])
+    game_hour  = _utc_to_local_hour(game_time_utc, park_data.get("tz_offset", -5))
+    weather    = weather_client.get_game_weather(park_data["lat"], park_data["lon"], game_hour)
     w_factor   = max(0.80, min(1.20,
         weather_client.temp_factor(weather["temp_f"])
         * weather_client.wind_factor(weather["wind_mph"], weather["wind_deg"], is_dome, cf_bearing)
@@ -397,6 +408,7 @@ def load_game_data(
                 batter_data, pitcher_data,
                 batter_bb_data=batter_bb,
                 pitcher_bb_data=pitcher_bb,
+                game_time_utc=game_time_utc,
             )
             if profile:
                 profile["game_time_utc"] = game_time_utc

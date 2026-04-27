@@ -19,7 +19,7 @@ def get_game_weather(lat: float, lon: float, game_hour_local: int = 19) -> dict:
 
     Returns: temp_f, wind_mph, wind_deg (or defaults if unavailable).
     """
-    cache_key = f"{lat:.3f},{lon:.3f}"
+    cache_key = f"{lat:.3f},{lon:.3f},{game_hour_local}"
     if cache_key in _CACHE:
         return _CACHE[cache_key]
 

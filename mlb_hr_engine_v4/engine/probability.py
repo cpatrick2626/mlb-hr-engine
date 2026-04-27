@@ -312,21 +312,18 @@ def expected_pa(lineup_spot: Optional[int]) -> float:
     return config.DEFAULT_PA
 
 
-def fly_ball_adjusted_park_factor(park_factor: float, season_stats: dict) -> float:
-    """
-    Scale park HR impact by batter's fly-ball tendency.
-    A batter who hits more fly balls benefits more (or suffers more) from park HR factor.
-    League avg fly-ball rate: ~18% of AB.
-    """
-    fly_balls = int(season_stats.get("flyBalls", 0))
-    ab        = int(season_stats.get("atBats", 1))
-    if ab < 80 or fly_balls == 0:
-        return park_factor
+_LEAGUE_AVG_FB_PCT = 0.266  # Savant pure fly ball rate (fb_rate, excludes popups) — 2025 MLB
 
-    fb_pct     = fly_balls / ab
-    league_fb  = 0.18
-    fb_dev     = (fb_pct - league_fb) / league_fb   # % above/below avg
-    adjusted   = 1.0 + (park_factor - 1.0) * (1.0 + 0.30 * fb_dev)
+def fly_ball_adjusted_park_factor(park_factor: float, statcast_fb_pct: float = None) -> float:
+    """
+    Scale park HR impact by batter's Statcast fly-ball rate (fb_pct from batted-ball CSV).
+    A high-FB% batter benefits more from a HR-friendly park (and suffers more in a suppressor).
+    Falls back to raw park factor when Statcast fb_pct is unavailable.
+    """
+    if statcast_fb_pct is None:
+        return park_factor
+    fb_dev   = (statcast_fb_pct - _LEAGUE_AVG_FB_PCT) / _LEAGUE_AVG_FB_PCT
+    adjusted = 1.0 + (park_factor - 1.0) * (1.0 + 0.30 * fb_dev)
     return max(0.70, min(1.45, adjusted))
 
 
