@@ -51,19 +51,22 @@ _SESSION.headers.update({
 PRIOR_YEAR_TRUST    = 0.85   # shrink composite deviation from 1.0 for prior-year-only data
 MIN_CURRENT_YEAR_PA = 30     # below this, blend current + prior year Statcast signals
 
-# ── League averages (2024 MLB) ─────────────────────────────────────────────────
-LEAGUE_AVG_BARREL_RATE = 0.052    # barrel% per PA
-LEAGUE_AVG_EXIT_VELO   = 88.9     # mph average exit velocity
-LEAGUE_AVG_HARD_HIT    = 0.394    # EV >95 mph rate
-LEAGUE_AVG_XSLG        = 0.405    # expected SLG
-LEAGUE_AVG_SWEET_SPOT  = 0.340    # LA 8-32° sweet spot rate
-LEAGUE_AVG_FB_PCT      = 0.360    # fly ball rate
-LEAGUE_AVG_GB_PCT      = 0.430    # ground ball rate
-LEAGUE_AVG_LD_PCT      = 0.210    # line drive rate
-LEAGUE_AVG_IFFB_PCT    = 0.090    # infield fly ball (popup) rate
-LEAGUE_AVG_PULL_PCT    = 0.400    # pull rate
-LEAGUE_AVG_STR_PCT     = 0.350    # straightaway/center rate
-LEAGUE_AVG_OPPO_PCT    = 0.250    # opposite field rate
+# ── League averages (2025 MLB, sourced from Baseball Savant league page) ───────
+LEAGUE_AVG_BARREL_RATE = 0.057    # brl_pa (barrel per PA); Savant league brl_percent=8.6%
+LEAGUE_AVG_EXIT_VELO   = 89.4     # mph average exit velocity
+LEAGUE_AVG_HARD_HIT    = 0.409    # EV >95 mph rate
+LEAGUE_AVG_XSLG        = 0.410    # expected SLG
+LEAGUE_AVG_SWEET_SPOT  = 0.341    # LA 8-32° sweet spot rate
+# NOTE: Savant fb_rate is pure fly balls (excludes popups). FanGraphs FB% (~34%)
+# combines Savant fb+pu. The Savant CSV fb_rate is used in batter_power_multiplier,
+# so this constant must match Savant's definition.
+LEAGUE_AVG_FB_PCT      = 0.266    # Savant pure fly ball rate (fb_rate, excludes popups)
+LEAGUE_AVG_GB_PCT      = 0.424    # ground ball rate
+LEAGUE_AVG_LD_PCT      = 0.239    # line drive rate
+LEAGUE_AVG_IFFB_PCT    = 0.071    # infield fly ball (popup) rate — Savant pu_rate
+LEAGUE_AVG_PULL_PCT    = 0.392    # pull rate
+LEAGUE_AVG_STR_PCT     = 0.364    # straightaway/center rate
+LEAGUE_AVG_OPPO_PCT    = 0.245    # opposite field rate
 BARREL_TO_HR_RATE      = 0.57     # ~57% of barrels become HRs
 
 
@@ -129,21 +132,51 @@ def get_batter_statcast(year: int = None, player_ids: set[int] = None) -> dict[i
 def get_pitcher_statcast(year: int = None, player_ids: set[int] = None) -> dict[int, dict]:
     """
     Full pitcher dataset: statcast + batted-ball merged per player_id.
-    Current year primary; prior year fills missing pitchers.
 
-    Args:
-        year: Season year (defaults to current)
-        player_ids: Optional set of player IDs to filter (for performance)
+    Three-tier prior-year coverage (always fetches both years in parallel):
+      Tier 1 — current-year data with >= MIN_CURRENT_YEAR_PA BF: full trust, no flag
+      Tier 2 — current-year data but sparse (< MIN_CURRENT_YEAR_PA BF): signals
+               linearly blended with prior-year; statcast_source = "blended"
+      Tier 3 — no current-year data at all: use prior-year with trust discount;
+               statcast_source = "prior"
     """
     year = year or config.CURRENT_SEASON
-    curr = _merge_pitcher_sources(year, player_ids)
 
-    # If we have sparse current data, fetch prior year in parallel
-    if len(curr) < 50:
-        prior = _merge_pitcher_sources(year - 1, player_ids)
-        for pid, stats in prior.items():
-            if pid not in curr:
-                curr[pid] = {**stats, "season": year - 1}
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        future_curr  = executor.submit(_merge_pitcher_sources, year,     player_ids)
+        future_prior = executor.submit(_merge_pitcher_sources, year - 1, player_ids)
+        curr  = future_curr.result()
+        prior = future_prior.result()
+
+    _BLEND_KEYS = (
+        "barrel_rate", "exit_velocity_avg", "hard_hit_pct",
+        "sweet_spot_pct", "xslg", "fb_pct", "gb_pct",
+        "ld_pct", "pull_pct",
+    )
+
+    # Tier 3: pitcher has zero current-year data
+    for pid, stats in prior.items():
+        if pid not in curr:
+            curr[pid] = {**stats, "season": year - 1, "statcast_source": "prior"}
+
+    # Tier 2: pitcher has current data but BF count is too small to fully trust
+    for pid in list(curr.keys()):
+        if curr[pid].get("statcast_source"):
+            continue   # already flagged as prior
+        curr_pa = curr[pid].get("pa", 0)
+        if 0 < curr_pa < MIN_CURRENT_YEAR_PA and pid in prior:
+            trust   = curr_pa / MIN_CURRENT_YEAR_PA
+            blended = dict(curr[pid])
+            for key in _BLEND_KEYS:
+                cv = curr[pid].get(key)
+                pv = prior[pid].get(key)
+                if cv is not None and pv is not None:
+                    blended[key] = cv * trust + pv * (1.0 - trust)
+                elif pv is not None:
+                    blended[key] = pv
+            blended["statcast_source"] = "blended"
+            curr[pid] = blended
+
     return curr
 
 
@@ -584,9 +617,9 @@ def _parse_expected_stats_csv(raw: str, player_ids: frozenset[int] = None) -> di
             if player_ids and pid not in player_ids:
                 continue
 
-            xslg  = _f(row, "xslg",  "x_slg",  "expected_slg")
-            xwoba = _f(row, "xwoba", "x_woba")
-            xba   = _f(row, "xba",   "x_ba")
+            xslg  = _f(row, "xslg",  "est_slg", "x_slg",  "expected_slg")
+            xwoba = _f(row, "xwoba", "est_woba", "x_woba")
+            xba   = _f(row, "xba",   "est_ba",  "x_ba")
             row_out: dict = {}
             if xslg  is not None: row_out["xslg"]  = xslg
             if xwoba is not None: row_out["xwoba"] = xwoba

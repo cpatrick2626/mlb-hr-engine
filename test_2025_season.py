@@ -20,7 +20,7 @@ import requests
 from pathlib import Path
 
 # Use v4 modules
-sys.path.insert(0, str(Path(__file__).parent / "codex_hr_engine_v4"))
+sys.path.insert(0, str(Path(__file__).parent / "mlb_hr_engine_v4"))
 
 # Patch config to use 2025 data
 import config as _cfg
@@ -82,8 +82,8 @@ def run_model(batters: list[dict], sc_data: dict[int, dict]) -> list[dict]:
         ss    = b["season_stats"]
         rs    = _fake_recent(ss)
 
-        raw_rate   = prob.base_hr_rate(ss, rs)
         power_mult = statcast_client.batter_power_multiplier(pid, sc_data)
+        raw_rate   = prob.base_hr_rate(ss, rs, statcast_mult=power_mult)
         sc_stats   = sc_data.get(pid, {})
         sc_pa      = sc_stats.get("pa", 0)
         sc_source  = sc_stats.get("statcast_source", "current")

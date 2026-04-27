@@ -4,7 +4,7 @@ MLB park HR factors and stadium geodata.
 hr_factor > 1.0 → hitter-friendly (more HRs than average)
 hr_factor < 1.0 → pitcher-friendly (fewer HRs than average)
 
-Derived from 2022-2024 multi-year park factor data (ESPN / FanGraphs).
+Derived from 2022-2025 multi-year park factor data (ESPN / FanGraphs).
 Coordinates used for Open-Meteo weather lookups.
 """
 
@@ -32,7 +32,7 @@ PARK_FACTORS: dict[str, dict] = {
     "MIN": {"name": "Target Field",               "hr_factor": 0.99, "cf_bearing":   15, "lat": 44.9817, "lon": -93.2778},
     "NYM": {"name": "Citi Field",                 "hr_factor": 0.97, "cf_bearing":  355, "lat": 40.7571, "lon": -73.8458},
     "NYY": {"name": "Yankee Stadium",             "hr_factor": 1.10, "cf_bearing":  355, "lat": 40.8296, "lon": -73.9262},
-    "OAK": {"name": "Sutter Health Park",         "hr_factor": 0.97, "cf_bearing":   10, "lat": 38.5726, "lon": -121.5041},
+    "OAK": {"name": "Sutter Health Park",         "hr_factor": 1.05, "cf_bearing":   10, "lat": 38.5726, "lon": -121.5041},
     "PHI": {"name": "Citizens Bank Park",         "hr_factor": 1.11, "cf_bearing":   25, "lat": 39.9056, "lon": -75.1665},
     "PIT": {"name": "PNC Park",                   "hr_factor": 1.04, "cf_bearing":  355, "lat": 40.4469, "lon": -80.0057},
     "SD":  {"name": "Petco Park",                 "hr_factor": 0.89, "cf_bearing":  290, "lat": 32.7074, "lon": -117.1566},

@@ -34,11 +34,13 @@ def _build_player_profile(
     if season_pa == 0 and recent_pa == 0:
         return None
 
-    raw_rate   = prob.base_hr_rate(season_stats, recent_stats)
     power_mult = statcast_client.batter_power_multiplier(player_id, batter_data, batter_bb_data)
     sc_stats   = dict(batter_data.get(player_id) or {})
     sc_pa      = sc_stats.get("pa", 0)
-    sc_source  = sc_stats.get("statcast_source", "current")
+    # Default to "current" only when the player IS in batter_data (tier-1 rows have no key set);
+    # players absent entirely get "none" so confidence_score awards no Statcast bonus.
+    sc_source  = sc_stats.get("statcast_source", "current" if sc_stats else "none")
+    raw_rate   = prob.base_hr_rate(season_stats, recent_stats, statcast_mult=power_mult)
     hr_rate    = prob.statcast_blended_rate(
         raw_rate, power_mult, season_pa,
         statcast_pa=sc_pa, statcast_source=sc_source,
@@ -257,7 +259,7 @@ def _enrich_with_ev(player):
     player["confidence"] = prob.confidence_score(
         player.get("season_pa", 0), player.get("recent_pa", 0),
         model_p, market_p,
-        has_statcast=player.get("has_statcast", False),
+        statcast_source=player.get("statcast_source", "none"),
         barrel_rate=barrel_raw,
         pitcher_hr9=pitcher_hr9,
     )

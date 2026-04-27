@@ -16,20 +16,31 @@ from data.park_factors import get_park
 from clients import weather as weather_client
 
 
-def base_hr_rate(season_stats: dict, recent_stats: dict) -> float:
+def base_hr_rate(
+    season_stats: dict,
+    recent_stats: dict,
+    statcast_mult: float = 1.0,
+) -> float:
     season_pa = int(season_stats.get("plateAppearances", 0))
     season_hr = int(season_stats.get("homeRuns", 0))
     recent_pa = int(recent_stats.get("plateAppearances", 0))
     recent_hr = int(recent_stats.get("homeRuns", 0))
+
+    # When Statcast signals below-average power, reduce the Bayesian regression target
+    # proportionally. This prevents the league-mean anchor from inflating predictions for
+    # true contact hitters who are never going to hit HRs. Only adjusts downward (mult >= 1
+    # keeps the unbiased league-avg prior so power hitters aren't double-boosted here).
+    reg_target_adj = max(0.40, min(1.0, statcast_mult))
+    regression_target = config.LEAGUE_AVG_HR_PA * reg_target_adj
 
     # Adaptive regression: reduce prior weight as sample grows, floored at 55% of
     # REGRESSION_PA so the league-mean anchor never disappears entirely.
     effective_reg = (config.REGRESSION_PA * max(0.55, 1.0 - season_pa / 700.0)
                      if season_pa > 0 else config.REGRESSION_PA)
     regressed_season = (
-        (season_hr + effective_reg * config.LEAGUE_AVG_HR_PA)
+        (season_hr + effective_reg * regression_target)
         / (season_pa + effective_reg)
-    ) if season_pa > 0 else config.LEAGUE_AVG_HR_PA
+    ) if season_pa > 0 else regression_target
 
     if recent_pa >= config.MIN_RECENT_PA:
         recent_rate = recent_hr / recent_pa
@@ -88,7 +99,16 @@ def statcast_blended_rate(
     boost = min(0.20, 0.40 * suppression_signal)
     statcast_weight = min(0.65, pa_weight + boost)
     raw_weight = 1.0 - statcast_weight
-    statcast_rate = raw_rate * statcast_power_mult
+
+    # Damp Statcast upside so base pa_weight doesn't double-boost elite power hitters.
+    # By large sample sizes the regression already converges toward their true rate;
+    # only half of (mult - 1) is added. Suppression side is unchanged.
+    if statcast_power_mult > 1.0:
+        effective_mult = 1.0 + (statcast_power_mult - 1.0) * 0.50
+    else:
+        effective_mult = statcast_power_mult
+
+    statcast_rate = raw_rate * effective_mult
     return max(raw_weight * raw_rate + statcast_weight * statcast_rate, 0.001)
 
 
@@ -217,12 +237,17 @@ def pitcher_combined_factor(
     k_gb_fac: float = 1.0,
 ) -> float:
     """
-    Weighted blend of three independent pitcher HR signals:
+    Weighted geometric mean of three independent pitcher HR signals:
       40% HR/FB rate (most HR-specific)
       40% Statcast contact quality against (barrel%, FB%, EV against)
       20% K% + GB% suppressor (ball-in-play profile)
+
+    Geometric mean prevents contradictory signals from canceling linearly —
+    a homer-prone HR/FB rate + elite contact suppression stays below 1.0
+    rather than averaging to neutral. Consistent with how batter factors
+    compound multiplicatively in game_hr_probability.
     """
-    combined = pitcher_hr_fac * 0.40 + statcast_contact_fac * 0.40 + k_gb_fac * 0.20
+    combined = (pitcher_hr_fac ** 0.40) * (statcast_contact_fac ** 0.40) * (k_gb_fac ** 0.20)
     return max(0.55, min(1.60, combined))
 
 
@@ -344,17 +369,20 @@ def hot_streak_factor(short_form: dict, season_stats: dict) -> float:
 def confidence_score(
     season_pa: int, recent_pa: int,
     model_prob: float, market_prob: float,
-    has_statcast: bool = False,
+    statcast_source: str = "none",
+    has_statcast: bool = False,   # legacy; ignored when statcast_source is set
     barrel_rate: float = 0.0,
     pitcher_hr9: float = 0.0,
 ) -> float:
     """
     Confidence score 0-100.
     Threshold bonuses: Barrel > 12% (+5), Pitcher HR/9 > 1.4 (+4).
+    Statcast source bonus: current=+8, blended=+5, prior=+3, none=+0.
     """
     sample_conf    = min(season_pa / 400.0, 1.0) * 35.0
     recent_conf    = min(recent_pa / 80.0,  1.0) * 20.0
-    statcast_bonus = 8.0 if has_statcast else 0.0
+    _SC_BONUS      = {"current": 8.0, "blended": 5.0, "prior": 3.0}
+    statcast_bonus = _SC_BONUS.get(statcast_source, 8.0 if has_statcast else 0.0)
 
     # Threshold bonuses (from the weighted factor list)
     barrel_bonus  = 5.0 if barrel_rate > 0.12 else 0.0          # Barrel > 12%

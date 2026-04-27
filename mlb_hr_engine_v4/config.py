@@ -49,10 +49,10 @@ LEAGUE_AVG_HR_PA: float = 0.033    # ~1 HR per 30 PA league-wide
 REGRESSION_PA: int = 200            # Bayes regression towards league mean
 MIN_RECENT_PA: int = 20             # Need ≥20 recent PA to trust recent rate
 
-# League-average HR/9 for pitchers (2024 MLB)
-LEAGUE_AVG_HR9: float = 1.35
-LEAGUE_AVG_ISO: float = 0.155   # ISO = SLG - AVG; 2024 MLB average
-LEAGUE_HR_FB:   float = 0.125   # HR per fly ball (2024 MLB average)
+# League-average HR/9 for pitchers (2025 MLB; FOX Sports qualified starters median ~1.2-1.3)
+LEAGUE_AVG_HR9: float = 1.25
+LEAGUE_AVG_ISO: float = 0.148   # ISO = SLG - AVG; 2025 MLB (FanGraphs wOBA=.313)
+LEAGUE_HR_FB:   float = 0.120   # HR per fly ball (2025 MLB, slight decrease from 2024)
 
 # ── Market / EV ───────────────────────────────────────────────────────────────
 VIG_FACTOR: float = 0.075  # Empirically measured on FanDuel/DraftKings HR props
