@@ -114,10 +114,10 @@ def _score_consistent_damage(player: dict) -> float:
     if hh is not None:
         score += min(2.0, max(0.0, hh / 0.50)) * 0.35
 
-    # Fly ball%: more fly balls = more HR opportunities; 45%+ is elite
+    # Fly ball%: more fly balls = more HR opportunities; 35%+ is elite (Savant fb_rate scale)
     fb = _parse_pct(player.get("fb_pct"))
     if fb is not None:
-        score += min(2.0, max(0.0, fb / 0.45)) * 0.30
+        score += min(2.0, max(0.0, fb / 0.35)) * 0.30
 
     return score
 
@@ -258,15 +258,16 @@ def build_auto_parlays(
             scored.append(_evaluate_parlay(list(combo)))
         scored.sort(key=lambda x: x["ev_pct"], reverse=True)
 
-        # Pick diverse top-N
+        # Pick diverse top-N — reject if >1 player overlaps with any selected combo.
+        # Allows one shared player between combos (avoids being too strict with a small pool)
+        # but prevents near-identical parlays that differ by only one leg.
         selected: list[dict] = []
         for candidate in scored:
             if len(selected) >= n_combos:
                 break
             cids = {leg["player_id"] for leg in candidate["legs"]}
-            # Reject if every player already appears in a selected combo
             too_similar = any(
-                len(cids & {leg["player_id"] for leg in sel["legs"]}) == n_legs
+                len(cids & {leg["player_id"] for leg in sel["legs"]}) > 1
                 for sel in selected
             )
             if not too_similar:
