@@ -8,6 +8,7 @@ a single dict that both the CLI display and the Streamlit UI can consume.
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, timedelta
 from rapidfuzz import fuzz, process as fuzz_process
+import unicodedata
 
 import config
 from clients import mlb_stats, odds_api
@@ -187,22 +188,26 @@ def _build_player_profile(
     }
 
 
+def _ascii_fold(name: str) -> str:
+    """Strip accents for robust fuzzy matching (e.g. 'José' → 'Jose')."""
+    return unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode("ascii")
+
+
 def _build_odds_lookup(all_props):
     """Pre-build a lookup structure for O(1) odds matching."""
     if not all_props:
         return {}, []
 
-    # Group props by player name
+    # Group props by player name; store both original and ascii-folded key
     odds_by_player = {}
     for prop in all_props:
         name = prop["player_name"]
-        if name not in odds_by_player:
-            odds_by_player[name] = []
-        odds_by_player[name].append(prop)
+        key  = _ascii_fold(name)
+        if key not in odds_by_player:
+            odds_by_player[key] = []
+        odds_by_player[key].append(prop)
 
-    # Create list of unique player names for fuzzy matching
     unique_names = list(odds_by_player.keys())
-
     return odds_by_player, unique_names
 
 
@@ -211,9 +216,10 @@ def _match_odds(player, odds_lookup, unique_names):
     if not odds_lookup:
         return player
 
-    # Fuzzy match against unique names only (much smaller list)
+    # Fold accents before matching so 'José' == 'Jose' at the fuzzy layer
+    folded_name = _ascii_fold(player["player_name"])
     match = fuzz_process.extractOne(
-        player["player_name"], unique_names,
+        folded_name, unique_names,
         scorer=fuzz.token_sort_ratio, score_cutoff=82,
     )
     if not match:
@@ -230,11 +236,12 @@ def _match_odds(player, odds_lookup, unique_names):
     fd_matches = [p for p in matches if p.get("bookmaker") == "fanduel"]
     fd_odds = max(fd_matches, key=lambda x: x["price"])["price"] if fd_matches else None
     player.update({
-        "best_american": best["price"], "best_bookmaker": best.get("bookmaker", ""),
-        "all_prices": prices, "n_books": summary.get("n_books", 1),
-        "market_no_vig_prob": round(summary.get("no_vig_prob_best", 0), 4),
+        "best_american":      best["price"], "best_bookmaker": best.get("bookmaker", ""),
+        "all_prices":         prices, "n_books": summary.get("n_books", 1),
+        # consensus no-vig for edge (conservative market baseline); best no-vig for EV display
+        "market_no_vig_prob": round(summary.get("no_vig_prob_consensus", 0), 4),
         "market_implied_avg": round(summary.get("implied_prob_avg", 0), 4),
-        "fanduel_american": fd_odds,
+        "fanduel_american":   fd_odds,
     })
     return player
 

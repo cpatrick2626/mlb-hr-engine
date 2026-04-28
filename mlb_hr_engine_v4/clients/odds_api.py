@@ -195,5 +195,3 @@ def _get_event_props(event_id: str) -> list[dict]:
         return []
 
 
-def _normalize(name: str) -> str:
-    return name.lower().strip()
