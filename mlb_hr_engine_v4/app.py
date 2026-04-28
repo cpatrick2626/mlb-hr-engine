@@ -60,6 +60,7 @@ try:
     from output.parlay import _evaluate_parlay, parlay_bet_size
     from output.ranker import rank_picks as _rank_picks
     from tracking import pnl as pnl_tracker, clv as clv_tracker
+    from tracking import line_movement as lm_tracker
     from strategies_ui import tab_advanced_strategies
 except ImportError as e:
     print(f"Import error: {e}")
@@ -81,6 +82,7 @@ except ImportError as e:
     from engine.ev import expected_value_pct
     from output.ranker import rank_picks as _rank_picks
     from tracking import pnl as pnl_tracker, clv as clv_tracker
+    from tracking import line_movement as lm_tracker
     # Try to import strategies UI
     try:
         from strategies_ui import tab_advanced_strategies
@@ -360,6 +362,10 @@ def get_data():
                         logged = pnl_tracker.log_picks(ranked, model_version="v4")
                         if logged:
                             clv_tracker.log_opening_lines(ranked)
+                    except Exception:
+                        pass
+                    try:
+                        lm_tracker.log_current_odds(ranked)
                     except Exception:
                         pass
 
@@ -867,9 +873,11 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
     # ── TAB: Qualified Picks ─────────────────────────────────────────────────
     with sub1:
         roster_confirmed = [p for p in ranked if p.get("lineup_spot") is not None]
-        _slate_tab, _confirmed_tab = st.tabs([
+        _slate_tab, _confirmed_tab, _movement_tab, _odds_cmp_tab = st.tabs([
             f"📋 Today's Slate ({len(ranked)})",
             f"✅ Roster Confirmed ({len(roster_confirmed)})",
+            "📈 Line Movement",
+            "📊 Odds Comparison",
         ])
 
         with _slate_tab:
@@ -905,6 +913,83 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
                 )
             else:
                 _render_qualified_table(roster_confirmed, scale, min_ev, min_edge)
+
+        # ── Line Movement tab ─────────────────────────────────────────────────
+        with _movement_tab:
+            try:
+                movement = lm_tracker.get_movement_today()
+            except Exception:
+                movement = {}
+            if not movement:
+                st.info(
+                    "No line movement data yet today.  \n"
+                    "Data is logged each time the app loads or refreshes. "
+                    "Reload after ~30 min to see intraday movement."
+                )
+            else:
+                mv_rows = []
+                for name, snaps in movement.items():
+                    summ = lm_tracker.movement_summary(snaps)
+                    if not summ:
+                        continue
+                    open_o = summ["opening_odds"]
+                    curr_o = summ["current_odds"]
+                    move   = summ["move_pct"]
+                    dirn   = summ["direction"]
+                    move_color = "#4ade80" if move > 0.5 else ("#f87171" if move < -0.5 else "#888888")
+                    mv_rows.append({
+                        "Player":   name,
+                        "Open":     _fmt_american(open_o),
+                        "Now":      _fmt_american(curr_o),
+                        "Move":     f"{move:+.1f}%",
+                        "Signal":   dirn,
+                        "Snaps":    summ["n_snapshots"],
+                    })
+                if mv_rows:
+                    st.caption(
+                        "Line movement since first load today. "
+                        "▲ shortened = market gaining confidence (sharp agreement). "
+                        "▼ lengthened = market fading."
+                    )
+                    st.dataframe(pd.DataFrame(mv_rows), hide_index=True, width="stretch")
+                else:
+                    st.info("Not enough snapshots yet to show movement.")
+
+        # ── Odds Comparison tab ───────────────────────────────────────────────
+        with _odds_cmp_tab:
+            odds_pool = ranked if ranked else [p for p in all_players if p.get("prices_by_book")]
+            if not odds_pool:
+                st.info("No odds data available.")
+            else:
+                # Collect all book names present across any player
+                all_books: list[str] = []
+                seen: set[str] = set()
+                # Preferred order first, then any extras
+                _PREF = ["fanduel", "draftkings", "betmgm", "caesars", "pointsbet", "betrivers", "bet365"]
+                for bk in _PREF:
+                    if any(bk in p.get("prices_by_book", {}) for p in odds_pool):
+                        all_books.append(bk)
+                        seen.add(bk)
+                for p in odds_pool:
+                    for bk in p.get("prices_by_book", {}).keys():
+                        if bk not in seen:
+                            all_books.append(bk)
+                            seen.add(bk)
+                cmp_rows = []
+                for p in odds_pool:
+                    pbk = p.get("prices_by_book", {})
+                    row = {
+                        "Player": p.get("player_name", ""),
+                        "Team":   p.get("team", ""),
+                        "EV%":    f"{p.get('ev_pct', 0):+.1f}%",
+                        "Best":   _fmt_american(p.get("best_american")),
+                        "@":      p.get("best_bookmaker", ""),
+                    }
+                    for bk in all_books:
+                        row[bk.title()] = _fmt_american(pbk.get(bk)) if bk in pbk else "--"
+                    cmp_rows.append(row)
+                st.caption("Best odds per sportsbook for each qualified pick. Best column = highest price found.")
+                st.dataframe(pd.DataFrame(cmp_rows), hide_index=True, width="stretch")
 
     if all_by_model:
         PRIME_FLOOR = 0.15
@@ -1435,6 +1520,82 @@ def tab_performance():
         c3.markdown(_pnl_box("Beat Close", f"{beat_close:.1f}%",             beat_css),  unsafe_allow_html=True)
         c4.markdown(_pnl_box("Verdict",    verdict,                           v_css),     unsafe_allow_html=True)
 
+    # ── P&L by Rating Tier ────────────────────────────────────────────────────
+    try:
+        _all_picks   = pnl_tracker.get_picks_log()
+        _all_results = {r["player_name"] + "|" + r["date"]: r
+                        for r in pnl_tracker._load_results()}
+        if _all_picks and _all_results:
+            def _pick_tier(ev, edge, conf):
+                try:
+                    ev_f = float(ev); edge_f = float(edge); conf_f = float(conf)
+                except (ValueError, TypeError):
+                    return "📊 MARGINAL"
+                if ev_f >= 30 and edge_f >= 12 and conf_f >= 65:
+                    return "🌟 ONCE IN A LIFETIME"
+                if (ev_f >= 18 and edge_f >= 7 and conf_f >= 50) or \
+                   (ev_f >= 12 and edge_f >= 5 and conf_f >= 50):
+                    return "🔥 STRONG EDGE"
+                if ev_f >= 5 and edge_f >= 2:
+                    return "✅ SOLID PLAY"
+                return "📊 MARGINAL"
+
+            tier_stats: dict[str, dict] = {}
+            for pick in _all_picks:
+                key = pick.get("player_name", "") + "|" + pick.get("date", "")
+                result = _all_results.get(key)
+                if result is None:
+                    continue
+                tier = _pick_tier(pick.get("ev_pct", 0), pick.get("edge_pct", 0),
+                                  pick.get("confidence", 0))
+                pl_str = result.get("profit_loss", "")
+                if pl_str == "" or pl_str is None:
+                    continue
+                try:
+                    pl = float(pl_str)
+                except (ValueError, TypeError):
+                    continue
+                bet_str = result.get("bet_dollars", "0") or "0"
+                try:
+                    bet = float(bet_str)
+                except (ValueError, TypeError):
+                    bet = 0.0
+                ts = tier_stats.setdefault(tier, {"wins": 0, "losses": 0, "wagered": 0.0, "profit": 0.0})
+                ts["wagered"] += bet
+                ts["profit"]  += pl
+                if pl > 0:
+                    ts["wins"] += 1
+                else:
+                    ts["losses"] += 1
+
+            if tier_stats:
+                st.markdown('<div class="section-header">🏆 Performance by Rating Tier</div>',
+                            unsafe_allow_html=True)
+                _TIER_ORDER = ["🌟 ONCE IN A LIFETIME", "🔥 STRONG EDGE", "✅ SOLID PLAY", "📊 MARGINAL"]
+                tier_rows = []
+                for tier in _TIER_ORDER:
+                    ts = tier_stats.get(tier)
+                    if not ts:
+                        continue
+                    decided = ts["wins"] + ts["losses"]
+                    wr = ts["wins"] / decided * 100 if decided else 0
+                    roi = ts["profit"] / ts["wagered"] * 100 if ts["wagered"] > 0 else 0
+                    tier_rows.append({
+                        "Tier":    tier,
+                        "Picks":   decided,
+                        "Wins":    ts["wins"],
+                        "Losses":  ts["losses"],
+                        "Win%":    f"{wr:.1f}%",
+                        "Wagered": f"${ts['wagered']:,.0f}",
+                        "P&L":     f"${ts['profit']:+,.2f}",
+                        "ROI":     f"{roi:+.1f}%",
+                    })
+                if tier_rows:
+                    st.dataframe(pd.DataFrame(tier_rows), hide_index=True, width="stretch")
+                    st.caption("Tier assigned at pick time using EV%, Edge%, and Confidence — same logic as the Rating column in Today's Picks.")
+    except Exception:
+        pass
+
     st.markdown('<div class="section-header">📋 Picks Log</div>', unsafe_allow_html=True)
     try:
         rows = pnl_tracker.get_picks_log()
@@ -1577,6 +1738,34 @@ def main():
                         f"</div></div>",
                         unsafe_allow_html=True,
                     )
+                # ── Scratch check ─────────────────────────────────────────
+                _scratched = st.session_state.get("scratched_ids", set())
+                for s in _selected:
+                    _p = _slip_map[s]
+                    if _p.get("player_id") in _scratched:
+                        st.error(f"⚠️ {_p['player_name']} may be SCRATCHED")
+                if st.button("🔍 Check for Scratches", width='stretch',
+                             key="check_scratches"):
+                    with st.spinner("Checking lineups…"):
+                        try:
+                            from clients.mlb_stats import get_confirmed_lineup_player_ids
+                            confirmed = get_confirmed_lineup_player_ids()
+                            if not confirmed:
+                                st.info("No lineups posted yet — check back closer to first pitch.")
+                            else:
+                                slip_pids = {_slip_map[s].get("player_id") for s in _selected}
+                                scratched_ids = {pid for pid in slip_pids if pid and pid not in confirmed}
+                                st.session_state["scratched_ids"] = scratched_ids
+                                if scratched_ids:
+                                    names = [_slip_map[s]["player_name"]
+                                             for s in _selected
+                                             if _slip_map[s].get("player_id") in scratched_ids]
+                                    st.error(f"⚠️ Possibly scratched: {', '.join(names)}")
+                                else:
+                                    st.success("All slip players confirmed in posted lineups ✓")
+                                    st.session_state["scratched_ids"] = set()
+                        except Exception as ex:
+                            st.warning(f"Lineup check failed: {ex}")
                 if st.button("📋 Log to Picks Tracker", width='stretch',
                              key="log_fd_slip"):
                     slip_players = [_slip_map[s] for s in _selected]

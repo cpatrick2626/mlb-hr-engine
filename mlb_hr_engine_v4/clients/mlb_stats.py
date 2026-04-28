@@ -78,6 +78,20 @@ def _get(path: str, params: dict = None) -> dict:
             time.sleep(2 ** attempt)  # 1s, then 2s
 
 
+def get_confirmed_lineup_player_ids(target_date: Optional[str] = None) -> set[int]:
+    """Return set of player IDs currently confirmed in any posted lineup for target_date.
+    Used for late-scratch detection: if a slip player's ID is absent, they may be scratched.
+    """
+    games = get_today_schedule(target_date)
+    ids: set[int] = set()
+    for game in games:
+        for lineup in [game.get("home_lineup", []), game.get("away_lineup", [])]:
+            for batter in lineup:
+                if batter.get("id"):
+                    ids.add(batter["id"])
+    return ids
+
+
 def get_today_schedule(target_date: Optional[str] = None) -> list[dict]:
     """
     Return parsed list of today's games with venue, lineups, and probable pitchers.

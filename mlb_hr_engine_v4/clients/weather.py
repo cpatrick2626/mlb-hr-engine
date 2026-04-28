@@ -79,7 +79,7 @@ def wind_factor(wind_mph: float, wind_deg: float, is_dome: bool = False, cf_bear
     return max(0.82, min(1.18, 1.0 + adj))
 
 
-DOME_TEAMS = {"TB", "MIA", "TOR", "MIL", "HOU", "ARI", "TEX"}
+DOME_TEAMS = {"TB", "MIA", "TOR", "MIL", "HOU", "ARI", "TEX", "SEA"}
 
 
 def temp_factor(temp_f: float) -> float:

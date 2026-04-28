@@ -235,9 +235,16 @@ def _match_odds(player, odds_lookup, unique_names):
     best    = max(matches, key=lambda x: x["price"])
     fd_matches = [p for p in matches if p.get("bookmaker") == "fanduel"]
     fd_odds = max(fd_matches, key=lambda x: x["price"])["price"] if fd_matches else None
+    # Deduplicate per book: keep best price per bookmaker for the comparison table
+    book_best: dict[str, int] = {}
+    for prop in matches:
+        bk = prop.get("bookmaker", "")
+        if bk and (bk not in book_best or prop["price"] > book_best[bk]):
+            book_best[bk] = prop["price"]
     player.update({
         "best_american":      best["price"], "best_bookmaker": best.get("bookmaker", ""),
         "all_prices":         prices, "n_books": summary.get("n_books", 1),
+        "prices_by_book":     book_best,   # {bookmaker: american_odds} for comparison table
         # consensus no-vig for edge (conservative market baseline); best no-vig for EV display
         "market_no_vig_prob": round(summary.get("no_vig_prob_consensus", 0), 4),
         "market_implied_avg": round(summary.get("implied_prob_avg", 0), 4),
