@@ -16,7 +16,8 @@ CLV < 0 consistently means: the market moved against you (bad sign for model).
 """
 
 import csv
-from datetime import date
+import unicodedata
+from datetime import date, datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -84,9 +85,12 @@ def fetch_and_compute_clv(target_date: Optional[str] = None) -> list[dict]:
             updated.append({**pick, "notes": "closing line unavailable"})
             continue
 
-        open_implied = float(pick.get("opening_implied_pct", 0)) / 100.0
+        open_implied  = float(pick.get("opening_implied_pct", 0)) / 100.0
         close_implied = _implied(close_odds)
-        clv = (open_implied - close_implied) * 100  # positive = we got better price
+        # Apply no-vig correction: divide by (1 + vig) so CLV reflects fair-value shift,
+        # not the bookmaker margin embedded in raw implied probabilities.
+        vig = config.VIG_FACTOR
+        clv = (open_implied - close_implied) / (1.0 + vig) * 100  # positive = we got better price
 
         updated.append({
             **pick,
@@ -137,7 +141,8 @@ def _implied(american: int) -> float:
 
 
 def _normalize(name: str) -> str:
-    return name.lower().strip()
+    """Fold accents and lowercase for robust name matching (e.g. 'José' → 'jose')."""
+    return unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode("ascii").lower().strip()
 
 
 def _append(rows: list[dict]) -> None:
@@ -183,13 +188,23 @@ def _existing_dates() -> set[str]:
 
 
 def _fetch_current_hr_odds() -> dict[str, int]:
-    """Best available HR odds keyed by normalized player name."""
+    """Best available HR odds keyed by normalized player name (today's games only)."""
     if not config.ODDS_API_KEY:
         return {}
     try:
+        # Filter to today's window to avoid fetching all historical events and
+        # burning API quota — mirrors the filter in odds_api._get_events().
+        now_utc     = datetime.now(timezone.utc)
+        today_start = now_utc.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(hours=9)
+        today_end   = today_start + timedelta(hours=20)
         resp = requests.get(
             "https://api.the-odds-api.com/v4/sports/baseball_mlb/events",
-            params={"apiKey": config.ODDS_API_KEY, "dateFormat": "iso"},
+            params={
+                "apiKey":             config.ODDS_API_KEY,
+                "dateFormat":         "iso",
+                "commenceTimeFrom":   today_start.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                "commenceTimeTo":     today_end.strftime("%Y-%m-%dT%H:%M:%SZ"),
+            },
             timeout=12,
         )
         events = resp.json() if resp.status_code == 200 else []

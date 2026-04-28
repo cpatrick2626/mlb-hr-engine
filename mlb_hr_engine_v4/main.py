@@ -71,6 +71,15 @@ def run(dump_json_path: str = None):
         clv_tracker.log_opening_lines(ranked)
         if logged:
             console.print(f"[dim]Logged {logged} picks -> tracking/picks_log.csv[/dim]\n")
+        # Attempt CLV update with current odds — fills in closing lines if run near first pitch.
+        # Safe to call multiple times: overwrites only today's rows.
+        try:
+            clv_results = clv_tracker.fetch_and_compute_clv(target_date)
+            filled = sum(1 for r in clv_results if r.get("clv_pct"))
+            if filled:
+                console.print(f"[dim]CLV updated: {filled}/{len(clv_results)} picks have closing lines[/dim]\n")
+        except Exception:
+            pass
     try:
         yesterday = (date.today() - timedelta(days=1)).isoformat()
         yest_outcomes = pnl_tracker.fetch_yesterday_outcomes(MODEL_VERSION)
