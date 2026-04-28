@@ -282,7 +282,11 @@ def pitcher_contact_suppressor(
     if source == "prior":
         composite = 1.0 + PRIOR_YEAR_TRUST * (composite - 1.0)
 
-    return round(_clamp(composite, 0.55, 1.75), 3)
+    # Upper bound reduced 1.75→1.50: batter power multiplier also clamps at 1.75 but is
+    # further damped 0.45x in statcast_blended_rate; pitcher contact suppressor feeds raw
+    # into pitcher_combined_factor at 40% weight with no equivalent damping. 1.50 aligns
+    # the effective ceiling with what the damped batter signal can produce.
+    return round(_clamp(composite, 0.55, 1.50), 3)
 
 
 def statcast_summary(

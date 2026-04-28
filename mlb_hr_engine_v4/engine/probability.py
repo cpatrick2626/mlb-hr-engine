@@ -68,10 +68,22 @@ def base_hr_rate(
     # signal the Bayesian regression can't fully capture due to its 55% floor.
     # Threshold lowered 50→30 PA: backtest showed 0-5% bucket over-predicts by 0.8pp
     # across all runs; early-season batters with 30-49 PA and 0 HRs were getting no discount.
-    # Scales from 0.95x at 30 PA down to 0.60x at 250+ PA; no effect when season_hr > 0.
+    # Scales from 0.95x at 30 PA down to 0.50x at 250+ PA; no effect when season_hr > 0.
     if season_hr == 0 and season_pa >= 30:
-        zero_hr_trust = max(0.60, 1.0 - 0.40 * min(season_pa / 250.0, 1.0))
+        zero_hr_trust = max(0.50, 1.0 - 0.50 * min(season_pa / 250.0, 1.0))
         rate = rate * zero_hr_trust
+
+    # Very-low-HR suppressor: extends contact-hitter discounting to players with 1-2 HRs
+    # whose observed rate is below 40% of league avg (< ~1.1% HR/PA). Bayesian regression
+    # still pulls them toward league mean despite near-zero power evidence.
+    # Fades in from 100→250 PA so small-sample 1-HR batters aren't penalised too early.
+    elif season_hr in (1, 2) and season_pa >= 100:
+        obs_rate = season_hr / season_pa
+        threshold = config.LEAGUE_AVG_HR_PA * 0.40
+        if obs_rate < threshold:
+            low_hr_fac = max(0.75, obs_rate / threshold)
+            pa_trust = min(1.0, (season_pa - 100) / 150.0)
+            rate = rate * (1.0 - pa_trust * (1.0 - low_hr_fac))
 
     return max(rate, 0.001)
 
@@ -112,10 +124,10 @@ def statcast_blended_rate(
     raw_weight = 1.0 - statcast_weight
 
     # Damp Statcast upside so base pa_weight doesn't double-boost elite power hitters.
-    # 0.45 factor — compromise between 0.50 (too much 20-25% over-prediction) and
-    # 0.40 (fixed 20-25% but hurt Brier by losing discrimination). Suppression unchanged.
+    # 0.42 factor — nudged down from 0.45 after backtest confirmed 20-25% still -1.6pp.
+    # 0.40 previously hurt Brier by over-correcting; 0.42 is a smaller step.
     if statcast_power_mult > 1.0:
-        effective_mult = 1.0 + (statcast_power_mult - 1.0) * 0.45
+        effective_mult = 1.0 + (statcast_power_mult - 1.0) * 0.42
     else:
         effective_mult = statcast_power_mult
 
