@@ -97,7 +97,8 @@ Every version follows the same flow:
 - `LEAGUE_AVG_HR_PA = 0.033` — regression target
 - `REGRESSION_PA = 200` — Bayesian shrinkage weight
 - `RECENT_WEIGHT = 0.65 / SEASON_WEIGHT = 0.35` — blending recent (30-day) vs season stats
-- `MIN_EV_PCT = 5.0`, `MIN_EDGE_PCT = 3.0` — filter floor thresholds
+- `MIN_EV_PCT = 3.0`, `MIN_EDGE_PCT = 2.0` — filter floor thresholds
+- `MIN_PA_THRESHOLD = 3.3` — blocks 9-hole batters (3.2 PA); `MAX_PARK_PENALTY = 0.87` — blocks SF + SD
 
 ### compare.py (root)
 

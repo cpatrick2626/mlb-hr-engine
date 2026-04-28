@@ -29,8 +29,8 @@ MIN_BET_DOLLARS: float = 5.0
 # ── Filter Thresholds ─────────────────────────────────────────────────────────
 MIN_EV_PCT: float = 3.0    # Bread-and-butter floor; anything below is noise
 MIN_EDGE_PCT: float = 2.0  # Minimum model-vs-market edge to surface a play
-MIN_PA_THRESHOLD: float = 3.1
-MAX_PARK_PENALTY: float = 0.85     # Skip if park_factor < this
+MIN_PA_THRESHOLD: float = 3.3      # Blocks 9-hole batters (3.2 PA); 3.1 was dead (never fired)
+MAX_PARK_PENALTY: float = 0.87     # Skip if park_factor < this; catches SF (0.83) + SD (0.89)
 MAX_WEATHER_PENALTY: float = 0.88  # Skip if weather_factor < this
 MAX_PITCHER_SUPPRESSOR: float = 0.75  # Skip elite HR suppressors
 
