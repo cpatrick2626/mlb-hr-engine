@@ -49,7 +49,8 @@ _SESSION.headers.update({
 
 # ── Prior-year fallback constants ─────────────────────────────────────────────
 PRIOR_YEAR_TRUST    = 0.85   # shrink composite deviation from 1.0 for prior-year-only data
-MIN_CURRENT_YEAR_PA = 30     # below this, blend current + prior year Statcast signals
+MIN_CURRENT_YEAR_PA = 50     # below this, blend current + prior year Statcast signals
+                             # 30 PA (~7 games) is too sparse for barrel%/EV to stabilize (~50 BF needed)
 
 # ── League averages (2026 MLB YTD Apr — sourced from Baseball Savant, revisit mid-May) ─
 LEAGUE_AVG_BARREL_RATE = 0.055    # brl_pa (barrel per PA); 2026 YTD (was 0.057 in 2025)

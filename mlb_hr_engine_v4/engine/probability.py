@@ -66,9 +66,10 @@ def base_hr_rate(
 
     # Zero-HR evidence suppressor: zero HRs through significant PA is strong contact-hitter
     # signal the Bayesian regression can't fully capture due to its 55% floor.
-    # Scales from 0.92x at 50 PA down to 0.60x at 250+ PA; has no effect on players
-    # who have already proven they can hit HRs (season_hr > 0).
-    if season_hr == 0 and season_pa >= 50:
+    # Threshold lowered 50→30 PA: backtest showed 0-5% bucket over-predicts by 0.8pp
+    # across all runs; early-season batters with 30-49 PA and 0 HRs were getting no discount.
+    # Scales from 0.95x at 30 PA down to 0.60x at 250+ PA; no effect when season_hr > 0.
+    if season_hr == 0 and season_pa >= 30:
         zero_hr_trust = max(0.60, 1.0 - 0.40 * min(season_pa / 250.0, 1.0))
         rate = rate * zero_hr_trust
 
@@ -99,8 +100,10 @@ def statcast_blended_rate(
     pa_weight = max(0.15, 1.0 - (season_pa / 350.0))
 
     # Reduce Statcast weight when current-year sample is sparse.
-    # Prior/blended data is a full season — it earns full base weight.
-    if statcast_source == "current" and 0 < statcast_pa < 30:
+    # Only applies to "blended" players (curr_pa < MIN_CURRENT_YEAR_PA=50) — "current"
+    # players by definition have >= 50 PA so 0 < pa < 50 is never true for them.
+    # "prior" is a full prior season and earns full base weight.
+    if statcast_source == "blended" and 0 < statcast_pa < 50:
         pa_weight *= 0.50
 
     suppression_signal = max(0.0, 1.0 - statcast_power_mult)
@@ -109,10 +112,10 @@ def statcast_blended_rate(
     raw_weight = 1.0 - statcast_weight
 
     # Damp Statcast upside so base pa_weight doesn't double-boost elite power hitters.
-    # 0.50 factor keeps high-threshold bets selective (tested: better live ROI than 0.75).
-    # Suppression side is unchanged.
+    # 0.45 factor — compromise between 0.50 (too much 20-25% over-prediction) and
+    # 0.40 (fixed 20-25% but hurt Brier by losing discrimination). Suppression unchanged.
     if statcast_power_mult > 1.0:
-        effective_mult = 1.0 + (statcast_power_mult - 1.0) * 0.50
+        effective_mult = 1.0 + (statcast_power_mult - 1.0) * 0.45
     else:
         effective_mult = statcast_power_mult
 
@@ -352,18 +355,24 @@ def weather_factor(home_team: str) -> tuple[float, dict]:
     return max(0.80, min(1.20, t_factor * w_factor)), weather
 
 
+# Hard ceiling on per-game HR probability. Even the most elite hitter in the best
+# matchup hits HRs in fewer than 35% of games over a full season. Predictions above
+# this are driven by look-ahead Statcast or factor stacking, not genuine edge.
+_MAX_GAME_HR_PROB = 0.35
+
 def game_hr_probability(
     hr_rate: float, exp_pa: float,
     pk_factor: float = 1.0, pitcher_fac: float = 1.0,
     w_factor: float = 1.0, plat_factor: float = 1.0,
 ) -> float:
     # Cap combined multiplier — prevents extreme stacking of park + pitcher + weather + platoon.
-    # 1.60 ceiling: Coors (1.28) + favorable pitcher + platoon + warm weather can still reach 1.55-1.60,
-    # but the old 1.82 cap was too permissive and allowed unrealistic compounding.
+    # 1.50 ceiling (reduced from 1.60): tightens 25-30% bucket calibration without hurting
+    # lower buckets. Coors (1.28) + hittable pitcher + platoon still reaches 1.45-1.50.
     combined = pk_factor * pitcher_fac * w_factor * plat_factor
-    combined = max(0.42, min(1.60, combined))
+    combined = max(0.42, min(1.50, combined))
     lam = hr_rate * combined * exp_pa
-    return max(0.001, min(0.999, 1.0 - math.exp(-lam)))
+    prob = max(0.001, 1.0 - math.exp(-lam))
+    return min(prob, _MAX_GAME_HR_PROB)
 
 
 def hot_streak_factor(short_form: dict, season_stats: dict) -> float:

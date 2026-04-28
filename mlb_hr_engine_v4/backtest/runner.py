@@ -126,10 +126,13 @@ def _score_player(r: dict, date_str: str, batter_data: dict, pitcher_data: dict)
     # Platoon factor
     plat_factor = prob.platoon_factor(splits, pitcher_hand, batter_side, season_pa)
 
-    # Batter-pitcher interaction: elite power hitter vs hittable pitcher synergy
+    # Batter-pitcher interaction: elite power hitter vs hittable pitcher synergy.
+    # Uses pit_factor (full combined signal) instead of sc_pit_fac alone — sc_pit_fac
+    # is already embedded in pit_factor at 40% weight, so using it directly double-counted
+    # the Statcast signal. Coefficient reduced 0.35→0.20 to match reduced amplitude.
     batter_excess  = max(0.0, power_mult - 1.0)
-    pitcher_excess = max(0.0, sc_pit_fac - 1.0)
-    interaction    = batter_excess * pitcher_excess * 0.35
+    pitcher_excess = max(0.0, pit_factor - 1.0)
+    interaction    = batter_excess * pitcher_excess * 0.20
 
     hr_rate    = hr_rate * streak_fac * k_fac * early_supp * (1.0 + interaction)
 

@@ -132,11 +132,12 @@ def _build_player_profile(
     plat_factor = prob.platoon_factor(splits, pitcher_hand, batter_side, season_pa)
 
     # Stage 6: batter × pitcher interaction term (non-additive matchup synergy).
-    # When an elite power hitter (high Statcast) faces a hittable pitcher (high
-    # contact quality allowed), the combined effect exceeds simple multiplication.
+    # Uses pit_factor (full combined signal) instead of sc_pit_fac alone — sc_pit_fac
+    # is already embedded in pit_factor at 40% weight, so using it directly double-counted
+    # the Statcast signal. Coefficient reduced 0.35→0.20 to match reduced amplitude.
     batter_excess  = max(0.0, power_mult - 1.0)
-    pitcher_excess = max(0.0, sc_pit_fac - 1.0)
-    interaction    = batter_excess * pitcher_excess * 0.35
+    pitcher_excess = max(0.0, pit_factor - 1.0)
+    interaction    = batter_excess * pitcher_excess * 0.20
 
     early_supp    = prob.early_season_suppressor(season_pa, sc_source)
     adjusted_rate = hr_rate * streak_fac * k_fac * early_supp * (1.0 + interaction)
