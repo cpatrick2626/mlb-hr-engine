@@ -94,42 +94,126 @@ def update_yesterday() -> dict:
     Returns dict with keys: settled (int), not_found (int), date (str).
     """
     yesterday = (date.today() - timedelta(days=1)).isoformat()
-    pending = _load_pending(yesterday)
-    if not pending:
-        return {"settled": 0, "not_found": 0, "date": yesterday}
+    return _settle_date(yesterday)
 
+
+def fetch_yesterday_outcomes(model_version: str = "v4") -> dict[str, bool]:
+    """
+    Fetch HR outcomes for yesterday's picks. Returns {player_name: hit_hr}.
+    Called by main.py at startup to auto-settle without requiring Streamlit.
+    """
+    yesterday = (date.today() - timedelta(days=1)).isoformat()
+    pending = _load_pending(yesterday)
     outcomes: dict[str, bool] = {}
     for pick in pending:
-        pid = pick.get("player_id") or pick.get("playerid") or ""
+        pid = pick.get("player_id") or ""
         if not pid:
             continue
         result = _mlb_hr_result(int(pid), yesterday)
+        if result is not None:
+            outcomes[pick["player_name"]] = result
+    return outcomes
+
+
+def update_results(date_str: str, outcomes: dict[str, bool], model_version: str = "v4") -> int:
+    """
+    Write settled outcomes to results.csv. Returns count of rows written.
+    Called by main.py after fetch_yesterday_outcomes().
+    """
+    pending = _load_pending(date_str)
+    result_rows = []
+    settled = 0
+    for pick in pending:
+        name     = pick["player_name"]
+        hit_hr   = outcomes.get(name)
+        odds_raw = pick.get("american_odds", "") or ""
+        bet      = float(pick.get("bet_dollars") or 0)
+        try:
+            odds = int(float(odds_raw))
+        except (ValueError, TypeError):
+            odds = 0
+
+        # Only write definitive outcomes — skip unknowns (DNP/API failure/postponement)
+        # so the pick stays in picks_log as pending and can be retried next run.
+        if hit_hr is None:
+            continue
+
+        result_rows.append({
+            **pick,
+            "hr_result":   1 if hit_hr else 0,
+            "profit_loss": _compute_pl(bet, odds, hit_hr),
+            "notes":       "",
+        })
+        settled += 1
+
+    if result_rows:
+        if _sheets.available():
+            _sheets.append_rows("results", RESULTS_FIELDS, result_rows)
+        else:
+            _append_csv(RESULTS_PATH, RESULTS_FIELDS, result_rows)
+    return settled
+
+
+def settle_all_unsettled() -> dict:
+    """
+    Backfill outcomes for all past dates that have unsettled picks.
+    Returns {date: settled_count}. Safe to call repeatedly (skips already-settled dates).
+    """
+    if not LOG_PATH.exists():
+        return {}
+
+    with open(LOG_PATH, newline="", encoding="utf-8") as f:
+        all_picks = list(csv.DictReader(f))
+
+    today = date.today().isoformat()
+    past_dates = sorted({r.get("date", "") for r in all_picks if r.get("date", "") < today})
+
+    summary = {}
+    for d in past_dates:
+        result = _settle_date(d)
+        if result["settled"] + result["not_found"] > 0:
+            summary[d] = result["settled"]
+    return summary
+
+
+def _settle_date(date_str: str) -> dict:
+    """Settle all pending picks for a given date. Returns settlement stats."""
+    pending = _load_pending(date_str)
+    if not pending:
+        return {"settled": 0, "not_found": 0, "date": date_str}
+
+    outcomes: dict[str, bool] = {}
+    for pick in pending:
+        pid = pick.get("player_id") or ""
+        if not pid:
+            continue
+        result = _mlb_hr_result(int(pid), date_str)
         if result is not None:
             outcomes[pick["player_name"]] = result
 
     settled = 0
     result_rows = []
     for pick in pending:
-        name = pick["player_name"]
-        hit_hr = outcomes.get(name)
-        odds = int(pick.get("american_odds") or 0)
-        bet  = float(pick.get("bet_dollars") or 0)
+        name     = pick["player_name"]
+        hit_hr   = outcomes.get(name)
+        odds_raw = pick.get("american_odds", "") or ""
+        bet      = float(pick.get("bet_dollars") or 0)
+        try:
+            odds = int(float(odds_raw))
+        except (ValueError, TypeError):
+            odds = 0
 
+        # Only write definitive outcomes — skip unknowns so they stay retryable.
         if hit_hr is None:
-            pl = ""
-        elif hit_hr:
-            pl = round(bet * odds / 100, 2) if odds > 0 else round(bet * 100 / abs(odds), 2)
-            settled += 1
-        else:
-            pl = round(-bet, 2)
-            settled += 1
+            continue
 
         result_rows.append({
             **pick,
-            "hr_result":   1 if hit_hr else (0 if hit_hr is not None else ""),
-            "profit_loss": pl,
+            "hr_result":   1 if hit_hr else 0,
+            "profit_loss": _compute_pl(bet, odds, hit_hr),
             "notes":       "",
         })
+        settled += 1
 
     if result_rows:
         if _sheets.available():
@@ -137,7 +221,7 @@ def update_yesterday() -> dict:
         else:
             _append_csv(RESULTS_PATH, RESULTS_FIELDS, result_rows)
 
-    return {"settled": settled, "not_found": len(pending) - settled, "date": yesterday}
+    return {"settled": settled, "not_found": len(pending) - settled, "date": date_str}
 
 
 def pnl_summary() -> dict:
@@ -277,7 +361,16 @@ def _mlb_hr_result(player_id: int, date_str: str) -> Optional[bool]:
         for split in splits:
             if split.get("date") == date_str:
                 return int(split.get("stat", {}).get("homeRuns", 0)) > 0
-        return False
+        # Date not in game log — player may not have played (DNP/scratch/postponement).
+        # Return None so the pick stays pending and is retried rather than settled as a loss.
+        return None
     except Exception:
         return None
+
+
+def _compute_pl(bet: float, odds: int, hit_hr: bool) -> float:
+    """Calculate profit/loss for a settled pick."""
+    if hit_hr:
+        return round(bet * odds / 100, 2) if odds > 0 else round(bet * 100 / abs(odds), 2)
+    return round(-bet, 2)
 
