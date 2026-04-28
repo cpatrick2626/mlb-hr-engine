@@ -374,6 +374,15 @@ def get_data():
                 except Exception:
                     pass
 
+                # Store pitcher map at load time for change detection
+                try:
+                    from clients.mlb_stats import get_today_pitcher_map
+                    pm = get_today_pitcher_map()
+                    st.session_state["pitcher_map_at_load"] = pm
+                    st.session_state.pop("pitcher_changes", None)
+                except Exception:
+                    pass
+
             except Exception as e:
                 _status.update(label="❌ Load failed — see error below", state="error")
                 st.error(f"Failed to load game data: {e}")
@@ -650,9 +659,13 @@ def _apply_ui_filters(players: list, min_ev: float, min_edge: float) -> list:
     return _rank_picks(result)
 
 
-def _render_qualified_table(ranked: list, scale: float, min_ev: float, min_edge: float):
+def _render_qualified_table(
+    ranked: list, scale: float, min_ev: float, min_edge: float,
+    steam_names: set = None, key_suffix: str = "",
+):
     """Render the qualified picks dataframe with range bar, legend, and column configs."""
     import math
+    import io
 
     def safe_val(v, default="--"):
         if v is None:
@@ -669,6 +682,7 @@ def _render_qualified_table(ranked: list, scale: float, min_ev: float, min_edge:
         pfx = "+" if sign else ""
         return f"{lo:{pfx+fmt}}{suffix} → {hi:{pfx+fmt}}{suffix}"
 
+    _pitcher_changes = st.session_state.get("pitcher_changes", {})
     rows = []
     for p in ranked:
         ev       = p.get("ev_pct", 0)
@@ -679,14 +693,22 @@ def _render_qualified_table(ranked: list, scale: float, min_ev: float, min_edge:
         plat_fac = p.get("platoon_factor", 1.0)
         spot     = p.get("lineup_spot")
         bet      = p.get("bet_dollars", 0) * scale
+        name     = p.get("player_name", "")
+        team     = p.get("team", "")
+        is_steam = steam_names and name in steam_names
+        pc       = _pitcher_changes.get(team)
+        pitcher_cell = (
+            f"⚠️ NOW: {pc['new']}" if pc
+            else _pitcher_label(p.get("pitcher_name", "TBD"), pit_fac, plat_fac)
+        )
         rows.append({
-            "Rating":  _pick_rating(ev, edge, model_p, conf),
+            "Rating":  ("📈 " if is_steam else "") + _pick_rating(ev, edge, model_p, conf),
             "#":       str(p.get("rank", "")),
-            "Player":  p.get("player_name", ""),
-            "Team":    p.get("team", ""),
+            "Player":  name,
+            "Team":    team,
             "Opp":     p.get("opponent", ""),
             "Spot":    _spot_label(spot, plat_fac),
-            "Pitcher": _pitcher_label(p.get("pitcher_name", "TBD"), pit_fac, plat_fac),
+            "Pitcher": pitcher_cell,
             "Odds":    _fmt_american(p.get("best_american")),
             "Model%":  _stat_badge("Model%", f"{model_p*100:.1f}%"),
             "Mkt%":    f"{p.get('market_no_vig_prob',0)*100:.1f}%",
@@ -813,6 +835,20 @@ def _render_qualified_table(ranked: list, scale: float, min_ev: float, min_edge:
         },
     )
 
+    if rows:
+        csv_buf = io.StringIO()
+        import csv as _csv
+        writer = _csv.DictWriter(csv_buf, fieldnames=list(rows[0].keys()))
+        writer.writeheader()
+        writer.writerows(rows)
+        st.download_button(
+            label="⬇️ Export CSV",
+            data=csv_buf.getvalue(),
+            file_name=f"picks_{_dt.date.today().isoformat()}{('_' + key_suffix) if key_suffix else ''}.csv",
+            mime="text/csv",
+            key=f"dl_csv_{key_suffix or 'default'}",
+        )
+
 
 # TAB 1 — TODAY'S PICKS
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
@@ -863,6 +899,17 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
     _n_prime = len([p for p in all_by_model if p.get("model_prob", 0) >= PRIME_FLOOR])
     _n_watch = len([p for p in all_by_model if p.get("model_prob", 0) < PRIME_FLOOR])
 
+    # Compute steam names: players whose implied prob shortened ≥2pp since first snapshot
+    _steam_names: set = set()
+    try:
+        _lm_today = lm_tracker.get_movement_today()
+        for _lm_name, _lm_snaps in _lm_today.items():
+            _lm_summ = lm_tracker.movement_summary(_lm_snaps)
+            if _lm_summ and _lm_summ.get("move_pct", 0) >= 2.0:
+                _steam_names.add(_lm_name)
+    except Exception:
+        pass
+
     sub1, sub2, sub3, sub4 = st.tabs([
         f"⚡ Qualified Picks ({len(ranked)})",
         f"📊 All Players ({len(all_by_model)})",
@@ -902,7 +949,8 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
                         f"Set Min EV ≤ {best_ev:.1f}% and Min Edge ≤ {best_edge:.1f}% to see the top pick."
                     )
             else:
-                _render_qualified_table(ranked, scale, min_ev, min_edge)
+                _render_qualified_table(ranked, scale, min_ev, min_edge,
+                                        steam_names=_steam_names, key_suffix="slate")
 
         with _confirmed_tab:
             if not roster_confirmed:
@@ -912,7 +960,8 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
                     "Players without a confirmed lineup spot receive an 18% model discount."
                 )
             else:
-                _render_qualified_table(roster_confirmed, scale, min_ev, min_edge)
+                _render_qualified_table(roster_confirmed, scale, min_ev, min_edge,
+                                        steam_names=_steam_names, key_suffix="confirmed")
 
         # ── Line Movement tab ─────────────────────────────────────────────────
         with _movement_tab:
@@ -1596,6 +1645,91 @@ def tab_performance():
     except Exception:
         pass
 
+    # ── Bankroll equity curve ─────────────────────────────────────────────────
+    try:
+        _eq_picks   = pnl_tracker.get_picks_log()
+        _eq_results = {r["player_name"] + "|" + r["date"]: r
+                       for r in pnl_tracker._load_results()}
+        if _eq_picks and _eq_results:
+            _eq_rows = []
+            for pick in _eq_picks:
+                key = pick.get("player_name", "") + "|" + pick.get("date", "")
+                res = _eq_results.get(key)
+                if res is None:
+                    continue
+                pl_str = res.get("profit_loss", "")
+                if pl_str in ("", None):
+                    continue
+                try:
+                    pl = float(pl_str)
+                except (ValueError, TypeError):
+                    continue
+                _eq_rows.append({"date": pick.get("date", ""), "pl": pl})
+            if _eq_rows:
+                _eq_rows.sort(key=lambda r: r["date"])
+                cumulative = 0.0
+                eq_chart_rows = []
+                for r in _eq_rows:
+                    cumulative += r["pl"]
+                    eq_chart_rows.append({"Date": r["date"], "Cumulative P&L ($)": round(cumulative, 2)})
+                st.markdown('<div class="section-header">📈 Bankroll Equity Curve</div>',
+                            unsafe_allow_html=True)
+                st.line_chart(pd.DataFrame(eq_chart_rows).set_index("Date"), height=220)
+                st.caption("Running cumulative P&L across all settled picks, sorted by date.")
+    except Exception:
+        pass
+
+    # ── Calibration curve ─────────────────────────────────────────────────────
+    try:
+        _cal_picks   = pnl_tracker.get_picks_log()
+        _cal_results = {r["player_name"] + "|" + r["date"]: r
+                        for r in pnl_tracker._load_results()}
+        if _cal_picks and _cal_results:
+            BUCKETS = [(0, 5), (5, 10), (10, 15), (15, 20), (20, 25), (25, 30), (30, 100)]
+            bucket_data: dict[str, list] = {f"{lo}-{hi}%": [] for lo, hi in BUCKETS}
+            for pick in _cal_picks:
+                key = pick.get("player_name", "") + "|" + pick.get("date", "")
+                res = _cal_results.get(key)
+                if res is None:
+                    continue
+                hr_res = res.get("hr_result", "")
+                if hr_res not in ("1", "0", 1, 0):
+                    continue
+                try:
+                    model_pct = float(pick.get("model_prob_pct", 0) or pick.get("model_prob", 0))
+                    if model_pct > 1:
+                        model_pct = model_pct  # already in percent
+                    else:
+                        model_pct = model_pct * 100
+                    hit = int(hr_res)
+                except (ValueError, TypeError):
+                    continue
+                for lo, hi in BUCKETS:
+                    if lo <= model_pct < hi:
+                        bucket_data[f"{lo}-{hi}%"].append((model_pct, hit))
+                        break
+            cal_rows = []
+            for label, items in bucket_data.items():
+                if len(items) < 3:
+                    continue
+                avg_pred = sum(m for m, _ in items) / len(items)
+                avg_act  = sum(h for _, h in items) / len(items) * 100
+                cal_rows.append({"Bucket": label, "Avg Model%": round(avg_pred, 1),
+                                 "Actual HR%": round(avg_act, 1), "N": len(items)})
+            if cal_rows:
+                st.markdown('<div class="section-header">🎯 Model Calibration</div>',
+                            unsafe_allow_html=True)
+                st.caption(
+                    "Each row: average model probability vs actual HR rate for picks in that probability bucket. "
+                    "Well-calibrated = Avg Model% ≈ Actual HR%. "
+                    "Consistent over-prediction means the model is too aggressive; under-prediction means it's conservative."
+                )
+                cal_df = pd.DataFrame(cal_rows)
+                st.dataframe(cal_df, hide_index=True, width="stretch")
+                st.bar_chart(cal_df.set_index("Bucket")[["Avg Model%", "Actual HR%"]], height=220)
+    except Exception:
+        pass
+
     st.markdown('<div class="section-header">📋 Picks Log</div>', unsafe_allow_html=True)
     try:
         rows = pnl_tracker.get_picks_log()
@@ -1766,6 +1900,27 @@ def main():
                                     st.session_state["scratched_ids"] = set()
                         except Exception as ex:
                             st.warning(f"Lineup check failed: {ex}")
+                # ── Pitcher change check ───────────────────────────────────
+                if st.button("🔄 Check Pitcher Changes", width='stretch',
+                             key="check_pitchers"):
+                    with st.spinner("Checking starters…"):
+                        try:
+                            from clients.mlb_stats import get_today_pitcher_map
+                            old_map = st.session_state.get("pitcher_map_at_load", {})
+                            new_map = get_today_pitcher_map()
+                            changes = {}
+                            for team, info in new_map.items():
+                                old_info = old_map.get(team, {})
+                                if old_info.get("id") and info.get("id") and old_info["id"] != info["id"]:
+                                    changes[team] = {"old": old_info.get("name", "?"), "new": info.get("name", "?")}
+                            st.session_state["pitcher_changes"] = changes
+                            if changes:
+                                for team, ch in changes.items():
+                                    st.error(f"⚠️ {team}: {ch['old']} → {ch['new']}")
+                            else:
+                                st.success("No pitcher changes detected ✓")
+                        except Exception as ex:
+                            st.warning(f"Pitcher check failed: {ex}")
                 if st.button("📋 Log to Picks Tracker", width='stretch',
                              key="log_fd_slip"):
                     slip_players = [_slip_map[s] for s in _selected]

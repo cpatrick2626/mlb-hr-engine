@@ -78,6 +78,26 @@ def _get(path: str, params: dict = None) -> dict:
             time.sleep(2 ** attempt)  # 1s, then 2s
 
 
+def get_today_pitcher_map(target_date: Optional[str] = None) -> dict[str, dict]:
+    """
+    Return {batting_team_abbr: {"id": pitcher_id, "name": pitcher_name}} for today.
+    Each batting team is mapped to the opposing pitcher they face.
+    Used to detect probable-pitcher changes after the model first loaded.
+    """
+    games = get_today_schedule(target_date)
+    pitcher_map: dict[str, dict] = {}
+    for game in games:
+        home = game.get("home_team", "")
+        away = game.get("away_team", "")
+        hp = game.get("home_pitcher", {})   # home pitcher → away batters face him
+        ap = game.get("away_pitcher", {})   # away pitcher → home batters face him
+        if ap and home:
+            pitcher_map[home] = {"id": ap.get("id"), "name": ap.get("name", "TBD")}
+        if hp and away:
+            pitcher_map[away] = {"id": hp.get("id"), "name": hp.get("name", "TBD")}
+    return pitcher_map
+
+
 def get_confirmed_lineup_player_ids(target_date: Optional[str] = None) -> set[int]:
     """Return set of player IDs currently confirmed in any posted lineup for target_date.
     Used for late-scratch detection: if a slip player's ID is absent, they may be scratched.
