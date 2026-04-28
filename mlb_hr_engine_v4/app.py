@@ -644,6 +644,169 @@ def _apply_ui_filters(players: list, min_ev: float, min_edge: float) -> list:
     return _rank_picks(result)
 
 
+def _render_qualified_table(ranked: list, scale: float, min_ev: float, min_edge: float):
+    """Render the qualified picks dataframe with range bar, legend, and column configs."""
+    import math
+
+    def safe_val(v, default="--"):
+        if v is None:
+            return default
+        if isinstance(v, float) and (math.isnan(v) or math.isinf(v)):
+            return default
+        return v
+
+    def _rng(vals, fmt=".1f", suffix="", sign=False):
+        clean = [v for v in vals if v is not None]
+        if not clean:
+            return "N/A"
+        lo, hi = min(clean), max(clean)
+        pfx = "+" if sign else ""
+        return f"{lo:{pfx+fmt}}{suffix} → {hi:{pfx+fmt}}{suffix}"
+
+    rows = []
+    for p in ranked:
+        ev       = p.get("ev_pct", 0)
+        edge     = p.get("edge_pct", 0)
+        model_p  = p.get("model_prob", 0)
+        conf     = p.get("confidence", 0)
+        pit_fac  = p.get("pitcher_factor", 1.0)
+        plat_fac = p.get("platoon_factor", 1.0)
+        spot     = p.get("lineup_spot")
+        bet      = p.get("bet_dollars", 0) * scale
+        rows.append({
+            "Rating":  _pick_rating(ev, edge, model_p, conf),
+            "#":       str(p.get("rank", "")),
+            "Player":  p.get("player_name", ""),
+            "Team":    p.get("team", ""),
+            "Opp":     p.get("opponent", ""),
+            "Spot":    _spot_label(spot, plat_fac),
+            "Pitcher": _pitcher_label(p.get("pitcher_name", "TBD"), pit_fac, plat_fac),
+            "Odds":    _fmt_american(p.get("best_american")),
+            "Model%":  _stat_badge("Model%", f"{model_p*100:.1f}%"),
+            "Mkt%":    f"{p.get('market_no_vig_prob',0)*100:.1f}%",
+            "Edge":    _stat_badge("Edge", f"{edge:+.1f}%"),
+            "EV%":     _stat_badge("EV%", f"{ev:+.1f}%"),
+            "Bet $":   f"${bet:.0f}",
+            "Conf":    _stat_badge("Conf", f"{conf:.0f}"),
+            "Brl%":    _stat_badge("Brl%", str(safe_val(p.get("barrel_pct"), "--"))),
+            "SwSp%":   _stat_badge("SwSp%", str(safe_val(p.get("sweet_spot_pct"), "--"))),
+            "EV mph":  _stat_badge("EV mph", str(safe_val(p.get("exit_velo"), "--"))),
+            "FB%":     _stat_badge("FB%", str(safe_val(p.get("fb_pct"), "--"))),
+            "GB%":     _stat_badge("GB%", str(safe_val(p.get("gb_pct"), "--"))),
+            "Pull%":   str(safe_val(p.get("pull_pct"), "--")),
+            "Score":   f"{p.get('score',0):.1f}",
+        })
+
+    evs    = [p.get("ev_pct", 0) for p in ranked]
+    edges  = [p.get("edge_pct", 0) for p in ranked]
+    models = [p.get("model_prob", 0) * 100 for p in ranked]
+    mkts   = [p.get("market_no_vig_prob", 0) * 100 for p in ranked]
+    bets   = [p.get("bet_dollars", 0) * scale for p in ranked]
+    confs  = [p.get("confidence", 0) for p in ranked]
+    scores = [p.get("score", 0) for p in ranked]
+
+    range_items = [
+        ("Model%", _rng(models, suffix="%")),
+        ("Mkt%",   _rng(mkts, suffix="%")),
+        ("Edge",   _rng(edges, sign=True, suffix="%")),
+        ("EV%",    _rng(evs, sign=True, suffix="%")),
+        ("Bet $",  f"${min(bets):.0f} → ${max(bets):.0f}" if bets else "N/A"),
+        ("Conf",   _rng(confs, fmt=".0f")),
+    ]
+    range_html = " &nbsp;|&nbsp; ".join(
+        f"<span style='color:#888888'>{k}:</span> "
+        f"<span style='color:#f0f0f0; font-weight:600'>{v}</span>"
+        for k, v in range_items
+    )
+    st.markdown(
+        f"<div class='range-bar'>📊 Today's ranges — {range_html}</div>",
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        "<div style='font-size:11px; color:#888888; margin-bottom:8px;'>"
+        "<b style='color:#f0f0f0'>Pitcher:</b> "
+        "🔴 Elite suppressor &nbsp; 🟠 Tough &nbsp; ⬜ Neutral &nbsp; 🟡 Favorable &nbsp; 🟢 HR target &nbsp; ⚡ Platoon edge"
+        "&nbsp;&nbsp;&nbsp;<b style='color:#f0f0f0'>Spot:</b> "
+        "🟢 Premium (1-4) &nbsp; 🟡 Mid (5-6) &nbsp; 🔴 Bottom (7-9)"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+    ev_rng    = _rng(evs, sign=True, suffix="%")
+    edge_rng  = _rng(edges, sign=True, suffix="%")
+    model_rng = _rng(models, suffix="%")
+    mkt_rng   = _rng(mkts, suffix="%")
+    bet_rng   = f"${min(bets):.0f} → ${max(bets):.0f}" if bets else "N/A"
+    conf_rng  = _rng(confs, fmt=".0f")
+    score_rng = _rng(scores, fmt=".1f")
+
+    session_br = st.session_state.get("bankroll_override", config.BANKROLL)
+
+    df = pd.DataFrame(rows)
+    df = df.fillna("--")
+    df = df.replace([np.nan, np.inf, -np.inf, float('inf'), -float('inf')], "--")
+
+    st.dataframe(
+        df,
+        width='stretch',
+        hide_index=True,
+        column_config={
+            "Rating":  st.column_config.TextColumn("Rating",
+                help=(
+                    "Pick quality tier based on EV%, Edge%, and model Confidence.\n\n"
+                    "🌟 ONCE IN A LIFETIME — EV ≥30% + Edge ≥12% + Conf ≥65. "
+                    "Rare: the model sees a large, confident mispricing vs the market. "
+                    "Expect 1–3 per day at most.\n\n"
+                    "🔥 STRONG EDGE — EV ≥18% + Edge ≥7% + Conf ≥50. "
+                    "Clear disagreement between model and market with solid confidence. "
+                    "Core betting targets most days.\n\n"
+                    "✅ SOLID PLAY — EV ≥5% + Edge ≥2%. "
+                    "Positive expected value with a real model edge — worth playing "
+                    "at reasonable stakes. The bulk of qualified picks land here.\n\n"
+                    "📊 MARGINAL — Passes filters but edge or EV is thin. "
+                    "Skip unless odds improve or you have strong conviction."
+                )),
+            "#":       st.column_config.TextColumn("#",
+                help="Composite rank: 40% EV% + 35% Edge% + 25% Confidence"),
+            "Player":  st.column_config.TextColumn("Player"),
+            "Team":    st.column_config.TextColumn("Team"),
+            "Opp":     st.column_config.TextColumn("Opp"),
+            "Spot":    st.column_config.TextColumn("Spot",
+                help="Lineup spot. 🟢=premium PA (1-4), 🟡=mid (5-6), 🔴=bottom (7-9). ⚡=platoon edge vs this pitcher."),
+            "Pitcher": st.column_config.TextColumn("Pitcher",
+                help="🔴=elite suppressor, 🟠=tough, ⬜=neutral, 🟡=favorable, 🟢=HR target. ⚡=batter has platoon edge."),
+            "Odds":    st.column_config.TextColumn("Odds",
+                help="Best American odds across all books for HR (0.5+)"),
+            "Model%":  st.column_config.TextColumn("Model%",
+                help=f"Poisson HR probability — Statcast + park + pitcher + weather + platoon.\nRange: {model_rng}"),
+            "Mkt%":    st.column_config.TextColumn("Mkt%",
+                help=f"Market no-vig implied probability.\nRange: {mkt_rng}"),
+            "Edge":    st.column_config.TextColumn("Edge",
+                help=f"Model% − Market%. Active threshold +{min_edge:.1f}%.\nRange: {edge_rng}"),
+            "EV%":     st.column_config.TextColumn("EV%",
+                help=f"Expected value per $100 wagered. Active threshold +{min_ev:.0f}%.\nRange: {ev_rng}"),
+            "Bet $":   st.column_config.TextColumn("Bet $",
+                help=f"Quarter-Kelly sizing on ${session_br:,.0f} bankroll (5% cap = ${session_br*config.MAX_BET_PCT:.0f} max).\nRange: {bet_rng}"),
+            "Conf":    st.column_config.TextColumn("Conf",
+                help=f"Confidence 0–100: sample size + Statcast availability + model/market agreement.\nRange: {conf_rng}"),
+            "Brl%":    st.column_config.TextColumn("Brl%",
+                help="Statcast barrel rate. League avg ~5.2%. Higher = more true HR power."),
+            "SwSp%":   st.column_config.TextColumn("SwSp%",
+                help="Sweet spot rate (LA 8-32°). League avg ~34%. The exact HR angle band."),
+            "EV mph":  st.column_config.TextColumn("EV mph",
+                help="Average exit velocity. League avg ~88.9 mph."),
+            "FB%":     st.column_config.TextColumn("FB%",
+                help="Fly ball rate. League avg ~36%. Higher = more HR opportunities."),
+            "GB%":     st.column_config.TextColumn("GB%",
+                help="Ground ball rate. League avg ~43%. Higher = fewer HR chances."),
+            "Pull%":   st.column_config.TextColumn("Pull%",
+                help="Pull rate. League avg ~40%. Pull hitters access the short porch."),
+            "Score":   st.column_config.TextColumn("Score",
+                help=f"Ranking score = 40% EV% + 35% Edge% + 25% Conf.\nRange: {score_rng}"),
+        },
+    )
+
 
 # TAB 1 — TODAY'S PICKS
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
@@ -703,191 +866,46 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
 
     # ── TAB: Qualified Picks ─────────────────────────────────────────────────
     with sub1:
-        if not ranked:
-            with_odds = [p for p in all_players if p.get("best_american")]
-            if not with_odds:
-                st.warning("No market odds available — sportsbooks stop offering HR props once games are in progress.")
-                st.info(f"Pipeline found {len(all_players)} players. Run the app before first pitch to get live odds.")
+        roster_confirmed = [p for p in ranked if p.get("lineup_spot") is not None]
+        _slate_tab, _confirmed_tab = st.tabs([
+            f"📋 Today's Slate ({len(ranked)})",
+            f"✅ Roster Confirmed ({len(roster_confirmed)})",
+        ])
+
+        with _slate_tab:
+            if not ranked:
+                with_odds = [p for p in all_players if p.get("best_american")]
+                if not with_odds:
+                    st.warning("No market odds available — sportsbooks stop offering HR props once games are in progress.")
+                    st.info(f"Pipeline found {len(all_players)} players. Run the app before first pitch to get live odds.")
+                else:
+                    evs   = sorted((p.get("ev_pct", -999) for p in with_odds), reverse=True)
+                    edges = sorted((p.get("edge_pct", -999) for p in with_odds), reverse=True)
+                    best_ev   = evs[0]   if evs   else -999
+                    best_edge = edges[0] if edges else -999
+                    st.warning(
+                        f"No picks pass current filters (EV ≥ {min_ev:.1f}%, Edge ≥ {min_edge:.1f}%). "
+                        f"Slide **both sliders left** in the sidebar to see picks."
+                    )
+                    st.info(
+                        f"Pool: **{len(all_players)}** players total | "
+                        f"**{len(with_odds)}** have odds | "
+                        f"Best EV: **{best_ev:+.1f}%** | Best Edge: **{best_edge:+.1f}%**\n\n"
+                        f"Set Min EV ≤ {best_ev:.1f}% and Min Edge ≤ {best_edge:.1f}% to see the top pick."
+                    )
             else:
-                evs   = sorted((p.get("ev_pct", -999) for p in with_odds), reverse=True)
-                edges = sorted((p.get("edge_pct", -999) for p in with_odds), reverse=True)
-                best_ev   = evs[0]   if evs   else -999
-                best_edge = edges[0] if edges else -999
-                st.warning(
-                    f"No picks pass current filters (EV ≥ {min_ev:.1f}%, Edge ≥ {min_edge:.1f}%). "
-                    f"Slide **both sliders left** in the sidebar to see picks."
-                )
+                _render_qualified_table(ranked, scale, min_ev, min_edge)
+
+        with _confirmed_tab:
+            if not roster_confirmed:
                 st.info(
-                    f"Pool: **{len(all_players)}** players total | "
-                    f"**{len(with_odds)}** have odds | "
-                    f"Best EV: **{best_ev:+.1f}%** | Best Edge: **{best_edge:+.1f}%**\n\n"
-                    f"Set Min EV ≤ {best_ev:.1f}% and Min Edge ≤ {best_edge:.1f}% to see the top pick."
+                    "No roster-confirmed picks pass current filters yet.  \n"
+                    "Lineups typically post 1–2 hours before first pitch. "
+                    "Players without a confirmed lineup spot receive an 18% model discount."
                 )
-        else:
-            rows = []
-            for p in ranked:
-                ev        = p.get("ev_pct", 0)
-                edge      = p.get("edge_pct", 0)
-                model_p   = p.get("model_prob", 0)
-                conf      = p.get("confidence", 0)
-                pit_fac   = p.get("pitcher_factor", 1.0)
-                plat_fac  = p.get("platoon_factor", 1.0)
-                spot      = p.get("lineup_spot")
-                bet       = p.get("bet_dollars", 0) * scale
-    
-                # Helper to safely convert values, handling NaN/None
-                def safe_val(v, default="--"):
-                    if v is None:
-                        return default
-                    import math
-                    if isinstance(v, float) and (math.isnan(v) or math.isinf(v)):
-                        return default
-                    return v
-    
-                rows.append({
-                    "Rating":   _pick_rating(ev, edge, model_p, conf),
-                    "#":        str(p.get("rank", "")),
-                    "Player":   p.get("player_name", ""),
-                    "Team":     p.get("team", ""),
-                    "Opp":      p.get("opponent", ""),
-                    "Spot":     _spot_label(spot, plat_fac),
-                    "Pitcher":  _pitcher_label(p.get("pitcher_name", "TBD"), pit_fac, plat_fac),
-                    "Odds":     _fmt_american(p.get("best_american")),
-                    "Model%":   _stat_badge("Model%", f"{model_p*100:.1f}%"),
-                    "Mkt%":     f"{p.get('market_no_vig_prob',0)*100:.1f}%",
-                    "Edge":     _stat_badge("Edge", f"{edge:+.1f}%"),
-                    "EV%":      _stat_badge("EV%", f"{ev:+.1f}%"),
-                    "Bet $":    f"${bet:.0f}",
-                    "Conf":     _stat_badge("Conf", f"{conf:.0f}"),
-                    "Brl%":     _stat_badge("Brl%", str(safe_val(p.get("barrel_pct"), "--"))),
-                    "SwSp%":    _stat_badge("SwSp%", str(safe_val(p.get("sweet_spot_pct"), "--"))),
-                    "EV mph":   _stat_badge("EV mph", str(safe_val(p.get("exit_velo"), "--"))),
-                    "FB%":      _stat_badge("FB%", str(safe_val(p.get("fb_pct"), "--"))),
-                    "GB%":      _stat_badge("GB%", str(safe_val(p.get("gb_pct"), "--"))),
-                    "Pull%":    str(safe_val(p.get("pull_pct"), "--")),
-                    "Score":    f"{p.get('score',0):.1f}",
-                })
-    
-            # â"€â"€ Range stats bar â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-            def _rng(vals, fmt=".1f", suffix="", sign=False):
-                clean = [v for v in vals if v is not None]
-                if not clean:
-                    return "N/A"
-                lo, hi = min(clean), max(clean)
-                pfx = "+" if sign else ""
-                return f"{lo:{pfx+fmt}}{suffix} → {hi:{pfx+fmt}}{suffix}"
-    
-            evs    = [p.get("ev_pct", 0) for p in ranked]
-            edges  = [p.get("edge_pct", 0) for p in ranked]
-            models = [p.get("model_prob", 0) * 100 for p in ranked]
-            mkts   = [p.get("market_no_vig_prob", 0) * 100 for p in ranked]
-            bets   = [p.get("bet_dollars", 0) * scale for p in ranked]
-            confs  = [p.get("confidence", 0) for p in ranked]
-            scores = [p.get("score", 0) for p in ranked]
-    
-            range_items = [
-                ("Model%", _rng(models, suffix="%")),
-                ("Mkt%",   _rng(mkts, suffix="%")),
-                ("Edge",   _rng(edges, sign=True, suffix="%")),
-                ("EV%",    _rng(evs, sign=True, suffix="%")),
-                ("Bet $",  f"${min(bets):.0f} → ${max(bets):.0f}" if bets else "N/A"),
-                ("Conf",   _rng(confs, fmt=".0f")),
-            ]
-            range_html = " &nbsp;|&nbsp; ".join(
-                f"<span style='color:#888888'>{k}:</span> "
-                f"<span style='color:#f0f0f0; font-weight:600'>{v}</span>"
-                for k, v in range_items
-            )
-            st.markdown(
-                f"<div class='range-bar'>📊 Today's ranges — {range_html}</div>",
-                unsafe_allow_html=True,
-            )
-    
-            # â"€â"€ Legend â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-            st.markdown(
-                "<div style='font-size:11px; color:#888888; margin-bottom:8px;'>"
-                "<b style='color:#f0f0f0'>Pitcher:</b> "
-                "🔴 Elite suppressor &nbsp; 🟠 Tough &nbsp; ⬜ Neutral &nbsp; 🟡 Favorable &nbsp; 🟢 HR target &nbsp; ⚡ Platoon edge"
-                "&nbsp;&nbsp;&nbsp;<b style='color:#f0f0f0'>Spot:</b> "
-                "🟢 Premium (1-4) &nbsp; 🟡 Mid (5-6) &nbsp; 🔴 Bottom (7-9)"
-                "</div>",
-                unsafe_allow_html=True,
-            )
-    
-            ev_rng    = _rng(evs, sign=True, suffix="%")
-            edge_rng  = _rng(edges, sign=True, suffix="%")
-            model_rng = _rng(models, suffix="%")
-            mkt_rng   = _rng(mkts, suffix="%")
-            bet_rng   = f"${min(bets):.0f} → ${max(bets):.0f}" if bets else "N/A"
-            conf_rng  = _rng(confs, fmt=".0f")
-            score_rng = _rng(scores, fmt=".1f")
-    
-            session_br = st.session_state.get("bankroll_override", config.BANKROLL)
-    
-            # Replace NaN/None values before displaying
-            df = pd.DataFrame(rows)
-            df = df.fillna("--")  # Replace NaN and None with "--"
-            df = df.replace([np.nan, np.inf, -np.inf, float('inf'), -float('inf')], "--")  # Replace NaN/infinity values
-    
-            st.dataframe(
-                df,
-                width='stretch',
-                hide_index=True,
-                column_config={
-                    "Rating":  st.column_config.TextColumn("Rating",
-                        help=(
-                            "Pick quality tier based on EV%, Edge%, and model Confidence.\n\n"
-                            "🌟 ONCE IN A LIFETIME — EV ≥30% + Edge ≥12% + Conf ≥65. "
-                            "Rare: the model sees a large, confident mispricing vs the market. "
-                            "Expect 1–3 per day at most.\n\n"
-                            "🔥 STRONG EDGE — EV ≥18% + Edge ≥7% + Conf ≥50. "
-                            "Clear disagreement between model and market with solid confidence. "
-                            "Core betting targets most days.\n\n"
-                            "✅ SOLID PLAY — EV ≥5% + Edge ≥2%. "
-                            "Positive expected value with a real model edge — worth playing "
-                            "at reasonable stakes. The bulk of qualified picks land here.\n\n"
-                            "📊 MARGINAL — Passes filters but edge or EV is thin. "
-                            "Skip unless odds improve or you have strong conviction."
-                        )),
-                    "#":       st.column_config.TextColumn("#",
-                        help="Composite rank: 40% EV% + 35% Edge% + 25% Confidence"),
-                    "Player":  st.column_config.TextColumn("Player"),
-                    "Team":    st.column_config.TextColumn("Team"),
-                    "Opp":     st.column_config.TextColumn("Opp"),
-                    "Spot":    st.column_config.TextColumn("Spot",
-                        help="Lineup spot. 🟢=premium PA (1-4), 🟡=mid (5-6), 🔴=bottom (7-9). ⚡=platoon edge vs this pitcher."),
-                    "Pitcher": st.column_config.TextColumn("Pitcher",
-                        help="🔴=elite suppressor, 🟠=tough, ⬜=neutral, 🟡=favorable, 🟢=HR target. ⚡=batter has platoon edge."),
-                    "Odds":    st.column_config.TextColumn("Odds",
-                        help="Best American odds across all books for HR (0.5+)"),
-                    "Model%":  st.column_config.TextColumn("Model%",
-                        help=f"Poisson HR probability — Statcast + park + pitcher + weather + platoon.\nRange: {model_rng}"),
-                    "Mkt%":    st.column_config.TextColumn("Mkt%",
-                        help=f"Market no-vig implied probability.\nRange: {mkt_rng}"),
-                    "Edge":    st.column_config.TextColumn("Edge",
-                        help=f"Model% − Market%. Active threshold +{min_edge:.1f}%.\nRange: {edge_rng}"),
-                    "EV%":     st.column_config.TextColumn("EV%",
-                        help=f"Expected value per $100 wagered. Active threshold +{min_ev:.0f}%.\nRange: {ev_rng}"),
-                    "Bet $":   st.column_config.TextColumn("Bet $",
-                        help=f"Quarter-Kelly sizing on ${session_br:,.0f} bankroll (5% cap = ${session_br*config.MAX_BET_PCT:.0f} max).\nRange: {bet_rng}"),
-                    "Conf":    st.column_config.TextColumn("Conf",
-                        help=f"Confidence 0–100: sample size + Statcast availability + model/market agreement.\nRange: {conf_rng}"),
-                    "Brl%":    st.column_config.TextColumn("Brl%",
-                        help="Statcast barrel rate. League avg ~5.2%. Higher = more true HR power."),
-                    "SwSp%":   st.column_config.TextColumn("SwSp%",
-                        help="Sweet spot rate (LA 8-32°). League avg ~34%. The exact HR angle band."),
-                    "EV mph":  st.column_config.TextColumn("EV mph",
-                        help="Average exit velocity. League avg ~88.9 mph."),
-                    "FB%":     st.column_config.TextColumn("FB%",
-                        help="Fly ball rate. League avg ~36%. Higher = more HR opportunities."),
-                    "GB%":     st.column_config.TextColumn("GB%",
-                        help="Ground ball rate. League avg ~43%. Higher = fewer HR chances."),
-                    "Pull%":   st.column_config.TextColumn("Pull%",
-                        help="Pull rate. League avg ~40%. Pull hitters access the short porch."),
-                    "Score":   st.column_config.TextColumn("Score",
-                        help=f"Ranking score = 40% EV% + 35% Edge% + 25% Conf.\nRange: {score_rng}"),
-                },
-            )
+            else:
+                _render_qualified_table(roster_confirmed, scale, min_ev, min_edge)
+
     if all_by_model:
         PRIME_FLOOR = 0.15
 
@@ -1503,10 +1521,16 @@ def main():
         st.markdown("#### 🎰 FanDuel Slip")
         _slip_data = st.session_state.get("data")
         if _slip_data:
-            _odds_players = sorted(
-                [p for p in _slip_data.get("all_players", []) if p.get("best_american")],
-                key=lambda x: x.get("score", 0), reverse=True,
+            _fd_min_ev   = float(st.session_state.get("min_ev",   config.MIN_EV_PCT))
+            _fd_min_edge = float(st.session_state.get("min_edge", config.MIN_EDGE_PCT))
+            _odds_players = _apply_ui_filters(
+                _slip_data.get("all_players", []), _fd_min_ev, _fd_min_edge
             )
+            if not _odds_players:
+                _odds_players = sorted(
+                    [p for p in _slip_data.get("all_players", []) if p.get("best_american")],
+                    key=lambda x: x.get("score", 0), reverse=True,
+                )
 
             def _slip_label(p):
                 odds = p.get("fanduel_american") or p.get("best_american")
