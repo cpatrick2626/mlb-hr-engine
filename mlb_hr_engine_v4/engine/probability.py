@@ -428,9 +428,11 @@ def confidence_score(
     _SC_BONUS      = {"current": 8.0, "blended": 5.0, "prior": 3.0}
     statcast_bonus = _SC_BONUS.get(statcast_source, 8.0 if has_statcast else 0.0)
 
-    # Threshold bonuses (from the weighted factor list)
-    barrel_bonus  = 5.0 if barrel_rate > 0.12 else 0.0          # Barrel > 12%
-    pitcher_bonus = 4.0 if pitcher_hr9 > 1.4  else 0.0          # Pitcher HR/9 > 1.4
+    # Threshold bonuses — tied to league constants so they adapt when config is refreshed.
+    # Barrel: 2× league avg (~11% at 2026 avg of 5.5%) captures elite power-contact tier.
+    # Pitcher: 1.25× league avg HR/9 (~1.36 at 2026 avg of 1.09) captures notably hittable tier.
+    barrel_bonus  = 5.0 if barrel_rate > config.LEAGUE_AVG_BARREL_RATE * 2.0 else 0.0
+    pitcher_bonus = 4.0 if pitcher_hr9 > config.LEAGUE_AVG_HR9 * 1.25        else 0.0
 
     edge = abs(model_prob - market_prob)
     se   = math.sqrt(model_prob * (1 - model_prob) / max(season_pa, 1))

@@ -53,7 +53,7 @@ MIN_CURRENT_YEAR_PA = 50     # below this, blend current + prior year Statcast s
                              # 30 PA (~7 games) is too sparse for barrel%/EV to stabilize (~50 BF needed)
 
 # ── League averages (2026 MLB YTD Apr — sourced from Baseball Savant, revisit mid-May) ─
-LEAGUE_AVG_BARREL_RATE = 0.055    # brl_pa (barrel per PA); 2026 YTD (was 0.057 in 2025)
+LEAGUE_AVG_BARREL_RATE = config.LEAGUE_AVG_BARREL_RATE  # canonical source: config.py
 LEAGUE_AVG_EXIT_VELO   = 89.2     # mph average exit velocity (was 89.4)
 LEAGUE_AVG_HARD_HIT    = 0.401    # EV >95 mph rate (was 0.409)
 LEAGUE_AVG_XSLG        = 0.407    # expected SLG (est_slg column; was 0.410)
