@@ -157,8 +157,11 @@ def build_profile_parlays(
     Candidates drawn from top-20 profile scorers; ranked 60% by EV, 40% by profile fit.
     Returns a list of profile result dicts (one per profile).
     """
+    # Require positive EV — profile parlays should never include -EV legs
+    # even if those players have elite Statcast metrics.
     pool = [p for p in all_players
-            if p.get("best_american") and p.get("model_prob", 0) > 0]
+            if p.get("best_american") and p.get("model_prob", 0) > 0
+            and p.get("ev_pct", 0) > 0]
 
     results = []
     for profile in _PROFILES:
@@ -224,6 +227,11 @@ def build_best_parlay(ranked_picks: list[dict]) -> Optional[dict]:
     best_ev = float("-inf")
     for n_legs in range(config.PARLAY_MIN_LEGS, config.PARLAY_MAX_LEGS + 1):
         for combo in itertools.combinations(pool, n_legs):
+            # Reject same-team stacks: HR props within the same lineup share pitcher
+            # and weather exposure, directly violating the independence assumption.
+            teams = [leg.get("team", "") for leg in combo]
+            if len(teams) != len(set(teams)):
+                continue
             parlay = _evaluate_parlay(list(combo))
             if parlay["ev_pct"] > best_ev:
                 best_ev = parlay["ev_pct"]
@@ -281,30 +289,31 @@ def build_auto_parlays(
 def _evaluate_parlay(legs: list[dict]) -> dict:
     combined_prob = 1.0
     combined_decimal = 1.0
-    combined_ev_prob = 1.0  # per-leg cap mirrors single-pick EV cap in pipeline
+    combined_ev_prob = 1.0
 
     for leg in legs:
         model_p = leg["model_prob"]
         market_p = leg.get("market_no_vig_prob", 0)
-        # Same 1.4x cap applied to single picks: prevents long-shot odds
-        # from amplifying a small probability gap into absurd EV values.
+        # Cap each leg's EV probability at 1.4× market no-vig to prevent a small
+        # per-leg edge from compounding into absurd parlay EV. Parlay-specific —
+        # not applied to single-pick EV calculations.
         ev_model_p = min(model_p, market_p * 1.4) if market_p > 0 else model_p
-        combined_prob *= model_p
+        combined_prob    *= model_p
         combined_ev_prob *= ev_model_p
         combined_decimal *= american_to_decimal(leg["best_american"])
 
-    # Parlay pays combined_decimal − 1 on a win
     ev_pct = expected_value_pct(combined_ev_prob, combined_decimal)
     combined_american = decimal_to_american(combined_decimal)
 
     return {
-        "legs": legs,
-        "n_legs": len(legs),
-        "combined_prob": round(combined_prob, 4),
+        "legs":              legs,
+        "n_legs":            len(legs),
+        "combined_prob":     round(combined_prob, 4),
+        "combined_ev_prob":  round(combined_ev_prob, 4),
         "combined_prob_pct": round(combined_prob * 100, 2),
-        "combined_decimal": round(combined_decimal, 2),
+        "combined_decimal":  round(combined_decimal, 2),
         "combined_american": combined_american,
-        "ev_pct": round(ev_pct, 2),
+        "ev_pct":            round(ev_pct, 2),
     }
 
 
@@ -315,7 +324,9 @@ def parlay_bet_size(parlay: dict, bankroll: float = None) -> float:
         bankroll = cfg.BANKROLL
 
     dec = parlay["combined_decimal"]
-    p = parlay["combined_prob"]
+    # Use combined_ev_prob (capped at 1.4× market per leg) to match the EV
+    # calculation — consistent with how single-leg EV is computed.
+    p = parlay.get("combined_ev_prob", parlay["combined_prob"])
     b = dec - 1.0
     if b <= 0 or p <= 0:
         return 0.0
