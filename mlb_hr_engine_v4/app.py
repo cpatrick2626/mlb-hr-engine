@@ -888,13 +888,14 @@ def _render_qualified_table(
     df = df.fillna("--")
     df = df.replace([np.nan, np.inf, -np.inf, float('inf'), -float('inf')], "--")
 
+    _tver = st.session_state.get("_table_ver", 0)
     _df_sel = st.dataframe(
         df,
         width='stretch',
         hide_index=True,
         on_select="rerun",
         selection_mode="single-row",
-        key=f"picks_df_{key_suffix}",
+        key=f"picks_df_{key_suffix}_{_tver}",
         column_config={
             "Rating":  st.column_config.TextColumn("Rating",
                 help=(
@@ -951,14 +952,12 @@ def _render_qualified_table(
         },
     )
 
-    # Open player modal on row click
+    # Open player modal on row click; bump table version so selection resets after modal
     _sel_rows = getattr(getattr(_df_sel, "selection", None), "rows", [])
-    if _sel_rows:
-        _row_sig = f"picks_{key_suffix}_{_sel_rows[0]}"
-        if st.session_state.get("_modal_row_sig") != _row_sig and 0 <= _sel_rows[0] < len(ranked):
-            st.session_state["_modal_row_sig"] = _row_sig
-            st.session_state["show_modal"] = ranked[_sel_rows[0]]
-            st.rerun()
+    if _sel_rows and 0 <= _sel_rows[0] < len(ranked):
+        st.session_state["_table_ver"] = _tver + 1
+        st.session_state["show_modal"] = ranked[_sel_rows[0]]
+        st.rerun()
     st.caption("💡 Click any row to view full player details & add to FD Slip.")
 
     if rows:
@@ -1483,18 +1482,17 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                 st.info("No players in this view.")
                 return
             _model_df_idx[0] += 1
-            _df_key = f"model_df_{_model_df_idx[0]}"
+            _mtver = st.session_state.get("_table_ver", 0)
+            _df_key = f"model_df_{_model_df_idx[0]}_{_mtver}"
             df = pd.DataFrame(_model_rows(players))
             df = df.fillna("--").replace([np.nan, np.inf, -np.inf, float('inf'), -float('inf')], "--")
             _msel = st.dataframe(df, width='stretch', hide_index=True, column_config=_col_cfg,
                                  on_select="rerun", selection_mode="single-row", key=_df_key)
             _mrows = getattr(getattr(_msel, "selection", None), "rows", [])
-            if _mrows:
-                _sig = f"{_df_key}_{_mrows[0]}"
-                if st.session_state.get("_modal_row_sig") != _sig and 0 <= _mrows[0] < len(players):
-                    st.session_state["_modal_row_sig"] = _sig
-                    st.session_state["show_modal"] = players[_mrows[0]]
-                    st.rerun()
+            if _mrows and 0 <= _mrows[0] < len(players):
+                st.session_state["_table_ver"] = _mtver + 1
+                st.session_state["show_modal"] = players[_mrows[0]]
+                st.rerun()
             st.caption("💡 Click any row to view full player details & add to FD Slip.")
 
         prime = [p for p in all_by_model if p.get("model_prob", 0) >= PRIME_FLOOR][:60]
