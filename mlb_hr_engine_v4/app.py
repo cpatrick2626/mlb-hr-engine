@@ -626,7 +626,20 @@ def _game_time_et(game_time_utc: str) -> "_dt.time | None":
 
 
 
-def _apply_ui_filters(players: list, min_ev: float, min_edge: float) -> list:
+def _game_time_utc_hour(game_time_utc: str) -> int | None:
+    """Return UTC hour (0-23) from a game_time_utc string, or None if unparseable."""
+    try:
+        return int(game_time_utc[11:13])
+    except (TypeError, ValueError, IndexError):
+        return None
+
+
+def _apply_ui_filters(
+    players: list,
+    min_ev: float,
+    min_edge: float,
+    cutoff_utc_hour: int | None = None,
+) -> list:
     """Re-filter all_players using sidebar thresholds (post-cache, no reload needed)."""
     result = []
     for p in players:
@@ -644,6 +657,11 @@ def _apply_ui_filters(players: list, min_ev: float, min_edge: float) -> list:
             continue
         if p.get("pitcher_factor", 1.0) < config.MAX_PITCHER_SUPPRESSOR:
             continue
+        # Time gate: skip players whose game starts at or after the UTC cutoff
+        if cutoff_utc_hour is not None:
+            gh = _game_time_utc_hour(p.get("game_time_utc", ""))
+            if gh is not None and gh >= cutoff_utc_hour:
+                continue
         result.append(p)
     return _rank_picks(result)
 
@@ -843,9 +861,9 @@ def _render_qualified_table(
 
 # TAB 1 — TODAY'S PICKS
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-def tab_picks(data: dict, min_ev: float, min_edge: float):
+def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int | None = None):
     all_players = data.get("all_players", [])
-    ranked    = _apply_ui_filters(all_players, min_ev, min_edge)
+    ranked    = _apply_ui_filters(all_players, min_ev, min_edge, cutoff_utc_hour)
     stats     = data.get("stats", {})
     source    = data.get("odds_source", "none")
     quota     = data.get("odds_quota", {})
@@ -903,6 +921,12 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
     )
 
     all_by_model = data.get("all_by_model", [])
+    # Apply time gate to all_by_model so All/Prime/Watch tabs respect the cutoff too
+    if cutoff_utc_hour is not None:
+        all_by_model = [
+            p for p in all_by_model
+            if (gh := _game_time_utc_hour(p.get("game_time_utc", ""))) is None or gh < cutoff_utc_hour
+        ]
     PRIME_FLOOR  = 0.15
     _n_prime = len([p for p in all_by_model if p.get("model_prob", 0) >= PRIME_FLOOR])
     _n_watch = len([p for p in all_by_model if p.get("model_prob", 0) < PRIME_FLOOR])
@@ -1867,6 +1891,36 @@ def main():
 
         st.divider()
 
+        # ── Game time gate ────────────────────────────────────────────────────
+        st.markdown("#### ⏰ Game Time Cutoff")
+        _time_gate_on = st.toggle(
+            "Only show games starting before…",
+            value=st.session_state.get("time_gate_on", False),
+            key="time_gate_on",
+        )
+        _cutoff_utc_hour: int | None = None
+        if _time_gate_on:
+            import datetime as _dtlib
+            _cutoff_et = st.time_input(
+                "Cutoff (Eastern Time)",
+                value=st.session_state.get(
+                    "time_gate_et",
+                    _dtlib.time(19, 0),   # default 7:00 PM ET
+                ),
+                step=900,               # 15-min steps
+                label_visibility="collapsed",
+                key="time_gate_et",
+            )
+            # MLB season runs in EDT (UTC-4). Convert ET cutoff → UTC hour.
+            _cutoff_utc_hour = (_cutoff_et.hour + 4) % 24
+            st.caption(
+                f"Showing games before {_cutoff_et.strftime('%-I:%M %p')} ET "
+                f"({_cutoff_utc_hour:02d}:00 UTC)"
+            )
+        st.session_state["cutoff_utc_hour"] = _cutoff_utc_hour
+
+        st.divider()
+
         # ── FanDuel Slip ──────────────────────────────────────────────────────
         st.markdown("#### 🎰 FanDuel Slip")
         _slip_data = st.session_state.get("data")
@@ -1874,7 +1928,8 @@ def main():
             _fd_min_ev   = float(st.session_state.get("min_ev",   config.MIN_EV_PCT))
             _fd_min_edge = float(st.session_state.get("min_edge", config.MIN_EDGE_PCT))
             _odds_players = _apply_ui_filters(
-                _slip_data.get("all_players", []), _fd_min_ev, _fd_min_edge
+                _slip_data.get("all_players", []), _fd_min_ev, _fd_min_edge,
+                cutoff_utc_hour=st.session_state.get("cutoff_utc_hour"),
             )
             if not _odds_players:
                 _odds_players = sorted(
@@ -2122,7 +2177,8 @@ The app will open full-screen like a native app.
     with tab1:
         try:
             data = get_data()
-            tab_picks(data, _min_ev, _min_edge)
+            tab_picks(data, _min_ev, _min_edge,
+                      cutoff_utc_hour=st.session_state.get("cutoff_utc_hour"))
         except Exception as _e:
             st.error(f"Picks tab error: {_e}")
             st.code(_tb.format_exc())
