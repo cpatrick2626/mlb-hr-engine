@@ -657,10 +657,10 @@ def _apply_ui_filters(
             continue
         if p.get("pitcher_factor", 1.0) < config.MAX_PITCHER_SUPPRESSOR:
             continue
-        # Time gate: skip players whose game starts at or after the UTC cutoff
+        # Time gate: skip players whose game starts before the UTC cutoff
         if cutoff_utc_hour is not None:
             gh = _game_time_utc_hour(p.get("game_time_utc", ""))
-            if gh is not None and gh >= cutoff_utc_hour:
+            if gh is not None and gh < cutoff_utc_hour:
                 continue
         result.append(p)
     return _rank_picks(result)
@@ -925,7 +925,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
     if cutoff_utc_hour is not None:
         all_by_model = [
             p for p in all_by_model
-            if (gh := _game_time_utc_hour(p.get("game_time_utc", ""))) is None or gh < cutoff_utc_hour
+            if (gh := _game_time_utc_hour(p.get("game_time_utc", ""))) is None or gh >= cutoff_utc_hour
         ]
     PRIME_FLOOR  = 0.15
     _n_prime = len([p for p in all_by_model if p.get("model_prob", 0) >= PRIME_FLOOR])
