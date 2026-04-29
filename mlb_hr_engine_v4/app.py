@@ -928,12 +928,62 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
     # ── TAB: Qualified Picks ─────────────────────────────────────────────────
     with sub1:
         roster_confirmed = [p for p in ranked if p.get("lineup_spot") is not None]
-        _slate_tab, _confirmed_tab, _movement_tab, _odds_cmp_tab = st.tabs([
+        _quick_tab, _slate_tab, _confirmed_tab, _movement_tab, _odds_cmp_tab = st.tabs([
+            "📱 Quick",
             f"📋 Slate ({len(ranked)})",
             f"✅ Confirmed ({len(roster_confirmed)})",
             "📈 Movement",
             "📊 Odds",
         ])
+
+        with _quick_tab:
+            _quick_pool = ranked[:10] if ranked else []
+            if not _quick_pool:
+                st.info("No qualified picks. Adjust EV/Edge filters in the sidebar.")
+            else:
+                st.caption("Top picks — tap a card to open FanDuel.")
+                for _qp in _quick_pool:
+                    _qev      = _qp.get("ev_pct", 0)
+                    _qodds    = _qp.get("best_american")
+                    _qmodel   = _qp.get("hr_prob", 0) * 100
+                    _qteam    = _qp.get("team", "")
+                    _qvs      = _qp.get("opposing_pitcher", "")
+                    _qspot    = _qp.get("lineup_spot")
+                    _qev_col  = "#4ade80" if _qev >= 0 else "#f87171"
+                    _qconf    = "✅" if _qspot is not None else "⏳"
+                    _qurl     = _fanduel_url(_qp["player_name"])
+                    st.markdown(
+                        f"<a href='{_qurl}' target='_blank' style='text-decoration:none;'>"
+                        f"<div style='background:#0d0d20; border:1px solid #1e1e40; border-radius:10px; "
+                        f"padding:14px 16px; margin-bottom:10px; cursor:pointer;'>"
+                        f"<div style='display:flex; justify-content:space-between; align-items:flex-start;'>"
+                        f"<div>"
+                        f"<div style='font-size:17px; font-weight:700; color:#f0f0f0; line-height:1.2;'>"
+                        f"{_qconf} {_qp['player_name']}</div>"
+                        f"<div style='font-size:13px; color:#888; margin-top:3px;'>"
+                        f"{_qteam} vs {_qvs}</div>"
+                        f"</div>"
+                        f"<div style='text-align:right;'>"
+                        f"<div style='font-size:20px; font-weight:700; color:#FF6666;'>"
+                        f"{_fmt_american(_qodds)}</div>"
+                        f"<div style='font-size:12px; color:#888;'>best odds</div>"
+                        f"</div>"
+                        f"</div>"
+                        f"<div style='display:flex; gap:16px; margin-top:10px;'>"
+                        f"<div style='text-align:center; flex:1; background:#0a0a18; "
+                        f"border-radius:6px; padding:6px 4px;'>"
+                        f"<div style='font-size:18px; font-weight:700; color:#a78bfa;'>{_qmodel:.0f}%</div>"
+                        f"<div style='font-size:10px; color:#666;'>Model</div>"
+                        f"</div>"
+                        f"<div style='text-align:center; flex:1; background:#0a0a18; "
+                        f"border-radius:6px; padding:6px 4px;'>"
+                        f"<div style='font-size:18px; font-weight:700; color:{_qev_col};'>{_qev:+.1f}%</div>"
+                        f"<div style='font-size:10px; color:#666;'>EV</div>"
+                        f"</div>"
+                        f"</div>"
+                        f"</div></a>",
+                        unsafe_allow_html=True,
+                    )
 
         with _slate_tab:
             if not ranked:
@@ -1851,7 +1901,7 @@ def main():
             st.session_state["fd_slip"] = _selected
 
             if _selected:
-                for s in _selected:
+                for i, s in enumerate(_selected):
                     p = _slip_map[s]
                     fd_odds   = p.get("fanduel_american")
                     best_odds = p.get("best_american")
@@ -1860,23 +1910,31 @@ def main():
                     ev        = p.get("ev_pct", 0)
                     ev_color  = "#4ade80" if ev >= 0 else "#f87171"
                     url       = _fanduel_url(p["player_name"])
-                    st.markdown(
-                        f"<div style='background:#0a0a1a; border:1px solid #1a1a3a; "
-                        f"border-radius:6px; padding:7px 10px; margin-bottom:5px; font-size:12px;'>"
-                        f"<div style='display:flex; justify-content:space-between; align-items:center;'>"
-                        f"<span><b style='color:#f0f0f0'>{p['player_name']}</b> "
-                        f"<span style='color:#555; font-size:11px'>{p.get('team','')}</span></span>"
-                        f"<a href='{url}' target='_blank' "
-                        f"style='color:#4488ff; font-size:11px; background:#0d0d2a; "
-                        f"padding:2px 8px; border-radius:4px; border:1px solid #1a2a66; "
-                        f"text-decoration:none;'>Open FD →</a>"
-                        f"</div>"
-                        f"<div style='color:#888; margin-top:3px;'>"
-                        f"{odds_lbl}: <b style='color:#FF6666'>{_fmt_american(odds_val)}</b>"
-                        f" &nbsp;|&nbsp; EV: <b style='color:{ev_color}'>{ev:+.1f}%</b>"
-                        f"</div></div>",
-                        unsafe_allow_html=True,
-                    )
+                    _c_card, _c_rm = st.columns([9, 1])
+                    with _c_card:
+                        st.markdown(
+                            f"<div style='background:#0a0a1a; border:1px solid #1a1a3a; "
+                            f"border-radius:6px; padding:7px 10px; margin-bottom:2px; font-size:12px;'>"
+                            f"<div style='display:flex; justify-content:space-between; align-items:center;'>"
+                            f"<span><b style='color:#f0f0f0'>{p['player_name']}</b> "
+                            f"<span style='color:#555; font-size:11px'>{p.get('team','')}</span></span>"
+                            f"<a href='{url}' target='_blank' "
+                            f"style='color:#4488ff; font-size:11px; background:#0d0d2a; "
+                            f"padding:2px 8px; border-radius:4px; border:1px solid #1a2a66; "
+                            f"text-decoration:none;'>Open FD →</a>"
+                            f"</div>"
+                            f"<div style='color:#888; margin-top:3px;'>"
+                            f"{odds_lbl}: <b style='color:#FF6666'>{_fmt_american(odds_val)}</b>"
+                            f" &nbsp;|&nbsp; EV: <b style='color:{ev_color}'>{ev:+.1f}%</b>"
+                            f"</div></div>",
+                            unsafe_allow_html=True,
+                        )
+                    with _c_rm:
+                        if st.button("✕", key=f"slip_rm_{i}", help=f"Remove {p['player_name']}"):
+                            _new_slip = [x for x in _selected if x != s]
+                            st.session_state["fd_slip"] = _new_slip
+                            st.session_state.pop("fd_slip_select", None)
+                            st.rerun()
                 # ── Scratch check ─────────────────────────────────────────
                 _scratched = st.session_state.get("scratched_ids", set())
                 for s in _selected:
