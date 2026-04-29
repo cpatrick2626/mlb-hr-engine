@@ -633,15 +633,15 @@ def _show_player_modal(player: dict):
     st.caption(f"**Statcast power profile** — source: *{sc_src}*")
     s1, s2, s3, s4 = st.columns(4)
     s1.metric("Barrel%",    _pct(player.get("barrel_pct")))
-    s2.metric("Exit Velo",  f"{player.get('exit_velo', 0):.1f}" if player.get("exit_velo") else "--")
+    s2.metric("Exit Velo",  _pct(player.get("exit_velo"), mult=1, suffix="", dec=1))
     s3.metric("Hard Hit%",  _pct(player.get("hard_hit")))
     s4.metric("Sweet Spot%",_pct(player.get("sweet_spot_pct")))
 
     s5, s6, s7, s8 = st.columns(4)
     s5.metric("FB%",        _pct(player.get("fb_pct")))
     s6.metric("Pull%",      _pct(player.get("pull_pct")))
-    s7.metric("xSLG",       f"{player.get('xslg', 0):.3f}" if player.get("xslg") else "--")
-    s8.metric("xBA",        f"{player.get('xba', 0):.3f}"  if player.get("xba")  else "--")
+    s7.metric("xSLG",       _pct(player.get("xslg"), mult=1, suffix="", dec=3))
+    s8.metric("xBA",        _pct(player.get("xba"),  mult=1, suffix="", dec=3))
 
     st.divider()
 
