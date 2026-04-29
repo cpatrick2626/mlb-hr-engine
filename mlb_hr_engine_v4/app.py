@@ -277,6 +277,74 @@ div[data-testid="stSelectbox"] label { font-size: 12px; color: #666; }
 
 /* â"€â"€ Alert boxes â"€â"€ */
 [data-testid="stAlert"] { border-radius: 8px !important; border-left-width: 4px !important; }
+
+/* ══════════════════════════ MOBILE ══════════════════════════ */
+@media (max-width: 768px) {
+    /* Main content — tighter padding */
+    .main .block-container {
+        padding-left: 8px !important;
+        padding-right: 8px !important;
+        padding-top: 8px !important;
+        max-width: 100% !important;
+    }
+
+    /* Primary tabs — compact for 3 tabs on a 375px screen */
+    .stTabs [data-baseweb="tab"] {
+        height: 44px !important;
+        padding: 0 10px !important;
+        font-size: 9px !important;
+        letter-spacing: 0.3px !important;
+    }
+    .stTabs [data-baseweb="tab-panel"] { padding-top: 10px !important; }
+
+    /* Section headers — no overflow */
+    .section-header {
+        font-size: 13px !important;
+        letter-spacing: 0.5px !important;
+        padding: 7px 0 7px 10px !important;
+        margin: 14px 0 10px 0 !important;
+        word-break: break-word !important;
+    }
+
+    /* Range bar — let items wrap */
+    .range-bar {
+        font-size: 11px !important;
+        padding: 8px 10px !important;
+        display: flex !important;
+        flex-wrap: wrap !important;
+        gap: 4px 10px !important;
+    }
+
+    /* Cards */
+    .combo-card { padding: 10px 12px !important; }
+    .leg-pill { font-size: 11px !important; padding: 4px 8px !important; margin: 3px 2px !important; }
+
+    /* Metrics — smaller value, tighter box */
+    [data-testid="stMetric"] { padding: 10px 10px !important; }
+    [data-testid="stMetricValue"] { font-size: 1.3rem !important; }
+    [data-testid="stMetricLabel"] { font-size: 9px !important; }
+
+    /* Columns — wrap so 5-col layouts become 2-per-row instead of 5 squished */
+    [data-testid="stHorizontalBlock"] { flex-wrap: wrap !important; }
+    [data-testid="column"] { min-width: 140px !important; flex: 1 1 140px !important; }
+
+    /* Buttons — minimum 44px touch target */
+    .stButton button {
+        min-height: 44px !important;
+        font-size: 10px !important;
+        letter-spacing: 1px !important;
+    }
+
+    /* Rating badges */
+    .r-goat, .r-fire { font-size: 12px !important; }
+    .r-good, .r-marg { font-size: 11px !important; }
+
+    /* Alerts */
+    [data-testid="stAlert"] { font-size: 13px !important; }
+
+    /* Sidebar toggle button — larger touch target (Streamlit default is small) */
+    [data-testid="stSidebarCollapseButton"] button { min-width: 44px !important; min-height: 44px !important; }
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -348,8 +416,9 @@ def get_data():
 
                 data = load_game_data(target_date=target_date, progress_cb=_cb)
                 gc.collect()  # free statcast/HTTP memory before rendering
-                st.session_state["data"]      = data
-                st.session_state["cache_key"] = target_date
+                st.session_state["data"]           = data
+                st.session_state["cache_key"]      = target_date
+                st.session_state["data_loaded_at"] = _dt.datetime.now()
                 _status.update(
                     label=(f"✅ Loaded — {data['stats'].get('players', 0)} players, "
                            f"{data['stats'].get('qualified', 0)} qualified"),
@@ -661,13 +730,15 @@ def _render_qualified_table(
         ("Bet $",  f"${min(bets):.0f} → ${max(bets):.0f}" if bets else "N/A"),
         ("Conf",   _rng(confs, fmt=".0f")),
     ]
-    range_html = " &nbsp;|&nbsp; ".join(
+    range_html = "".join(
+        f"<span style='white-space:nowrap'>"
         f"<span style='color:#888888'>{k}:</span> "
         f"<span style='color:#f0f0f0; font-weight:600'>{v}</span>"
+        f"</span>"
         for k, v in range_items
     )
     st.markdown(
-        f"<div class='range-bar'>📊 Today's ranges — {range_html}</div>",
+        f"<div class='range-bar'>📊 Ranges &nbsp;— &nbsp;{range_html}</div>",
         unsafe_allow_html=True,
     )
 
@@ -798,6 +869,24 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
     st.markdown('<div class="section-header">&#9889; TODAY\'S PICKS</div>',
                 unsafe_allow_html=True)
 
+    # Lineup readiness
+    n_confirmed  = sum(1 for p in all_players if p.get("lineup_spot"))
+    n_estimated  = len(all_players) - n_confirmed
+    lineup_pct   = int(100 * n_confirmed / len(all_players)) if all_players else 0
+    lineup_color = "#4ade80" if lineup_pct >= 80 else "#FFD700" if lineup_pct >= 40 else "#FF6666"
+    lineup_label = (
+        f"Lineups: <b style='color:{lineup_color}'>{n_confirmed}/{len(all_players)} confirmed</b>"
+        + (f" <span style='color:#888'>({n_estimated} estimated)</span>" if n_estimated else "")
+    )
+
+    loaded_at    = st.session_state.get("data_loaded_at")
+    age_str      = ""
+    if loaded_at:
+        age_min  = int((_dt.datetime.now() - loaded_at).total_seconds() / 60)
+        age_str  = f" &nbsp;|&nbsp; Loaded: <b style='color:#888'>{loaded_at.strftime('%-I:%M %p')}</b>"
+        if age_min >= 60:
+            age_str += f" <span style='color:#FF6666'>({age_min//60}h old — refresh?)</span>"
+
     st.markdown(
         f"<div style='color:#888888; font-size:12px; margin-bottom:12px; "
         f"background:#110000; border:1px solid #330000; border-radius:6px; padding:8px 14px;'>"
@@ -807,7 +896,8 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
         f"Qualified: <b style='color:#FF3333'>{len(ranked)}</b> "
         f"<span style='color:#555'>(EV≥{min_ev:.0f}% Edge≥{min_edge:.1f}%)</span> &nbsp;|&nbsp; "
         f"Odds: {odds_label} &nbsp;|&nbsp; "
-        f"Statcast: <b style='color:#f0f0f0'>{n_batters}</b> batters"
+        f"Statcast: <b style='color:#f0f0f0'>{n_batters}</b> batters &nbsp;|&nbsp; "
+        f"{lineup_label}{age_str}"
         f"</div>",
         unsafe_allow_html=True,
     )
@@ -829,20 +919,20 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
         pass
 
     sub1, sub2, sub3, sub4 = st.tabs([
-        f"⚡ Qualified Picks ({len(ranked)})",
-        f"📊 All Players ({len(all_by_model)})",
-        f"⭐ Prime Targets ({_n_prime})",
-        f"📋 Watch List ({min(_n_watch, 20)})",
+        f"⚡ Picks ({len(ranked)})",
+        f"📊 All ({len(all_by_model)})",
+        f"⭐ Prime ({_n_prime})",
+        f"📋 Watch ({min(_n_watch, 20)})",
     ])
 
     # ── TAB: Qualified Picks ─────────────────────────────────────────────────
     with sub1:
         roster_confirmed = [p for p in ranked if p.get("lineup_spot") is not None]
         _slate_tab, _confirmed_tab, _movement_tab, _odds_cmp_tab = st.tabs([
-            f"📋 Today's Slate ({len(ranked)})",
-            f"✅ Roster Confirmed ({len(roster_confirmed)})",
-            "📈 Line Movement",
-            "📊 Odds Comparison",
+            f"📋 Slate ({len(ranked)})",
+            f"✅ Confirmed ({len(roster_confirmed)})",
+            "📈 Movement",
+            "📊 Odds",
         ])
 
         with _slate_tab:
@@ -1864,7 +1954,16 @@ def main():
 
         st.divider()
 
+        loaded_at = st.session_state.get("data_loaded_at")
+        if loaded_at:
+            age_min = int((_dt.datetime.now() - loaded_at).total_seconds() / 60)
+            age_str = f"{age_min}m ago" if age_min < 60 else f"{age_min // 60}h {age_min % 60}m ago"
+            st.caption(f"Data loaded {age_str} ({loaded_at.strftime('%-I:%M %p')})")
+
         if st.button("🔄 Force Refresh Data", width='stretch'):
+            from clients import mlb_stats as _ms, statcast as _sc
+            _ms.clear_all_caches()
+            _sc.clear_all_caches()
             st.cache_data.clear()
             for k in ["data", "cache_key", "data_loaded_at"]:
                 st.session_state.pop(k, None)

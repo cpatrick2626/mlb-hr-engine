@@ -379,7 +379,7 @@ def get_pitcher_recent_stats(pitcher_id: int, days: int = 30) -> dict:
     splits = _pitcher_game_log_splits(pitcher_id)
     recent = splits[:config.PITCHER_RECENT_GAMES]
     totals: dict = {"homeRuns": 0, "inningsPitched": 0.0, "battersFaced": 0,
-                    "strikeOuts": 0, "groundOuts": 0, "airOuts": 0}
+                    "strikeOuts": 0, "groundOuts": 0, "airOuts": 0, "baseOnBalls": 0}
     for split in recent:
         st = split.get("stat", {})
         totals["homeRuns"]     += int(st.get("homeRuns", 0))
@@ -387,6 +387,7 @@ def get_pitcher_recent_stats(pitcher_id: int, days: int = 30) -> dict:
         totals["strikeOuts"]   += int(st.get("strikeOuts", 0))
         totals["groundOuts"]   += int(st.get("groundOuts", 0))
         totals["airOuts"]      += int(st.get("airOuts", 0))
+        totals["baseOnBalls"]  += int(st.get("baseOnBalls", 0))
         ip_str = str(st.get("inningsPitched", "0.0"))
         try:
             parts = ip_str.split(".")
@@ -485,7 +486,7 @@ def get_pitcher_recent_stats_as_of(pitcher_id: int, date_str: str) -> dict:
 def _acc_pitching(splits: list) -> dict:
     """Accumulate per-start pitching splits into a pitcher-stats-shaped dict."""
     totals: dict = {"homeRuns": 0, "inningsPitched": 0.0, "battersFaced": 0,
-                    "strikeOuts": 0, "groundOuts": 0, "airOuts": 0}
+                    "strikeOuts": 0, "groundOuts": 0, "airOuts": 0, "baseOnBalls": 0}
     for s in splits:
         st = s.get("stat", {})
         totals["homeRuns"]     += int(st.get("homeRuns", 0))
@@ -493,6 +494,7 @@ def _acc_pitching(splits: list) -> dict:
         totals["strikeOuts"]   += int(st.get("strikeOuts", 0))
         totals["groundOuts"]   += int(st.get("groundOuts", 0))
         totals["airOuts"]      += int(st.get("airOuts", 0))
+        totals["baseOnBalls"]  += int(st.get("baseOnBalls", 0))
         ip_str = str(st.get("inningsPitched", "0.0"))
         try:
             parts = ip_str.split(".")
@@ -742,3 +744,16 @@ def _fetch_batch_pitcher_stats(pitcher_ids: list[int]) -> None:
     except Exception as e:
         print(f"[mlb_stats] Bulk pitcher fetch failed for batch: {e}")
 
+
+def clear_all_caches() -> None:
+    """Clear all in-process caches. Call this before a Force Refresh so
+    the next load fetches fresh player stats, platoon splits, and game logs."""
+    _GAME_LOG_CACHE.clear()
+    _PITCHER_GAME_LOG_CACHE.clear()
+    _BULK_SEASON_STATS_CACHE.clear()
+    _BULK_RECENT_STATS_CACHE.clear()
+    _BULK_PITCHER_STATS_CACHE.clear()
+    get_player_season_stats.cache_clear()
+    get_pitcher_season_stats.cache_clear()
+    get_player_platoon_splits.cache_clear()
+    get_player_info.cache_clear()

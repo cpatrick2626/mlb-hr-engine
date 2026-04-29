@@ -33,9 +33,11 @@ def base_hr_rate(
     reg_target_adj = max(0.40, min(1.0, statcast_mult))
     regression_target = config.LEAGUE_AVG_HR_PA * reg_target_adj
 
-    # Adaptive regression: reduce prior weight as sample grows, floored at 55% of
+    # Adaptive regression: reduce prior weight as sample grows, floored at 50% of
     # REGRESSION_PA so the league-mean anchor never disappears entirely.
-    effective_reg = (config.REGRESSION_PA * max(0.55, 1.0 - season_pa / 700.0)
+    # Reduced floor 0.55→0.50: lets established hitters (300+ PA) carry slightly more
+    # weight on their own observed rate; addresses 10-15% bucket under-prediction.
+    effective_reg = (config.REGRESSION_PA * max(0.50, 1.0 - season_pa / 700.0)
                      if season_pa > 0 else config.REGRESSION_PA)
     regressed_season = (
         (season_hr + effective_reg * regression_target)
@@ -109,7 +111,9 @@ def statcast_blended_rate(
         too few batted balls to trust fully.
       - "prior" or "blended": prior-year data is a full season; use full base weight.
     """
-    pa_weight = max(0.15, 1.0 - (season_pa / 350.0))
+    # Floor raised 0.15→0.18: at 350+ PA, Statcast now contributes 18% vs 15% of the
+    # blended rate — small but systematic lift for established hitters in the 10-15% bucket.
+    pa_weight = max(0.18, 1.0 - (season_pa / 350.0))
 
     # Reduce Statcast weight when current-year sample is sparse.
     # Only applies to "blended" players (curr_pa < MIN_CURRENT_YEAR_PA=50) — "current"
@@ -244,32 +248,40 @@ def pitcher_hr_factor(pitcher_stats: dict) -> float:
 
 def pitcher_k_gb_suppressor(pitcher_stats: dict) -> float:
     """
-    K% + GB% combined suppressor.
-    K% → fewer balls in play → fewer HR opportunities.
+    K% + GB% + BB% combined suppressor.
+    K%  → fewer balls in play → fewer HR opportunities (most stable metric, r~0.85 YoY).
     GB% → fewer fly balls → lower HR conversion rate.
-    Both are more stable indicators than raw HR/9.
+    BB% → poor command → more hittable counts → more HRs (each 1pp above avg adds ~0.4%).
     """
     k  = int(pitcher_stats.get("strikeOuts", 0))
+    bb = int(pitcher_stats.get("baseOnBalls", 0))
     bf = int(pitcher_stats.get("battersFaced", 0))
     go = int(pitcher_stats.get("groundOuts", 0))
     ao = int(pitcher_stats.get("airOuts", 0))
 
-    # K% factor — 22.5% is league avg; each 5pp above reduces HR prob ~4%
+    # K% factor — 22.5% league avg; each 5pp above reduces HR prob ~4%
     if bf >= 30:
-        k_pct  = k / bf
+        k_pct    = k / bf
         k_factor = max(0.82, min(1.12, 1.0 - 0.80 * (k_pct - 0.225)))
     else:
         k_factor = 1.0
 
-    # GB% factor — 44% is league avg on outs; high GB = strong HR suppressor
+    # GB% factor — 44% league avg on outs; high GB = strong HR suppressor
     total_outs = go + ao
     if total_outs >= 50:
-        gb_pct   = go / total_outs
+        gb_pct    = go / total_outs
         gb_factor = max(0.86, min(1.12, 1.0 - 0.45 * (gb_pct - 0.44)))
     else:
         gb_factor = 1.0
 
-    return max(0.76, min(1.18, k_factor * gb_factor))
+    # BB% factor — 8.5% league avg; high walk rate signals poor command → more HRs
+    if bf >= 30:
+        bb_pct    = bb / bf
+        bb_factor = max(0.92, min(1.08, 1.0 + 0.50 * (bb_pct - 0.085)))
+    else:
+        bb_factor = 1.0
+
+    return max(0.72, min(1.20, k_factor * gb_factor * bb_factor))
 
 
 def pitcher_combined_factor(
@@ -279,16 +291,14 @@ def pitcher_combined_factor(
 ) -> float:
     """
     Weighted geometric mean of three independent pitcher HR signals:
-      40% HR/FB rate (most HR-specific)
-      40% Statcast contact quality against (barrel%, FB%, EV against)
-      20% K% + GB% suppressor (ball-in-play profile)
+      40% Statcast contact quality against (barrel%, FB%, EV against) — most HR-specific
+      35% HR/FB rate — direct but noisy (YoY r~0.30); regressed heavily
+      25% K% + GB% + BB% suppressor — stable (K% YoY r~0.85), adds command signal
 
-    Geometric mean prevents contradictory signals from canceling linearly —
-    a homer-prone HR/FB rate + elite contact suppression stays below 1.0
-    rather than averaging to neutral. Consistent with how batter factors
-    compound multiplicatively in game_hr_probability.
+    Shifted 5% weight from HR/FB to K/GB/BB: HR/FB is the noisiest signal and regresses
+    heavily to the mean; K% and BB% are more stable and improve year-to-year discrimination.
     """
-    combined = (pitcher_hr_fac ** 0.40) * (statcast_contact_fac ** 0.40) * (k_gb_fac ** 0.20)
+    combined = (statcast_contact_fac ** 0.40) * (pitcher_hr_fac ** 0.35) * (k_gb_fac ** 0.25)
     return max(0.55, min(1.60, combined))
 
 
@@ -367,10 +377,9 @@ def weather_factor(home_team: str) -> tuple[float, dict]:
     return max(0.80, min(1.20, t_factor * w_factor)), weather
 
 
-# Hard ceiling on per-game HR probability. Even the most elite hitter in the best
-# matchup hits HRs in fewer than 35% of games over a full season. Predictions above
-# this are driven by look-ahead Statcast or factor stacking, not genuine edge.
-_MAX_GAME_HR_PROB = 0.35
+# Hard ceiling on per-game HR probability. Full-season backtest shows the actual
+# HR rate in the 30%+ bucket is ~30.1%; 0.31 aligns the ceiling with observed reality.
+_MAX_GAME_HR_PROB = 0.31
 
 def game_hr_probability(
     hr_rate: float, exp_pa: float,

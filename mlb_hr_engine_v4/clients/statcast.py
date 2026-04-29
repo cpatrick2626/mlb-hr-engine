@@ -653,3 +653,11 @@ def _safe(d: dict, key: str, default: float,
 
 def _clamp(v: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, v))
+
+
+def clear_all_caches() -> None:
+    """Clear Statcast lru_caches. Call before Force Refresh so next load
+    fetches fresh leaderboard, batted-ball, and expected-stats data."""
+    _fetch_leaderboard.cache_clear()
+    _fetch_batted_ball.cache_clear()
+    _fetch_expected_stats.cache_clear()
