@@ -88,7 +88,7 @@ except ImportError as e:
         from strategies_ui import tab_advanced_strategies
     except:
         # Create a placeholder function if import fails
-        def tab_advanced_strategies(data):
+        def tab_advanced_strategies(data, parlays_callback=None):
             st.info("Advanced strategies module is being loaded...")
 
 # â"€â"€ Styling â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
@@ -555,86 +555,6 @@ def _game_time_et(game_time_utc: str) -> "_dt.time | None":
         return None
 
 
-def _time_gate_data(data: dict, cutoff_et: "_dt.time") -> dict:
-    """Return a copy of data scoped to games starting at or after cutoff_et (ET).
-    Midnight (0:00) is treated as 'show all' and returns data unchanged."""
-    if cutoff_et <= _dt.time(0, 0):
-        return data
-
-    def _passes(player: dict) -> bool:
-        t = _game_time_et(player.get("game_time_utc", ""))
-        return t is not None and t >= cutoff_et
-
-    min_ev   = float(st.session_state.get("min_ev",   config.MIN_EV_PCT))
-    min_edge = float(st.session_state.get("min_edge", config.MIN_EDGE_PCT))
-
-    gated_players = [p for p in data.get("all_players",  []) if _passes(p)]
-    gated_model   = [p for p in data.get("all_by_model", []) if _passes(p)]
-    gated_ranked  = _apply_ui_filters(gated_players, min_ev, min_edge)
-    gated_pids    = {p["player_id"] for p in gated_players}
-
-    def _all_legs_pass(parlay: dict) -> bool:
-        return all(leg.get("player_id") in gated_pids for leg in parlay.get("legs", []))
-
-    gated_auto: dict = {}
-    for k, parlays in data.get("auto_parlays", {}).items():
-        keep = [p for p in parlays if _all_legs_pass(p)]
-        if keep:
-            gated_auto[k] = keep
-
-    gated_profile = []
-    for profile in data.get("profile_parlays", []):
-        keep = [c for c in profile.get("combos", []) if _all_legs_pass(c)]
-        if keep:
-            gated_profile.append({**profile, "combos": keep})
-
-    gated_teams: dict[str, list] = {}
-    for p in gated_players:
-        if p.get("best_american"):
-            gated_teams.setdefault(p["team"], []).append(p)
-
-    return {
-        **data,
-        "all_players":     gated_players,
-        "all_by_model":    gated_model,
-        "ranked":          gated_ranked,
-        "auto_parlays":    gated_auto,
-        "profile_parlays": gated_profile,
-        "team_players":    gated_teams,
-    }
-
-
-def _slate_time_controls(data: dict, picker_key: str,
-                          default_hour: int = 0) -> "_dt.time":
-    """Render a time picker + game-times info bar. Returns the selected cutoff."""
-    cutoff = st.time_input(
-        "Games starting at or after (Eastern Time):",
-        value=_dt.time(default_hour, 0),
-        step=_td(minutes=30),
-        key=picker_key,
-        help="Set to 12:00 AM to show all games. "
-             "7:00 PM covers most evening starts. "
-             "10:00 PM targets West Coast slates only.",
-    )
-    slots = set()
-    for p in data.get("all_players", []):
-        t = _game_time_et(p.get("game_time_utc", ""))
-        if t:
-            slots.add(t.strftime("%-I:%M %p"))
-    if slots and cutoff > _dt.time(0, 0):
-        st.markdown(
-            f"<div style='color:#888888; font-size:12px; margin-bottom:12px; "
-            f"background:#110000; border:1px solid #330000; border-radius:6px; padding:8px 14px;'>"
-            f"🕐 All game times (ET): <b style='color:#f0f0f0'>"
-            f"{' &nbsp;·&nbsp; '.join(sorted(slots))}</b>"
-            f"&nbsp;&nbsp;|&nbsp;&nbsp; Cutoff: "
-            f"<b style='color:#FF6666'>{cutoff.strftime('%-I:%M %p')} ET</b>"
-            f"</div>",
-            unsafe_allow_html=True,
-        )
-    elif slots:
-        st.caption(f"Game times today (ET): {', '.join(sorted(slots))}")
-    return cutoff
 
 
 def _apply_ui_filters(players: list, min_ev: float, min_edge: float) -> list:
@@ -853,8 +773,6 @@ def _render_qualified_table(
 # TAB 1 — TODAY'S PICKS
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 def tab_picks(data: dict, min_ev: float, min_edge: float):
-    cutoff_et = _slate_time_controls(data, picker_key="picks_cutoff", default_hour=0)
-    data      = _time_gate_data(data, cutoff_et)
     all_players = data.get("all_players", [])
     ranked    = _apply_ui_filters(all_players, min_ev, min_edge)
     stats     = data.get("stats", {})
@@ -1318,9 +1236,6 @@ def tab_picks(data: dict, min_ev: float, min_edge: float):
 # TAB 2 — PARLAYS
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 def tab_parlays(data: dict):
-    cutoff = _slate_time_controls(data, picker_key="parlays_cutoff", default_hour=0)
-    data   = _time_gate_data(data, cutoff)
-
     ranked          = data.get("ranked", [])
     team_players    = data.get("team_players", {})
     auto_parlays    = data.get("auto_parlays", {})
@@ -2023,9 +1938,8 @@ The app will open full-screen like a native app.
         except Exception:
             st.image(str(_banner), use_container_width=True)
     st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
-    tab1, tab2, tab3, tab4 = st.tabs([
+    tab1, tab2, tab3 = st.tabs([
         "📋  TODAY'S PICKS",
-        "🎰  PARLAYS",
         "📊  PERFORMANCE",
         "🎯  ADVANCED STRATEGIES",
     ])
@@ -2038,27 +1952,17 @@ The app will open full-screen like a native app.
             st.error(f"Picks tab error: {_e}")
             st.code(_tb.format_exc())
 
-
     with tab2:
-        try:
-            data = get_data()
-            tab_parlays(data)
-        except Exception as _e:
-            st.error(f"Parlays tab error: {_e}")
-            st.code(_tb.format_exc())
-
-    with tab3:
         try:
             tab_performance()
         except Exception as _e:
             st.error(f"Performance tab error: {_e}")
             st.code(_tb.format_exc())
 
-    with tab4:
+    with tab3:
         try:
             data = get_data()
-            _adv_cutoff = _slate_time_controls(data, picker_key="adv_cutoff", default_hour=0)
-            tab_advanced_strategies(_time_gate_data(data, _adv_cutoff))
+            tab_advanced_strategies(data, parlays_callback=tab_parlays)
         except Exception as _e:
             st.error(f"Advanced strategies tab error: {_e}")
             st.code(_tb.format_exc())

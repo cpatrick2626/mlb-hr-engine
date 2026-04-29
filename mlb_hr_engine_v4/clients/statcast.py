@@ -101,7 +101,7 @@ def get_batter_statcast(year: int = None, player_ids: set[int] = None) -> dict[i
     _BLEND_KEYS = (
         "barrel_rate", "exit_velocity_avg", "hard_hit_pct",
         "sweet_spot_pct", "xslg", "fb_pct", "gb_pct",
-        "ld_pct", "pull_pct",
+        "ld_pct", "pull_pct", "pu_pct", "str_pct", "oppo_pct", "xba",
     )
 
     # Tier 3: player has zero current-year data
@@ -152,7 +152,7 @@ def get_pitcher_statcast(year: int = None, player_ids: set[int] = None) -> dict[
     _BLEND_KEYS = (
         "barrel_rate", "exit_velocity_avg", "hard_hit_pct",
         "sweet_spot_pct", "xslg", "fb_pct", "gb_pct",
-        "ld_pct", "pull_pct",
+        "ld_pct", "pull_pct", "pu_pct", "str_pct", "oppo_pct",
     )
 
     # Tier 3: pitcher has zero current-year data

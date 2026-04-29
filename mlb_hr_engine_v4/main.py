@@ -93,7 +93,6 @@ def run(dump_json_path: str = None):
     if not quiet:
         if odds_source == "none":
             display.print_no_odds_warning(api_key_set=bool(config.ODDS_API_KEY))
-            odds_api.write_shopping_list(all_by_model[:30])
         else:
             console.print(f"[dim]Odds source: {odds_source} | Statcast: {len(batter_data)} batters[/dim]\n")
 

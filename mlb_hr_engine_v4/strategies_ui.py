@@ -1,7 +1,7 @@
 # ═══════════════════════════════════════════════════════════════════════════
-# TAB 4 - ADVANCED STRATEGIES
+# ADVANCED STRATEGIES (formerly Tab 4)
 # ═══════════════════════════════════════════════════════════════════════════
-def tab_advanced_strategies(data: dict):
+def tab_advanced_strategies(data: dict, parlays_callback=None):
     """Advanced betting strategies tab with correlation parlays, hedging, stacks, etc."""
     import urllib.parse
     import streamlit as st
@@ -70,6 +70,7 @@ def tab_advanced_strategies(data: dict):
     strategy_type = st.selectbox(
         "Select Strategy Type",
         [
+            "🎰 Parlays",
             "Correlation Parlays",
             "Team Stacks",
             "Value Bomb Parlays",
@@ -115,7 +116,13 @@ def tab_advanced_strategies(data: dict):
                         break
             return result
 
-        if strategy_type == "Correlation Parlays":
+        if strategy_type == "🎰 Parlays":
+            if parlays_callback is not None:
+                parlays_callback(data)
+            else:
+                st.warning("Parlays view not available.")
+
+        elif strategy_type == "Correlation Parlays":
             st.markdown("### 🔗 Correlation-Based Parlays")
             st.info("Same-team players facing the same pitcher — correlation bonus applied to EV")
 

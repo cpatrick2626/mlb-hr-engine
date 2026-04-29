@@ -15,9 +15,11 @@ Output:
   - Simulated P&L at various probability thresholds
 
 Note:
-  Uses current season stats (not stats-as-of-date), so early-season results
-  have minimal look-ahead bias â€” most 2026 PA are < 30, so prior-year stats
-  are used anyway. Later in the season, treat calibration as approximate.
+  For historical backtests (start year < current year), Statcast leaderboard data
+  is fetched for the prior season (e.g., 2024 data for a 2025 backtest). This
+  eliminates look-ahead bias since full-season barrel%/EV/FB% aggregates would
+  otherwise include games that hadn't occurred yet on most backtest dates.
+  MLB Stats API stats-as-of-date logic handles the remaining non-Statcast signals.
 """
 
 import sys
@@ -63,15 +65,23 @@ def run():
     console.print(f"\n[bold blue]CODEX HR ENGINE v4 â€” BACKTEST[/bold blue]")
     console.print(f"[dim]Date range: {start_date} to {end_date}  ({len(dates)} days)[/dim]\n")
 
-    # Pre-fetch Statcast once (cached for the whole session)
+    # For historical backtests use prior-season Statcast to eliminate look-ahead bias:
+    # the leaderboard endpoint returns full-season aggregates (barrel%, EV, etc.) which
+    # include games that hadn't happened yet on most backtest dates. Using year-1 data
+    # reflects only what was known at the start of the backtest season.
+    start_year    = int(start_date[:4])
+    current_year  = date.today().year
+    statcast_year = (start_year - 1) if start_year < current_year else None
+
+    label = f"{statcast_year} Statcast" if statcast_year else "current-season Statcast"
     with Progress(SpinnerColumn(), TextColumn("[progress.description]{task.description}"),
                   transient=True) as progress:
-        task = progress.add_task("Loading Statcast leaderboard...", total=None)
-        batter_data  = statcast_client.get_batter_statcast()
-        pitcher_data = statcast_client.get_pitcher_statcast()
+        task = progress.add_task(f"Loading {label} leaderboard...", total=None)
+        batter_data  = statcast_client.get_batter_statcast(year=statcast_year)
+        pitcher_data = statcast_client.get_pitcher_statcast(year=statcast_year)
         progress.update(task, description=f"Statcast: {len(batter_data)} batters, {len(pitcher_data)} pitchers")
 
-    console.print(f"[dim]Statcast loaded: {len(batter_data)} batters, {len(pitcher_data)} pitchers[/dim]\n")
+    console.print(f"[dim]Statcast ({label}) loaded: {len(batter_data)} batters, {len(pitcher_data)} pitchers[/dim]\n")
 
     all_rows = []
     skipped_dates = []
