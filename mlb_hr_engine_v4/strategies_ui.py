@@ -102,6 +102,33 @@ def tab_advanced_strategies(data: dict, parlays_callback=None):
         all_players = data.get("all_players", [])
         ranked = data.get("ranked", [])
 
+        # Build lookup for modal triggers — set session_state["show_modal"]; fired by main()
+        _player_map = {p["player_name"]: p for p in all_players if p.get("player_name")}
+
+        def _player_row(player_name: str, team: str, meta: str, modal_key: str):
+            """Render a player as a clickable button (opens modal) + stats caption + FD link."""
+            _rc1, _rc2 = st.columns([5, 1])
+            with _rc1:
+                if st.button(
+                    f"• {player_name}",
+                    key=modal_key,
+                    help=f"View full stats for {player_name}",
+                    use_container_width=True,
+                ):
+                    st.session_state["show_modal"] = _player_map.get(
+                        player_name, {"player_name": player_name}
+                    )
+                    st.rerun()
+                _parts = ([f"({team})"] if team else []) + ([meta] if meta else [])
+                if _parts:
+                    st.markdown(
+                        f"<div style='font-size:11px; color:#888888; margin:-6px 0 4px 8px;'>"
+                        f"{'  ·  '.join(_parts)}</div>",
+                        unsafe_allow_html=True,
+                    )
+            with _rc2:
+                st.link_button("FD →", _fd_url(player_name), use_container_width=True)
+
         def _diverse_top(parlays: list, max_per_player: int = 2, limit: int = 10) -> list:
             """Greedy pick so no single player dominates the displayed parlays."""
             counts: dict = {}
@@ -152,14 +179,8 @@ def tab_advanced_strategies(data: dict, parlays_callback=None):
                             st.metric("Correlation Bonus", f"{parlay['correlation_bonus']*100:.1f}%")
 
                         st.write("**Players:**")
-                        for player, team in zip(parlay['legs'], parlay['teams']):
-                            st.markdown(
-                                f"<div style='display:flex; justify-content:space-between; "
-                                f"align-items:center; padding:3px 0;'>"
-                                f"<span>• <b>{player}</b> <span style='color:#888'>({team})</span></span>"
-                                f"{_fd_link(player)}</div>",
-                                unsafe_allow_html=True,
-                            )
+                        for j, (player, team) in enumerate(zip(parlay['legs'], parlay['teams'])):
+                            _player_row(player, team, "", f"modal_corr_{i}_{j}")
 
                         fd_col, _ = st.columns([1, 2])
                         with fd_col:
@@ -216,15 +237,9 @@ def tab_advanced_strategies(data: dict, parlays_callback=None):
                             st.metric("Confidence", f"{stack['confidence']:.0f}%")
 
                         st.write("**Players (Lineup Spot):**")
-                        for player, spot in zip(stack['players'], stack['lineup_spots']):
+                        for j, (player, spot) in enumerate(zip(stack['players'], stack['lineup_spots'])):
                             spot_str = f"#{spot}" if spot else "?"
-                            st.markdown(
-                                f"<div style='display:flex; justify-content:space-between; "
-                                f"align-items:center; padding:3px 0;'>"
-                                f"<span>• <b>{player}</b> <span style='color:#888'>({spot_str})</span></span>"
-                                f"{_fd_link(player)}</div>",
-                                unsafe_allow_html=True,
-                            )
+                            _player_row(player, stack['team'], f"Spot {spot_str}", f"modal_stack_{i}_{j}")
 
                         fd_col, _ = st.columns([1, 2])
                         with fd_col:
@@ -286,14 +301,8 @@ def tab_advanced_strategies(data: dict, parlays_callback=None):
                             st.metric("American Odds", _fmt_american(b['american_odds']))
                             st.metric("Legs", b['n_legs'])
                         st.write("**Players:**")
-                        for player, team, ev_e, odds_e in zip(b['legs'], b['teams'], b['ev_each'], b['odds_each']):
-                            st.markdown(
-                                f"<div style='display:flex; justify-content:space-between; align-items:center; padding:3px 0;'>"
-                                f"<span>• <b>{player}</b> <span style='color:#888'>({team})</span> "
-                                f"<span style='color:#4caf50; font-size:11px;'>EV {ev_e:+.1f}%  {_fmt_american(odds_e)}</span></span>"
-                                f"{_fd_link(player)}</div>",
-                                unsafe_allow_html=True,
-                            )
+                        for j, (player, team, ev_e, odds_e) in enumerate(zip(b['legs'], b['teams'], b['ev_each'], b['odds_each'])):
+                            _player_row(player, team, f"EV {ev_e:+.1f}%  {_fmt_american(odds_e)}", f"modal_vb_{i}_{j}")
                         fd_col, _ = st.columns([1, 2])
                         with fd_col:
                             if st.button("📲 Add All to FD Slip", key=f"fd_vb_{i}"):
@@ -376,17 +385,11 @@ def tab_advanced_strategies(data: dict, parlays_callback=None):
                             st.metric("American Odds", _fmt_american(pp['american_odds']))
                             st.metric("Avg Power Score", f"{avg_pwr:.3f}")
                         st.write("**Players:**")
-                        for player, team, pwr, brl, evo in zip(pp['legs'], pp['teams'], pp['power_scores'], pp['barrel_pcts'], pp['exit_velos']):
+                        for j, (player, team, pwr, brl, evo) in enumerate(zip(pp['legs'], pp['teams'], pp['power_scores'], pp['barrel_pcts'], pp['exit_velos'])):
                             brl_str = f"Brl {brl:.1f}%" if brl else ""
                             evo_str = f"EV {evo:.1f}" if evo else ""
-                            meta = "  ".join(filter(None, [brl_str, evo_str]))
-                            st.markdown(
-                                f"<div style='display:flex; justify-content:space-between; align-items:center; padding:3px 0;'>"
-                                f"<span>• <b>{player}</b> <span style='color:#888'>({team})</span> "
-                                f"<span style='color:#ff9800; font-size:11px;'>{meta}</span></span>"
-                                f"{_fd_link(player)}</div>",
-                                unsafe_allow_html=True,
-                            )
+                            meta = "  ·  ".join(filter(None, [brl_str, evo_str]))
+                            _player_row(player, team, meta, f"modal_pp_{i}_{j}")
                         fd_col, _ = st.columns([1, 2])
                         with fd_col:
                             if st.button("📲 Add All to FD Slip", key=f"fd_pp_{i}"):
@@ -483,14 +486,8 @@ def tab_advanced_strategies(data: dict, parlays_callback=None):
                             if hp["type"] == "same-team":
                                 st.metric("Correlation Boost", f"{(hp['corr_boost']-1)*100:.0f}%")
                         st.write("**Players:**")
-                        for player, team, spot in zip(hp['legs'], hp['teams'], hp['spots']):
-                            st.markdown(
-                                f"<div style='display:flex; justify-content:space-between; align-items:center; padding:3px 0;'>"
-                                f"<span>• <b>{player}</b> <span style='color:#888'>({team})</span> "
-                                f"<span style='color:#e91e63; font-size:11px;'>Spot #{spot}</span></span>"
-                                f"{_fd_link(player)}</div>",
-                                unsafe_allow_html=True,
-                            )
+                        for j, (player, team, spot) in enumerate(zip(hp['legs'], hp['teams'], hp['spots'])):
+                            _player_row(player, team, f"Spot #{spot}", f"modal_lh_{i}_{j}")
                         fd_col, _ = st.columns([1, 2])
                         with fd_col:
                             if st.button("📲 Add All to FD Slip", key=f"fd_lh_{i}"):
@@ -566,14 +563,8 @@ def tab_advanced_strategies(data: dict, parlays_callback=None):
                             st.metric("American Odds", _fmt_american(par['american_odds']))
                             st.metric("Park Boost", f"{(par['park_boost']-1)*100:.1f}%")
                         st.write("**Players:**")
-                        for player, team, pf in zip(par['legs'], par['teams'], par['park_factors']):
-                            st.markdown(
-                                f"<div style='display:flex; justify-content:space-between; align-items:center; padding:3px 0;'>"
-                                f"<span>• <b>{player}</b> <span style='color:#888'>({team})</span> "
-                                f"<span style='color:#00bcd4; font-size:11px;'>Park {pf:.2f}x</span></span>"
-                                f"{_fd_link(player)}</div>",
-                                unsafe_allow_html=True,
-                            )
+                        for j, (player, team, pf) in enumerate(zip(par['legs'], par['teams'], par['park_factors'])):
+                            _player_row(player, team, f"Park {pf:.2f}x", f"modal_park_{i}_{j}")
                         fd_col, _ = st.columns([1, 2])
                         with fd_col:
                             if st.button("📲 Add All to FD Slip", key=f"fd_park_{i}"):
@@ -670,17 +661,10 @@ def tab_advanced_strategies(data: dict, parlays_callback=None):
                             st.metric("Pitcher HR Factor", f"{pt['pitcher_factor']:.2f}x")
                             st.metric("Pitcher HR/9", f"{pt['pitcher_hr9']:.2f}")
                         st.write(f"**Hitters vs {pt['pitcher_name']}:**")
-                        for player, team, mp, odds_e in zip(
+                        for j, (player, team, mp, odds_e) in enumerate(zip(
                             pt['legs'], pt['teams'], pt['model_probs'], pt['odds_each']
-                        ):
-                            st.markdown(
-                                f"<div style='display:flex; justify-content:space-between; align-items:center; padding:3px 0;'>"
-                                f"<span>• <b>{player}</b> <span style='color:#888'>({team})</span> "
-                                f"<span style='color:{pf_color}; font-size:11px;'>"
-                                f"Model {mp:.1f}%  {_fmt_american(odds_e)}</span></span>"
-                                f"{_fd_link(player)}</div>",
-                                unsafe_allow_html=True,
-                            )
+                        )):
+                            _player_row(player, team, f"Model {mp:.1f}%  {_fmt_american(odds_e)}", f"modal_pt_{i}_{j}")
                         fd_col, _ = st.columns([1, 2])
                         with fd_col:
                             if st.button("📲 Add All to FD Slip", key=f"fd_pt_{i}"):
@@ -756,18 +740,11 @@ def tab_advanced_strategies(data: dict, parlays_callback=None):
                             st.metric("American Odds", _fmt_american(pp['american_odds']))
                             st.metric("Avg Platoon Factor", f"{pp['avg_platoon']:.2f}x")
                         st.write("**Players:**")
-                        for player, team, plat, pitcher, mp in zip(
+                        for j, (player, team, plat, pitcher, mp) in enumerate(zip(
                             pp['legs'], pp['teams'], pp['platoon_factors'],
                             pp['pitchers'], pp['model_probs']
-                        ):
-                            st.markdown(
-                                f"<div style='display:flex; justify-content:space-between; align-items:center; padding:3px 0;'>"
-                                f"<span>• <b>{player}</b> <span style='color:#888'>({team})</span> "
-                                f"<span style='color:#9c27b0; font-size:11px;'>"
-                                f"Platoon {plat:.2f}x  vs {pitcher}  Model {mp:.1f}%</span></span>"
-                                f"{_fd_link(player)}</div>",
-                                unsafe_allow_html=True,
-                            )
+                        )):
+                            _player_row(player, team, f"Platoon {plat:.2f}x  vs {pitcher}  Model {mp:.1f}%", f"modal_plat_{i}_{j}")
                         fd_col, _ = st.columns([1, 2])
                         with fd_col:
                             if st.button("📲 Add All to FD Slip", key=f"fd_plat_{i}"):
@@ -843,16 +820,10 @@ def tab_advanced_strategies(data: dict, parlays_callback=None):
                             st.metric("American Odds", _fmt_american(wx['american_odds']))
                             st.metric("Avg Weather Factor", f"{wx['avg_weather']:.3f}x")
                         st.write("**Players:**")
-                        for player, team, wf, ht in zip(
+                        for j, (player, team, wf, ht) in enumerate(zip(
                             wx['legs'], wx['teams'], wx['weather_factors'], wx['home_teams']
-                        ):
-                            st.markdown(
-                                f"<div style='display:flex; justify-content:space-between; align-items:center; padding:3px 0;'>"
-                                f"<span>• <b>{player}</b> <span style='color:#888'>({team} @ {ht})</span> "
-                                f"<span style='color:#03a9f4; font-size:11px;'>Weather {wf:.3f}x</span></span>"
-                                f"{_fd_link(player)}</div>",
-                                unsafe_allow_html=True,
-                            )
+                        )):
+                            _player_row(player, f"{team} @ {ht}", f"Weather {wf:.3f}x", f"modal_wx_{i}_{j}")
                         fd_col, _ = st.columns([1, 2])
                         with fd_col:
                             if st.button("📲 Add All to FD Slip", key=f"fd_wx_{i}"):
@@ -930,19 +901,12 @@ def tab_advanced_strategies(data: dict, parlays_callback=None):
                             st.metric("American Odds", _fmt_american(sp['american_odds']))
                             st.metric("Avg Streak Factor", f"{sp['avg_streak']:.3f}x")
                         st.write("**Players (last 10 games):**")
-                        for player, team, sf, shr, spa, mp in zip(
+                        for j, (player, team, sf, shr, spa, mp) in enumerate(zip(
                             sp['legs'], sp['teams'], sp['streak_factors'],
                             sp['short_hrs'], sp['short_pas'], sp['model_probs']
-                        ):
+                        )):
                             recent_str = f"{shr} HR / {spa} PA" if spa > 0 else "recent data N/A"
-                            st.markdown(
-                                f"<div style='display:flex; justify-content:space-between; align-items:center; padding:3px 0;'>"
-                                f"<span>• <b>{player}</b> <span style='color:#888'>({team})</span> "
-                                f"<span style='color:#ff5722; font-size:11px;'>"
-                                f"Streak {sf:.3f}x  |  Last 10: {recent_str}  |  Model {mp:.1f}%</span></span>"
-                                f"{_fd_link(player)}</div>",
-                                unsafe_allow_html=True,
-                            )
+                            _player_row(player, team, f"Streak {sf:.3f}x  |  Last 10: {recent_str}  |  Model {mp:.1f}%", f"modal_str_{i}_{j}")
                         fd_col, _ = st.columns([1, 2])
                         with fd_col:
                             if st.button("📲 Add All to FD Slip", key=f"fd_str_{i}"):
@@ -1038,9 +1002,9 @@ def tab_advanced_strategies(data: dict, parlays_callback=None):
                         with col2:
                             st.metric("American Odds", _fmt_american(sa['american_odds']))
                             st.metric("Avg Alignment Score", f"{avg_score:.3f}")
-                        for player, team, fac, score in zip(
+                        for j, (player, team, fac, score) in enumerate(zip(
                             sa['legs'], sa['teams'], sa['factors'], sa['scores']
-                        ):
+                        )):
                             factor_parts = [
                                 f"Park {fac['park']:.2f}x",
                                 f"Pit {fac['pitcher']:.2f}x",
@@ -1048,14 +1012,7 @@ def tab_advanced_strategies(data: dict, parlays_callback=None):
                                 f"Plat {fac['platoon']:.2f}x",
                                 f"Streak {fac['streak']:.3f}x",
                             ]
-                            st.markdown(
-                                f"<div style='display:flex; justify-content:space-between; align-items:center; padding:3px 0;'>"
-                                f"<span>• <b>{player}</b> <span style='color:#888'>({team})</span></span>"
-                                f"{_fd_link(player)}</div>"
-                                f"<div style='font-size:10px; color:#666; padding:0 0 6px 14px;'>"
-                                f"{'  ·  '.join(factor_parts)}</div>",
-                                unsafe_allow_html=True,
-                            )
+                            _player_row(player, team, "  ·  ".join(factor_parts), f"modal_sa_{i}_{j}")
                         fd_col, _ = st.columns([1, 2])
                         with fd_col:
                             if st.button("📲 Add All to FD Slip", key=f"fd_sa_{i}"):

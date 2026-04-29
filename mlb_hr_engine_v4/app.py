@@ -585,6 +585,104 @@ def _fanduel_url(player_name: str = "") -> str:
     return "https://sportsbook.fanduel.com/baseball/mlb?tab=player-home-runs"
 
 
+@st.dialog("⚾ Player Details", width="large")
+def _show_player_modal(player: dict):
+    name  = player.get("player_name", "Unknown")
+    team  = player.get("team", "")
+    opp   = player.get("opponent", "")
+    pit   = player.get("pitcher_name", "TBD")
+    spot  = player.get("lineup_spot")
+    sc_src = player.get("statcast_source", "none")
+
+    st.markdown(
+        f"<div style='font-size:20px; font-weight:800; color:#f0f0f0;'>{name}</div>"
+        f"<div style='font-size:13px; color:#888; margin-bottom:12px;'>"
+        f"{team} vs {opp} &nbsp;·&nbsp; vs {pit}"
+        f"{f'  &nbsp;·&nbsp;  Bat #{spot}' if spot else ''}"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+    # ── Key metrics ──────────────────────────────────────────────────────
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Model%",   f"{player.get('model_prob', 0)*100:.1f}%")
+    c2.metric("Best Odds", _fmt_american(player.get("best_american")))
+    c3.metric("EV%",      f"{player.get('ev_pct', 0):+.1f}%")
+    c4.metric("Edge%",    f"{player.get('edge_pct', 0):+.1f}%")
+
+    st.divider()
+
+    # ── Factor breakdown ──────────────────────────────────────────────────
+    st.caption("**Game-day factors**")
+    f1, f2, f3, f4, f5 = st.columns(5)
+    f1.metric("Park",    f"{player.get('park_factor',    1.0):.3f}×")
+    f2.metric("Pitcher", f"{player.get('pitcher_factor', 1.0):.3f}×")
+    f3.metric("Weather", f"{player.get('weather_factor', 1.0):.3f}×")
+    f4.metric("Platoon", f"{player.get('platoon_factor', 1.0):.3f}×")
+    f5.metric("Streak",  f"{player.get('streak_factor',  1.0):.3f}×")
+
+    st.divider()
+
+    # ── Statcast power profile ────────────────────────────────────────────
+    def _pct(val, mult=100, suffix="%", dec=1):
+        try:
+            return f"{float(val)*mult:.{dec}f}{suffix}" if val not in (None, "--") else "--"
+        except (TypeError, ValueError):
+            return "--"
+
+    st.caption(f"**Statcast power profile** — source: *{sc_src}*")
+    s1, s2, s3, s4 = st.columns(4)
+    s1.metric("Barrel%",    _pct(player.get("barrel_pct")))
+    s2.metric("Exit Velo",  f"{player.get('exit_velo', 0):.1f}" if player.get("exit_velo") else "--")
+    s3.metric("Hard Hit%",  _pct(player.get("hard_hit")))
+    s4.metric("Sweet Spot%",_pct(player.get("sweet_spot_pct")))
+
+    s5, s6, s7, s8 = st.columns(4)
+    s5.metric("FB%",        _pct(player.get("fb_pct")))
+    s6.metric("Pull%",      _pct(player.get("pull_pct")))
+    s7.metric("xSLG",       f"{player.get('xslg', 0):.3f}" if player.get("xslg") else "--")
+    s8.metric("xBA",        f"{player.get('xba', 0):.3f}"  if player.get("xba")  else "--")
+
+    st.divider()
+
+    # ── Season stats ──────────────────────────────────────────────────────
+    st.caption("**Season / recent stats**")
+    t1, t2, t3, t4 = st.columns(4)
+    t1.metric("Season PA",  player.get("season_pa", "--"))
+    t2.metric("Season HR",  player.get("season_hr", "--"))
+    t3.metric("Recent PA",  player.get("recent_pa", "--"))
+    t4.metric("HR Rate",    f"{player.get('hr_rate', 0)*100:.2f}%" if player.get("hr_rate") else "--")
+
+    st.divider()
+
+    # ── FD Slip action ────────────────────────────────────────────────────
+    odds   = player.get("fanduel_american") or player.get("best_american")
+    _label = f"{name} ({team}) {_fmt_american(odds)}"
+    _current = st.session_state.get("fd_slip", [])
+    _in_slip = _label in _current
+
+    btn_col, fd_col = st.columns(2)
+    with btn_col:
+        if _in_slip:
+            if st.button("✓ In Slip — Remove", type="secondary", use_container_width=True, key="modal_slip_rm"):
+                st.session_state["fd_slip"] = [x for x in _current if x != _label]
+                st.session_state.pop("fd_slip_select", None)
+                st.rerun()
+        else:
+            if st.button("➕ Add to FD Slip", type="primary", use_container_width=True, key="modal_slip_add"):
+                st.session_state["fd_slip"] = list(_current) + [_label]
+                st.session_state.pop("fd_slip_select", None)
+                st.rerun()
+    with fd_col:
+        st.link_button("📲 Open on FanDuel", _fanduel_url(name), use_container_width=True)
+
+
+def _open_player_modal(player: dict):
+    """Store player in session_state so the modal fires on the next rerun."""
+    st.session_state["show_modal"] = player
+    st.rerun()
+
+
 def _add_legs_to_fd_slip(legs: list[dict]) -> int:
     """Merge parlay legs into the FanDuel slip and force sidebar rerender."""
     current = list(st.session_state.get("fd_slip", []))
@@ -784,10 +882,13 @@ def _render_qualified_table(
     df = df.fillna("--")
     df = df.replace([np.nan, np.inf, -np.inf, float('inf'), -float('inf')], "--")
 
-    st.dataframe(
+    _df_sel = st.dataframe(
         df,
         width='stretch',
         hide_index=True,
+        on_select="rerun",
+        selection_mode="single-row",
+        key=f"picks_df_{key_suffix}",
         column_config={
             "Rating":  st.column_config.TextColumn("Rating",
                 help=(
@@ -843,6 +944,16 @@ def _render_qualified_table(
                 help=f"Ranking score = 40% EV% + 35% Edge% + 25% Conf.\nRange: {score_rng}"),
         },
     )
+
+    # Open player modal on row click
+    _sel_rows = getattr(getattr(_df_sel, "selection", None), "rows", [])
+    if _sel_rows:
+        _row_sig = f"picks_{key_suffix}_{_sel_rows[0]}"
+        if st.session_state.get("_modal_row_sig") != _row_sig and 0 <= _sel_rows[0] < len(ranked):
+            st.session_state["_modal_row_sig"] = _row_sig
+            st.session_state["show_modal"] = ranked[_sel_rows[0]]
+            st.rerun()
+    st.caption("💡 Click any row to view full player details & add to FD Slip.")
 
     if rows:
         csv_buf = io.StringIO()
@@ -965,35 +1076,37 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
             if not _quick_pool:
                 st.info("No qualified picks. Adjust EV/Edge filters in the sidebar.")
             else:
-                st.caption("Top picks — tap a card to open FanDuel.")
-                for _qp in _quick_pool:
+                st.caption("Top picks — tap player name to view details & add to FD Slip.")
+                for _qi, _qp in enumerate(_quick_pool):
                     _qev      = _qp.get("ev_pct", 0)
                     _qodds    = _qp.get("best_american")
-                    _qmodel   = _qp.get("hr_prob", 0) * 100
+                    _qmodel   = _qp.get("model_prob", 0) * 100
                     _qteam    = _qp.get("team", "")
-                    _qvs      = _qp.get("opposing_pitcher", "")
+                    _qvs      = _qp.get("pitcher_name", "")
                     _qspot    = _qp.get("lineup_spot")
                     _qev_col  = "#4ade80" if _qev >= 0 else "#f87171"
                     _qconf    = "✅" if _qspot is not None else "⏳"
                     _qurl     = _fanduel_url(_qp["player_name"])
+                    if st.button(
+                        f"{_qconf} {_qp['player_name']}",
+                        key=f"qv_modal_{_qi}",
+                        use_container_width=True,
+                    ):
+                        st.session_state["show_modal"] = _qp
+                        st.rerun()
                     st.markdown(
-                        f"<a href='{_qurl}' target='_blank' style='text-decoration:none;'>"
                         f"<div style='background:#0d0d20; border:1px solid #1e1e40; border-radius:10px; "
-                        f"padding:14px 16px; margin-bottom:10px; cursor:pointer;'>"
+                        f"padding:10px 16px; margin-bottom:10px;'>"
                         f"<div style='display:flex; justify-content:space-between; align-items:flex-start;'>"
-                        f"<div>"
-                        f"<div style='font-size:17px; font-weight:700; color:#f0f0f0; line-height:1.2;'>"
-                        f"{_qconf} {_qp['player_name']}</div>"
-                        f"<div style='font-size:13px; color:#888; margin-top:3px;'>"
-                        f"{_qteam} vs {_qvs}</div>"
-                        f"</div>"
+                        f"<div style='font-size:13px; color:#888;'>{_qteam} vs {_qvs}</div>"
+                        f"<a href='{_qurl}' target='_blank' style='text-decoration:none;'>"
                         f"<div style='text-align:right;'>"
                         f"<div style='font-size:20px; font-weight:700; color:#FF6666;'>"
                         f"{_fmt_american(_qodds)}</div>"
-                        f"<div style='font-size:12px; color:#888;'>best odds</div>"
+                        f"<div style='font-size:12px; color:#888;'>best odds ↗</div>"
+                        f"</div></a>"
                         f"</div>"
-                        f"</div>"
-                        f"<div style='display:flex; gap:16px; margin-top:10px;'>"
+                        f"<div style='display:flex; gap:16px; margin-top:8px;'>"
                         f"<div style='text-align:center; flex:1; background:#0a0a18; "
                         f"border-radius:6px; padding:6px 4px;'>"
                         f"<div style='font-size:18px; font-weight:700; color:#a78bfa;'>{_qmodel:.0f}%</div>"
@@ -1005,7 +1118,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                         f"<div style='font-size:10px; color:#666;'>EV</div>"
                         f"</div>"
                         f"</div>"
-                        f"</div></a>",
+                        f"</div>",
                         unsafe_allow_html=True,
                     )
 
@@ -1357,13 +1470,26 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                 rows.append({c: _extract(c, p, pit_fac, plat_fac) for c in visible_cols})
             return rows
 
+        _model_df_idx = [0]  # mutable counter for unique keys across calls
+
         def _render_model_df(players):
             if not players:
                 st.info("No players in this view.")
                 return
+            _model_df_idx[0] += 1
+            _df_key = f"model_df_{_model_df_idx[0]}"
             df = pd.DataFrame(_model_rows(players))
             df = df.fillna("--").replace([np.nan, np.inf, -np.inf, float('inf'), -float('inf')], "--")
-            st.dataframe(df, width='stretch', hide_index=True, column_config=_col_cfg)
+            _msel = st.dataframe(df, width='stretch', hide_index=True, column_config=_col_cfg,
+                                 on_select="rerun", selection_mode="single-row", key=_df_key)
+            _mrows = getattr(getattr(_msel, "selection", None), "rows", [])
+            if _mrows:
+                _sig = f"{_df_key}_{_mrows[0]}"
+                if st.session_state.get("_modal_row_sig") != _sig and 0 <= _mrows[0] < len(players):
+                    st.session_state["_modal_row_sig"] = _sig
+                    st.session_state["show_modal"] = players[_mrows[0]]
+                    st.rerun()
+            st.caption("💡 Click any row to view full player details & add to FD Slip.")
 
         prime = [p for p in all_by_model if p.get("model_prob", 0) >= PRIME_FLOOR][:60]
         watch = [p for p in all_by_model if p.get("model_prob", 0) < PRIME_FLOOR][:20]
@@ -1836,6 +1962,10 @@ def tab_performance():
 # MAIN
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 def main():
+    # Fire player detail modal if one was queued (pop so it only shows once)
+    if "show_modal" in st.session_state:
+        _show_player_modal(st.session_state.pop("show_modal"))
+
     # Read filter thresholds from session state first (sidebar sets them on each rerun)
     _min_ev   = float(st.session_state.get("min_ev",   config.MIN_EV_PCT))
     _min_edge = float(st.session_state.get("min_edge", config.MIN_EDGE_PCT))
