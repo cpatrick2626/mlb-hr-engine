@@ -2073,7 +2073,7 @@ def main():
             age_str = f"{age_min}m ago" if age_min < 60 else f"{age_min // 60}h {age_min % 60}m ago"
             st.caption(f"Data loaded {age_str} ({loaded_at.strftime('%-I:%M %p')})")
 
-        _sc_stats = data.get("stats", {}) if "data" in st.session_state else {}
+        _sc_stats = st.session_state["data"].get("stats", {}) if "data" in st.session_state else {}
         if _sc_stats.get("players"):
             _sc_cur  = _sc_stats.get("sc_current", 0)
             _sc_bl   = _sc_stats.get("sc_blended", 0)
