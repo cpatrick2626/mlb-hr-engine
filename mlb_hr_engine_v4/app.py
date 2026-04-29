@@ -2193,7 +2193,22 @@ The app will open full-screen like a native app.
     with tab3:
         try:
             data = get_data()
-            tab_advanced_strategies(data, parlays_callback=tab_parlays)
+            _cutoff = st.session_state.get("cutoff_utc_hour")
+            if _cutoff is not None:
+                _gated_data = dict(data)
+                _gated_data["all_players"] = [
+                    p for p in data.get("all_players", [])
+                    if (gh := _game_time_utc_hour(p.get("game_time_utc", ""))) is None
+                    or gh >= _cutoff
+                ]
+                _gated_data["ranked"] = [
+                    p for p in data.get("ranked", [])
+                    if (gh := _game_time_utc_hour(p.get("game_time_utc", ""))) is None
+                    or gh >= _cutoff
+                ]
+            else:
+                _gated_data = data
+            tab_advanced_strategies(_gated_data, parlays_callback=tab_parlays)
         except Exception as _e:
             st.error(f"Advanced strategies tab error: {_e}")
             st.code(_tb.format_exc())
