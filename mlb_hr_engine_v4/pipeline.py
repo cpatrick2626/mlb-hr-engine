@@ -480,5 +480,13 @@ def load_game_data(
             "players":   len(all_players),
             "qualified": len(qualified),
             "filtered":  len(all_players) - len(qualified),
+            # Statcast coverage breakdown across today's player pool
+            "sc_current":  sum(1 for p in all_players if p.get("statcast_source") == "current"),
+            "sc_blended":  sum(1 for p in all_players if p.get("statcast_source") == "blended"),
+            "sc_prior":    sum(1 for p in all_players if p.get("statcast_source") == "prior"),
+            "sc_none":     sum(1 for p in all_players if p.get("statcast_source") in ("none", None, "")),
+            # Pitcher Statcast coverage (pitcher_data keyed by pitcher_id)
+            "pit_sc_count": len(pitcher_data),
+            "pit_total":   len({p.get("pitcher_id") for p in all_players if p.get("pitcher_id")}),
         },
     }

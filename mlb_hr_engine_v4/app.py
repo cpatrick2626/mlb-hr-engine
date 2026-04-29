@@ -2018,6 +2018,24 @@ def main():
             age_str = f"{age_min}m ago" if age_min < 60 else f"{age_min // 60}h {age_min % 60}m ago"
             st.caption(f"Data loaded {age_str} ({loaded_at.strftime('%-I:%M %p')})")
 
+        _sc_stats = data.get("stats", {}) if "data" in st.session_state else {}
+        if _sc_stats.get("players"):
+            _sc_cur  = _sc_stats.get("sc_current", 0)
+            _sc_bl   = _sc_stats.get("sc_blended", 0)
+            _sc_pr   = _sc_stats.get("sc_prior", 0)
+            _sc_no   = _sc_stats.get("sc_none", 0)
+            _sc_tot  = _sc_stats.get("players", 1)
+            _pit_sc  = _sc_stats.get("pit_sc_count", 0)
+            _pit_tot = _sc_stats.get("pit_total", 1) or 1
+            _batter_cov = round((_sc_cur + _sc_bl + _sc_pr) / _sc_tot * 100)
+            _pit_cov    = round(_pit_sc / _pit_tot * 100)
+            with st.expander(f"📡 Coverage — batters {_batter_cov}% / pitchers {_pit_cov}%"):
+                st.caption(
+                    f"**Batter Statcast:** {_sc_cur} current · {_sc_bl} blended · "
+                    f"{_sc_pr} prior · {_sc_no} none  \n"
+                    f"**Pitcher Statcast:** {_pit_sc}/{_pit_tot} ({_pit_cov}%)"
+                )
+
         if st.button("🔄 Force Refresh Data", width='stretch'):
             from clients import mlb_stats as _ms, statcast as _sc
             _ms.clear_all_caches()

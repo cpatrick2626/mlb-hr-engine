@@ -219,7 +219,7 @@ def _settle_date(date_str: str) -> dict:
         if _sheets.available():
             _sheets.append_rows("results", RESULTS_FIELDS, result_rows)
         else:
-            _append_csv(RESULTS_PATH, RESULTS_FIELDS, result_rows)
+            _upsert_results(result_rows)
 
     return {"settled": settled, "not_found": len(pending) - settled, "date": date_str}
 
@@ -300,11 +300,13 @@ def _pick_row(p: dict, today: str, model_version: str) -> dict:
 
 
 def _load_pending(date_str: str) -> list[dict]:
-    """Load picks for a date that haven't been settled yet."""
+    """Load picks for a date that haven't been settled yet.
+    A pick is only considered settled when hr_result is non-empty in results.csv."""
     if _sheets.available():
         all_picks = _sheets.read_rows("picks_log")
         settled_names = {r.get("player_name") for r in _load_results()
-                         if str(r.get("date", "")) == date_str}
+                         if str(r.get("date", "")) == date_str
+                         and r.get("hr_result", "")}
         return [r for r in all_picks
                 if str(r.get("date", "")) == date_str
                 and r.get("player_name") not in settled_names]
@@ -313,12 +315,12 @@ def _load_pending(date_str: str) -> list[dict]:
             return []
         with open(LOG_PATH, newline="", encoding="utf-8") as f:
             all_picks = list(csv.DictReader(f))
-        # Check which are already settled
+        # Only count as settled if hr_result is actually populated
         settled_names: set[str] = set()
         if RESULTS_PATH.exists():
             with open(RESULTS_PATH, newline="", encoding="utf-8") as f:
                 for row in csv.DictReader(f):
-                    if row.get("date") == date_str:
+                    if row.get("date") == date_str and row.get("hr_result", ""):
                         settled_names.add(row.get("player_name", ""))
         return [r for r in all_picks
                 if r.get("date") == date_str
@@ -332,6 +334,24 @@ def _load_results() -> list[dict]:
         return []
     with open(RESULTS_PATH, newline="", encoding="utf-8") as f:
         return list(csv.DictReader(f))
+
+
+def _upsert_results(new_rows: list[dict]) -> None:
+    """Write settled rows to results.csv, replacing any existing empty-outcome rows
+    for the same date+player_name rather than appending duplicates."""
+    incoming = {(r["date"], r["player_name"]): r for r in new_rows}
+    existing: list[dict] = []
+    if RESULTS_PATH.exists():
+        with open(RESULTS_PATH, newline="", encoding="utf-8") as f:
+            for row in csv.DictReader(f):
+                key = (row.get("date", ""), row.get("player_name", ""))
+                if key not in incoming:
+                    existing.append(row)
+    merged = existing + list(incoming.values())
+    with open(RESULTS_PATH, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=RESULTS_FIELDS, extrasaction="ignore")
+        writer.writeheader()
+        writer.writerows(merged)
 
 
 def _append_csv(path: Path, fields: list[str], rows: list[dict]) -> None:
