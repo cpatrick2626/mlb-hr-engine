@@ -626,7 +626,13 @@ def _show_player_modal(player: dict):
     # ── Statcast power profile ────────────────────────────────────────────
     def _pct(val, mult=100, suffix="%", dec=1):
         try:
-            return f"{float(val)*mult:.{dec}f}{suffix}" if val not in (None, "--") else "--"
+            if val in (None, "--", ""):
+                return "--"
+            s = str(val).strip()
+            if s.endswith("%"):
+                # Already formatted as a percent string (e.g. "8.5%") — just reformat
+                return f"{float(s[:-1]):.{dec}f}{suffix}"
+            return f"{float(s) * mult:.{dec}f}{suffix}"
         except (TypeError, ValueError):
             return "--"
 
