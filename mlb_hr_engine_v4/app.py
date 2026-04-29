@@ -1894,7 +1894,7 @@ def main():
         # ── Game time gate ────────────────────────────────────────────────────
         st.markdown("#### ⏰ Game Time Cutoff")
         _time_gate_on = st.toggle(
-            "Only show games starting before…",
+            "Only show games starting after…",
             value=st.session_state.get("time_gate_on", False),
             key="time_gate_on",
         )
@@ -1902,7 +1902,7 @@ def main():
         if _time_gate_on:
             import datetime as _dtlib
             _cutoff_et = st.time_input(
-                "Cutoff (Eastern Time)",
+                "Start time (Eastern Time)",
                 value=st.session_state.get(
                     "time_gate_et",
                     _dtlib.time(19, 0),   # default 7:00 PM ET
@@ -1914,7 +1914,7 @@ def main():
             # MLB season runs in EDT (UTC-4). Convert ET cutoff → UTC hour.
             _cutoff_utc_hour = (_cutoff_et.hour + 4) % 24
             st.caption(
-                f"Showing games before {_cutoff_et.strftime('%-I:%M %p')} ET "
+                f"Showing games starting at/after {_cutoff_et.strftime('%-I:%M %p')} ET "
                 f"({_cutoff_utc_hour:02d}:00 UTC)"
             )
         st.session_state["cutoff_utc_hour"] = _cutoff_utc_hour
