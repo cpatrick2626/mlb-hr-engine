@@ -34,19 +34,21 @@ def calculate_hedge_bet(
     # Calculate original payout
     original_payout = original_stake * orig_decimal
 
-    if target_profit is None:
-        # Break-even hedge
-        hedge_stake = original_stake
-        guaranteed = 0
+    if hedge_decimal <= 1.001:
+        hedge_stake = 0.0
+    elif target_profit and target_profit > 0:
+        # Solve for hedge-side guaranteed = target:
+        # hedge_stake * (hedge_decimal - 1) - original_stake = target_profit
+        hedge_stake = (original_stake + target_profit) / (hedge_decimal - 1)
     else:
-        # Target profit hedge
-        # hedge_stake * hedge_decimal = original_stake + target_profit
-        hedge_stake = (original_stake + target_profit) / hedge_decimal
-        guaranteed = target_profit
+        # Full lock: equalize both outcome profits
+        # orig_payout - original_stake - h == h*(hedge_decimal-1) - original_stake
+        # => orig_payout = h * hedge_decimal
+        hedge_stake = original_payout / hedge_decimal
 
-    # Calculate profit in each scenario
+    # Net profit in each scenario
     if_original_wins = original_payout - original_stake - hedge_stake
-    if_hedge_wins = (hedge_stake * hedge_decimal) - hedge_stake - original_stake
+    if_hedge_wins    = hedge_stake * (hedge_decimal - 1) - original_stake
 
     return {
         "hedge_stake": round(hedge_stake, 2),
