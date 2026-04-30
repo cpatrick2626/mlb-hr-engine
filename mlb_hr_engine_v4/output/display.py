@@ -160,7 +160,8 @@ def print_model_probabilities(all_players: list[dict], top_n: int = 20) -> None:
         brl = p.get("barrel_pct", "")
         brl_str = f"[bold]{brl}[/bold]" if brl else "[dim]--[/dim]"
 
-        ev_str = p.get("exit_velo", "") or "[dim]--[/dim]"
+        ev_val = p.get("exit_velo")
+        ev_str = ev_val if (ev_val and ev_val != "--") else "[dim]--[/dim]"
         spot_str = str(p.get("lineup_spot")) if p.get("lineup_spot") else "?"
 
         table.add_row(

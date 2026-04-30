@@ -30,7 +30,7 @@ from rich.progress import Progress, SpinnerColumn, TextColumn
 
 from clients import statcast as statcast_client
 from backtest.outcomes import get_game_results, get_date_range
-from backtest.runner import score_date
+from backtest.runner import score_date, clear_cache as _clear_runner_cache
 from backtest.calibration import calibration_report
 
 console = Console(legacy_windows=False, highlight=False, width=180)
@@ -105,6 +105,7 @@ def run():
 
                 scored = score_date(d, results, batter_data, pitcher_data)
                 all_rows.extend(scored)
+                _clear_runner_cache()  # release per-date stat snapshots; game logs stay in mlb_stats cache
                 progress.update(task, description=f"{d}: {len(scored)} batters scored")
             except Exception as e:
                 skipped_dates.append(d)

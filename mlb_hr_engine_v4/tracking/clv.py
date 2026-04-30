@@ -227,5 +227,6 @@ def _fetch_current_hr_odds() -> dict[str, int]:
                             if name and (name not in best or price > best[name]):
                                 best[name] = price
         return best
-    except Exception:
+    except Exception as e:
+        print(f"[clv] odds fetch failed: {e}")
         return {}

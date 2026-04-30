@@ -685,7 +685,7 @@ def _calculate_recent_from_logs(game_logs: list) -> dict:
         "homeRuns": 0,
         "doubles": 0,
         "triples": 0,
-        "walks": 0,
+        "baseOnBalls": 0,  # MLB API field name (not "walks")
         "strikeOuts": 0,
         "rbi": 0,
         "runs": 0,
@@ -697,16 +697,17 @@ def _calculate_recent_from_logs(game_logs: list) -> dict:
 
     # Calculate percentages
     if totals["atBats"] > 0:
-        totals["avg"] = round(totals["hits"] / totals["atBats"], 3)
-        total_bases = (totals["hits"] - totals["doubles"] - totals["triples"] - totals["homeRuns"] +
-                      2 * totals["doubles"] + 3 * totals["triples"] + 4 * totals["homeRuns"])
-        totals["sluggingPercentage"] = round(total_bases / totals["atBats"], 3)
+        hi, db, tr, hr = totals["hits"], totals["doubles"], totals["triples"], totals["homeRuns"]
+        totals["avg"]                = round(hi / totals["atBats"], 3)
+        totals["sluggingPercentage"] = round((hi + db + 2*tr + 3*hr) / totals["atBats"], 3)
     else:
         totals["avg"] = 0.0
         totals["sluggingPercentage"] = 0.0
 
     if totals["plateAppearances"] > 0:
-        totals["onBasePercentage"] = round((totals["hits"] + totals["walks"]) / totals["plateAppearances"], 3)
+        totals["onBasePercentage"] = round(
+            (totals["hits"] + totals["baseOnBalls"]) / totals["plateAppearances"], 3
+        )
         totals["ops"] = totals["onBasePercentage"] + totals["sluggingPercentage"]
     else:
         totals["onBasePercentage"] = 0.0

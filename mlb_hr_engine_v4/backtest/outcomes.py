@@ -45,7 +45,8 @@ def get_game_results(date_str: str) -> list[dict]:
             rows = _parse_boxscore(game, box)
             results.extend(rows)
             time.sleep(0.15)  # be polite to the API
-        except Exception:
+        except Exception as e:
+            print(f"[outcomes] skip game {game.get('game_pk', '?')}: {e}")
             continue
     return results
 

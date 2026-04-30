@@ -191,7 +191,8 @@ def _get_event_props(event_id: str) -> list[dict]:
                         "game_id": event_id,
                     })
         return props
-    except Exception:
+    except Exception as e:
+        print(f"[odds_api] props fetch failed for event {event_id}: {e}")
         return []
 
 
