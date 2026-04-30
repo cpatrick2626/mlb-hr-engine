@@ -377,9 +377,7 @@ def weather_factor(home_team: str) -> tuple[float, dict]:
     return max(0.80, min(1.20, t_factor * w_factor)), weather
 
 
-# Hard ceiling on per-game HR probability. Full-season backtest shows the actual
-# HR rate in the 30%+ bucket is ~30.1%; 0.31 aligns the ceiling with observed reality.
-_MAX_GAME_HR_PROB = 0.31
+_MAX_GAME_HR_PROB = config.MAX_GAME_HR_PROB  # canonical source: config.py
 
 def game_hr_probability(
     hr_rate: float, exp_pa: float,

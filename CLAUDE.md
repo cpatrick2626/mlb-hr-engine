@@ -94,9 +94,13 @@ Every version follows the same flow:
 ### Key Model Constants (`config.py`)
 
 - `KELLY_FRACTION = 0.25` — quarter-Kelly risk scaling
-- `LEAGUE_AVG_HR_PA = 0.033` — regression target
+- `LEAGUE_AVG_HR_PA = 0.028` — regression target (2026 YTD; revisit mid-May)
 - `REGRESSION_PA = 200` — Bayesian shrinkage weight
-- `RECENT_WEIGHT = 0.65 / SEASON_WEIGHT = 0.35` — blending recent (30-day) vs season stats
+- `RECENT_WEIGHT = 0.30 / SEASON_WEIGHT = 0.70` — blending recent vs season stats
+- `LEAGUE_AVG_HR9 = 1.09`, `LEAGUE_HR_FB = 0.106` — pitcher league baselines (2026 YTD)
+- `MAX_GAME_HR_PROB = 0.31` — hard ceiling on per-game HR probability (calibration-backed)
+- `PRIOR_YEAR_TRUST = 0.85`, `MIN_CURRENT_YEAR_PA = 50` — Statcast prior-year blending
+- All Statcast leaderboard league averages (barrel%, exit velo, hard hit%, etc.) live in `config.py`; update all together at mid-season refresh
 - `MIN_EV_PCT = 3.0`, `MIN_EDGE_PCT = 2.0` — filter floor thresholds
 - `MIN_PA_THRESHOLD = 3.3` — blocks 9-hole batters (3.2 PA); `MAX_PARK_PENALTY = 0.87` — blocks SF + SD
 

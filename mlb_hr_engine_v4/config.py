@@ -53,10 +53,26 @@ MIN_RECENT_PA: int = 20             # Need ≥20 recent PA to trust recent rate
 LEAGUE_AVG_HR9: float = 1.09          # 2026 MLB YTD (Apr); revisit mid-May as sample grows
 LEAGUE_AVG_ISO: float = 0.150         # ISO = SLG - AVG; 2026 MLB YTD
 LEAGUE_HR_FB:   float = 0.106         # HR per fly ball; 2026 MLB YTD (down from 0.120 in 2025)
-LEAGUE_AVG_BARREL_RATE: float = 0.055 # barrel per PA (brl_pa); 2026 YTD (was 0.057 in 2025)
+# All Statcast leaderboard league averages live here — single source for mid-May refresh.
 # NOTE: Savant fb_rate is pure fly balls (excludes popups). FanGraphs FB% (~34%) combines fb+pu.
-# This must match Savant's definition since it's used against the Savant CSV fb_rate column.
-LEAGUE_AVG_FB_PCT:      float = 0.265 # Savant pure fly ball rate (fb_rate, excludes popups); 2026 YTD
+# LEAGUE_AVG_FB_PCT must match Savant's definition since it's compared against the CSV fb_rate column.
+LEAGUE_AVG_BARREL_RATE: float = 0.055 # barrel per PA (brl_pa); 2026 YTD (was 0.057)
+LEAGUE_AVG_FB_PCT:      float = 0.265 # Savant pure fly ball rate (excludes popups); 2026 YTD
+LEAGUE_AVG_EXIT_VELO:   float = 89.2  # mph average exit velocity; 2026 YTD (was 89.4)
+LEAGUE_AVG_HARD_HIT:    float = 0.401 # EV >95 mph rate; 2026 YTD (was 0.409)
+LEAGUE_AVG_XSLG:        float = 0.407 # expected SLG (est_slg); 2026 YTD (was 0.410)
+LEAGUE_AVG_SWEET_SPOT:  float = 0.333 # LA 8-32° sweet spot rate; 2026 YTD (was 0.320 — up)
+LEAGUE_AVG_PULL_PCT:    float = 0.391 # pull rate; 2026 YTD
+LEAGUE_AVG_GB_PCT:      float = 0.430 # ground ball rate; 2026 YTD (was 0.424)
+LEAGUE_AVG_LD_PCT:      float = 0.233 # line drive rate; 2026 YTD (was 0.239)
+LEAGUE_AVG_IFFB_PCT:    float = 0.073 # infield fly ball (popup) rate; 2026 YTD
+LEAGUE_AVG_STR_PCT:     float = 0.368 # straightaway/center rate; 2026 YTD (was 0.364)
+LEAGUE_AVG_OPPO_PCT:    float = 0.240 # opposite field rate; 2026 YTD (was 0.245)
+
+# ── Probability model ceiling ─────────────────────────────────────────────────
+# Full-season 2025 backtest: actual HR rate in 30%+ bucket = 30.1%; 0.31 aligns ceiling
+# with observed reality. Revisit when 2026 full-season backtest is available.
+MAX_GAME_HR_PROB: float = 0.31
 
 # ── Statcast blending ─────────────────────────────────────────────────────────
 PRIOR_YEAR_TRUST:    float = 0.85  # shrink prior-year-only signal deviation from 1.0

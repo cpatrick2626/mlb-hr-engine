@@ -46,23 +46,21 @@ _SESSION.headers.update({
     "Referer": "https://baseballsavant.mlb.com/",
 })
 
-# ── Prior-year fallback constants ─────────────────────────────────────────────
-PRIOR_YEAR_TRUST    = config.PRIOR_YEAR_TRUST     # canonical source: config.py
-MIN_CURRENT_YEAR_PA = config.MIN_CURRENT_YEAR_PA  # canonical source: config.py
-
-# ── League averages (2026 MLB YTD Apr — sourced from Baseball Savant, revisit mid-May) ─
-LEAGUE_AVG_BARREL_RATE = config.LEAGUE_AVG_BARREL_RATE  # canonical source: config.py
-LEAGUE_AVG_FB_PCT      = config.LEAGUE_AVG_FB_PCT       # canonical source: config.py
-LEAGUE_AVG_EXIT_VELO   = 89.2     # mph average exit velocity (was 89.4)
-LEAGUE_AVG_HARD_HIT    = 0.401    # EV >95 mph rate (was 0.409)
-LEAGUE_AVG_XSLG        = 0.407    # expected SLG (est_slg column; was 0.410)
-LEAGUE_AVG_SWEET_SPOT  = 0.333    # LA 8-32° sweet spot rate (was 0.320 — up in 2026)
-LEAGUE_AVG_GB_PCT      = 0.430    # ground ball rate (was 0.424)
-LEAGUE_AVG_LD_PCT      = 0.233    # line drive rate (was 0.239)
-LEAGUE_AVG_IFFB_PCT    = 0.073    # infield fly ball (popup) rate — Savant pu_rate
-LEAGUE_AVG_PULL_PCT    = 0.391    # pull rate
-LEAGUE_AVG_STR_PCT     = 0.368    # straightaway/center rate (was 0.364)
-LEAGUE_AVG_OPPO_PCT    = 0.240    # opposite field rate (was 0.245)
+# ── Module-level aliases — all canonical values live in config.py ─────────────
+PRIOR_YEAR_TRUST    = config.PRIOR_YEAR_TRUST
+MIN_CURRENT_YEAR_PA = config.MIN_CURRENT_YEAR_PA
+LEAGUE_AVG_BARREL_RATE = config.LEAGUE_AVG_BARREL_RATE
+LEAGUE_AVG_FB_PCT      = config.LEAGUE_AVG_FB_PCT
+LEAGUE_AVG_EXIT_VELO   = config.LEAGUE_AVG_EXIT_VELO
+LEAGUE_AVG_HARD_HIT    = config.LEAGUE_AVG_HARD_HIT
+LEAGUE_AVG_XSLG        = config.LEAGUE_AVG_XSLG
+LEAGUE_AVG_SWEET_SPOT  = config.LEAGUE_AVG_SWEET_SPOT
+LEAGUE_AVG_PULL_PCT    = config.LEAGUE_AVG_PULL_PCT
+LEAGUE_AVG_GB_PCT      = config.LEAGUE_AVG_GB_PCT
+LEAGUE_AVG_LD_PCT      = config.LEAGUE_AVG_LD_PCT
+LEAGUE_AVG_IFFB_PCT    = config.LEAGUE_AVG_IFFB_PCT
+LEAGUE_AVG_STR_PCT     = config.LEAGUE_AVG_STR_PCT
+LEAGUE_AVG_OPPO_PCT    = config.LEAGUE_AVG_OPPO_PCT
 
 
 # ── Public API ─────────────────────────────────────────────────────────────────
