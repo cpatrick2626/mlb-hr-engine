@@ -2,7 +2,7 @@
 Expected Value and edge calculations.
 """
 
-from engine.market import american_to_decimal
+from engine.market import american_to_decimal, implied_prob
 
 
 def expected_value_pct(model_prob: float, decimal_odds: float) -> float:
@@ -35,5 +35,4 @@ def roi_over_n(ev_pct: float, n_bets: int = 100) -> float:
 
 def implied_edge_american(model_prob: float, american_odds: int) -> float:
     """Edge expressed relative to the American odds implied probability."""
-    from engine.market import implied_prob
     return edge_pct(model_prob, implied_prob(american_odds))

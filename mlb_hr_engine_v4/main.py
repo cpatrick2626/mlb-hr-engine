@@ -78,16 +78,18 @@ def run(dump_json_path: str = None):
             filled = sum(1 for r in clv_results if r.get("clv_pct"))
             if filled:
                 console.print(f"[dim]CLV updated: {filled}/{len(clv_results)} picks have closing lines[/dim]\n")
-        except Exception:
-            pass
+        except Exception as e:
+            if not quiet:
+                console.print(f"[dim]CLV update skipped: {e}[/dim]")
     try:
         yesterday = (date.today() - timedelta(days=1)).isoformat()
         yest_outcomes = pnl_tracker.fetch_yesterday_outcomes(MODEL_VERSION)
         if yest_outcomes:
             pnl_tracker.update_results(yesterday, yest_outcomes, MODEL_VERSION)
             console.print(f"[dim]Updated {len(yest_outcomes)} yesterday outcomes[/dim]\n")
-    except Exception:
-        pass
+    except Exception as e:
+        if not quiet:
+            console.print(f"[dim]Yesterday outcomes update skipped: {e}[/dim]")
 
     # â”€â”€ Display â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if not quiet:
@@ -109,7 +111,7 @@ def run(dump_json_path: str = None):
     # â”€â”€ JSON dump (compare mode) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if dump_json_path:
         dump = {
-            "version": "v2",
+            "version": MODEL_VERSION,
             "date": target_date,
             "stats": stats,
             "odds_source": odds_source,
