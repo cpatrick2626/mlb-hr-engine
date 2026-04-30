@@ -91,6 +91,8 @@ def _get(path: str, params: dict = None) -> dict:
     for attempt in range(3):
         try:
             resp = _SESSION.get(url, params=params, timeout=15)
+            if resp.status_code in (404, 403):
+                return {}  # permanent client error — don't retry
             resp.raise_for_status()
             return resp.json()
         except requests.RequestException:
@@ -488,7 +490,7 @@ def _acc_hitting(splits: list) -> dict:
     pa = totals["plateAppearances"]
 
     if ab > 0:
-        tb = hi - db - tr - hr + 2*db + 3*tr + 4*hr
+        tb = hi + db + 2*tr + 3*hr  # singles×1 + doubles×2 + triples×3 + HRs×4
         totals["avg"]                = round(hi / ab, 3)
         totals["sluggingPercentage"] = round(tb / ab, 3)
     else:

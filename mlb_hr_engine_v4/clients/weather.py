@@ -3,6 +3,7 @@ Open-Meteo weather client — free, no API key.
 Fetches temperature and wind at game time for stadium location.
 """
 
+import math
 import requests
 from datetime import datetime
 
@@ -53,7 +54,7 @@ def get_game_weather(lat: float, lon: float, game_hour_local: int = 19) -> dict:
             "wind_mph": round(winds[idx], 1) if winds else 0.0,
             "wind_deg": round(dirs[idx], 0) if dirs else 0.0,
         }
-    except Exception as e:
+    except requests.RequestException as e:
         print(f"[weather] API failed ({lat},{lon}): {e} — using neutral defaults")
         result = {"temp_f": 70.0, "wind_mph": 0.0, "wind_deg": 0.0}
 
@@ -69,7 +70,6 @@ def wind_factor(wind_mph: float, wind_deg: float, is_dome: bool = False, cf_bear
     Tailwind (boost) when wind blows FROM the opposite of cf_bearing;
     headwind (suppress) when wind blows FROM cf_bearing direction.
     """
-    import math
     if is_dome or wind_mph < 2:
         return 1.0
     # A tailwind toward CF occurs when wind comes from (cf_bearing + 180°).

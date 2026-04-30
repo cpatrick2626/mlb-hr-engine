@@ -343,19 +343,19 @@ def load_game_data(
             pitcher_ids.add(game["away_pitcher"]["id"])
 
         # Add batters from lineups
-        for lineup in [game.get("home_lineup", []), game.get("away_lineup", [])]:
+        for lineup, tid in [
+            (game.get("home_lineup", []), game.get("home_team_id")),
+            (game.get("away_lineup", []), game.get("away_team_id")),
+        ]:
             if lineup:
                 for batter in lineup:
                     if batter.get("id"):
                         batter_ids.add(batter["id"])
-            else:
-                # If no lineup, we'll need to fetch roster (but can't pre-filter those)
-                team_id = game.get("home_team_id") if lineup == game.get("home_lineup") else game.get("away_team_id")
-                if team_id:
-                    roster = mlb_stats.get_team_active_roster(team_id)
-                    for player in roster:
-                        if player.get("id"):
-                            batter_ids.add(player["id"])
+            elif tid:
+                roster = mlb_stats.get_team_active_roster(tid)
+                for player in roster:
+                    if player.get("id"):
+                        batter_ids.add(player["id"])
 
     # Fetch Statcast and MLB stats in parallel for maximum efficiency
     _cb(f"Loading data for {len(batter_ids)} batters, {len(pitcher_ids)} pitchers...")

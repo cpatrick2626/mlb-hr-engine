@@ -62,6 +62,18 @@ LEAGUE_AVG_IFFB_PCT    = config.LEAGUE_AVG_IFFB_PCT
 LEAGUE_AVG_STR_PCT     = config.LEAGUE_AVG_STR_PCT
 LEAGUE_AVG_OPPO_PCT    = config.LEAGUE_AVG_OPPO_PCT
 
+# Fields blended between current and prior Statcast seasons (shared by batter + pitcher tiers)
+_BATTER_BLEND_KEYS = (
+    "barrel_rate", "exit_velocity_avg", "hard_hit_pct",
+    "sweet_spot_pct", "xslg", "fb_pct", "gb_pct",
+    "ld_pct", "pull_pct", "pu_pct", "str_pct", "oppo_pct", "xba",
+)
+_PITCHER_BLEND_KEYS = (
+    "barrel_rate", "exit_velocity_avg", "hard_hit_pct",
+    "sweet_spot_pct", "xslg", "fb_pct", "gb_pct",
+    "ld_pct", "pull_pct", "pu_pct", "str_pct", "oppo_pct",
+)
+
 
 # ── Public API ─────────────────────────────────────────────────────────────────
 
@@ -90,12 +102,6 @@ def get_batter_statcast(year: int = None, player_ids: set[int] = None) -> dict[i
         curr = future_curr.result()
         prior = future_prior.result()
 
-    _BLEND_KEYS = (
-        "barrel_rate", "exit_velocity_avg", "hard_hit_pct",
-        "sweet_spot_pct", "xslg", "fb_pct", "gb_pct",
-        "ld_pct", "pull_pct", "pu_pct", "str_pct", "oppo_pct", "xba",
-    )
-
     # Tier 3: player has zero current-year data
     for pid, stats in prior.items():
         if pid not in curr:
@@ -109,7 +115,7 @@ def get_batter_statcast(year: int = None, player_ids: set[int] = None) -> dict[i
         if 0 < curr_pa < MIN_CURRENT_YEAR_PA and pid in prior:
             trust   = curr_pa / MIN_CURRENT_YEAR_PA   # 0..1 over 0..30 PA
             blended = dict(curr[pid])
-            for key in _BLEND_KEYS:
+            for key in _BATTER_BLEND_KEYS:
                 cv = curr[pid].get(key)
                 pv = prior[pid].get(key)
                 if cv is not None and pv is not None:
@@ -141,12 +147,6 @@ def get_pitcher_statcast(year: int = None, player_ids: set[int] = None) -> dict[
         curr  = future_curr.result()
         prior = future_prior.result()
 
-    _BLEND_KEYS = (
-        "barrel_rate", "exit_velocity_avg", "hard_hit_pct",
-        "sweet_spot_pct", "xslg", "fb_pct", "gb_pct",
-        "ld_pct", "pull_pct", "pu_pct", "str_pct", "oppo_pct",
-    )
-
     # Tier 3: pitcher has zero current-year data
     for pid, stats in prior.items():
         if pid not in curr:
@@ -160,7 +160,7 @@ def get_pitcher_statcast(year: int = None, player_ids: set[int] = None) -> dict[
         if 0 < curr_pa < MIN_CURRENT_YEAR_PA and pid in prior:
             trust   = curr_pa / MIN_CURRENT_YEAR_PA
             blended = dict(curr[pid])
-            for key in _BLEND_KEYS:
+            for key in _PITCHER_BLEND_KEYS:
                 cv = curr[pid].get(key)
                 pv = prior[pid].get(key)
                 if cv is not None and pv is not None:
