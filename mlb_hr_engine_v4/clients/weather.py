@@ -53,7 +53,8 @@ def get_game_weather(lat: float, lon: float, game_hour_local: int = 19) -> dict:
             "wind_mph": round(winds[idx], 1) if winds else 0.0,
             "wind_deg": round(dirs[idx], 0) if dirs else 0.0,
         }
-    except Exception:
+    except Exception as e:
+        print(f"[weather] API failed ({lat},{lon}): {e} — using neutral defaults")
         result = {"temp_f": 70.0, "wind_mph": 0.0, "wind_deg": 0.0}
 
     _CACHE[cache_key] = result

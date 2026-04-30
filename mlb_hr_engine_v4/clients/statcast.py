@@ -29,7 +29,6 @@ Pitcher contact-quality factor (4 signals):
 import io
 import csv
 import requests
-from functools import lru_cache
 from typing import Optional
 from concurrent.futures import ThreadPoolExecutor
 
@@ -48,20 +47,16 @@ _SESSION.headers.update({
 })
 
 # ── Prior-year fallback constants ─────────────────────────────────────────────
-PRIOR_YEAR_TRUST    = 0.85   # shrink composite deviation from 1.0 for prior-year-only data
-MIN_CURRENT_YEAR_PA = 50     # below this, blend current + prior year Statcast signals
-                             # 30 PA (~7 games) is too sparse for barrel%/EV to stabilize (~50 BF needed)
+PRIOR_YEAR_TRUST    = config.PRIOR_YEAR_TRUST     # canonical source: config.py
+MIN_CURRENT_YEAR_PA = config.MIN_CURRENT_YEAR_PA  # canonical source: config.py
 
 # ── League averages (2026 MLB YTD Apr — sourced from Baseball Savant, revisit mid-May) ─
 LEAGUE_AVG_BARREL_RATE = config.LEAGUE_AVG_BARREL_RATE  # canonical source: config.py
+LEAGUE_AVG_FB_PCT      = config.LEAGUE_AVG_FB_PCT       # canonical source: config.py
 LEAGUE_AVG_EXIT_VELO   = 89.2     # mph average exit velocity (was 89.4)
 LEAGUE_AVG_HARD_HIT    = 0.401    # EV >95 mph rate (was 0.409)
 LEAGUE_AVG_XSLG        = 0.407    # expected SLG (est_slg column; was 0.410)
 LEAGUE_AVG_SWEET_SPOT  = 0.333    # LA 8-32° sweet spot rate (was 0.320 — up in 2026)
-# NOTE: Savant fb_rate is pure fly balls (excludes popups). FanGraphs FB% (~34%)
-# combines Savant fb+pu. The Savant CSV fb_rate is used in batter_power_multiplier,
-# so this constant must match Savant's definition.
-LEAGUE_AVG_FB_PCT      = 0.265    # Savant pure fly ball rate (fb_rate, excludes popups)
 LEAGUE_AVG_GB_PCT      = 0.430    # ground ball rate (was 0.424)
 LEAGUE_AVG_LD_PCT      = 0.233    # line drive rate (was 0.239)
 LEAGUE_AVG_IFFB_PCT    = 0.073    # infield fly ball (popup) rate — Savant pu_rate
@@ -405,16 +400,17 @@ def _merge_pitcher_sources(year: int, player_ids: set[int] = None) -> dict[int, 
 
 
 # ── Cached fetch functions ─────────────────────────────────────────────────────
+# Manual success-only cache: lru_cache would permanently cache {} on failure,
+# blocking retries for the rest of the session if Savant is temporarily down.
 
-@lru_cache(maxsize=12)
+_FETCH_CACHE: dict = {}
+
+
 def _fetch_leaderboard(player_type: str, year: int, player_ids: frozenset[int] = None) -> dict[int, dict]:
-    """Fetch leaderboard data with optional filtering.
-
-    Args:
-        player_type: "batter" or "pitcher"
-        year: Season year
-        player_ids: Optional frozenset of player IDs to filter (must be frozenset for caching)
-    """
+    """Fetch leaderboard data with optional filtering."""
+    key = ("lb", player_type, year, player_ids)
+    if key in _FETCH_CACHE:
+        return _FETCH_CACHE[key]
     url = (
         "https://baseballsavant.mlb.com/leaderboard/statcast"
         f"?type={player_type}&year={year}&position=&team=&min=1&csv=true"
@@ -423,21 +419,19 @@ def _fetch_leaderboard(player_type: str, year: int, player_ids: frozenset[int] =
         resp = _SESSION.get(url, timeout=25)
         if resp.status_code != 200:
             return {}
-        return _parse_statcast_csv(resp.text, year=year, player_ids=player_ids)
+        result = _parse_statcast_csv(resp.text, year=year, player_ids=player_ids)
+        _FETCH_CACHE[key] = result
+        return result
     except Exception as e:
         print(f"[statcast] leaderboard fetch failed ({player_type} {year}): {e}")
         return {}
 
 
-@lru_cache(maxsize=12)
 def _fetch_batted_ball(player_type: str, year: int, player_ids: frozenset[int] = None) -> dict[int, dict]:
-    """Fetch batted ball data with optional filtering.
-
-    Args:
-        player_type: "batter" or "pitcher"
-        year: Season year
-        player_ids: Optional frozenset of player IDs to filter (must be frozenset for caching)
-    """
+    """Fetch batted ball data with optional filtering."""
+    key = ("bb", player_type, year, player_ids)
+    if key in _FETCH_CACHE:
+        return _FETCH_CACHE[key]
     url = (
         "https://baseballsavant.mlb.com/leaderboard/batted-ball"
         f"?type={player_type}&year={year}&min=1&csv=true"
@@ -446,21 +440,19 @@ def _fetch_batted_ball(player_type: str, year: int, player_ids: frozenset[int] =
         resp = _SESSION.get(url, timeout=25)
         if resp.status_code != 200:
             return {}
-        return _parse_batted_ball_csv(resp.text, player_ids=player_ids)
+        result = _parse_batted_ball_csv(resp.text, player_ids=player_ids)
+        _FETCH_CACHE[key] = result
+        return result
     except Exception as e:
         print(f"[statcast] batted-ball fetch failed ({player_type} {year}): {e}")
         return {}
 
 
-@lru_cache(maxsize=12)
 def _fetch_expected_stats(player_type: str, year: int, player_ids: frozenset[int] = None) -> dict[int, dict]:
-    """Fetch expected stats data with optional filtering.
-
-    Args:
-        player_type: "batter" or "pitcher"
-        year: Season year
-        player_ids: Optional frozenset of player IDs to filter (must be frozenset for caching)
-    """
+    """Fetch expected stats data with optional filtering."""
+    key = ("es", player_type, year, player_ids)
+    if key in _FETCH_CACHE:
+        return _FETCH_CACHE[key]
     url = (
         "https://baseballsavant.mlb.com/leaderboard/expected_statistics"
         f"?type={player_type}&year={year}&min=1&csv=true"
@@ -469,7 +461,9 @@ def _fetch_expected_stats(player_type: str, year: int, player_ids: frozenset[int
         resp = _SESSION.get(url, timeout=25)
         if resp.status_code != 200:
             return {}
-        return _parse_expected_stats_csv(resp.text, player_ids=player_ids)
+        result = _parse_expected_stats_csv(resp.text, player_ids=player_ids)
+        _FETCH_CACHE[key] = result
+        return result
     except Exception as e:
         print(f"[statcast] expected-stats fetch failed ({player_type} {year}): {e}")
         return {}
@@ -656,8 +650,6 @@ def _clamp(v: float, lo: float, hi: float) -> float:
 
 
 def clear_all_caches() -> None:
-    """Clear Statcast lru_caches. Call before Force Refresh so next load
+    """Clear Statcast fetch cache. Call before Force Refresh so next load
     fetches fresh leaderboard, batted-ball, and expected-stats data."""
-    _fetch_leaderboard.cache_clear()
-    _fetch_batted_ball.cache_clear()
-    _fetch_expected_stats.cache_clear()
+    _FETCH_CACHE.clear()

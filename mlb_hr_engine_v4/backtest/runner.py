@@ -49,7 +49,8 @@ def score_date(
             row = _score_player(r, date_str, batter_data, pitcher_data)
             if row:
                 scored.append(row)
-        except Exception:
+        except Exception as e:
+            print(f"[backtest] skip {r.get('player_name', r.get('player_id', '?'))}: {e}")
             continue
     return scored
 

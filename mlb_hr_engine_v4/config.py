@@ -54,6 +54,13 @@ LEAGUE_AVG_HR9: float = 1.09          # 2026 MLB YTD (Apr); revisit mid-May as s
 LEAGUE_AVG_ISO: float = 0.150         # ISO = SLG - AVG; 2026 MLB YTD
 LEAGUE_HR_FB:   float = 0.106         # HR per fly ball; 2026 MLB YTD (down from 0.120 in 2025)
 LEAGUE_AVG_BARREL_RATE: float = 0.055 # barrel per PA (brl_pa); 2026 YTD (was 0.057 in 2025)
+# NOTE: Savant fb_rate is pure fly balls (excludes popups). FanGraphs FB% (~34%) combines fb+pu.
+# This must match Savant's definition since it's used against the Savant CSV fb_rate column.
+LEAGUE_AVG_FB_PCT:      float = 0.265 # Savant pure fly ball rate (fb_rate, excludes popups); 2026 YTD
+
+# ── Statcast blending ─────────────────────────────────────────────────────────
+PRIOR_YEAR_TRUST:    float = 0.85  # shrink prior-year-only signal deviation from 1.0
+MIN_CURRENT_YEAR_PA: int   = 50    # below this, blend current + prior Statcast (50 BF to stabilize)
 
 # ── Market / EV ───────────────────────────────────────────────────────────────
 VIG_FACTOR: float = 0.075  # Empirically measured on FanDuel/DraftKings HR props
