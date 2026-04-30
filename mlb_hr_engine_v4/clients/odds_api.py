@@ -88,8 +88,8 @@ def _save_cache(props: list[dict], quota: dict) -> None:
         _CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
         with open(_CACHE_PATH, "w", encoding="utf-8") as f:
             json.dump({"timestamp": time.time(), "props": props, "quota": quota}, f)
-    except Exception:
-        pass
+    except Exception as e:
+        print(f"[odds_api] cache write failed: {e}")
 
 
 def _parse_quota(resp) -> None:

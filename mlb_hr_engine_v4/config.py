@@ -79,3 +79,6 @@ DEFAULT_PA: float = 3.8  # fallback when lineup spot unknown
 PARLAY_MIN_LEGS: int = 2
 PARLAY_MAX_LEGS: int = 3
 PARLAY_CANDIDATE_POOL: int = 8   # Top N picks to consider for parlay
+
+# ── Backtest simulation ───────────────────────────────────────────────────────
+BACKTEST_FLAT_BET: float = 10.0  # dollars per pick in calibration P&L simulation

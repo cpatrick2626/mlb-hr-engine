@@ -42,8 +42,10 @@ def _pitcher_game_log_splits(pitcher_id: int) -> list:
             _PITCHER_GAME_LOG_CACHE[pitcher_id] = sorted(
                 splits, key=lambda s: s.get("date", ""), reverse=True
             )
-        except Exception:
-            _PITCHER_GAME_LOG_CACHE[pitcher_id] = []
+        except Exception as e:
+            # Don't cache: a transient failure shouldn't permanently suppress this pitcher
+            print(f"[mlb_stats] pitcher game log failed (id={pitcher_id}): {e}")
+            return []
     return _PITCHER_GAME_LOG_CACHE[pitcher_id]
 
 
@@ -60,9 +62,22 @@ def _game_log_splits(player_id: int) -> list:
             _GAME_LOG_CACHE[player_id] = sorted(
                 splits, key=lambda s: s.get("date", ""), reverse=True
             )
-        except Exception:
-            _GAME_LOG_CACHE[player_id] = []
+        except Exception as e:
+            # Don't cache: a transient failure shouldn't permanently suppress this batter
+            print(f"[mlb_stats] batter game log failed (id={player_id}): {e}")
+            return []
     return _GAME_LOG_CACHE[player_id]
+
+
+def parse_ip(innings_raw) -> float:
+    """Parse MLB Stats API inningsPitched ('6.2' means 6⅔ IP) to a float."""
+    try:
+        if isinstance(innings_raw, (int, float)):
+            return float(innings_raw)
+        parts = str(innings_raw).split(".")
+        return int(parts[0]) + int(parts[1]) / 3.0 if len(parts) > 1 else float(innings_raw)
+    except Exception:
+        return 0.0
 
 
 def _get(path: str, params: dict = None) -> dict:
@@ -219,7 +234,8 @@ def get_player_season_stats(player_id: int) -> dict:
             if prior:
                 return prior  # Use prior season as base rate
         return stats
-    except Exception:
+    except Exception as e:
+        print(f"[mlb_stats] batter season stats failed (id={player_id}): {e}")
         return _get_prior_season_stats(player_id)
 
 
@@ -233,7 +249,8 @@ def _get_prior_season_stats(player_id: int) -> dict:
         })
         splits = _first_splits(data)
         return splits.get("stat", {}) if splits else {}
-    except Exception:
+    except Exception as e:
+        print(f"[mlb_stats] batter prior-season stats failed (id={player_id}): {e}")
         return {}
 
 
@@ -277,13 +294,7 @@ def get_pitcher_season_stats(pitcher_id: int) -> dict:
     if pitcher_id in _BULK_PITCHER_STATS_CACHE:
         stats = _BULK_PITCHER_STATS_CACHE[pitcher_id]
         # Check if pitcher has < 5 IP this season
-        ip_str = stats.get("inningsPitched", "0.0")
-        try:
-            parts = str(ip_str).split(".")
-            ip = int(parts[0]) + int(parts[1]) / 3.0 if len(parts) > 1 else float(ip_str)
-        except Exception:
-            ip = 0.0
-        if ip < 5:
+        if parse_ip(stats.get("inningsPitched", "0.0")) < 5:
             return _get_prior_pitcher_stats(pitcher_id) or stats
         return stats
 
@@ -296,17 +307,11 @@ def get_pitcher_season_stats(pitcher_id: int) -> dict:
         })
         splits = _first_splits(data)
         stats = splits.get("stat", {}) if splits else {}
-        # If pitcher has < 5 IP this season, fall back to prior year
-        ip_str = stats.get("inningsPitched", "0.0")
-        try:
-            parts = str(ip_str).split(".")
-            ip = int(parts[0]) + int(parts[1]) / 3.0 if len(parts) > 1 else float(ip_str)
-        except Exception:
-            ip = 0.0
-        if ip < 5:
+        if parse_ip(stats.get("inningsPitched", "0.0")) < 5:
             return _get_prior_pitcher_stats(pitcher_id) or stats
         return stats
-    except Exception:
+    except Exception as e:
+        print(f"[mlb_stats] pitcher season stats failed (id={pitcher_id}): {e}")
         return _get_prior_pitcher_stats(pitcher_id)
 
 
@@ -319,7 +324,8 @@ def _get_prior_pitcher_stats(pitcher_id: int) -> dict:
         })
         splits = _first_splits(data)
         return splits.get("stat", {}) if splits else {}
-    except Exception:
+    except Exception as e:
+        print(f"[mlb_stats] pitcher prior-season stats failed (id={pitcher_id}): {e}")
         return {}
 
 
@@ -366,7 +372,8 @@ def get_player_platoon_splits(player_id: int) -> dict:
                 result[code]           = hr / pa   # HR rate
                 result[f"{code}_pa"]   = pa        # actual PA count for shrinkage
         return result  # keys: "vl"/"vr" = rate, "vl_pa"/"vr_pa" = PA count
-    except Exception:
+    except Exception as e:
+        print(f"[mlb_stats] platoon splits failed (id={player_id}): {e}")
         return {}
 
 
@@ -388,13 +395,7 @@ def get_pitcher_recent_stats(pitcher_id: int, days: int = 30) -> dict:
         totals["groundOuts"]   += int(st.get("groundOuts", 0))
         totals["airOuts"]      += int(st.get("airOuts", 0))
         totals["baseOnBalls"]  += int(st.get("baseOnBalls", 0))
-        ip_str = str(st.get("inningsPitched", "0.0"))
-        try:
-            parts = ip_str.split(".")
-            ip = int(parts[0]) + int(parts[1]) / 3.0 if len(parts) > 1 else float(ip_str)
-        except Exception:
-            ip = 0.0
-        totals["inningsPitched"] += ip
+        totals["inningsPitched"] += parse_ip(st.get("inningsPitched", "0.0"))
     return totals
 
 
@@ -495,13 +496,7 @@ def _acc_pitching(splits: list) -> dict:
         totals["groundOuts"]   += int(st.get("groundOuts", 0))
         totals["airOuts"]      += int(st.get("airOuts", 0))
         totals["baseOnBalls"]  += int(st.get("baseOnBalls", 0))
-        ip_str = str(st.get("inningsPitched", "0.0"))
-        try:
-            parts = ip_str.split(".")
-            ip = int(parts[0]) + int(parts[1]) / 3.0 if len(parts) > 1 else float(ip_str)
-        except Exception:
-            ip = 0.0
-        totals["inningsPitched"] += ip
+        totals["inningsPitched"] += parse_ip(st.get("inningsPitched", "0.0"))
     # Keep inningsPitched as a float so pitcher_recent_factor can use < comparisons directly.
     # pitcher_hr_factor also accepts float (handled via isinstance check in probability.py).
     return totals

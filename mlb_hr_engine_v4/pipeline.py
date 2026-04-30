@@ -108,12 +108,7 @@ def _build_player_profile(
     pit_factor     = max(0.55, min(1.60, pit_factor * fatigue_fac))
 
     # Pitcher HR/9 for confidence threshold flag
-    pit_ip_str = pitcher_stats.get("inningsPitched", "0.0")
-    try:
-        parts  = str(pit_ip_str).split(".")
-        pit_ip = int(parts[0]) + int(parts[1]) / 3.0 if len(parts) > 1 else float(pit_ip_str)
-    except Exception:
-        pit_ip = 0.0
+    pit_ip = mlb_stats.parse_ip(pitcher_stats.get("inningsPitched", "0.0"))
     pit_hrs  = int(pitcher_stats.get("homeRuns", 0))
     pitcher_hr9 = round((pit_hrs / pit_ip) * 9.0, 2) if pit_ip >= 5 else 0.0
 

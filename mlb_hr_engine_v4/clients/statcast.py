@@ -63,7 +63,6 @@ LEAGUE_AVG_IFFB_PCT    = 0.073    # infield fly ball (popup) rate — Savant pu_
 LEAGUE_AVG_PULL_PCT    = 0.391    # pull rate
 LEAGUE_AVG_STR_PCT     = 0.368    # straightaway/center rate (was 0.364)
 LEAGUE_AVG_OPPO_PCT    = 0.240    # opposite field rate (was 0.245)
-BARREL_TO_HR_RATE      = 0.57     # ~57% of barrels become HRs (stable year-to-year)
 
 
 # ── Public API ─────────────────────────────────────────────────────────────────

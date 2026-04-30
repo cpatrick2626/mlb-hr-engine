@@ -10,6 +10,10 @@ probability bucket as a conservative estimate (since we don't have historical od
 """
 
 import math
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+import config
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
@@ -40,7 +44,7 @@ BUCKET_AVG_ODDS = {
     "30%+":    200,
 }
 
-FLAT_BET = 10.0  # dollars per pick in P&L simulation
+FLAT_BET = config.BACKTEST_FLAT_BET
 
 
 def calibration_report(rows: list[dict], date_range: str) -> None:
