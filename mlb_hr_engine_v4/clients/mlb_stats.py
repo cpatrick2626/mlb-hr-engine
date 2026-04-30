@@ -1,5 +1,5 @@
 ﻿"""
-MLB Stats API client â€” free, no API key required.
+MLB Stats API client â€" free, no API key required.
 Docs: https://statsapi.mlb.com/docs/
 """
 
@@ -7,7 +7,6 @@ import sys
 import time
 import requests
 from datetime import date, timedelta
-from functools import lru_cache
 from typing import Optional
 
 import config
@@ -16,7 +15,7 @@ MLB_API = "https://statsapi.mlb.com/api/v1"
 _SESSION = requests.Session()
 _SESSION.headers.update({"User-Agent": "Codex-HR-Engine/1.0"})
 
-# Session-level cache for game logs â€” avoids duplicate API calls when
+# Session-level cache for game logs â€" avoids duplicate API calls when
 # get_player_recent_stats() and get_player_short_form() are both called.
 _GAME_LOG_CACHE: dict[int, list] = {}
 
@@ -28,6 +27,13 @@ _PITCHER_GAME_LOG_CACHE: dict[int, list] = {}
 _BULK_SEASON_STATS_CACHE: dict[int, dict] = {}
 _BULK_RECENT_STATS_CACHE: dict[int, dict] = {}
 _BULK_PITCHER_STATS_CACHE: dict[int, dict] = {}
+
+# Success-only individual caches — only store non-empty results so transient
+# API failures don't permanently block retries for the rest of the session.
+_player_season_cache:  dict[int, dict] = {}
+_pitcher_season_cache: dict[int, dict] = {}
+_platoon_splits_cache: dict[int, dict] = {}
+_player_info_cache:    dict[int, dict] = {}
 
 
 def _pitcher_game_log_splits(pitcher_id: int) -> list:
@@ -201,12 +207,14 @@ def _parse_pitcher(pitcher: dict) -> dict:
     }
 
 
-@lru_cache(maxsize=512)
 def get_player_season_stats(player_id: int) -> dict:
     """
     Hitting stats for the current season.
     Falls back to prior season if current season has < 30 PA (early season noise).
     """
+    if player_id in _player_season_cache:
+        return _player_season_cache[player_id]
+
     # Check bulk cache first
     if player_id in _BULK_SEASON_STATS_CACHE:
         stats = _BULK_SEASON_STATS_CACHE[player_id]
@@ -214,7 +222,9 @@ def get_player_season_stats(player_id: int) -> dict:
         if pa < 30:
             prior = _get_prior_season_stats(player_id)
             if prior:
+                _player_season_cache[player_id] = prior
                 return prior
+        _player_season_cache[player_id] = stats
         return stats
 
     # Fall back to individual fetch
@@ -232,11 +242,17 @@ def get_player_season_stats(player_id: int) -> dict:
         if pa < 30:
             prior = _get_prior_season_stats(player_id)
             if prior:
-                return prior  # Use prior season as base rate
+                _player_season_cache[player_id] = prior
+                return prior
+        if stats:
+            _player_season_cache[player_id] = stats
         return stats
     except Exception as e:
         print(f"[mlb_stats] batter season stats failed (id={player_id}): {e}")
-        return _get_prior_season_stats(player_id)
+        result = _get_prior_season_stats(player_id)
+        if result:
+            _player_season_cache[player_id] = result
+        return result
 
 
 def _get_prior_season_stats(player_id: int) -> dict:
@@ -284,19 +300,25 @@ def get_player_recent_stats(player_id: int) -> dict:
     return totals
 
 
-@lru_cache(maxsize=256)
 def get_pitcher_season_stats(pitcher_id: int) -> dict:
     """
     Pitching stats — current season with prior-year fallback.
     Includes airOuts for HR/FB calculation (v2 enhancement).
     """
+    if pitcher_id in _pitcher_season_cache:
+        return _pitcher_season_cache[pitcher_id]
+
+    def _cache(result: dict) -> dict:
+        if result:
+            _pitcher_season_cache[pitcher_id] = result
+        return result
+
     # Check bulk cache first
     if pitcher_id in _BULK_PITCHER_STATS_CACHE:
         stats = _BULK_PITCHER_STATS_CACHE[pitcher_id]
-        # Check if pitcher has < 5 IP this season
         if parse_ip(stats.get("inningsPitched", "0.0")) < 5:
-            return _get_prior_pitcher_stats(pitcher_id) or stats
-        return stats
+            return _cache(_get_prior_pitcher_stats(pitcher_id) or stats)
+        return _cache(stats)
 
     # Fall back to individual fetch
     try:
@@ -308,11 +330,11 @@ def get_pitcher_season_stats(pitcher_id: int) -> dict:
         splits = _first_splits(data)
         stats = splits.get("stat", {}) if splits else {}
         if parse_ip(stats.get("inningsPitched", "0.0")) < 5:
-            return _get_prior_pitcher_stats(pitcher_id) or stats
-        return stats
+            return _cache(_get_prior_pitcher_stats(pitcher_id) or stats)
+        return _cache(stats)
     except Exception as e:
         print(f"[mlb_stats] pitcher season stats failed (id={pitcher_id}): {e}")
-        return _get_prior_pitcher_stats(pitcher_id)
+        return _cache(_get_prior_pitcher_stats(pitcher_id))
 
 
 def _get_prior_pitcher_stats(pitcher_id: int) -> dict:
@@ -347,13 +369,14 @@ def get_player_short_form(player_id: int, days: int = 14) -> dict:
     return totals
 
 
-@lru_cache(maxsize=512)
 def get_player_platoon_splits(player_id: int) -> dict:
     """
     L/R platoon HR splits for a batter.
-    Returns: {"vs_LHP": hr_rate, "vs_RHP": hr_rate}
+    Returns: {"vl": hr_rate, "vr": hr_rate, "vl_pa": int, "vr_pa": int}
     Uses MLB Stats API statSplits endpoint.
     """
+    if player_id in _platoon_splits_cache:
+        return _platoon_splits_cache[player_id]
     try:
         data = _get(f"/people/{player_id}/stats", {
             "stats": "statSplits",
@@ -369,9 +392,11 @@ def get_player_platoon_splits(player_id: int) -> dict:
             pa   = int(st.get("plateAppearances", 0))
             hr   = int(st.get("homeRuns", 0))
             if pa > 0:
-                result[code]           = hr / pa   # HR rate
-                result[f"{code}_pa"]   = pa        # actual PA count for shrinkage
-        return result  # keys: "vl"/"vr" = rate, "vl_pa"/"vr_pa" = PA count
+                result[code]           = hr / pa
+                result[f"{code}_pa"]   = pa
+        if result:
+            _platoon_splits_cache[player_id] = result
+        return result
     except Exception as e:
         print(f"[mlb_stats] platoon splits failed (id={player_id}): {e}")
         return {}
@@ -518,14 +543,19 @@ def get_pitcher_days_rest(pitcher_id: int) -> int:
         return 5
 
 
-@lru_cache(maxsize=512)
 def get_player_info(player_id: int) -> dict:
-    """Minimal bio â€” bats, position, full name."""
+    '''Minimal bio: bats, position, full name.'''
+    if player_id in _player_info_cache:
+        return _player_info_cache[player_id]
     try:
         data = _get(f"/people/{player_id}", {"hydrate": "currentTeam"})
         people = data.get("people", [])
-        return people[0] if people else {}
-    except Exception:
+        result = people[0] if people else {}
+        if result:
+            _player_info_cache[player_id] = result
+        return result
+    except Exception as e:
+        print(f"[mlb_stats] player info failed (id={player_id}): {e}")
         return {}
 
 
@@ -748,7 +778,7 @@ def clear_all_caches() -> None:
     _BULK_SEASON_STATS_CACHE.clear()
     _BULK_RECENT_STATS_CACHE.clear()
     _BULK_PITCHER_STATS_CACHE.clear()
-    get_player_season_stats.cache_clear()
-    get_pitcher_season_stats.cache_clear()
-    get_player_platoon_splits.cache_clear()
-    get_player_info.cache_clear()
+    _player_season_cache.clear()
+    _pitcher_season_cache.clear()
+    _platoon_splits_cache.clear()
+    _player_info_cache.clear()
