@@ -182,7 +182,7 @@ def pitcher_recent_factor(recent_pitcher_stats: dict) -> float:
     recent_hr9 = (hrs / ip) * 9.0
     reg_ip = 30
     regressed = (recent_hr9 * ip + config.LEAGUE_AVG_HR9 * reg_ip) / (ip + reg_ip)
-    direction = config.LEAGUE_AVG_HR9 / max(regressed, 0.1)
+    direction = regressed / config.LEAGUE_AVG_HR9
     trust = min(ip / 40.0, 0.30)
     return round(max(0.80, min(1.20, 1.0 + trust * (direction - 1.0))), 3)
 
@@ -229,7 +229,7 @@ def pitcher_hr_factor(pitcher_stats: dict) -> float:
     hr9 = (hrs / ip) * 9.0
     reg_ip = 50
     reg_hr9 = (hr9 * ip + config.LEAGUE_AVG_HR9 * reg_ip) / (ip + reg_ip)
-    hr9_factor = config.LEAGUE_AVG_HR9 / max(reg_hr9, 0.1)
+    hr9_factor = reg_hr9 / config.LEAGUE_AVG_HR9
 
     # HR/FB component
     fly_balls = hrs + air_outs

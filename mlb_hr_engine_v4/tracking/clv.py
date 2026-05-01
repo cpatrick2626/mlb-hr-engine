@@ -90,7 +90,7 @@ def fetch_and_compute_clv(target_date: Optional[str] = None) -> list[dict]:
         # Apply no-vig correction: divide by (1 + vig) so CLV reflects fair-value shift,
         # not the bookmaker margin embedded in raw implied probabilities.
         vig = config.VIG_FACTOR
-        clv = (open_implied - close_implied) / (1.0 + vig) * 100  # positive = we got better price
+        clv = (close_implied - open_implied) / (1.0 + vig) * 100  # positive = we got better price
 
         updated.append({
             **pick,
