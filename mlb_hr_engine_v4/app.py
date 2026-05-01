@@ -400,6 +400,27 @@ def _spot_label(spot, platoon_factor: float) -> str:
     return f"{icon}{spot}{edge}"
 
 
+# ── Auto-refresh fragment ─────────────────────────────────────────────────────
+@st.fragment(run_every=60)
+def _auto_refresh_ticker():
+    """Ticks every 60 s. Clears data cache and triggers full rerun when interval is met."""
+    if not st.session_state.get("auto_refresh_on"):
+        return
+    loaded_at = st.session_state.get("data_loaded_at")
+    if not loaded_at:
+        return
+    interval_min = int(st.session_state.get("auto_refresh_interval", 15))
+    elapsed_min  = (_dt.datetime.now() - loaded_at).total_seconds() / 60
+    if elapsed_min >= interval_min:
+        from clients import mlb_stats as _ms_ar, statcast as _sc_ar
+        _ms_ar.clear_all_caches()
+        _sc_ar.clear_all_caches()
+        st.cache_data.clear()
+        for k in ["data", "cache_key", "data_loaded_at"]:
+            st.session_state.pop(k, None)
+        st.rerun()
+
+
 # ── Data loading ──────────────────────────────────────────────────────────────
 def get_data():
     import gc
@@ -443,12 +464,26 @@ def get_data():
                 except Exception:
                     pass
 
-                # Store pitcher map at load time for change detection
+                # Store pitcher map for change detection
                 try:
                     from clients.mlb_stats import get_today_pitcher_map
                     pm = get_today_pitcher_map()
+                    # session_start map is set once per session — never overwritten
+                    if "pitcher_map_session_start" not in st.session_state:
+                        st.session_state["pitcher_map_session_start"] = pm
+                    # at_load map updates on every refresh — diff vs session_start
+                    old_map = st.session_state.get("pitcher_map_session_start", {})
+                    changes = {}
+                    for team, info in pm.items():
+                        old_info = old_map.get(team, {})
+                        if (old_info.get("id") and info.get("id")
+                                and old_info["id"] != info["id"]):
+                            changes[team] = {
+                                "old": old_info.get("name", "?"),
+                                "new": info.get("name", "?"),
+                            }
                     st.session_state["pitcher_map_at_load"] = pm
-                    st.session_state.pop("pitcher_changes", None)
+                    st.session_state["pitcher_changes"] = changes
                 except Exception:
                     pass
 
@@ -585,6 +620,50 @@ def _fanduel_url(player_name: str = "") -> str:
     return "https://sportsbook.fanduel.com/baseball/mlb?tab=player-home-runs"
 
 
+def _deg_to_compass(deg: float) -> str:
+    """Convert wind direction degrees to 16-point compass label."""
+    dirs = ["N","NNE","NE","ENE","E","ESE","SE","SSE",
+            "S","SSW","SW","WSW","W","WNW","NW","NNW"]
+    return dirs[round(deg / 22.5) % 16]
+
+
+def _weather_summary(player: dict) -> str:
+    """Return compact weather string e.g. '78°F · 12mph SW' or '' for domes."""
+    w = player.get("weather")
+    if not w:
+        return ""
+    wf = player.get("weather_factor", 1.0)
+    if wf is None:
+        wf = 1.0
+    # Dome teams have weather_factor exactly 1.0 from a suppressed calc; check flag too
+    is_dome = player.get("is_dome", False)
+    temp   = w.get("temp_f")
+    speed  = w.get("wind_mph")
+    deg    = w.get("wind_deg")
+    if temp is None:
+        return ""
+    parts = [f"{temp:.0f}°F"]
+    if speed is not None and not is_dome:
+        compass = _deg_to_compass(deg) if deg is not None else ""
+        parts.append(f"{speed:.0f}mph {compass}".strip())
+    elif is_dome:
+        parts.append("Dome")
+    return " · ".join(parts)
+
+
+def _weather_badge(player: dict) -> str:
+    """Return HTML weather badge for use in cards. Empty string if no data."""
+    summary = _weather_summary(player)
+    if not summary:
+        return ""
+    wf = player.get("weather_factor", 1.0) or 1.0
+    # Color-code: strong boost (>1.08) green, suppressor (<0.93) red, else grey
+    color = "#4ade80" if wf >= 1.08 else "#f87171" if wf <= 0.93 else "#888"
+    return (
+        f"<span style='font-size:11px; color:{color};'>🌤 {summary}</span>"
+    )
+
+
 @st.dialog("⚾ Player Details", width="large")
 def _show_player_modal(player: dict):
     name  = player.get("player_name", "Unknown")
@@ -620,6 +699,32 @@ def _show_player_modal(player: dict):
     f3.metric("Weather", f"{player.get('weather_factor', 1.0):.3f}×")
     f4.metric("Platoon", f"{player.get('platoon_factor', 1.0):.3f}×")
     f5.metric("Streak",  f"{player.get('streak_factor',  1.0):.3f}×")
+
+    # ── Weather conditions ────────────────────────────────────────────────
+    _w = player.get("weather")
+    if _w:
+        _wtemp  = _w.get("temp_f")
+        _wspeed = _w.get("wind_mph")
+        _wdeg   = _w.get("wind_deg")
+        _wf     = player.get("weather_factor", 1.0) or 1.0
+        _wparts = []
+        if _wtemp is not None:
+            _wparts.append(f"🌡️ {_wtemp:.0f}°F")
+        if _wspeed is not None:
+            _wcomp = _deg_to_compass(_wdeg) if _wdeg is not None else ""
+            _wparts.append(f"🌬️ {_wspeed:.0f} mph {_wcomp}".strip())
+        if _wparts:
+            _wcolor = "#4ade80" if _wf >= 1.08 else "#f87171" if _wf <= 0.93 else "#aaaaaa"
+            _wimpact = "HR boost" if _wf >= 1.08 else "HR suppressor" if _wf <= 0.93 else "Neutral"
+            st.markdown(
+                f"<div style='background:#0d0d20; border:1px solid #1e1e40; border-radius:6px; "
+                f"padding:8px 12px; margin-top:8px; display:flex; justify-content:space-between; align-items:center;'>"
+                f"<span style='color:#aaa; font-size:12px;'>Conditions: "
+                f"<span style='color:#f0f0f0;'>{' &nbsp;&nbsp; '.join(_wparts)}</span></span>"
+                f"<span style='font-size:11px; font-weight:700; color:{_wcolor};'>{_wimpact}</span>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
 
     st.divider()
 
@@ -658,6 +763,71 @@ def _show_player_modal(player: dict):
     t2.metric("Season HR",  player.get("season_hr", "--"))
     t3.metric("Recent PA",  player.get("recent_pa", "--"))
     t4.metric("HR Rate",    f"{player.get('hr_rate', 0)*100:.2f}%" if player.get("hr_rate") else "--")
+
+    # ── Odds by book ──────────────────────────────────────────────────────
+    _pbk = player.get("prices_by_book", {})
+    if _pbk:
+        st.divider()
+        st.caption("**Odds by sportsbook** — tap best price to open FanDuel")
+        _BOOK_ORDER = ["fanduel", "draftkings", "betmgm", "caesars",
+                       "pointsbet", "betrivers", "bet365", "bovada"]
+        _best_odds_val = player.get("best_american")
+        _best_book_key = player.get("best_book", player.get("best_bookmaker", "")).lower()
+        _book_items = sorted(
+            [(bk, v) for bk, v in _pbk.items() if v is not None],
+            key=lambda x: (
+                _BOOK_ORDER.index(x[0]) if x[0] in _BOOK_ORDER else 99,
+            )
+        )
+        _bk_cols = st.columns(min(len(_book_items), 4))
+        for _bi, (_bk_key, _bk_val) in enumerate(_book_items):
+            _bk_label   = _bk_key.title().replace("Betmgm", "BetMGM").replace("Pointsbet", "PointsBet")
+            _bk_fmt     = _fmt_american(_bk_val)
+            _is_best    = (_bk_val == _best_odds_val) or (_bk_key == _best_book_key)
+            _bk_color   = "#4ade80" if _is_best else "#f0f0f0"
+            _bk_bg      = "#0d2a0d" if _is_best else "#0d0d20"
+            _bk_border  = "#1a5c1a" if _is_best else "#1e1e40"
+            _best_badge = " ★" if _is_best else ""
+            with _bk_cols[_bi % 4]:
+                if _bk_key == "fanduel":
+                    st.link_button(
+                        f"{_bk_label}{_best_badge}  {_bk_fmt}",
+                        _fanduel_url(name),
+                        use_container_width=True,
+                    )
+                else:
+                    st.markdown(
+                        f"<div style='background:{_bk_bg}; border:1px solid {_bk_border}; "
+                        f"border-radius:6px; padding:8px 10px; text-align:center; margin-bottom:6px;'>"
+                        f"<div style='font-size:10px; color:#888;'>{_bk_label}{_best_badge}</div>"
+                        f"<div style='font-size:18px; font-weight:700; color:{_bk_color};'>{_bk_fmt}</div>"
+                        f"</div>",
+                        unsafe_allow_html=True,
+                    )
+
+    # ── Bet sizing ────────────────────────────────────────────────────────
+    _bet_size   = player.get("bet_size") or player.get("bet_dollars")
+    _confidence = player.get("confidence")
+    _score      = player.get("score")
+    if any(x is not None for x in [_bet_size, _confidence, _score]):
+        st.divider()
+        st.caption("**Engine recommendation**")
+        _eng_cols = st.columns(3)
+        if _bet_size is not None:
+            try:
+                _eng_cols[0].metric("Suggested Bet", f"${float(_bet_size):.0f}")
+            except (TypeError, ValueError):
+                pass
+        if _confidence is not None:
+            try:
+                _eng_cols[1].metric("Confidence", f"{float(_confidence):.0f}")
+            except (TypeError, ValueError):
+                pass
+        if _score is not None:
+            try:
+                _eng_cols[2].metric("Score", f"{float(_score):.2f}")
+            except (TypeError, ValueError):
+                pass
 
     st.divider()
 
@@ -1036,6 +1206,101 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
         unsafe_allow_html=True,
     )
 
+    # ── Best Bet Hero Card ───────────────────────────────────────────────────
+    if ranked:
+        _top = ranked[0]
+        _top_name  = _top.get("player_name", "")
+        _top_team  = _top.get("team", "")
+        _top_vs    = _top.get("pitcher_name", "")
+        _top_ev    = _top.get("ev_pct", 0)
+        _top_edge  = _top.get("edge_pct", 0)
+        _top_model = _top.get("model_prob", 0) * 100
+        _top_odds  = _top.get("best_american")
+        _top_book  = _top.get("best_book", "")
+        _top_bet   = _top.get("bet_dollars", 0)
+        _top_spot  = _top.get("lineup_spot")
+        _top_conf  = "✅ Confirmed" if _top_spot is not None else "⏳ Estimated"
+        _top_ev_col = "#4ade80" if _top_ev >= 0 else "#f87171"
+        _top_url    = _fanduel_url(_top_name)
+
+        _hc1, _hc2, _hc3 = st.columns([6, 2, 2])
+        with _hc1:
+            if st.button(
+                f"🏆  {_top_name}",
+                key="hero_modal_btn",
+                help=f"View full stats for {_top_name}",
+                use_container_width=True,
+            ):
+                st.session_state["show_modal"] = _top
+                st.rerun()
+            st.markdown(
+                f"<div style='font-size:12px; color:#888; margin:-4px 0 2px 6px;'>"
+                f"{_top_team} vs {_top_vs} &nbsp;·&nbsp; {_top_conf} &nbsp;·&nbsp; "
+                f"Spot #{_top_spot if _top_spot else '?'}"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+        with _hc2:
+            st.metric("Model / EV",
+                      f"{_top_model:.0f}%",
+                      delta=f"EV {_top_ev:+.1f}%",
+                      delta_color="normal")
+        with _hc3:
+            st.metric("Odds / Bet",
+                      _fmt_american(_top_odds) if _top_odds else "--",
+                      delta=f"${_top_bet:.0f} suggested" if _top_bet else None,
+                      delta_color="off")
+
+        _hb1, _hb2 = st.columns([8, 2])
+        with _hb2:
+            st.link_button("Open on FanDuel ↗", _top_url, use_container_width=True)
+
+        st.markdown(
+            "<div style='border-top:1px solid #2a1a2a; margin:10px 0 14px;'></div>",
+            unsafe_allow_html=True,
+        )
+
+    # ── Share / Export ────────────────────────────────────────────────────────
+    if ranked:
+        with st.expander("📤 Share Picks", expanded=False):
+            _share_date  = data.get("date", _dt.date.today().isoformat())
+            _share_lines = [
+                f"⚾ CODEX HR PICKS — {_share_date}",
+                "━" * 36,
+                "",
+            ]
+            for _si, _sp in enumerate(ranked):
+                _sname   = _sp.get("player_name", "")
+                _steam   = _sp.get("team", "")
+                _svs     = _sp.get("pitcher_name", "")
+                _sodds   = _sp.get("best_american")
+                _sbook   = _sp.get("best_book", _sp.get("best_bookmaker", "")).title()
+                _smodel  = _sp.get("model_prob", 0) * 100
+                _sev     = _sp.get("ev_pct", 0)
+                _sbet    = _sp.get("bet_size") or _sp.get("bet_dollars")
+                _sconf   = "✅" if _sp.get("lineup_spot") is not None else "⏳"
+                _prefix  = "🏆 #1 BEST BET" if _si == 0 else f"{_si + 1}."
+                _share_lines.append(f"{_prefix} {_sconf} {_sname} ({_steam}) vs {_svs}")
+                _odds_str = _fmt_american(_sodds) if _sodds else "--"
+                _book_str = f" @ {_sbook}" if _sbook else ""
+                _bet_str  = f" | Bet: ${float(_sbet):.0f}" if _sbet else ""
+                _share_lines.append(
+                    f"   {_odds_str}{_book_str} | {_smodel:.0f}% model | EV {_sev:+.1f}%{_bet_str}"
+                )
+                _share_lines.append("")
+            _share_lines += [
+                "━" * 36,
+                "Generated by Codex HR Engine v4",
+            ]
+            _share_text = "\n".join(_share_lines)
+            st.text_area(
+                "Copy the text below",
+                value=_share_text,
+                height=min(300, 60 + len(ranked) * 55),
+                label_visibility="collapsed",
+            )
+            st.caption("Select all text above and copy (⌘A / Ctrl+A → ⌘C / Ctrl+C).")
+
     all_by_model = data.get("all_by_model", [])
     # Apply time gate to all_by_model so All/Prime/Watch tabs respect the cutoff too
     if cutoff_utc_hour is not None:
@@ -1047,16 +1312,95 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
     _n_prime = len([p for p in all_by_model if p.get("model_prob", 0) >= PRIME_FLOOR])
     _n_watch = len([p for p in all_by_model if p.get("model_prob", 0) < PRIME_FLOOR])
 
-    # Compute steam names: players whose implied prob shortened ≥2pp since first snapshot
+    # Compute steam moves: players whose implied prob shortened ≥2pp since first snapshot
     _steam_names: set = set()
+    _steam_details: list = []   # [(name, open_odds, curr_odds, move_pct, is_ranked)]
     try:
         _lm_today = lm_tracker.get_movement_today()
+        _ranked_names = {p.get("player_name") for p in ranked}
         for _lm_name, _lm_snaps in _lm_today.items():
             _lm_summ = lm_tracker.movement_summary(_lm_snaps)
             if _lm_summ and _lm_summ.get("move_pct", 0) >= 2.0:
                 _steam_names.add(_lm_name)
+                _steam_details.append((
+                    _lm_name,
+                    _lm_summ.get("opening_odds"),
+                    _lm_summ.get("current_odds"),
+                    _lm_summ.get("move_pct", 0),
+                    _lm_name in _ranked_names,
+                ))
+        _steam_details.sort(key=lambda x: x[3], reverse=True)
     except Exception:
         pass
+
+    # ── Steam move alert banner ───────────────────────────────────────────────
+    if _steam_details:
+        _steam_pick_names = [x[0] for x in _steam_details if x[4]]
+        _steam_watch_names = [x[0] for x in _steam_details if not x[4]]
+        _banner_parts = []
+        if _steam_pick_names:
+            _banner_parts.append(f"**📈 Sharp money on your picks: {', '.join(_steam_pick_names)}**")
+        if _steam_watch_names:
+            _banner_parts.append(f"Also moving: {', '.join(_steam_watch_names)}")
+
+        with st.container():
+            st.markdown(
+                f"<div style='background:#1a1a00; border:1px solid #666600; border-left:4px solid #FFD700; "
+                f"border-radius:6px; padding:10px 16px; margin-bottom:12px;'>"
+                f"<div style='color:#FFD700; font-weight:700; font-size:13px; margin-bottom:6px;'>"
+                f"⚡ LINE MOVEMENT ALERT</div>"
+                + "".join(
+                    f"<div style='display:flex; justify-content:space-between; align-items:center; "
+                    f"margin-bottom:4px; padding:4px 8px; background:#{'111100' if x[4] else '0d0d00'}; "
+                    f"border-radius:4px;'>"
+                    f"<span style='color:{'#FFD700' if x[4] else '#aaaaaa'}; font-weight:{'700' if x[4] else '400'};'>"
+                    f"{'✅ ' if x[4] else '○ '}{x[0]}</span>"
+                    f"<span style='color:#888; font-size:12px;'>"
+                    f"{_fmt_american(x[1])} → {_fmt_american(x[2])} "
+                    f"<b style='color:#FF6666'>({x[3]:+.1f}pp shorter)</b></span>"
+                    f"</div>"
+                    for x in _steam_details
+                )
+                + "<div style='color:#888; font-size:11px; margin-top:6px;'>"
+                  "Lines shortening = market gaining confidence. Bet before it moves further.</div>"
+                  "</div>",
+                unsafe_allow_html=True,
+            )
+
+    # ── Pitcher change alert banner ───────────────────────────────────────────
+    _pitcher_changes = st.session_state.get("pitcher_changes", {})
+    if _pitcher_changes:
+        # Which affected teams have picks in our ranked list?
+        _ranked_teams = {p.get("team", "") for p in ranked}
+        _opp_teams    = {p.get("opponent", "") for p in ranked}
+        _affected_picks = {t for t in _pitcher_changes if t in _ranked_teams or t in _opp_teams}
+
+        _pc_rows_html = ""
+        for team, ch in _pitcher_changes.items():
+            _is_pick_team = team in _affected_picks
+            _pc_rows_html += (
+                f"<div style='display:flex; justify-content:space-between; align-items:center; "
+                f"margin-bottom:4px; padding:4px 8px; "
+                f"background:#{'1a0000' if _is_pick_team else '0d0000'}; border-radius:4px;'>"
+                f"<span style='color:{'#FF6666' if _is_pick_team else '#aaaaaa'}; "
+                f"font-weight:{'700' if _is_pick_team else '400'};'>"
+                f"{'⚠️ ' if _is_pick_team else '○ '}{team}</span>"
+                f"<span style='color:#888; font-size:12px;'>"
+                f"<s>{ch['old']}</s> → <b style='color:#FF6666'>{ch['new']}</b></span>"
+                f"</div>"
+            )
+        st.markdown(
+            f"<div style='background:#1a0000; border:1px solid #660000; border-left:4px solid #FF3333; "
+            f"border-radius:6px; padding:10px 16px; margin-bottom:12px;'>"
+            f"<div style='color:#FF3333; font-weight:700; font-size:13px; margin-bottom:6px;'>"
+            f"🔄 PITCHER CHANGE DETECTED</div>"
+            + _pc_rows_html
+            + "<div style='color:#888; font-size:11px; margin-top:6px;'>"
+              "Model probabilities were calculated using the original starters. "
+              "Picks against affected teams may no longer be valid — verify before betting.</div>"
+              "</div>",
+            unsafe_allow_html=True,
+        )
 
     sub1, sub2, sub3, sub4 = st.tabs([
         f"⚡ Picks ({len(ranked)})",
@@ -1068,8 +1412,9 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
     # ── TAB: Qualified Picks ─────────────────────────────────────────────────
     with sub1:
         roster_confirmed = [p for p in ranked if p.get("lineup_spot") is not None]
-        _quick_tab, _slate_tab, _confirmed_tab, _movement_tab, _odds_cmp_tab = st.tabs([
+        _quick_tab, _timeline_tab, _slate_tab, _confirmed_tab, _movement_tab, _odds_cmp_tab = st.tabs([
             "📱 Quick",
+            "⏰ Timeline",
             f"📋 Slate ({len(ranked)})",
             f"✅ Confirmed ({len(roster_confirmed)})",
             "📈 Movement",
@@ -1081,6 +1426,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
             if not _quick_pool:
                 st.info("No qualified picks. Adjust EV/Edge filters in the sidebar.")
             else:
+                _now_et = _dt.datetime.now(_EDT)
                 st.caption("Top picks — tap player name to view details & add to FD Slip.")
                 for _qi, _qp in enumerate(_quick_pool):
                     _qev      = _qp.get("ev_pct", 0)
@@ -1089,9 +1435,40 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                     _qteam    = _qp.get("team", "")
                     _qvs      = _qp.get("pitcher_name", "")
                     _qspot    = _qp.get("lineup_spot")
+                    _qbet     = _qp.get("bet_size") or _qp.get("bet_dollars")
                     _qev_col  = "#4ade80" if _qev >= 0 else "#f87171"
                     _qconf    = "✅" if _qspot is not None else "⏳"
                     _qurl     = _fanduel_url(_qp["player_name"])
+                    _qis_steam = _qp.get("player_name") in _steam_names
+
+                    # Game time + urgency
+                    _qgt = _game_time_et(_qp.get("game_time_utc", ""))
+                    if _qgt:
+                        _qgt_str  = _qgt.strftime("%-I:%M %p ET")
+                        _qgt_dt   = _dt.datetime.combine(_now_et.date(), _qgt, tzinfo=_EDT)
+                        _mins_to  = int((_qgt_dt - _now_et).total_seconds() / 60)
+                        if _mins_to < 0:
+                            _urgency_col = "#555"
+                            _urgency_lbl = "In progress"
+                        elif _mins_to < 60:
+                            _urgency_col = "#FF6666"
+                            _urgency_lbl = f"BET NOW — {_mins_to}m"
+                        elif _mins_to < 120:
+                            _urgency_col = "#FFD700"
+                            _urgency_lbl = f"{_mins_to}m to game"
+                        else:
+                            _urgency_col = "#4ade80"
+                            _urgency_lbl = f"{_mins_to // 60}h {_mins_to % 60}m"
+                    else:
+                        _qgt_str  = "TBD"
+                        _urgency_col = "#555"
+                        _urgency_lbl = ""
+
+                    _steam_border = "#666600" if _qis_steam else "#1e1e40"
+                    _steam_bg     = "#1a1a00" if _qis_steam else "#0d0d20"
+                    _steam_badge  = "<span style='background:#444400;color:#FFD700;font-size:10px;padding:1px 6px;border-radius:4px;margin-left:6px;'>📈 STEAM</span>" if _qis_steam else ""
+                    _qweather     = _weather_badge(_qp)
+
                     if st.button(
                         f"{_qconf} {_qp['player_name']}",
                         key=f"qv_modal_{_qi}",
@@ -1099,33 +1476,143 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                     ):
                         st.session_state["show_modal"] = _qp
                         st.rerun()
+                    _spot_str = f" · Bat #{_qspot}" if _qspot else ""
+                    _bet_str  = f"<span style='color:#888;font-size:11px;'> · Bet ${float(_qbet):.0f}</span>" if _qbet else ""
                     st.markdown(
-                        f"<div style='background:#0d0d20; border:1px solid #1e1e40; border-radius:10px; "
+                        f"<div style='background:{_steam_bg}; border:1px solid {_steam_border}; border-radius:10px; "
                         f"padding:10px 16px; margin-bottom:10px;'>"
+                        # row 1: matchup + steam badge + odds link
                         f"<div style='display:flex; justify-content:space-between; align-items:flex-start;'>"
-                        f"<div style='font-size:13px; color:#888;'>{_qteam} vs {_qvs}</div>"
+                        f"<div style='font-size:13px; color:#888;'>{_qteam} vs {_qvs}{_spot_str}{_steam_badge}</div>"
                         f"<a href='{_qurl}' target='_blank' style='text-decoration:none;'>"
                         f"<div style='text-align:right;'>"
-                        f"<div style='font-size:20px; font-weight:700; color:#FF6666;'>"
-                        f"{_fmt_american(_qodds)}</div>"
-                        f"<div style='font-size:12px; color:#888;'>best odds ↗</div>"
+                        f"<div style='font-size:20px; font-weight:700; color:#FF6666;'>{_fmt_american(_qodds)}</div>"
+                        f"<div style='font-size:11px; color:#888;'>best odds ↗</div>"
                         f"</div></a>"
                         f"</div>"
-                        f"<div style='display:flex; gap:16px; margin-top:8px;'>"
-                        f"<div style='text-align:center; flex:1; background:#0a0a18; "
-                        f"border-radius:6px; padding:6px 4px;'>"
+                        # row 2: game time urgency + weather
+                        f"<div style='margin:4px 0 8px; display:flex; justify-content:space-between; align-items:center;'>"
+                        f"<span>"
+                        f"<span style='font-size:12px; color:#888;'>🕐 {_qgt_str}</span>"
+                        + (f"  <span style='font-size:11px; font-weight:700; color:{_urgency_col};'>· {_urgency_lbl}</span>" if _urgency_lbl else "")
+                        + f"</span>"
+                        + (f"<span>{_qweather}</span>" if _qweather else "")
+                        + f"</div>"
+                        # row 3: stat boxes
+                        f"<div style='display:flex; gap:10px;'>"
+                        f"<div style='text-align:center; flex:1; background:#0a0a18; border-radius:6px; padding:6px 4px;'>"
                         f"<div style='font-size:18px; font-weight:700; color:#a78bfa;'>{_qmodel:.0f}%</div>"
                         f"<div style='font-size:10px; color:#666;'>Model</div>"
                         f"</div>"
-                        f"<div style='text-align:center; flex:1; background:#0a0a18; "
-                        f"border-radius:6px; padding:6px 4px;'>"
+                        f"<div style='text-align:center; flex:1; background:#0a0a18; border-radius:6px; padding:6px 4px;'>"
                         f"<div style='font-size:18px; font-weight:700; color:{_qev_col};'>{_qev:+.1f}%</div>"
                         f"<div style='font-size:10px; color:#666;'>EV</div>"
                         f"</div>"
                         f"</div>"
+                        + (f"<div style='margin-top:6px; text-align:right;'>{_bet_str}</div>" if _qbet else "")
+                        + f"</div>",
+                        unsafe_allow_html=True,
+                    )
+
+        with _timeline_tab:
+            # Pool: qualified picks + all players with odds, deduplicated, sorted by game time
+            _tl_seen: set = set()
+            _tl_pool: list = []
+            for _p in ranked:
+                _n = _p.get("player_name", "")
+                if _n not in _tl_seen:
+                    _tl_seen.add(_n)
+                    _tl_pool.append((_p, True))   # (player_dict, is_pick)
+            for _p in all_players:
+                _n = _p.get("player_name", "")
+                if _n not in _tl_seen and _p.get("best_american"):
+                    _tl_seen.add(_n)
+                    _tl_pool.append((_p, False))  # has odds but didn't qualify
+
+            if not _tl_pool:
+                st.info("No players with odds yet — load data first.")
+            else:
+                # Group by rounded game time (nearest 5 min)
+                from collections import defaultdict as _dd
+                _tl_groups: dict = _dd(list)
+                _tl_sort_key: dict = {}
+                for _p, _is_pick in _tl_pool:
+                    _gt = _game_time_et(_p.get("game_time_utc", ""))
+                    if _gt:
+                        # Round down to 5-min slot for grouping
+                        _slot_min = (_gt.hour * 60 + _gt.minute // 5 * 5)
+                        _slot_lbl = f"{_gt.strftime('%-I:%M %p')} ET"
+                    else:
+                        _slot_min = 9999
+                        _slot_lbl = "Time TBD"
+                    _tl_groups[_slot_lbl].append((_p, _is_pick))
+                    _tl_sort_key[_slot_lbl] = _slot_min
+
+                _now_et = _dt.datetime.now(_EDT)
+                _now_min = _now_et.hour * 60 + _now_et.minute
+                _sorted_slots = sorted(_tl_groups.keys(), key=lambda s: _tl_sort_key[s])
+                _n_pick_slots = sum(1 for s in _sorted_slots if any(ip for _, ip in _tl_groups[s]))
+                st.caption(
+                    f"{len(_tl_pool)} players across {len(_sorted_slots)} game times · "
+                    f"{len(ranked)} qualified picks · ✅ = pass filters · ○ = has odds only"
+                )
+                for _slot_lbl in _sorted_slots:
+                    _slot_players = _tl_groups[_slot_lbl]
+                    _slot_min_val = _tl_sort_key[_slot_lbl]
+                    _n_picks_in   = sum(1 for _, ip in _slot_players if ip)
+                    _is_past      = _slot_min_val < _now_min and _slot_min_val != 9999
+                    _is_next      = not _is_past and _slot_min_val != 9999 and all(
+                        _tl_sort_key[s] <= _slot_min_val or _tl_sort_key[s] == 9999
+                        for s in _sorted_slots if _tl_sort_key[s] < _slot_min_val
+                    )
+                    _pick_tag = f"  {_n_picks_in} pick{'s' if _n_picks_in != 1 else ''}" if _n_picks_in else "  watch only"
+                    _past_tag = "  ⚫ past" if _is_past else ""
+                    _hdr_col  = "#888" if _is_past else ("#FFD700" if _n_picks_in else "#555")
+                    st.markdown(
+                        f"<div style='background:#0d0d20; border-left:3px solid {_hdr_col}; "
+                        f"padding:6px 12px; margin:10px 0 4px; border-radius:0 6px 6px 0;'>"
+                        f"<span style='color:{_hdr_col}; font-weight:700; font-size:14px;'>"
+                        f"🕐 {_slot_lbl}</span>"
+                        f"<span style='color:#555; font-size:12px;'>{_pick_tag}{_past_tag}</span>"
                         f"</div>",
                         unsafe_allow_html=True,
                     )
+                    for _tli, (_p, _is_pick) in enumerate(_slot_players):
+                        _tl_name  = _p.get("player_name", "")
+                        _tl_team  = _p.get("team", "")
+                        _tl_vs    = _p.get("pitcher_name", "")
+                        _tl_odds  = _p.get("best_american")
+                        _tl_ev    = _p.get("ev_pct", 0)
+                        _tl_model = _p.get("model_prob", 0) * 100
+                        _tl_conf  = "✅" if _is_pick else "○"
+                        _tl_ev_col = "#4ade80" if _tl_ev >= 0 else "#f87171"
+                        _tl_name_col = "#f0f0f0" if _is_pick else "#888"
+                        _tc1, _tc2 = st.columns([7, 3])
+                        with _tc1:
+                            if st.button(
+                                f"{_tl_conf} {_tl_name}",
+                                key=f"tl_modal_{_slot_lbl}_{_tli}",
+                                use_container_width=True,
+                                disabled=_is_past,
+                            ):
+                                st.session_state["show_modal"] = _p
+                                st.rerun()
+                            st.markdown(
+                                f"<div style='font-size:11px; color:#666; margin:-4px 0 2px 6px;'>"
+                                f"{_tl_team} vs {_tl_vs}"
+                                f"</div>",
+                                unsafe_allow_html=True,
+                            )
+                        with _tc2:
+                            st.markdown(
+                                f"<div style='text-align:right; padding-top:4px;'>"
+                                f"<span style='color:#FF6666; font-weight:700;'>{_fmt_american(_tl_odds) if _tl_odds else '--'}</span>"
+                                f"<span style='color:#555; font-size:10px;'> odds</span><br>"
+                                f"<span style='color:#a78bfa; font-size:11px;'>{_tl_model:.0f}% mdl</span>"
+                                + (f"  <span style='color:{_tl_ev_col}; font-size:11px;'>{_tl_ev:+.1f}% EV</span>" if _is_pick else "")
+                                + f"</div>",
+                                unsafe_allow_html=True,
+                            )
 
         with _slate_tab:
             if not ranked:
@@ -1198,9 +1685,24 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                     st.caption(
                         "Line movement since first load today. "
                         "▲ shortened = market gaining confidence (sharp agreement). "
-                        "▼ lengthened = market fading."
+                        "▼ lengthened = market fading. Click any row to view full player details."
                     )
-                    st.dataframe(pd.DataFrame(mv_rows), hide_index=True, width="stretch")
+                    # Build a name→player lookup from all_players for modal support
+                    _mv_player_map = {p.get("player_name", ""): p for p in all_players}
+                    _mv_tver = st.session_state.get("_table_ver", 0)
+                    _mv_sel = st.dataframe(
+                        pd.DataFrame(mv_rows), hide_index=True, width="stretch",
+                        on_select="rerun", selection_mode="single-row",
+                        key=f"mv_df_{_mv_tver}",
+                    )
+                    _mv_rows_sel = getattr(getattr(_mv_sel, "selection", None), "rows", [])
+                    if _mv_rows_sel and 0 <= _mv_rows_sel[0] < len(mv_rows):
+                        _mv_name = mv_rows[_mv_rows_sel[0]]["Player"]
+                        _mv_p    = _mv_player_map.get(_mv_name)
+                        if _mv_p:
+                            st.session_state["_table_ver"] = _mv_tver + 1
+                            st.session_state["show_modal"] = _mv_p
+                            st.rerun()
                 else:
                     st.info("Not enough snapshots yet to show movement.")
 
@@ -1237,8 +1739,18 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                     for bk in all_books:
                         row[bk.title()] = _fmt_american(pbk.get(bk)) if bk in pbk else "--"
                     cmp_rows.append(row)
-                st.caption("Best odds per sportsbook for each qualified pick. Best column = highest price found.")
-                st.dataframe(pd.DataFrame(cmp_rows), hide_index=True, width="stretch")
+                st.caption("Best odds per sportsbook for each qualified pick. Click any row to view full player details & add to FD Slip.")
+                _oc_tver = st.session_state.get("_table_ver", 0)
+                _oc_sel = st.dataframe(
+                    pd.DataFrame(cmp_rows), hide_index=True, width="stretch",
+                    on_select="rerun", selection_mode="single-row",
+                    key=f"odds_cmp_df_{_oc_tver}",
+                )
+                _oc_rows_sel = getattr(getattr(_oc_sel, "selection", None), "rows", [])
+                if _oc_rows_sel and 0 <= _oc_rows_sel[0] < len(odds_pool):
+                    st.session_state["_table_ver"] = _oc_tver + 1
+                    st.session_state["show_modal"] = odds_pool[_oc_rows_sel[0]]
+                    st.rerun()
 
     if all_by_model:
         PRIME_FLOOR = 0.15
@@ -1498,6 +2010,26 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
         prime = [p for p in all_by_model if p.get("model_prob", 0) >= PRIME_FLOOR][:60]
         watch = [p for p in all_by_model if p.get("model_prob", 0) < PRIME_FLOOR][:20]
 
+        # Shared search bar — filters all three model tabs simultaneously
+        _search_query = st.text_input(
+            "🔍 Search players",
+            value=st.session_state.get("model_search", ""),
+            placeholder="Name or team (e.g. 'Judge', 'NYY', 'Schwarber')…",
+            key="model_search",
+            label_visibility="collapsed",
+        )
+        _sq = _search_query.strip().lower()
+
+        def _apply_search(players):
+            if not _sq:
+                return players
+            return [
+                p for p in players
+                if _sq in (p.get("player_name") or "").lower()
+                or _sq in (p.get("team") or "").lower()
+                or _sq in (p.get("opponent") or "").lower()
+            ]
+
         with sub2:
             with st.expander("⚙️ Customize columns", expanded=False):
                 st.caption("Each option shows the full stat name, description, and how it affects the model. "
@@ -1509,21 +2041,31 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                     format_func=lambda c: _COL_FULL.get(c, c),
                     key="model_col_picker",
                 )
-            _render_model_df(all_by_model[:100])
+            _all_filtered = _apply_search(all_by_model)
+            if _sq and not _all_filtered:
+                st.info(f'No players matching "{_search_query}".')
+            else:
+                # Cap at 100 only when not searching
+                _all_display = _all_filtered if _sq else _all_filtered[:100]
+                if not _sq and len(all_by_model) > 100:
+                    st.caption(f"Showing top 100 of {len(all_by_model)} players by model probability. Use the search box above to find specific players.")
+                _render_model_df(_all_display)
 
         with sub3:
-            if not prime:
-                st.info("No players with ≥15% model HR probability today.")
+            _prime_filtered = _apply_search(prime)
+            if not _prime_filtered:
+                st.info(f"No {'matches for "' + _search_query + '"' if _sq else 'players with ≥15% model HR probability today'}.")
             else:
-                st.caption(f"⭐ {len(prime)} players with model HR probability ≥ 15% — ranked by model probability.")
-                _render_model_df(prime)
+                st.caption(f"⭐ {len(_prime_filtered)} player{'s' if len(_prime_filtered) != 1 else ''} with model HR probability ≥ 15%{' matching search' if _sq else ''}.")
+                _render_model_df(_prime_filtered)
 
         with sub4:
-            if not watch:
-                st.info("No watch list players today.")
+            _watch_filtered = _apply_search(watch)
+            if not _watch_filtered:
+                st.info(f"No {'matches for "' + _search_query + '"' if _sq else 'watch list players today'}.")
             else:
-                st.caption(f"📋 {len(watch)} players with model HR probability < 15% — ranked by model probability.")
-                _render_model_df(watch)
+                st.caption(f"📋 {len(_watch_filtered)} player{'s' if len(_watch_filtered) != 1 else ''} with model HR probability < 15%{' matching search' if _sq else ''}.")
+                _render_model_df(_watch_filtered)
 
 
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
@@ -1707,15 +2249,75 @@ def tab_performance():
         unsafe_allow_html=True,
     )
 
-    st.markdown('<div class="section-header">📊 Running P&L</div>', unsafe_allow_html=True)
+    # ── Recency filter ────────────────────────────────────────────────────────
+    _WINDOWS = {"7D": 7, "14D": 14, "30D": 30, "All": None}
+    _pw_cols = st.columns(len(_WINDOWS))
+    _cur_win = st.session_state.get("perf_window", "All")
+    for _wi, (_wlabel, _wdays) in enumerate(_WINDOWS.items()):
+        with _pw_cols[_wi]:
+            _btn_type = "primary" if _wlabel == _cur_win else "secondary"
+            if st.button(_wlabel, key=f"pw_{_wlabel}", type=_btn_type,
+                         use_container_width=True):
+                st.session_state["perf_window"] = _wlabel
+                st.rerun()
+    _win_days = _WINDOWS[_cur_win]
+    if _win_days:
+        from datetime import date as _dclass, timedelta as _tdclass
+        _cutoff_date = (_dclass.today() - _tdclass(days=_win_days)).isoformat()
+        st.caption(f"Showing last {_win_days} days (since {_cutoff_date})")
+    else:
+        _cutoff_date = None
+        st.caption("Showing all-time performance")
+
+    # Load and filter raw data once — everything below uses these filtered lists
     try:
-        summary = pnl_tracker.pnl_summary()
-        clv     = clv_tracker.clv_summary()
+        _all_results_raw = pnl_tracker._load_results()
+        _all_picks_raw   = pnl_tracker.get_picks_log()
     except Exception as e:
         st.error(f"Error loading performance data: {e}")
         return
 
-    if summary:
+    if _cutoff_date:
+        _all_results_raw = [r for r in _all_results_raw if r.get("date", "") >= _cutoff_date]
+        _all_picks_raw   = [r for r in _all_picks_raw   if r.get("date", "") >= _cutoff_date]
+
+    # Compute summary from filtered results
+    _res_map = {r.get("player_name","") + "|" + r.get("date",""): r for r in _all_results_raw}
+
+    def _filtered_summary(results: list) -> dict:
+        total_bet, total_profit, wins, losses, pending = 0.0, 0.0, 0, 0, 0
+        for row in results:
+            bet = float(row.get("bet_dollars") or 0)
+            pl  = row.get("profit_loss", "")
+            total_bet += bet
+            if pl in ("", None):
+                pending += 1
+            else:
+                try:
+                    profit = float(pl)
+                    total_profit += profit
+                    if profit > 0: wins += 1
+                    else:          losses += 1
+                except (ValueError, TypeError):
+                    pending += 1
+        decided = wins + losses
+        return {
+            "total_picks": decided + pending, "wins": wins, "losses": losses,
+            "pending": pending,
+            "win_rate": wins / decided if decided else 0,
+            "total_wagered": total_bet, "total_profit": total_profit,
+            "roi_pct": total_profit / total_bet * 100 if total_bet > 0 else 0,
+        }
+
+    summary = _filtered_summary(_all_results_raw)
+    try:
+        clv = clv_tracker.clv_summary()
+    except Exception:
+        clv = {}
+
+    st.markdown('<div class="section-header">📊 Running P&L</div>', unsafe_allow_html=True)
+
+    if summary and (summary.get("wins", 0) + summary.get("losses", 0)) > 0:
 
         win_rate  = summary.get("win_rate", 0) * 100
         roi       = summary.get("roi_pct", 0)
@@ -1744,10 +2346,7 @@ def tab_performance():
         col_l.markdown(_pnl_box("Losses",  str(losses),                    "#7f1d1d" if losses > 0 else "#1a1a2e"), unsafe_allow_html=True)
         col_p.markdown(_pnl_box("Pending", str(summary.get("pending", 0)), "#1a1a2e"), unsafe_allow_html=True)
     else:
-        try:
-            logged = pnl_tracker.get_picks_log()
-        except Exception:
-            logged = []
+        logged = _all_picks_raw
         if logged:
             pending_count = len(logged)
             backend = pnl_tracker.storage_backend()
@@ -1780,9 +2379,8 @@ def tab_performance():
 
     # ── P&L by Rating Tier ────────────────────────────────────────────────────
     try:
-        _all_picks   = pnl_tracker.get_picks_log()
-        _all_results = {r["player_name"] + "|" + r["date"]: r
-                        for r in pnl_tracker._load_results()}
+        _all_picks   = _all_picks_raw
+        _all_results = _res_map
         if _all_picks and _all_results:
             def _pick_tier(ev, edge, conf):
                 try:
@@ -1856,9 +2454,8 @@ def tab_performance():
 
     # ── Bankroll equity curve ─────────────────────────────────────────────────
     try:
-        _eq_picks   = pnl_tracker.get_picks_log()
-        _eq_results = {r["player_name"] + "|" + r["date"]: r
-                       for r in pnl_tracker._load_results()}
+        _eq_picks   = _all_picks_raw
+        _eq_results = _res_map
         if _eq_picks and _eq_results:
             _eq_rows = []
             for pick in _eq_picks:
@@ -1885,14 +2482,38 @@ def tab_performance():
                             unsafe_allow_html=True)
                 st.line_chart(pd.DataFrame(eq_chart_rows).set_index("Date"), height=220)
                 st.caption("Running cumulative P&L across all settled picks, sorted by date.")
+
+                # ── Daily P&L bar chart ───────────────────────────────────────
+                from collections import defaultdict as _dd2
+                _daily: dict = _dd2(float)
+                for r in _eq_rows:
+                    _daily[r["date"]] += r["pl"]
+                if len(_daily) >= 2:
+                    _daily_dates = sorted(_daily.keys())
+                    _daily_rows  = [{"Date": d, "Daily P&L ($)": round(_daily[d], 2)}
+                                    for d in _daily_dates]
+                    _daily_df = pd.DataFrame(_daily_rows).set_index("Date")
+                    st.markdown('<div class="section-header">📊 Daily P&L</div>',
+                                unsafe_allow_html=True)
+                    st.bar_chart(_daily_df, height=200)
+                    # Best / worst day callout
+                    _best_day  = max(_daily.items(), key=lambda x: x[1])
+                    _worst_day = min(_daily.items(), key=lambda x: x[1])
+                    _dc1, _dc2, _dc3 = st.columns(3)
+                    _dc1.metric("Best Day",  f"${_best_day[1]:+.2f}",  _best_day[0])
+                    _dc2.metric("Worst Day", f"${_worst_day[1]:+.2f}", _worst_day[0])
+                    _profitable_days = sum(1 for v in _daily.values() if v > 0)
+                    _dc3.metric("Profitable Days",
+                                f"{_profitable_days}/{len(_daily)}",
+                                f"{_profitable_days/len(_daily)*100:.0f}%")
+                    st.caption("Green = profitable day · Red = losing day. Each bar is the net P&L across all settled picks for that date.")
     except Exception:
         pass
 
     # ── Calibration curve ─────────────────────────────────────────────────────
     try:
-        _cal_picks   = pnl_tracker.get_picks_log()
-        _cal_results = {r["player_name"] + "|" + r["date"]: r
-                        for r in pnl_tracker._load_results()}
+        _cal_picks   = _all_picks_raw
+        _cal_results = _res_map
         if _cal_picks and _cal_results:
             BUCKETS = [(0, 5), (5, 10), (10, 15), (15, 20), (20, 25), (25, 30), (30, 100)]
             bucket_data: dict[str, list] = {f"{lo}-{hi}%": [] for lo, hi in BUCKETS}
@@ -1939,23 +2560,162 @@ def tab_performance():
     except Exception:
         pass
 
+    # ── Manual Result Entry ───────────────────────────────────────────────────
+    # Always uses unfiltered data — pending picks need resolution regardless of window
+    try:
+        from datetime import date as _today_cls, timedelta as _td
+        _all_log     = pnl_tracker.get_picks_log()
+        _all_results = {
+            r.get("player_name","") + "|" + r.get("date",""): r
+            for r in pnl_tracker._load_results()
+        }
+        _yesterday   = (_today_cls.today() - _td(days=1)).isoformat()
+        _today_str   = _today_cls.today().isoformat()
+        # Pending = logged but not yet in results with a definitive hr_result
+        _pending = [
+            r for r in _all_log
+            if r.get("date", "") < _today_str            # only past picks
+            and _all_results.get(
+                r.get("player_name", "") + "|" + r.get("date", ""), {}
+            ).get("hr_result", "") == ""
+        ]
+        if _pending:
+            st.markdown('<div class="section-header">⏳ Pending Results</div>',
+                        unsafe_allow_html=True)
+            st.caption("Mark each pick Won or Lost to update P&L. The MLB API auto-settles yesterday's picks — use these buttons if a result is missing.")
+            for _pr in _pending:
+                _pr_name  = _pr.get("player_name", "")
+                _pr_date  = _pr.get("date", "")
+                _pr_odds  = _pr.get("american_odds", "")
+                _pr_bet   = _pr.get("bet_dollars", "")
+                _pr_team  = _pr.get("team", "")
+                _pr_model = _pr.get("model_prob_pct", "")
+                try:
+                    _pr_odds_fmt = _fmt_american(int(float(_pr_odds))) if _pr_odds else "--"
+                except (ValueError, TypeError):
+                    _pr_odds_fmt = str(_pr_odds)
+                _pc1, _pc2, _pc3, _pc4 = st.columns([5, 2, 1, 1])
+                with _pc1:
+                    st.markdown(
+                        f"<div style='font-size:13px; color:#f0f0f0; font-weight:600;'>"
+                        f"{_pr_name} <span style='color:#555; font-size:11px;'>({_pr_team})</span></div>"
+                        f"<div style='font-size:11px; color:#888;'>"
+                        f"{_pr_date} &nbsp;·&nbsp; {_pr_odds_fmt} &nbsp;·&nbsp; "
+                        f"${_pr_bet} &nbsp;·&nbsp; Model {_pr_model}%</div>",
+                        unsafe_allow_html=True,
+                    )
+                with _pc2:
+                    st.write("")  # spacer
+                with _pc3:
+                    if st.button("✅ HR", key=f"res_win_{_pr_name}_{_pr_date}", use_container_width=True):
+                        pnl_tracker.update_results(_pr_date, {_pr_name: True})
+                        st.toast(f"Marked {_pr_name} ✅ HR on {_pr_date}")
+                        st.rerun()
+                with _pc4:
+                    if st.button("❌ No", key=f"res_loss_{_pr_name}_{_pr_date}", use_container_width=True):
+                        pnl_tracker.update_results(_pr_date, {_pr_name: False})
+                        st.toast(f"Marked {_pr_name} ❌ No HR on {_pr_date}")
+                        st.rerun()
+    except Exception as _re:
+        st.warning(f"Could not load pending results: {_re}")
+
     st.markdown('<div class="section-header">📋 Picks Log</div>', unsafe_allow_html=True)
     try:
-        rows = pnl_tracker.get_picks_log()
-        if rows:
-            def _clean_row(row: dict) -> dict:
-                out = {}
-                for k, v in row.items():
-                    if k is None or (isinstance(k, float) and k != k):
-                        continue  # drop NaN/None column names from blank CSV headers
-                    if isinstance(v, list):
-                        v = ", ".join(str(x) for x in v) if v else ""
-                    out[k] = v
-                return out
-            df_log = pd.DataFrame([_clean_row(r) for r in rows])
-            df_log = df_log.fillna("--")
-            df_log = df_log.replace([np.nan, np.inf, -np.inf, float('inf'), -float('inf')], "--")
-            st.dataframe(df_log, width='stretch', hide_index=True)
+        _log_picks   = _all_picks_raw
+        _log_results = _res_map
+        if _log_picks:
+            _log_rows = []
+            for _lp in _log_picks:
+                _lp_name  = _lp.get("player_name", "")
+                _lp_date  = _lp.get("date", "")
+                _lp_key   = f"{_lp_name}|{_lp_date}"
+                _lp_res   = _log_results.get(_lp_key, {})
+                _lp_hr    = _lp_res.get("hr_result", "")
+                _lp_pl    = _lp_res.get("profit_loss", "")
+
+                # Result display
+                if _lp_hr in ("1", 1):
+                    _res_str = "✅ HR"
+                elif _lp_hr in ("0", 0):
+                    _res_str = "❌ No HR"
+                elif _lp_date >= _dt.date.today().isoformat():
+                    _res_str = "🔄 Today"
+                else:
+                    _res_str = "⏳ Pending"
+
+                # P&L display
+                try:
+                    _pl_val  = float(_lp_pl)
+                    _pl_str  = f"${_pl_val:+.2f}"
+                except (TypeError, ValueError):
+                    _pl_str  = "--"
+
+                # Odds formatting
+                try:
+                    _odds_raw = _lp.get("american_odds", "")
+                    _odds_fmt = _fmt_american(int(float(_odds_raw))) if _odds_raw else "--"
+                except (TypeError, ValueError):
+                    _odds_fmt = str(_lp.get("american_odds", "--"))
+
+                # Bet size formatting
+                try:
+                    _bet_val = float(_lp.get("bet_dollars") or 0)
+                    _bet_str = f"${_bet_val:.0f}"
+                except (TypeError, ValueError):
+                    _bet_str = "--"
+
+                # Model prob formatting
+                try:
+                    _mp_raw = _lp.get("model_prob_pct", "")
+                    _mp_val = float(_mp_raw)
+                    _mp_str = f"{_mp_val:.1f}%"
+                except (TypeError, ValueError):
+                    _mp_str = "--"
+
+                _log_rows.append({
+                    "Date":     _lp_date,
+                    "Player":   _lp_name,
+                    "Team":     _lp.get("team", ""),
+                    "Pitcher":  _lp.get("pitcher", ""),
+                    "Model%":   _mp_str,
+                    "Odds":     _odds_fmt,
+                    "Bet":      _bet_str,
+                    "EV%":      f"{float(_lp.get('ev_pct', 0) or 0):+.1f}%",
+                    "Result":   _res_str,
+                    "P&L":      _pl_str,
+                })
+
+            _log_df = pd.DataFrame(_log_rows)
+
+            # Summary footer row
+            _settled = [r for r in _log_rows if r["Result"] in ("✅ HR", "❌ No HR")]
+            if _settled:
+                _tot_pl = sum(
+                    float(_log_results.get(f"{r['Player']}|{r['Date']}", {}).get("profit_loss", 0) or 0)
+                    for r in _settled
+                )
+                _n_win  = sum(1 for r in _settled if r["Result"] == "✅ HR")
+                _wr     = _n_win / len(_settled) * 100
+                st.caption(
+                    f"**{len(_log_picks)} picks logged** · "
+                    f"**{len(_settled)} settled** · "
+                    f"Win rate: **{_wr:.0f}%** ({_n_win}W / {len(_settled) - _n_win}L) · "
+                    f"Net P&L: **${_tot_pl:+.2f}**"
+                )
+
+            st.dataframe(
+                _log_df,
+                width="stretch",
+                hide_index=True,
+                column_config={
+                    "Result": st.column_config.TextColumn("Result", width="small"),
+                    "P&L":    st.column_config.TextColumn("P&L",    width="small"),
+                    "Model%": st.column_config.TextColumn("Model%", width="small"),
+                    "Odds":   st.column_config.TextColumn("Odds",   width="small"),
+                    "Bet":    st.column_config.TextColumn("Bet",    width="small"),
+                    "EV%":    st.column_config.TextColumn("EV%",    width="small"),
+                },
+            )
         else:
             st.caption("No picks logged yet — open Today's Picks tab to auto-log.")
     except Exception as e:
@@ -2001,6 +2761,37 @@ def main():
         )
         if new_br != st.session_state.get("bankroll_override"):
             st.session_state["bankroll_override"] = new_br
+
+        # Show current bankroll = input + cumulative settled P&L
+        try:
+            _br_results = pnl_tracker._load_results()
+            _br_pnl = sum(
+                float(r.get("profit_loss", 0) or 0)
+                for r in _br_results
+                if r.get("profit_loss", "") not in ("", None)
+            )
+            _br_current = new_br + _br_pnl
+            _br_color   = "#4ade80" if _br_pnl >= 0 else "#f87171"
+            _br_today   = sum(
+                float(r.get("profit_loss", 0) or 0)
+                for r in _br_results
+                if r.get("date", "") == _dt.date.today().isoformat()
+                and r.get("profit_loss", "") not in ("", None)
+            )
+            _br_today_str = (f" &nbsp;·&nbsp; Today: "
+                             f"<b style='color:{'#4ade80' if _br_today >= 0 else '#f87171'}'>"
+                             f"${_br_today:+.0f}</b>") if _br_today != 0 else ""
+            st.markdown(
+                f"<div style='font-size:12px; color:#888; margin-top:2px;'>"
+                f"Current: <b style='color:{_br_color}'>${_br_current:,.0f}</b>"
+                f" <span style='color:#555'>(${_br_pnl:+.0f} P&L)</span>"
+                f"{_br_today_str}"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+        except Exception:
+            pass
+
         st.caption(f"Max bet: ${new_br * config.MAX_BET_PCT:,.0f} &nbsp;|&nbsp; Kelly: {config.KELLY_FRACTION:.0%}")
 
         st.divider()
@@ -2090,7 +2881,15 @@ def main():
             st.session_state["fd_slip"] = _selected
 
             if _selected:
-                for i, s in enumerate(_selected):
+                _slip_now_et = _dt.datetime.now(_EDT)
+                # Sort slip by game time so earliest games appear first
+                _selected_sorted = sorted(
+                    _selected,
+                    key=lambda s: (
+                        _game_time_utc_hour(_slip_map[s].get("game_time_utc", "")) or 99
+                    )
+                )
+                for i, s in enumerate(_selected_sorted):
                     p = _slip_map[s]
                     fd_odds   = p.get("fanduel_american")
                     best_odds = p.get("best_american")
@@ -2099,6 +2898,33 @@ def main():
                     ev        = p.get("ev_pct", 0)
                     ev_color  = "#4ade80" if ev >= 0 else "#f87171"
                     url       = _fanduel_url(p["player_name"])
+
+                    # Game time + urgency
+                    _sgt = _game_time_et(p.get("game_time_utc", ""))
+                    if _sgt:
+                        _sgt_str = _sgt.strftime("%-I:%M %p")
+                        _sgt_dt  = _dt.datetime.combine(_slip_now_et.date(), _sgt, tzinfo=_EDT)
+                        _smins   = int((_sgt_dt - _slip_now_et).total_seconds() / 60)
+                        if _smins < 0:
+                            _surg_col = "#555"
+                            _surg_lbl = "In progress"
+                        elif _smins < 60:
+                            _surg_col = "#FF6666"
+                            _surg_lbl = f"BET NOW · {_smins}m"
+                        elif _smins < 120:
+                            _surg_col = "#FFD700"
+                            _surg_lbl = f"{_smins}m"
+                        else:
+                            _surg_col = "#4ade80"
+                            _surg_lbl = f"{_smins//60}h {_smins%60}m"
+                        _time_html = (
+                            f"<span style='color:#888; font-size:10px;'>🕐 {_sgt_str}</span>"
+                            f"  <span style='color:{_surg_col}; font-size:10px; "
+                            f"font-weight:700;'>{_surg_lbl}</span>"
+                        )
+                    else:
+                        _time_html = "<span style='color:#555; font-size:10px;'>🕐 TBD</span>"
+
                     _c_card, _c_rm = st.columns([9, 1])
                     with _c_card:
                         st.markdown(
@@ -2110,9 +2936,10 @@ def main():
                             f"<a href='{url}' target='_blank' "
                             f"style='color:#4488ff; font-size:11px; background:#0d0d2a; "
                             f"padding:2px 8px; border-radius:4px; border:1px solid #1a2a66; "
-                            f"text-decoration:none;'>Open FD →</a>"
+                            f"text-decoration:none;'>FD →</a>"
                             f"</div>"
-                            f"<div style='color:#888; margin-top:3px;'>"
+                            f"<div style='margin-top:3px;'>{_time_html}</div>"
+                            f"<div style='color:#888; margin-top:2px;'>"
                             f"{odds_lbl}: <b style='color:#FF6666'>{_fmt_american(odds_val)}</b>"
                             f" &nbsp;|&nbsp; EV: <b style='color:{ev_color}'>{ev:+.1f}%</b>"
                             f"</div></div>",
@@ -2124,6 +2951,51 @@ def main():
                             st.session_state["fd_slip"] = _new_slip
                             st.session_state.pop("fd_slip_select", None)
                             st.rerun()
+                # ── Parlay Summary ────────────────────────────────────────
+                if len(_selected) >= 2:
+                    _slip_players = [_slip_map[s] for s in _selected]
+                    _par_dec = 1.0
+                    _par_model_prob = 1.0
+                    _par_valid = True
+                    for _sp in _slip_players:
+                        _sp_odds = _sp.get("fanduel_american") or _sp.get("best_american")
+                        _sp_model = _sp.get("model_prob", 0)
+                        if _sp_odds:
+                            _o = int(_sp_odds)
+                            _par_dec *= (_o / 100 + 1) if _o >= 100 else (100 / abs(_o) + 1)
+                        else:
+                            _par_valid = False
+                        _par_model_prob *= _sp_model if _sp_model > 0 else 0.0
+                    if _par_valid and _par_dec > 1:
+                        _par_pct = _par_model_prob * 100
+                        _par_implied = 1.0 / _par_dec * 100
+                        _par_ev = (_par_model_prob * _par_dec - 1) * 100
+                        _par_ev_col = "#4ade80" if _par_ev >= 0 else "#f87171"
+                        _par_am = int((_par_dec - 1) * 100) if _par_dec >= 2 else int(-100 / (_par_dec - 1))
+                        st.markdown(
+                            f"<div style='background:#0d1a0d; border:1px solid #1a3a1a; "
+                            f"border-radius:8px; padding:10px 12px; margin:8px 0 6px; font-size:12px;'>"
+                            f"<div style='color:#4ade80; font-weight:700; margin-bottom:6px;'>"
+                            f"📐 {len(_selected)}-Leg Parlay</div>"
+                            f"<div style='display:flex; justify-content:space-between; margin-bottom:4px;'>"
+                            f"<span style='color:#888;'>Combined odds</span>"
+                            f"<span style='color:#f0f0f0; font-weight:700;'>+{_par_am:,}</span>"
+                            f"</div>"
+                            f"<div style='display:flex; justify-content:space-between; margin-bottom:4px;'>"
+                            f"<span style='color:#888;'>$10 → payout</span>"
+                            f"<span style='color:#f0f0f0; font-weight:700;'>${10 * _par_dec:.0f}</span>"
+                            f"</div>"
+                            f"<div style='display:flex; justify-content:space-between; margin-bottom:4px;'>"
+                            f"<span style='color:#888;'>Model hit prob</span>"
+                            f"<span style='color:#a78bfa; font-weight:700;'>{_par_pct:.1f}%</span>"
+                            f"</div>"
+                            f"<div style='display:flex; justify-content:space-between;'>"
+                            f"<span style='color:#888;'>Parlay EV</span>"
+                            f"<span style='color:{_par_ev_col}; font-weight:700;'>{_par_ev:+.1f}%</span>"
+                            f"</div></div>",
+                            unsafe_allow_html=True,
+                        )
+
                 # ── Scratch check ─────────────────────────────────────────
                 _scratched = st.session_state.get("scratched_ids", set())
                 for s in _selected:
@@ -2234,6 +3106,32 @@ def main():
                 st.session_state.pop(k, None)
             st.rerun()
 
+        # ── Auto-refresh ──────────────────────────────────────────────────────
+        _ar_on = st.toggle(
+            "⟳ Auto-refresh",
+            value=st.session_state.get("auto_refresh_on", False),
+            key="auto_refresh_on",
+            help="Automatically reload odds & lineups on a timer.",
+        )
+        if _ar_on:
+            _ar_interval = st.select_slider(
+                "Every",
+                options=[5, 10, 15, 30, 60],
+                value=st.session_state.get("auto_refresh_interval", 15),
+                format_func=lambda x: f"{x} min",
+                label_visibility="collapsed",
+            )
+            st.session_state["auto_refresh_interval"] = _ar_interval
+            _ar_loaded = st.session_state.get("data_loaded_at")
+            if _ar_loaded:
+                _ar_elapsed = int((_dt.datetime.now() - _ar_loaded).total_seconds() / 60)
+                _ar_remain  = max(0, _ar_interval - _ar_elapsed)
+                st.caption(
+                    f"Refreshes every {_ar_interval} min · "
+                    f"next in ~{_ar_remain} min"
+                )
+        _auto_refresh_ticker()
+
         st.divider()
 
         if st.button("✅ Update Yesterday's Results", width='stretch'):
@@ -2297,10 +3195,7 @@ The app will open full-screen like a native app.
     # ── Banner ────────────────────────────────────────────────────────────────
     _banner = Path(__file__).parent / "assets" / "banner.png"
     if _banner.exists():
-        try:
-            st.image(str(_banner), width="stretch")
-        except Exception:
-            st.image(str(_banner), use_container_width=True)
+        st.image(str(_banner), use_container_width=True)
     st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
     tab1, tab2, tab3 = st.tabs([
         "📋  TODAY'S PICKS",
