@@ -490,7 +490,7 @@ def _acc_hitting(splits: list) -> dict:
     pa = totals["plateAppearances"]
 
     if ab > 0:
-        tb = hi + db + 2*tr + 3*hr  # singles×1 + doubles×2 + triples×3 + HRs×4
+        tb = hi + db + 2*tr + 3*hr  # hi counts all hits once; +1/+2/+3 extra bases for 2B/3B/HR
         totals["avg"]                = round(hi / ab, 3)
         totals["sluggingPercentage"] = round(tb / ab, 3)
     else:

@@ -367,15 +367,6 @@ def park_factor(home_team: str, batter_is_home: bool) -> float:
     return get_park(home_team).get("hr_factor", 1.0)
 
 
-def weather_factor(home_team: str) -> tuple[float, dict]:
-    park = get_park(home_team)
-    is_dome    = home_team in weather_client.DOME_TEAMS
-    cf_bearing = park.get("cf_bearing", 0.0)
-    weather    = weather_client.get_game_weather(park["lat"], park["lon"])
-    t_factor   = weather_client.temp_factor(weather["temp_f"])
-    w_factor   = weather_client.wind_factor(weather["wind_mph"], weather["wind_deg"], is_dome, cf_bearing)
-    return max(0.80, min(1.20, t_factor * w_factor)), weather
-
 
 _MAX_GAME_HR_PROB = config.MAX_GAME_HR_PROB  # canonical source: config.py
 

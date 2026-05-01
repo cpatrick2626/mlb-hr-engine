@@ -49,7 +49,7 @@ LEAGUE_AVG_HR_PA: float = 0.028    # 2026 MLB YTD: 907 HR / 32083 PA (~35 PA/HR)
 REGRESSION_PA: int = 200            # Bayes regression towards league mean
 MIN_RECENT_PA: int = 20             # Need ≥20 recent PA to trust recent rate
 
-# League-average HR/9 for pitchers (2025 MLB; FOX Sports qualified starters median ~1.2-1.3)
+# League-average HR/9 for pitchers (2026 MLB YTD; FOX Sports qualified starters median ~1.2-1.3)
 LEAGUE_AVG_HR9: float = 1.09          # 2026 MLB YTD (Apr); revisit mid-May as sample grows
 LEAGUE_AVG_ISO: float = 0.150         # ISO = SLG - AVG; 2026 MLB YTD
 LEAGUE_HR_FB:   float = 0.106         # HR per fly ball; 2026 MLB YTD (down from 0.120 in 2025)
