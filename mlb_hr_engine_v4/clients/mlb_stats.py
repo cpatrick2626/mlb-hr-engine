@@ -44,12 +44,15 @@ def _pitcher_game_log_splits(pitcher_id: int) -> list:
                 "season": config.CURRENT_SEASON,
                 "limit": 162,
             })
-            splits = data.get("stats", [{}])[0].get("splits", [])
+            stats_list = data.get("stats", [])
+            splits = stats_list[0].get("splits", []) if stats_list else []
+            # Cache even when empty — player has no game log this season (IL, minors, etc.)
+            # Network failures still skip caching (caught below) so they stay retryable.
             _PITCHER_GAME_LOG_CACHE[pitcher_id] = sorted(
                 splits, key=lambda s: s.get("date", ""), reverse=True
             )
         except Exception as e:
-            # Don't cache: a transient failure shouldn't permanently suppress this pitcher
+            # Don't cache network/parse failures — allow retry on next call.
             print(f"[mlb_stats] pitcher game log failed (id={pitcher_id}): {e}")
             return []
     return _PITCHER_GAME_LOG_CACHE[pitcher_id]
@@ -63,13 +66,14 @@ def _game_log_splits(player_id: int) -> list:
                 "season": config.CURRENT_SEASON,
                 "limit": 162,   # full season; without this MLB API silently caps results
             })
-            splits = data.get("stats", [{}])[0].get("splits", [])
-            # Normalize to newest-first regardless of API sort order
+            stats_list = data.get("stats", [])
+            splits = stats_list[0].get("splits", []) if stats_list else []
+            # Cache even when empty — player has no game log this season.
             _GAME_LOG_CACHE[player_id] = sorted(
                 splits, key=lambda s: s.get("date", ""), reverse=True
             )
         except Exception as e:
-            # Don't cache: a transient failure shouldn't permanently suppress this batter
+            # Don't cache network/parse failures — allow retry on next call.
             print(f"[mlb_stats] batter game log failed (id={player_id}): {e}")
             return []
     return _GAME_LOG_CACHE[player_id]
