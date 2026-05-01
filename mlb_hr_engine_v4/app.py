@@ -86,8 +86,7 @@ except ImportError as e:
     # Try to import strategies UI
     try:
         from strategies_ui import tab_advanced_strategies
-    except:
-        # Create a placeholder function if import fails
+    except ImportError:
         def tab_advanced_strategies(data, parlays_callback=None):
             st.info("Advanced strategies module is being loaded...")
 
@@ -452,17 +451,17 @@ def get_data():
                         logged = pnl_tracker.log_picks(ranked, model_version="v4")
                         if logged:
                             clv_tracker.log_opening_lines(ranked)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        st.warning(f"Pick tracking error: {e}")
                     try:
                         lm_tracker.log_current_odds(ranked)
-                    except Exception:
-                        pass
+                    except Exception as e:
+                        st.warning(f"Line movement tracking error: {e}")
 
                 try:
-                    pnl_tracker.update_yesterday()
-                except Exception:
-                    pass
+                    pnl_tracker.settle_all_unsettled()
+                except Exception as e:
+                    st.warning(f"Outcome settlement error: {e}")
 
                 # Store pitcher map for change detection
                 try:
@@ -2449,8 +2448,8 @@ def tab_performance():
                 if tier_rows:
                     st.dataframe(pd.DataFrame(tier_rows), hide_index=True, width="stretch")
                     st.caption("Tier assigned at pick time using EV%, Edge%, and Confidence — same logic as the Rating column in Today's Picks.")
-    except Exception:
-        pass
+    except Exception as e:
+        st.warning(f"Performance by tier unavailable: {e}")
 
     # ── Bankroll equity curve ─────────────────────────────────────────────────
     try:
@@ -2507,8 +2506,8 @@ def tab_performance():
                                 f"{_profitable_days}/{len(_daily)}",
                                 f"{_profitable_days/len(_daily)*100:.0f}%")
                     st.caption("Green = profitable day · Red = losing day. Each bar is the net P&L across all settled picks for that date.")
-    except Exception:
-        pass
+    except Exception as e:
+        st.warning(f"Equity curve unavailable: {e}")
 
     # ── Calibration curve ─────────────────────────────────────────────────────
     try:
@@ -2527,9 +2526,7 @@ def tab_performance():
                     continue
                 try:
                     model_pct = float(pick.get("model_prob_pct", 0) or pick.get("model_prob", 0))
-                    if model_pct > 1:
-                        model_pct = model_pct  # already in percent
-                    else:
+                    if model_pct <= 1:
                         model_pct = model_pct * 100
                     hit = int(hr_res)
                 except (ValueError, TypeError):
@@ -2557,8 +2554,8 @@ def tab_performance():
                 cal_df = pd.DataFrame(cal_rows)
                 st.dataframe(cal_df, hide_index=True, width="stretch")
                 st.bar_chart(cal_df.set_index("Bucket")[["Avg Model%", "Actual HR%"]], height=220)
-    except Exception:
-        pass
+    except Exception as e:
+        st.warning(f"Calibration chart unavailable: {e}")
 
     # ── Manual Result Entry ───────────────────────────────────────────────────
     # Always uses unfiltered data — pending picks need resolution regardless of window
