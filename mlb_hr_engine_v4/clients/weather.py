@@ -47,15 +47,17 @@ def get_game_weather(lat: float, lon: float, game_hour_local: int = 19) -> dict:
         winds = hourly.get("windspeed_10m", [])
         dirs = hourly.get("winddirection_10m", [])
 
-        idx = min(game_hour_local, len(temps) - 1) if temps else 0
+        t_idx = min(game_hour_local, len(temps) - 1) if temps else 0
+        w_idx = min(game_hour_local, len(winds) - 1) if winds else 0
+        d_idx = min(game_hour_local, len(dirs)  - 1) if dirs  else 0
 
         result = {
-            "temp_f": round(temps[idx], 1) if temps else 70.0,
-            "wind_mph": round(winds[idx], 1) if winds else 0.0,
-            "wind_deg": round(dirs[idx], 0) if dirs else 0.0,
+            "temp_f":   round(temps[t_idx], 1) if temps else 70.0,
+            "wind_mph": round(winds[w_idx], 1) if winds else 0.0,
+            "wind_deg": round(dirs[d_idx],  0) if dirs  else 0.0,
         }
-    except requests.RequestException as e:
-        print(f"[weather] API failed ({lat},{lon}): {e} — using neutral defaults")
+    except Exception as e:
+        print(f"[weather] fetch/parse failed ({lat},{lon}): {e} — using neutral defaults")
         result = {"temp_f": 70.0, "wind_mph": 0.0, "wind_deg": 0.0}
 
     _CACHE[cache_key] = result

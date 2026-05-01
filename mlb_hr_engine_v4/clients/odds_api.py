@@ -183,10 +183,13 @@ def _get_event_props(event_id: str) -> list[dict]:
                     player_name = outcome.get("description", "")
                     if not player_name:
                         continue
+                    price = outcome.get("price")
+                    if not price:
+                        continue
                     props.append({
                         "player_name": player_name,
                         "description": f"Over {outcome.get('point', 0.5)} HR",
-                        "price": int(outcome.get("price", 99999)),
+                        "price": int(price),
                         "bookmaker": bookmaker.get("key", ""),
                         "game_id": event_id,
                     })

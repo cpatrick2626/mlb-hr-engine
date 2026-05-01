@@ -294,9 +294,9 @@ def _evaluate_parlay(legs: list[dict]) -> dict:
     for leg in legs:
         model_p = leg["model_prob"]
         market_p = leg.get("market_no_vig_prob", 0)
-        # Cap each leg's EV probability at 1.4× market no-vig to prevent a small
-        # per-leg edge from compounding into absurd parlay EV. Parlay-specific —
-        # not applied to single-pick EV calculations.
+        # Cap each leg's EV probability at 1.4× market no-vig — same cap as
+        # single-pick EV (pipeline.py) — prevents per-leg edges from compounding
+        # into absurd parlay EV on long-shot lines (+2000, +3000).
         ev_model_p = min(model_p, market_p * 1.4) if market_p > 0 else model_p
         combined_prob    *= model_p
         combined_ev_prob *= ev_model_p
