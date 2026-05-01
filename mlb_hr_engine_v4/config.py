@@ -81,7 +81,10 @@ MIN_CURRENT_YEAR_PA: int   = 50    # below this, blend current + prior Statcast 
 # ── Market / EV ───────────────────────────────────────────────────────────────
 VIG_FACTOR: float = 0.075  # Empirically measured on FanDuel/DraftKings HR props
 
-CURRENT_SEASON: int = 2026
+_today = __import__("datetime").date.today()
+# Jan–Feb: season hasn't started, use prior year; Mar–Dec: use current year
+CURRENT_SEASON: int = _today.year if _today.month >= 3 else _today.year - 1
+del _today
 
 # ── Expected PA by Lineup Spot ────────────────────────────────────────────────
 # Based on average 38-39 team PA per 9 innings

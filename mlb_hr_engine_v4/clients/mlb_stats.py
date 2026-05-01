@@ -401,8 +401,9 @@ def get_player_platoon_splits(player_id: int) -> dict:
             if pa > 0:
                 result[code]           = hr / pa
                 result[f"{code}_pa"]   = pa
-        if result:
-            _platoon_splits_cache[player_id] = result
+        # Cache even when empty — player has no PA vs each hand yet this season.
+        # Network failures still skip caching (caught below) so they stay retryable.
+        _platoon_splits_cache[player_id] = result
         return result
     except Exception as e:
         print(f"[mlb_stats] platoon splits failed (id={player_id}): {e}")
@@ -558,8 +559,7 @@ def get_player_info(player_id: int) -> dict:
         data = _get(f"/people/{player_id}", {"hydrate": "currentTeam"})
         people = data.get("people", [])
         result = people[0] if people else {}
-        if result:
-            _player_info_cache[player_id] = result
+        _player_info_cache[player_id] = result
         return result
     except Exception as e:
         print(f"[mlb_stats] player info failed (id={player_id}): {e}")
