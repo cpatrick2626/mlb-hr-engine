@@ -112,11 +112,11 @@ def calibration_report(rows: list[dict], date_range: str) -> None:
 
     console.print(cal_table)
     brier_score = brier_sum / total if total else 0
-    # Theoretical minimum Brier for a calibrated model at ~10% HR rate ≈ 0.090
-    # (p*(1-p)^2 + (1-p)*p^2 = p*(1-p) ≈ 0.095 at p=0.106).
-    # Scores below 0.090 indicate genuine skill above the base-rate model.
+    trivial_brier = actual_rate * (1 - actual_rate)  # Brier of a model that predicts the base rate for everyone
+    skill_target  = trivial_brier - 0.005            # meaningful skill: ~5pp better than trivial
     console.print(f"[dim]Brier Score: {brier_score:.4f}  "
-                  f"(lower = better; trivial base-rate model ~0.095, skilled model targets <0.090)[/dim]\n")
+                  f"(trivial base-rate model: {trivial_brier:.4f}; "
+                  f"skilled target: <{skill_target:.4f})[/dim]\n")
 
     # ── P&L simulation table ──────────────────────────────────────────────────
     console.print(Panel("[bold white]SIMULATED P&L — Flat $10 per pick at estimated odds[/bold white]",

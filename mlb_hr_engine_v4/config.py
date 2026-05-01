@@ -70,9 +70,9 @@ LEAGUE_AVG_STR_PCT:     float = 0.368 # straightaway/center rate; 2026 YTD (was 
 LEAGUE_AVG_OPPO_PCT:    float = 0.240 # opposite field rate; 2026 YTD (was 0.245)
 
 # ── Probability model ceiling ─────────────────────────────────────────────────
-# Full-season 2025 backtest: actual HR rate in 30%+ bucket = 30.1%; 0.31 aligns ceiling
-# with observed reality. Revisit when 2026 full-season backtest is available.
-MAX_GAME_HR_PROB: float = 0.31
+# Full-season 2025 backtest (corrected pitcher model): actual HR rate in 30%+ bucket = 28.9%;
+# 0.29 aligns ceiling with observed reality (was 0.31, which over-predicted by 2pp).
+MAX_GAME_HR_PROB: float = 0.29
 
 # ── Statcast blending ─────────────────────────────────────────────────────────
 PRIOR_YEAR_TRUST:    float = 0.85  # shrink prior-year-only signal deviation from 1.0

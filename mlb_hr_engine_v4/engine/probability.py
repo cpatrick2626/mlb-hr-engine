@@ -67,7 +67,7 @@ def base_hr_rate(
         pass
 
     # Zero-HR evidence suppressor: zero HRs through significant PA is strong contact-hitter
-    # signal the Bayesian regression can't fully capture due to its 55% floor.
+    # signal the Bayesian regression can't fully capture due to its regression floor.
     # Threshold lowered 50→30 PA: backtest showed 0-5% bucket over-predicts by 0.8pp
     # across all runs; early-season batters with 30-49 PA and 0 HRs were getting no discount.
     # Scales from 0.95x at 30 PA down to 0.50x at 250+ PA; no effect when season_hr > 0.
@@ -128,8 +128,9 @@ def statcast_blended_rate(
     raw_weight = 1.0 - statcast_weight
 
     # Damp Statcast upside so base pa_weight doesn't double-boost elite power hitters.
-    # 0.42 factor — nudged down from 0.45 after backtest confirmed 20-25% still -1.6pp.
-    # 0.40 previously hurt Brier by over-correcting; 0.42 is a smaller step.
+    # 0.42 factor — nudged down from 0.45 after backtest confirmed 20-25% still over-predicted.
+    # 0.44 was tested post-pitcher-inversion-fix but had no effect on 10-15% bucket (+0.9pp gap
+    # is structural, not driven by this factor) and slightly hurt 25-30% calibration.
     if statcast_power_mult > 1.0:
         effective_mult = 1.0 + (statcast_power_mult - 1.0) * 0.42
     else:
