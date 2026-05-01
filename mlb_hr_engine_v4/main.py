@@ -16,7 +16,7 @@ Run:  python main.py          (CLI)
 import sys
 import json
 import traceback
-from datetime import date, timedelta
+from datetime import date
 
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
@@ -82,14 +82,13 @@ def run(dump_json_path: str = None):
             if not quiet:
                 console.print(f"[dim]CLV update skipped: {e}[/dim]")
     try:
-        yesterday = (date.today() - timedelta(days=1)).isoformat()
-        yest_outcomes = pnl_tracker.fetch_yesterday_outcomes(MODEL_VERSION)
-        if yest_outcomes:
-            pnl_tracker.update_results(yesterday, yest_outcomes, MODEL_VERSION)
-            console.print(f"[dim]Updated {len(yest_outcomes)} yesterday outcomes[/dim]\n")
+        settled = pnl_tracker.settle_all_unsettled()
+        if settled:
+            total = sum(settled.values())
+            console.print(f"[dim]Settled {total} pick(s) across {len(settled)} date(s)[/dim]\n")
     except Exception as e:
         if not quiet:
-            console.print(f"[dim]Yesterday outcomes update skipped: {e}[/dim]")
+            console.print(f"[dim]Outcome settlement skipped: {e}[/dim]")
 
     # â”€â”€ Display â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if not quiet:
