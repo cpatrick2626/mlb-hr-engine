@@ -322,7 +322,10 @@ def platoon_factor(splits: dict, pitcher_hand: str, batter_side: str, season_pa:
     vl_pa   = splits.get("vl_pa", 0)
     vr_pa   = splits.get("vr_pa", 0)
 
-    if not split_rate or (vl_rate + vr_rate) == 0:
+    if split_rate is None or (vl_rate == 0 and vr_rate == 0):
+        # split_rate is None: player has no PA logged vs this pitcher hand this season.
+        # both rates == 0: player has PA vs both hands but 0 HRs — total_rate = 0, can't regress;
+        # fall back to handedness heuristic rather than divide by zero.
         b, p = batter_side[0].upper(), pitcher_hand[0].upper()
         if b == "S":
             return 1.03
