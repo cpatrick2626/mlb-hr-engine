@@ -377,7 +377,8 @@ def _mlb_hr_result(player_id: int, date_str: str) -> Optional[bool]:
             params={"stats": "gameLog", "group": "hitting", "season": date_str[:4]},
             timeout=10,
         )
-        splits = resp.json().get("stats", [{}])[0].get("splits", [])
+        resp_stats = resp.json().get("stats", [])
+        splits = resp_stats[0].get("splits", []) if resp_stats else []
         for split in splits:
             if split.get("date") == date_str:
                 return int(split.get("stat", {}).get("homeRuns", 0)) > 0

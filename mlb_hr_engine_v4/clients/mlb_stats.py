@@ -390,7 +390,8 @@ def get_player_platoon_splits(player_id: int) -> dict:
             "season": config.CURRENT_SEASON,
             "sitCodes": "vl,vr",
         })
-        splits_raw = data.get("stats", [{}])[0].get("splits", [])
+        stats_list = data.get("stats", [])
+        splits_raw = stats_list[0].get("splits", []) if stats_list else []
         result = {}
         for split in splits_raw:
             code = split.get("split", {}).get("code", "")
