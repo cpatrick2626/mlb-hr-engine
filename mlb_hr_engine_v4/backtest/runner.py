@@ -18,7 +18,7 @@ import time
 from pathlib import Path
 from typing import Optional
 
-# Allow imports from parent directory (v3 root)
+# Allow imports from parent directory (v4 root)
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from clients import mlb_stats, statcast as statcast_client

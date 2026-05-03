@@ -206,7 +206,7 @@ def pitcher_fatigue_factor(days_rest: int) -> float:
 
 def pitcher_hr_factor(pitcher_stats: dict) -> float:
     """
-    v2: HR/FB composite (blends HR/9 with HR per fly ball).
+    HR/FB composite (blends HR/9 with HR per fly ball).
     HR/FB separates fly ball rate from HR conversion rate — more predictive.
     MLB Stats API: homeRuns + airOuts => fly balls faced.
     """
@@ -419,10 +419,11 @@ def confidence_score(
     has_statcast: bool = False,   # legacy; ignored when statcast_source is set
     barrel_rate: float = 0.0,
     pitcher_hr9: float = 0.0,
+    xslg: float = None,
 ) -> float:
     """
     Confidence score 0-100.
-    Threshold bonuses: Barrel > 12% (+5), Pitcher HR/9 > 1.4 (+4).
+    Threshold bonuses: Barrel > 12% (+5), xSLG > 0.500 (+3), Pitcher HR/9 > 1.4 (+4).
     Statcast source bonus: current=+8, blended=+5, prior=+3, none=+0.
     """
     sample_conf    = min(season_pa / 400.0, 1.0) * 35.0
@@ -432,8 +433,10 @@ def confidence_score(
 
     # Threshold bonuses — tied to league constants so they adapt when config is refreshed.
     # Barrel: 2× league avg (~11% at 2026 avg of 5.5%) captures elite power-contact tier.
+    # xSLG: >0.500 (~1 SD above league avg 0.407) captures elite power ceiling independently.
     # Pitcher: 1.25× league avg HR/9 (~1.36 at 2026 avg of 1.09) captures notably hittable tier.
     barrel_bonus  = 5.0 if barrel_rate > config.LEAGUE_AVG_BARREL_RATE * 2.0 else 0.0
+    xslg_bonus    = 3.0 if (xslg is not None and xslg > 0.500)               else 0.0
     pitcher_bonus = 4.0 if pitcher_hr9 > config.LEAGUE_AVG_HR9 * 1.25        else 0.0
 
     edge = abs(model_prob - market_prob)
@@ -442,5 +445,5 @@ def confidence_score(
     edge_conf = snr * 28.0
 
     total = (sample_conf + recent_conf + edge_conf
-             + statcast_bonus + barrel_bonus + pitcher_bonus)
+             + statcast_bonus + barrel_bonus + xslg_bonus + pitcher_bonus)
     return round(min(total, 100.0), 1)

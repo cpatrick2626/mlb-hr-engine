@@ -181,6 +181,9 @@ def build_profile_parlays(
         # Evaluate every combination within the candidate pool
         scored_combos = []
         for combo in itertools.combinations(candidates, leg_size):
+            teams = [leg.get("team", "") for leg in combo]
+            if len(teams) != len(set(teams)):
+                continue
             parlay = _evaluate_parlay(list(combo))
             parlay["profile_score"] = sum(score_fn(leg) for leg in combo) / leg_size
             scored_combos.append(parlay)
@@ -263,6 +266,9 @@ def build_auto_parlays(
         # Score every combination
         scored = []
         for combo in itertools.combinations(pool, n_legs):
+            teams = [leg.get("team", "") for leg in combo]
+            if len(teams) != len(set(teams)):
+                continue
             scored.append(_evaluate_parlay(list(combo)))
         scored.sort(key=lambda x: x["ev_pct"], reverse=True)
 

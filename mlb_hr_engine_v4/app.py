@@ -417,6 +417,7 @@ def _auto_refresh_ticker():
         st.cache_data.clear()
         for k in ["data", "cache_key", "data_loaded_at"]:
             st.session_state.pop(k, None)
+        st.toast("↻ Data refreshed")
         st.rerun()
 
 
@@ -644,7 +645,7 @@ def _weather_summary(player: dict) -> str:
     parts = [f"{temp:.0f}°F"]
     if speed is not None and not is_dome:
         compass = _deg_to_compass(deg) if deg is not None else ""
-        parts.append(f"{speed:.0f}mph {compass}".strip())
+        parts.append(f"{speed:.0f} mph {compass}".strip())
     elif is_dome:
         parts.append("Dome")
     return " · ".join(parts)
@@ -850,6 +851,10 @@ def _show_player_modal(player: dict):
                 st.rerun()
     with fd_col:
         st.link_button("📲 Open on FanDuel", _fanduel_url(name), use_container_width=True)
+
+    st.divider()
+    if st.button("✕ Close", use_container_width=True, key="modal_close"):
+        st.rerun()
 
 
 def _open_player_modal(player: dict):
@@ -1105,15 +1110,16 @@ def _render_qualified_table(
             "Conf":    st.column_config.TextColumn("Conf",
                 help=f"Confidence 0–100: sample size + Statcast availability + model/market agreement.\nRange: {conf_rng}"),
             "Brl%":    st.column_config.TextColumn("Brl%",
-                help="Statcast barrel rate. League avg ~5.2%. Higher = more true HR power."),
+                help="Statcast barrel rate. League avg ~5.5%. Higher = more true HR power."),
             "SwSp%":   st.column_config.TextColumn("SwSp%",
-                help="Sweet spot rate (LA 8-32°). League avg ~34%. The exact HR angle band."),
+                help="Sweet spot rate (LA 8-32°). League avg ~33%. The exact HR angle band."),
             "EV mph":  st.column_config.TextColumn("EV mph",
-                help="Average exit velocity. League avg ~88.9 mph."),
+                help="Average exit velocity. League avg ~89 mph."),
             "FB%":     st.column_config.TextColumn("FB%",
-                help="Fly ball rate. League avg ~36%. Higher = more HR opportunities."),
+                help="Fly ball rate (Savant pure FB, excludes popups). League avg ~26.5%. Higher = more HR opportunities."),
             "GB%":     st.column_config.TextColumn("GB%",
                 help="Ground ball rate. League avg ~43%. Higher = fewer HR chances."),
+
             "Pull%":   st.column_config.TextColumn("Pull%",
                 help="Pull rate. League avg ~40%. Pull hitters access the short porch."),
             "Score":   st.column_config.TextColumn("Score",
@@ -1821,15 +1827,15 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
 
         _COL_HELP = {
             "Model%":       "Poisson HR probability for today's game: P(HR≥1) = 1−e^(−λ). Accounts for batter power, park, pitcher, weather, and platoon.",
-            "Brl%":         "Barrel rate (Statcast). Balls hit 98+ mph at 26-30° launch angle. League avg ~8%. Strong predictor of HR power.",
-            "SwSp%":        "Sweet spot rate — balls hit at 8-32° launch angle. League avg ~34%. Higher = more balls in the HR window.",
-            "FB%":          "Fly ball rate (% of batted balls). League avg ~36%. More fly balls = more HR opportunities.",
-            "GB%":          "Ground ball rate. High GB% suppresses HR output — grounders don't leave the park. League avg ~44%.",
-            "LD%":          "Line drive rate. League avg ~21%. Line drives don't go for HRs often but signal solid contact.",
-            "Pull%":        "Pull rate. League avg ~40%. Pull hitters access the short porch and benefit more from wind.",
+            "Brl%":         "Barrel rate (Statcast brl_pa). Balls hit 98+ mph at 26-30° launch angle. League avg ~5.5%. Strong predictor of HR power.",
+            "SwSp%":        "Sweet spot rate — balls hit at 8-32° launch angle. League avg ~33%. Higher = more balls in the HR window.",
+            "FB%":          "Fly ball rate — Savant pure FB% (excludes popups). League avg ~26.5%. More fly balls = more HR opportunities.",
+            "GB%":          "Ground ball rate. High GB% suppresses HR output — grounders don't leave the park. League avg ~43%.",
+            "LD%":          "Line drive rate. League avg ~23%. Line drives don't go for HRs often but signal solid contact.",
+            "Pull%":        "Pull rate. League avg ~39%. Pull hitters access the short porch and benefit more from wind.",
             "Oppo%":        "Opposite-field rate. Low pull%, high oppo% = contact hitter profile; harder to hit HRs to the deep part of the park.",
-            "Hard Hit%":    "Hard-hit rate — balls hit 95+ mph exit velocity. League avg ~38%. Correlates with power output.",
-            "Exit Velo":    "Average exit velocity (mph). League avg ~88 mph. 90+ is above average; 95+ is elite power territory.",
+            "Hard Hit%":    "Hard-hit rate — balls hit 95+ mph exit velocity. League avg ~40%. Correlates with power output.",
+            "Exit Velo":    "Average exit velocity (mph). League avg ~89 mph. 90+ is above average; 95+ is elite power territory.",
             "Launch Angle": "Average launch angle (degrees). Optimal HR zone is 25-35°. Too low = grounders; too high = pop-ups.",
             "PwrMult":      "Statcast composite power multiplier (0.45–1.75). Blends barrel%, FB%, xSLG, pull%, sweet spot, hard-hit%, and exit velo. 1.0 = league average.",
             "Park":         "Park HR factor for today's stadium. 1.0 = neutral. Coors = 1.28, Petco = 0.89. Applied to batter's fly-ball tendency.",
@@ -1842,7 +1848,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
             "HR Rate":      "Final blended HR/PA rate used as model input. Combines Bayesian-regressed season rate with Statcast power multiplier.",
             "Streak":       "Hot/cold streak factor (0.93–1.08). Compares last 10-game HR rate to season average. Capped at ±8% influence.",
             "K Factor":     "Batter strikeout suppressor (0.85–1.00). High K% reduces balls in play and HR opportunities. One-sided — never boosts contact hitters.",
-            "Pitcher HR/9": "Pitcher's HR allowed per 9 innings this season. League avg = 1.35. Above 1.5 = HR-prone; below 1.0 = HR suppressor.",
+            "Pitcher HR/9": "Pitcher's HR allowed per 9 innings this season. League avg = 1.09. Above 1.4 = HR-prone; below 0.8 = HR suppressor.",
             "Exp PA":       "Expected plate appearances today based on lineup spot. Top of order = ~4.5 PA; bottom = ~3.2 PA. Unknown lineup = 3.8 default.",
             "Odds":         "Best available American odds across all tracked books. Higher number = longer shot = bigger payout if correct.",
             "Mkt%":         "No-vig market implied probability — raw implied prob divided by (1 + 7.5% vig). Represents the book's true estimated HR probability.",
@@ -1859,28 +1865,28 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
         # Full names + descriptions shown in the dropdown for each toggleable column
         _COL_FULL = {
             "Brl%":
-                "Brl%  ·  Barrel Rate — % of batted balls hit 98+ mph at 26-30° launch angle. "
-                "League avg ~8%. Single strongest Statcast predictor of HR power. "
+                "Brl%  ·  Barrel Rate (Statcast brl_pa) — % of PA resulting in a barrel (98+ mph at 26-30°). "
+                "League avg ~5.5%. Single strongest Statcast predictor of HR power. "
                 "Effect: higher barrel% → larger power multiplier → higher model probability.",
             "SwSp%":
                 "SwSp%  ·  Sweet Spot Rate — % of batted balls hit at 8-32° launch angle. "
-                "League avg ~34%. More balls in this optimal window = more HR opportunities. "
+                "League avg ~33%. More balls in this optimal window = more HR opportunities. "
                 "Effect: contributes 10% weight to the Statcast power multiplier.",
             "FB%":
-                "FB%  ·  Fly Ball Rate — % of batted balls that are fly balls. "
-                "League avg ~36%. Only fly balls can leave the park. "
+                "FB%  ·  Fly Ball Rate — Savant pure FB% (excludes popups). "
+                "League avg ~26.5%. Only fly balls can leave the park. "
                 "Effect: 15% weight in power multiplier; also scales how much park factor applies to this batter.",
             "GB%":
                 "GB%  ·  Ground Ball Rate — % of batted balls that are grounders. "
-                "League avg ~44%. Grounders almost never become HRs. "
+                "League avg ~43%. Grounders almost never become HRs. "
                 "Effect: high GB% suppresses the power multiplier and limits park factor benefit.",
             "LD%":
                 "LD%  ·  Line Drive Rate — % of batted balls that are line drives. "
-                "League avg ~21%. Signals solid contact quality but not HR trajectory. "
+                "League avg ~23%. Signals solid contact quality but not HR trajectory. "
                 "Effect: informational only — not directly used in the HR probability model.",
             "Pull%":
                 "Pull%  ·  Pull Rate — % of batted balls pulled to the strong side. "
-                "League avg ~40%. Pull hitters access the shorter porch and benefit more from wind. "
+                "League avg ~39%. Pull hitters access the shorter porch and benefit more from wind. "
                 "Effect: 8% weight in the power multiplier.",
             "Oppo%":
                 "Oppo%  ·  Opposite-Field Rate — % of batted balls hit to the weak side. "
@@ -1888,11 +1894,11 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                 "Effect: informational — model uses pull%, not oppo%, in the power multiplier.",
             "Hard Hit%":
                 "Hard Hit%  ·  Hard-Hit Rate — % of batted balls hit 95+ mph exit velocity. "
-                "League avg ~38%. Strong correlation with HR output and overall power. "
+                "League avg ~40%. Strong correlation with HR output and overall power. "
                 "Effect: 10% weight in the Statcast power multiplier.",
             "Exit Velo":
                 "Exit Velo  ·  Average Exit Velocity (mph) — how hard the batter hits the ball. "
-                "League avg ~88 mph. 90+ = above average; 95+ = elite power hitter. "
+                "League avg ~89 mph. 90+ = above average; 95+ = elite power hitter. "
                 "Effect: 5% weight in the power multiplier; also gates how much barrel% is trusted.",
             "Launch Angle":
                 "Launch Angle  ·  Average Launch Angle (degrees) — upward trajectory of batted balls. "
@@ -1943,8 +1949,8 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                 "Effect: multiplied into the adjusted rate. Max suppression is −15% at very high K%.",
             "Pitcher HR/9":
                 "Pitcher HR/9  ·  HRs Allowed per 9 Innings — season figure for today's starter. "
-                "League avg = 1.35. Above 1.5 = HR-prone target. Below 1.0 = strong HR suppressor. "
-                "Effect: feeds into the pitcher HR factor; also triggers a +4pt confidence bonus if > 1.4.",
+                "League avg = 1.09. Above 1.4 = HR-prone target. Below 0.8 = strong HR suppressor. "
+                "Effect: feeds into the pitcher HR factor; also triggers a +4pt confidence bonus if > 1.36.",
             "Exp PA":
                 "Exp PA  ·  Expected Plate Appearances — how many times this batter will bat today. "
                 "Lineup spot 1 = ~4.5 PA. Spot 9 = ~3.2 PA. Unknown lineup = 3.8 default. "
@@ -2976,7 +2982,7 @@ def main():
                             f"📐 {len(_selected)}-Leg Parlay</div>"
                             f"<div style='display:flex; justify-content:space-between; margin-bottom:4px;'>"
                             f"<span style='color:#888;'>Combined odds</span>"
-                            f"<span style='color:#f0f0f0; font-weight:700;'>+{_par_am:,}</span>"
+                            f"<span style='color:#f0f0f0; font-weight:700;'>{_fmt_american(_par_am)}</span>"
                             f"</div>"
                             f"<div style='display:flex; justify-content:space-between; margin-bottom:4px;'>"
                             f"<span style='color:#888;'>$10 → payout</span>"

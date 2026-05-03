@@ -284,6 +284,7 @@ def _enrich_with_ev(player):
         statcast_source=player.get("statcast_source", "none"),
         barrel_rate=barrel_raw,
         pitcher_hr9=pitcher_hr9,
+        xslg=xslg_float,
     )
     player["bet_dollars"] = sizing.bet_dollars(model_p, player["best_american"])
     return player

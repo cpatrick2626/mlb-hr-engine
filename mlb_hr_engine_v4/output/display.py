@@ -123,9 +123,9 @@ def print_top_picks(ranked_picks: list[dict]) -> None:
 
 
 def print_model_probabilities(all_players: list[dict], top_n: int = 20) -> None:
-    """v2: includes Statcast barrel% and power multiplier columns."""
+    """Print top-N batter model probabilities with Statcast barrel% and power multiplier columns."""
     console.print(Panel(
-        f"[bold white]MODEL HR PROBABILITIES — TOP {top_n} [dim](v2: Statcast enhanced)[/dim][/bold white]",
+        f"[bold white]MODEL HR PROBABILITIES — TOP {top_n}[/bold white]",
         style="dim blue",
         expand=False,
     ))

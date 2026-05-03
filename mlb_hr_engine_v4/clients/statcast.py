@@ -176,16 +176,9 @@ def get_pitcher_statcast(year: int = None, player_ids: set[int] = None) -> dict[
 def batter_power_multiplier(
     player_id: int,
     batter_data: dict[int, dict],
-    batted_ball_data: dict[int, dict] = None,
 ) -> float:
-    """
-    Composite power multiplier, all signals normalized to league avg = 1.0.
-    batted_ball_data is already merged into batter_data; param kept for compat.
-    """
+    """Composite power multiplier, all signals normalized to league avg = 1.0."""
     stats = dict(batter_data.get(player_id) or {})
-    if batted_ball_data:
-        for k, v in (batted_ball_data.get(player_id) or {}).items():
-            stats.setdefault(k, v)
 
     if not stats:
         return 1.0
@@ -233,18 +226,12 @@ def batter_power_multiplier(
 def pitcher_contact_suppressor(
     pitcher_id: int,
     pitcher_data: dict[int, dict],
-    pitcher_bb_data: dict[int, dict] = None,
 ) -> float:
     """
     4-signal pitcher contact quality factor.
-    <1.0 = suppresses hard contact (good pitcher)
-    >1.0 = allows hard contact / homer-prone
-    pitcher_bb_data already merged into pitcher_data; param kept for compat.
+    <1.0 = suppresses hard contact (good pitcher); >1.0 = homer-prone.
     """
     stats = dict(pitcher_data.get(pitcher_id) or {})
-    if pitcher_bb_data:
-        for k, v in (pitcher_bb_data.get(pitcher_id) or {}).items():
-            stats.setdefault(k, v)
 
     if not stats:
         return 1.0
@@ -284,13 +271,9 @@ def pitcher_contact_suppressor(
 def statcast_summary(
     player_id: int,
     batter_data: dict[int, dict],
-    batted_ball_data: dict[int, dict] = None,
 ) -> dict:
     """Return display-ready Statcast fields. Returns '--' for any missing value."""
     stats = dict(batter_data.get(player_id) or {})
-    if batted_ball_data:
-        for k, v in (batted_ball_data.get(player_id) or {}).items():
-            stats.setdefault(k, v)
 
     def _pct(key):
         v = stats.get(key)
