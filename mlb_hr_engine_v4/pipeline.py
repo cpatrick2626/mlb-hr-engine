@@ -278,6 +278,12 @@ def _enrich_with_ev(player):
     except (ValueError, TypeError):
         pitcher_hr9 = 0.0
 
+    xslg_raw = player.get("xslg")
+    try:
+        xslg_float = float(xslg_raw) if xslg_raw and str(xslg_raw) != '--' else None
+    except (ValueError, TypeError):
+        xslg_float = None
+
     player["confidence"] = prob.confidence_score(
         player.get("season_pa", 0), player.get("recent_pa", 0),
         model_p, market_p,
