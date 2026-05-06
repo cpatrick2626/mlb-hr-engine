@@ -129,7 +129,7 @@ def tab_advanced_strategies(data: dict, parlays_callback=None):
             with _rc2:
                 st.link_button("FD →", _fd_url(player_name), use_container_width=True)
 
-        def _diverse_top(parlays: list, max_per_player: int = 2, limit: int = 10) -> list:
+        def _diverse_top(parlays: list, limit: int = 10) -> list:
             """Each player appears in at most one slip; slips ranked by best combined odds."""
             used: set = set()
             result = []
@@ -973,7 +973,7 @@ def tab_advanced_strategies(data: dict, parlays_callback=None):
                                     "platoon": round(p.get("platoon_factor", 1.0), 3),
                                     "streak":  round(p.get("streak_factor",  1.0), 3),
                                 } for p in combo],
-                                "scores":   [round(_alignment_score(p), 3) for p in combo],
+                                "scores":        [round(_alignment_score(p), 3) for p in combo],
                                 "base_prob":     base_prob,
                                 "parlay_odds":   parlay_odds,
                                 "american_odds": _dta(parlay_odds),
