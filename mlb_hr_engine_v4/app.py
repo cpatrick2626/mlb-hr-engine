@@ -2106,10 +2106,12 @@ def tab_hits(data: dict):
             pa_min  = st.slider("Min Exp PA",         2.0,   5.0,   3.0,  0.1,   key="hit_pa")
 
     def _pf(val, default=0.0):
+        if val is None:
+            return default
         try:
             v = str(val).replace("%", "").strip()
             return float(v) if v and v != "--" else default
-        except (TypeError, ValueError):
+        except ValueError:
             return default
 
     def _hit_metrics(p):
@@ -2522,23 +2524,31 @@ def tab_jig(data: dict):
         unsafe_allow_html=True,
     )
 
+    _JIG_SLIDER_KEYS = ["jig_slg","jig_iso","jig_hh","jig_brl","jig_la","jig_pit","jig_score"]
     with st.expander("⚙️ JIG Thresholds", expanded=False):
+        if st.button("↺ Reset to defaults", key="jig_reset"):
+            for _k in _JIG_SLIDER_KEYS:
+                st.session_state.pop(_k, None)
+            st.rerun()
         tc1, tc2, tc3 = st.columns(3)
         with tc1:
-            slg_min = st.slider("Min xSLG",          0.30, 0.70, 0.50, 0.01, key="jig_slg")
-            iso_min = st.slider("Min ISO",            0.10, 0.45, 0.30, 0.01, key="jig_iso")
+            slg_min    = st.slider("Min xSLG",          0.00, 0.70, 0.40, 0.01, key="jig_slg")
+            iso_min    = st.slider("Min ISO",            0.00, 0.45, 0.15, 0.01, key="jig_iso")
         with tc2:
-            hh_min  = st.slider("Min Hard Hit%",     25.0, 60.0, 40.0, 0.5,  key="jig_hh")
-            brl_min = st.slider("Min Barrel%",        2.0, 25.0,  8.0, 0.5,  key="jig_brl")
+            hh_min     = st.slider("Min Hard Hit%",      0.0, 60.0, 35.0, 0.5,  key="jig_hh")
+            brl_min    = st.slider("Min Barrel%",         0.0, 25.0,  5.0, 0.5,  key="jig_brl")
         with tc3:
-            la_min  = st.slider("Min Launch Angle°",  5.0, 25.0, 15.0, 0.5,  key="jig_la")
-            pit_min = st.slider("Min Pitcher Factor", 0.90, 1.30, 1.00, 0.01, key="jig_pit")
+            la_min     = st.slider("Min Launch Angle°",  0.0, 25.0, 10.0, 0.5,  key="jig_la")
+            pit_min    = st.slider("Min Pitcher Factor", 0.70, 1.30, 0.95, 0.01, key="jig_pit")
+        score_min  = st.slider("Min JIG Score (Picks gate)", 0, 100, 40, 1, key="jig_score")
 
     def _pf(val, default=0.0):
+        if val is None:
+            return default
         try:
             v = str(val).replace("%", "").strip()
             return float(v) if v and v != "--" else default
-        except (TypeError, ValueError):
+        except ValueError:
             return default
 
     def _jig_metrics(p):
@@ -2565,9 +2575,7 @@ def tab_jig(data: dict):
         return round(s * 100, 1)
 
     def _passes_all(p):
-        slg, iso, hh, brl, la, pit = _jig_metrics(p)
-        return (slg >= slg_min and iso >= iso_min and hh >= hh_min
-                and brl >= brl_min and la >= la_min and pit >= pit_min)
+        return _jig_score(p) >= score_min
 
     def _badge(val, thr, fmt):
         c = "#4ade80" if val >= thr else "#f87171"
@@ -2604,7 +2612,7 @@ def tab_jig(data: dict):
             f"<div style='background:#111128; border-radius:5px; padding:5px 8px;'>"
             f"<div style='color:#666;'>Barrel</div>{_badge(brl, brl_min, f'{brl:.1f}%')}</div>"
             f"<div style='background:#111128; border-radius:5px; padding:5px 8px;'>"
-            f"<div style='color:#666;'>Launch°</div>{_badge(la, la_min, f'{la:.1f}°')}</div>"
+            f"<div style='color:#666;'>Launch°</div>{_badge(la, la_min, '--' if p.get('avg_launch_angle') in (None, '--') else f'{la:.1f}°')}</div>"
             f"<div style='background:#111128; border-radius:5px; padding:5px 8px;'>"
             f"<div style='color:#666;'>Pit Fac</div>{_badge(pit, pit_min, f'{pit:.3f}x')}</div>"
             f"</div>"
@@ -2632,6 +2640,26 @@ def tab_jig(data: dict):
     qualified = [x for x in scored if x["passes"]]
     prime     = [x for x in qualified
                  if x["player"].get("best_american") and x["player"].get("ev_pct", 0) > 0]
+
+    with st.expander(f"🔍 Debug — {len(all_players)} players in pool, {len(qualified)} qualified", expanded=len(qualified)==0):
+        st.write(f"**Gate:** JIG ≥ {score_min} | **Scoring targets:** slg {slg_min} iso {iso_min} hh {hh_min} brl {brl_min} la {la_min} pit {pit_min}")
+        if all_players:
+            import pandas as pd
+            dbg = []
+            for entry in scored[:20]:
+                p = entry["player"]
+                slg, iso, hh, brl, la, pit = _jig_metrics(p)
+                dbg.append({
+                    "Name":   p.get("player_name","")[:18],
+                    "JIG":    entry["jig"],
+                    "passes": entry["passes"],
+                    "slg→":   round(slg,3), "iso→": round(iso,3),
+                    "hh→":    round(hh,1),  "brl→": round(brl,1),
+                    "la→":    round(la,1),  "pit→": round(pit,3),
+                })
+            st.dataframe(pd.DataFrame(dbg), hide_index=True, use_container_width=True)
+        else:
+            st.warning("all_players is EMPTY — pipeline returned no players.")
 
     _jq, _jp, _ja, _jpr = st.tabs([
         "📱 Quick Picks",
