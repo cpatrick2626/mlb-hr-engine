@@ -2088,14 +2088,14 @@ def tab_jig(data: dict):
         "<div style='font-size:22px; font-weight:900; color:#FF6666; "
         "letter-spacing:2px; margin-bottom:2px;'>⚙️ JIG</div>"
         "<div style='font-size:12px; color:#888; margin-bottom:12px;'>"
-        "Power contact index — SLG · ISO · Hard Hit · Barrel · Launch Angle · Pitcher Mix</div>",
+        "Power contact index — xSLG · ISO · Hard Hit · Barrel · Launch Angle · Pitcher Mix</div>",
         unsafe_allow_html=True,
     )
 
     with st.expander("⚙️ JIG Thresholds", expanded=False):
         tc1, tc2, tc3 = st.columns(3)
         with tc1:
-            slg_min = st.slider("Min SLG",           0.30, 0.70, 0.50, 0.01, key="jig_slg")
+            slg_min = st.slider("Min xSLG",          0.30, 0.70, 0.50, 0.01, key="jig_slg")
             iso_min = st.slider("Min ISO",            0.10, 0.45, 0.30, 0.01, key="jig_iso")
         with tc2:
             hh_min  = st.slider("Min Hard Hit%",     25.0, 60.0, 40.0, 0.5,  key="jig_hh")
@@ -2112,13 +2112,18 @@ def tab_jig(data: dict):
             return default
 
     def _jig_metrics(p):
-        slg = _pf(p.get("actual_slg"), 0.0)
+        # Prefer xSLG (Statcast expected); fall back to actual season SLG
+        xslg_v = _pf(p.get("xslg"), 0.0)
+        slg = xslg_v if xslg_v > 0.0 else _pf(p.get("actual_slg"), 0.0)
         iso = _pf(p.get("xiso"), 0.0)
         hh  = _pf(p.get("hard_hit"))
         brl = _pf(p.get("barrel_pct"))
         la  = _pf(p.get("avg_launch_angle"))
         pit = _pf(p.get("pitcher_factor"), 1.0)
         return slg, iso, hh, brl, la, pit
+
+    def _slg_label(p):
+        return "xSLG" if _pf(p.get("xslg"), 0.0) > 0.0 else "SLG"
 
     def _jig_score(p):
         slg, iso, hh, brl, la, pit = _jig_metrics(p)
@@ -2161,7 +2166,7 @@ def tab_jig(data: dict):
             f"{team} vs {opp} &nbsp;·&nbsp; vs {pit_n}</div>"
             f"<div style='display:grid; grid-template-columns:repeat(3,1fr); gap:6px; font-size:11px;'>"
             f"<div style='background:#111128; border-radius:5px; padding:5px 8px;'>"
-            f"<div style='color:#666;'>SLG</div>{_badge(slg, slg_min, f'{slg:.3f}')}</div>"
+            f"<div style='color:#666;'>{_slg_label(p)}</div>{_badge(slg, slg_min, f'{slg:.3f}')}</div>"
             f"<div style='background:#111128; border-radius:5px; padding:5px 8px;'>"
             f"<div style='color:#666;'>ISO</div>{_badge(iso, iso_min, f'{iso:.3f}')}</div>"
             f"<div style='background:#111128; border-radius:5px; padding:5px 8px;'>"
