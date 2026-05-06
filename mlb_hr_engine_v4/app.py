@@ -675,12 +675,41 @@ def _show_player_modal(player: dict):
 
     st.markdown(
         f"<div style='font-size:20px; font-weight:800; color:#f0f0f0;'>{name}</div>"
-        f"<div style='font-size:13px; color:#888; margin-bottom:12px;'>"
+        f"<div style='font-size:13px; color:#888; margin-bottom:6px;'>"
         f"{team} vs {opp} &nbsp;·&nbsp; vs {pit}"
         f"{f'  &nbsp;·&nbsp;  Bat #{spot}' if spot else ''}"
         f"</div>",
         unsafe_allow_html=True,
     )
+
+    # ── Game time / status ────────────────────────────────────────────────
+    _gtime_utc = player.get("game_time_utc", "")
+    _gt_et = _game_time_et(_gtime_utc)
+    if _gt_et:
+        _hour12 = _gt_et.hour % 12 or 12
+        _ampm   = "AM" if _gt_et.hour < 12 else "PM"
+        _gt_str = f"{_hour12}:{_gt_et.minute:02d} {_ampm} ET"
+        try:
+            _game_dt_utc = _dt.datetime.fromisoformat(_gtime_utc.replace("Z", "+00:00"))
+            _delta_secs  = (_game_dt_utc - _dt.datetime.now(_dt.timezone.utc)).total_seconds()
+            if _delta_secs > 60:
+                _h, _m = int(_delta_secs // 3600), int((_delta_secs % 3600) // 60)
+                _until = f"{_h}h {_m}m" if _h else f"{_m}m"
+                _gt_html = (f"<span style='color:#888;'>🕐 {_gt_str}</span>"
+                            f"<span style='color:#f59e0b;'> · Starts in {_until}</span>")
+            elif _delta_secs > -14400:
+                _em = int(-_delta_secs // 60)
+                _elapsed = f"{_em // 60}h {_em % 60}m" if _em >= 60 else f"{_em}m"
+                _gt_html = (f"<span style='color:#f87171; font-weight:700;'>🔴 In Progress</span>"
+                            f"<span style='color:#888;'> · {_gt_str} ({_elapsed} ago)</span>")
+            else:
+                _gt_html = f"<span style='color:#888;'>🕐 {_gt_str}</span>"
+        except Exception:
+            _gt_html = f"<span style='color:#888;'>🕐 {_gt_str}</span>"
+        st.markdown(
+            f"<div style='font-size:12px; margin-bottom:10px;'>{_gt_html}</div>",
+            unsafe_allow_html=True,
+        )
 
     # ── Key metrics ──────────────────────────────────────────────────────
     c1, c2, c3, c4 = st.columns(4)
@@ -910,6 +939,19 @@ def _game_time_utc_hour(game_time_utc: str) -> int | None:
         return int(game_time_utc[11:13])
     except (TypeError, ValueError, IndexError):
         return None
+
+
+def _gate_data(data: dict, cutoff: "int | None") -> dict:
+    """Return data with all_players and ranked filtered to games at or after cutoff UTC hour."""
+    if cutoff is None:
+        return data
+    def _keep(p):
+        gh = _game_time_utc_hour(p.get("game_time_utc", ""))
+        return gh is None or gh >= cutoff
+    gated = dict(data)
+    gated["all_players"] = [p for p in data.get("all_players", []) if _keep(p)]
+    gated["ranked"]      = [p for p in data.get("ranked", []) if _keep(p)]
+    return gated
 
 
 def _apply_ui_filters(
@@ -3881,39 +3923,24 @@ The app will open full-screen like a native app.
 
     with tab3:
         try:
-            data = get_data()
-            _cutoff = st.session_state.get("cutoff_utc_hour")
-            if _cutoff is not None:
-                _gated_data = dict(data)
-                _gated_data["all_players"] = [
-                    p for p in data.get("all_players", [])
-                    if (gh := _game_time_utc_hour(p.get("game_time_utc", ""))) is None
-                    or gh >= _cutoff
-                ]
-                _gated_data["ranked"] = [
-                    p for p in data.get("ranked", [])
-                    if (gh := _game_time_utc_hour(p.get("game_time_utc", ""))) is None
-                    or gh >= _cutoff
-                ]
-            else:
-                _gated_data = data
-            tab_advanced_strategies(_gated_data, parlays_callback=tab_parlays)
+            tab_advanced_strategies(
+                _gate_data(get_data(), st.session_state.get("cutoff_utc_hour")),
+                parlays_callback=tab_parlays,
+            )
         except Exception as _e:
             st.error(f"Advanced strategies tab error: {_e}")
             st.code(_tb.format_exc())
 
     with tab4:
         try:
-            data = get_data()
-            tab_jig(data)
+            tab_jig(_gate_data(get_data(), st.session_state.get("cutoff_utc_hour")))
         except Exception as _e:
             st.error(f"JIG tab error: {_e}")
             st.code(_tb.format_exc())
 
     with tab5:
         try:
-            data = get_data()
-            tab_hits(data)
+            tab_hits(_gate_data(get_data(), st.session_state.get("cutoff_utc_hour")))
         except Exception as _e:
             st.error(f"Hits tab error: {_e}")
             st.code(_tb.format_exc())
