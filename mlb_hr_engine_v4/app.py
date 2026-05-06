@@ -2112,12 +2112,12 @@ def tab_jig(data: dict):
             return default
 
     def _jig_metrics(p):
-        slg = float(p.get("actual_slg", 0) or 0)
-        iso = float(p.get("xiso", 0) or 0)
+        slg = _pf(p.get("actual_slg"), 0.0)
+        iso = _pf(p.get("xiso"), 0.0)
         hh  = _pf(p.get("hard_hit"))
         brl = _pf(p.get("barrel_pct"))
-        la  = float(p.get("avg_launch_angle") or 0)
-        pit = float(p.get("pitcher_factor", 1.0) or 1.0)
+        la  = _pf(p.get("avg_launch_angle"))
+        pit = _pf(p.get("pitcher_factor"), 1.0)
         return slg, iso, hh, brl, la, pit
 
     def _jig_score(p):
