@@ -193,6 +193,21 @@ def get_today_schedule(target_date: Optional[str] = None) -> list[dict]:
     return games
 
 
+def get_live_game_status(game_pk: int) -> dict:
+    """Fetch linescore for an in-progress game. No internal cache — TTL handled by caller."""
+    if not game_pk:
+        return {}
+    try:
+        data = _get(f"/game/{game_pk}/linescore")
+        return {
+            "current_inning": data.get("currentInning"),
+            "inning_state":   data.get("inningState", ""),   # "Top"/"Middle"/"Bottom"/"End"
+            "outs":           data.get("outs"),
+        }
+    except Exception:
+        return {}
+
+
 def _parse_lineup(players: list) -> list[dict]:
     result = []
     for i, p in enumerate(players, 1):

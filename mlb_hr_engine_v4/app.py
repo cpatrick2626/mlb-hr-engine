@@ -683,31 +683,11 @@ def _show_player_modal(player: dict):
     )
 
     # ── Game time / status ────────────────────────────────────────────────
-    _gtime_utc = player.get("game_time_utc", "")
-    _gt_et = _game_time_et(_gtime_utc)
-    if _gt_et:
-        _hour12 = _gt_et.hour % 12 or 12
-        _ampm   = "AM" if _gt_et.hour < 12 else "PM"
-        _gt_str = f"{_hour12}:{_gt_et.minute:02d} {_ampm} ET"
-        try:
-            _game_dt_utc = _dt.datetime.fromisoformat(_gtime_utc.replace("Z", "+00:00"))
-            _delta_secs  = (_game_dt_utc - _dt.datetime.now(_dt.timezone.utc)).total_seconds()
-            if _delta_secs > 60:
-                _h, _m = int(_delta_secs // 3600), int((_delta_secs % 3600) // 60)
-                _until = f"{_h}h {_m}m" if _h else f"{_m}m"
-                _gt_html = (f"<span style='color:#888;'>🕐 {_gt_str}</span>"
-                            f"<span style='color:#f59e0b;'> · Starts in {_until}</span>")
-            elif _delta_secs > -14400:
-                _em = int(-_delta_secs // 60)
-                _elapsed = f"{_em // 60}h {_em % 60}m" if _em >= 60 else f"{_em}m"
-                _gt_html = (f"<span style='color:#f87171; font-weight:700;'>🔴 In Progress</span>"
-                            f"<span style='color:#888;'> · {_gt_str} ({_elapsed} ago)</span>")
-            else:
-                _gt_html = f"<span style='color:#888;'>🕐 {_gt_str}</span>"
-        except Exception:
-            _gt_html = f"<span style='color:#888;'>🕐 {_gt_str}</span>"
+    _status_html, _is_live = _game_status_badge(player)
+    if _status_html:
+        _live_bar = "border-left:3px solid #f87171; padding-left:8px;" if _is_live else ""
         st.markdown(
-            f"<div style='font-size:12px; margin-bottom:10px;'>{_gt_html}</div>",
+            f"<div style='font-size:12px; margin-bottom:10px; {_live_bar}'>{_status_html}</div>",
             unsafe_allow_html=True,
         )
 
@@ -952,6 +932,73 @@ def _gate_data(data: dict, cutoff: "int | None") -> dict:
     gated["all_players"] = [p for p in data.get("all_players", []) if _keep(p)]
     gated["ranked"]      = [p for p in data.get("ranked", []) if _keep(p)]
     return gated
+
+
+@st.cache_data(ttl=60)
+def _fetch_live_status(game_pk: int) -> dict:
+    """Linescore for an in-progress game, cached 60 s to avoid hammering the API."""
+    try:
+        from clients import mlb_stats as _ms
+        return _ms.get_live_game_status(game_pk)
+    except Exception:
+        return {}
+
+
+def _game_status_badge(player: dict) -> "tuple[str, bool]":
+    """Return (html_badge, is_live) for embedding in player cards and modals.
+
+    badge  — ready-to-embed HTML span(s)
+    is_live — True when the game is currently in progress (use red card border)
+    """
+    gtime_utc = player.get("game_time_utc", "")
+    game_pk   = player.get("game_pk")
+    lineup_ok = player.get("lineup_spot") is not None
+    gt_et     = _game_time_et(gtime_utc)
+    if not gt_et:
+        return "", False
+    hour12 = gt_et.hour % 12 or 12
+    ampm   = "AM" if gt_et.hour < 12 else "PM"
+    gt_str = f"{hour12}:{gt_et.minute:02d} {ampm} ET"
+    try:
+        game_dt = _dt.datetime.fromisoformat(gtime_utc.replace("Z", "+00:00"))
+        delta   = (game_dt - _dt.datetime.now(_dt.timezone.utc)).total_seconds()
+    except Exception:
+        return f"<span style='color:#888;'>🕐 {gt_str}</span>", False
+
+    if delta > 60:                          # ── Upcoming ──
+        h, m  = int(delta // 3600), int((delta % 3600) // 60)
+        until = f"{h}h {m}m" if h else f"{m}m"
+        badge = f"<span style='color:#aaa;'>🕐 {gt_str}</span> <span style='color:#f59e0b;'>· {until}</span>"
+        if not lineup_ok:
+            chk_dt = game_dt - _dt.timedelta(minutes=90)
+            chk_et = chk_dt.astimezone(_EDT)
+            ch12   = chk_et.hour % 12 or 12
+            c_ampm = "AM" if chk_et.hour < 12 else "PM"
+            badge += (f" <span style='color:#f59e0b;'>"
+                      f"· ⏳ Lineup ~{ch12}:{chk_et.minute:02d} {c_ampm}</span>")
+        return badge, False
+
+    elif delta > -14400:                    # ── In progress ──
+        live   = _fetch_live_status(game_pk) if game_pk else {}
+        inning = live.get("current_inning")
+        state  = live.get("inning_state", "")
+        outs   = live.get("outs")
+        if inning:
+            def _ord(n):
+                sfx = "th" if 11 <= (n % 100) <= 13 else {1:"st",2:"nd",3:"rd"}.get(n % 10, "th")
+                return f"{n}{sfx}"
+            arrow  = "▲" if state == "Top" else "▼" if state == "Bottom" else "—"
+            outs_s = f" {outs}✕" if outs is not None else ""
+            badge  = (f"<span style='color:#f87171; font-weight:800;'>● LIVE</span>"
+                      f" <span style='color:#fca5a5;'>{arrow} {_ord(inning)}{outs_s}</span>")
+        else:
+            em    = int(-delta // 60)
+            ela   = f"{em//60}h {em%60}m" if em >= 60 else f"{em}m"
+            badge = (f"<span style='color:#f87171; font-weight:800;'>● LIVE</span>"
+                     f" <span style='color:#888;'>· {gt_str} ({ela} ago)</span>")
+        return badge, True
+
+    return f"<span style='color:#888;'>🕐 {gt_str}</span>", False   # ── Finished ──
 
 
 def _apply_ui_filters(
@@ -2199,15 +2246,20 @@ def tab_hits(data: dict):
         ev    = p.get("ev_pct", 0)
         ev_c  = "#4ade80" if ev > 0 else "#f87171"
         hc    = "#4ade80" if hsco >= 60 else "#f59e0b" if hsco >= 40 else "#f87171"
+        status_html, is_live = _game_status_badge(p)
+        border = "#f87171" if is_live else "#1e3a5f"
+        status_row = (f"<div style='font-size:11px; margin:2px 0 8px;'>{status_html}</div>"
+                      if status_html else "")
         st.markdown(
-            f"<div style='background:#0d0d1e; border:1px solid #1e3a5f; border-radius:10px; "
+            f"<div style='background:#0d0d1e; border:1px solid {border}; border-radius:10px; "
             f"padding:14px 16px; margin-bottom:10px;'>"
             f"<div style='display:flex; justify-content:space-between; align-items:baseline;'>"
             f"<div style='font-size:15px; font-weight:800; color:#f0f0f0;'>{name}</div>"
             f"<div style='font-size:18px; font-weight:900; color:{hc};'>HIT {hsco:.0f}</div>"
             f"</div>"
-            f"<div style='font-size:12px; color:#888; margin:2px 0 10px;'>"
+            f"<div style='font-size:12px; color:#888; margin:2px 0 4px;'>"
             f"{team} vs {opp} &nbsp;·&nbsp; vs {pit_n}</div>"
+            f"{status_row}"
             f"<div style='display:grid; grid-template-columns:repeat(3,1fr); gap:6px; font-size:11px;'>"
             f"<div style='background:#111128; border-radius:5px; padding:5px 8px;'>"
             f"<div style='color:#666;'>xBA</div>{_badge(xba, xba_min, f'{xba:.3f}')}</div>"
@@ -2635,15 +2687,20 @@ def tab_jig(data: dict):
         ev    = p.get("ev_pct", 0)
         ev_c  = "#4ade80" if ev > 0 else "#f87171"
         jc    = "#4ade80" if jig >= 60 else "#f59e0b" if jig >= 40 else "#f87171"
+        status_html, is_live = _game_status_badge(p)
+        border = "#f87171" if is_live else "#2a2a50"
+        status_row = (f"<div style='font-size:11px; margin:2px 0 8px;'>{status_html}</div>"
+                      if status_html else "")
         st.markdown(
-            f"<div style='background:#0d0d1e; border:1px solid #2a2a50; border-radius:10px; "
+            f"<div style='background:#0d0d1e; border:1px solid {border}; border-radius:10px; "
             f"padding:14px 16px; margin-bottom:10px;'>"
             f"<div style='display:flex; justify-content:space-between; align-items:baseline;'>"
             f"<div style='font-size:15px; font-weight:800; color:#f0f0f0;'>{name}</div>"
             f"<div style='font-size:18px; font-weight:900; color:{jc};'>JIG {jig:.0f}</div>"
             f"</div>"
-            f"<div style='font-size:12px; color:#888; margin:2px 0 10px;'>"
+            f"<div style='font-size:12px; color:#888; margin:2px 0 4px;'>"
             f"{team} vs {opp} &nbsp;·&nbsp; vs {pit_n}</div>"
+            f"{status_row}"
             f"<div style='display:grid; grid-template-columns:repeat(3,1fr); gap:6px; font-size:11px;'>"
             f"<div style='background:#111128; border-radius:5px; padding:5px 8px;'>"
             f"<div style='color:#666;'>{_slg_label(p)}</div>{_badge(slg, slg_min, f'{slg:.3f}')}</div>"

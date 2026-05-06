@@ -410,14 +410,15 @@ def load_game_data(
                 name = batter.get("name", "Unknown")
                 if not pid:
                     continue
-                tasks.append((pid, name, batter.get("lineup_spot"), team, opp, home, opp_pitcher, game_time_utc))
+                tasks.append((pid, name, batter.get("lineup_spot"), team, opp, home, opp_pitcher,
+                              game_time_utc, game.get("game_pk"), game.get("status", "Scheduled")))
 
     # Pre-warm weather cache: fetch each unique (lat, lon, hour) combo in parallel
     # before the 16-thread profile pool starts, so threads never race on the same park.
     _unique_wx = {
         (get_park(home_team)["lat"], get_park(home_team)["lon"],
          _utc_to_local_hour(game_time_utc, get_park(home_team).get("tz_offset", -5)))
-        for _, _, _, _, _, home_team, _, game_time_utc in tasks
+        for _, _, _, _, _, home_team, _, game_time_utc, _, _ in tasks
     }
     if _unique_wx:
         with ThreadPoolExecutor(max_workers=min(len(_unique_wx), 8)) as _wx_exec:
@@ -426,7 +427,7 @@ def load_game_data(
     _cb(f"Building profiles for {len(tasks)} players...")
 
     def _profile(args: tuple):
-        pid, name, spot, team, opp, home_team, opp_pitcher, game_time_utc = args
+        pid, name, spot, team, opp, home_team, opp_pitcher, game_time_utc, game_pk, game_status = args
         try:
             profile = _build_player_profile(
                 pid, name, spot, team, opp, home_team, opp_pitcher,
@@ -435,6 +436,8 @@ def load_game_data(
             )
             if profile:
                 profile["game_time_utc"] = game_time_utc
+                profile["game_pk"]       = game_pk
+                profile["game_status"]   = game_status
             return profile
         except Exception as e:
             print(f"[pipeline] profile error for {name} ({pid}): {e}")
