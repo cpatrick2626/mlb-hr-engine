@@ -2143,7 +2143,7 @@ def tab_jig(data: dict):
         c = "#4ade80" if val >= thr else "#f87171"
         return f"<span style='color:{c}; font-weight:700;'>{fmt}</span>"
 
-    def _jig_card(entry):
+    def _jig_card(entry, key_prefix="jig"):
         p   = entry["player"]
         jig = entry["jig"]
         slg, iso, hh, brl, la, pit = _jig_metrics(p)
@@ -2188,12 +2188,12 @@ def tab_jig(data: dict):
         )
         _bc, _fc = st.columns(2)
         with _bc:
-            if st.button("View Details", key=f"jig_modal_{p.get('player_id','')}{name[:4]}",
-                         use_container_width=True):
+            if st.button("ℹ️ Player Info", key=f"{key_prefix}_modal_{p.get('player_id','')}{name[:6]}",
+                         use_container_width=True, type="primary"):
                 st.session_state["show_modal"] = p
                 st.rerun()
         with _fc:
-            st.link_button("Open FanDuel", _fanduel_url(name), use_container_width=True)
+            st.link_button("📲 Open on FanDuel", _fanduel_url(name), use_container_width=True)
 
     scored    = sorted(
         [{"player": p, "jig": _jig_score(p), "passes": _passes_all(p)} for p in all_players],
@@ -2215,7 +2215,7 @@ def tab_jig(data: dict):
             st.info("No players meet all JIG thresholds — lower thresholds in the expander above.")
         else:
             for entry in qualified[:3]:
-                _jig_card(entry)
+                _jig_card(entry, key_prefix="jq")
             if len(qualified) > 3:
                 st.caption(f"Top 3 of {len(qualified)} qualified. See Picks tab for all.")
 
@@ -2225,10 +2225,11 @@ def tab_jig(data: dict):
         else:
             st.caption(f"{len(qualified)} players pass all 6 JIG criteria — ranked by JIG score.")
             for entry in qualified:
-                _jig_card(entry)
+                _jig_card(entry, key_prefix="jp")
 
     with _ja:
         import pandas as pd
+        _ja_ver = st.session_state.get("_jig_all_ver", 0)
         rows = []
         for entry in scored:
             p = entry["player"]
@@ -2237,24 +2238,32 @@ def tab_jig(data: dict):
                 "Player":   p.get("player_name", ""),
                 "Team":     p.get("team", ""),
                 "JIG":      entry["jig"],
-                "All":      "YES" if entry["passes"] else "",
-                "SLG":      f"{slg:.3f}",
+                "Passes":   "✅" if entry["passes"] else "",
+                "xSLG":     f"{slg:.3f}",
                 "ISO":      f"{iso:.3f}" if iso else "--",
                 "Hard Hit": f"{hh:.1f}%" if hh else "--",
                 "Barrel":   f"{brl:.1f}%" if brl else "--",
-                "Launch":   f"{la:.1f}" if la else "--",
+                "Launch°":  f"{la:.1f}" if la else "--",
                 "Pit Fac":  f"{pit:.3f}",
                 "Odds":     _fmt_american(p.get("best_american")),
                 "EV%":      f"{p.get('ev_pct',0):+.1f}%",
                 "Model%":   f"{p.get('model_prob',0)*100:.1f}%",
             })
         if rows:
-            st.dataframe(
+            _ja_sel = st.dataframe(
                 pd.DataFrame(rows), hide_index=True, use_container_width=True,
+                on_select="rerun", selection_mode="single-row",
+                key=f"jig_all_df_{_ja_ver}",
                 column_config={
                     "JIG": st.column_config.ProgressColumn("JIG", min_value=0, max_value=100, format="%.0f"),
                 },
             )
+            _ja_rows = getattr(getattr(_ja_sel, "selection", None), "rows", [])
+            if _ja_rows and 0 <= _ja_rows[0] < len(scored):
+                st.session_state["_jig_all_ver"] = _ja_ver + 1
+                st.session_state["show_modal"] = scored[_ja_rows[0]]["player"]
+                st.rerun()
+            st.caption("💡 Click any row to view full player details.")
 
     with _jpr:
         if not prime:
@@ -2262,7 +2271,7 @@ def tab_jig(data: dict):
         else:
             st.caption(f"{len(prime)} players pass all JIG criteria with positive EV.")
             for entry in prime:
-                _jig_card(entry)
+                _jig_card(entry, key_prefix="jpr")
 
 def tab_parlays(data: dict):
     ranked          = data.get("ranked", [])
