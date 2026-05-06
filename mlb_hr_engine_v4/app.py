@@ -2196,20 +2196,254 @@ def tab_hits(data: dict):
         with _fc:
             st.link_button("📲 Open on FanDuel", _fanduel_url(name), use_container_width=True)
 
+    # ── BTS hit-probability (pure contact likelihood, separate from HIT score) ──
+    def _hit_prob(p):
+        """P(≥1 hit in game) = 1 - (1 - xBA)^expected_pa"""
+        xba = _pf(p.get("xba"), 0.0)
+        pa  = float(p.get("expected_pa") or 0.0)
+        if xba <= 0 or pa <= 0:
+            return 0.0
+        return round((1.0 - (1.0 - xba) ** pa) * 100.0, 1)
+
     scored    = sorted(
-        [{"player": p, "hit": _hit_score(p), "passes": _passes_all(p)} for p in all_players],
+        [{"player": p, "hit": _hit_score(p), "passes": _passes_all(p),
+          "hit_prob": _hit_prob(p)} for p in all_players],
         key=lambda x: x["hit"], reverse=True,
     )
     qualified = [x for x in scored if x["passes"]]
     prime     = [x for x in qualified
                  if x["player"].get("best_american") and x["player"].get("ev_pct", 0) > 0]
 
-    _hq, _hp, _ha, _hpr = st.tabs([
+    # BTS pool: all players with a real xBA and starting lineup spot, ranked by hit probability
+    bts_pool  = sorted(
+        [x for x in scored if x["hit_prob"] > 0 and x["player"].get("lineup_spot")],
+        key=lambda x: x["hit_prob"], reverse=True,
+    )
+
+    _hbts, _hq, _hp, _ha, _hpr = st.tabs([
+        "🎯 Beat The Streak",
         "📱 Quick Picks",
         f"⚡ Picks ({len(qualified)})",
         f"📊 All ({len(scored)})",
         f"⭐ Prime ({len(prime)})",
     ])
+
+    # ── Beat The Streak tab ──────────────────────────────────────────────────
+    with _hbts:
+        import pandas as pd
+
+        # Streak tracker
+        if "bts_streak" not in st.session_state:
+            st.session_state["bts_streak"] = 0
+        if "bts_best" not in st.session_state:
+            st.session_state["bts_best"] = 0
+        streak = st.session_state["bts_streak"]
+        best   = st.session_state["bts_best"]
+
+        # Header / streak counter
+        streak_c = "#4ade80" if streak >= 10 else "#f59e0b" if streak >= 5 else "#60a5fa"
+        st.markdown(
+            f"<div style='background:linear-gradient(135deg,#0d1f3c,#0a0a1a); "
+            f"border:2px solid #1e3a5f; border-radius:14px; padding:18px 22px; "
+            f"margin-bottom:14px; text-align:center;'>"
+            f"<div style='font-size:13px; color:#888; letter-spacing:2px; "
+            f"text-transform:uppercase;'>🎯 Beat The Streak</div>"
+            f"<div style='font-size:48px; font-weight:900; color:{streak_c}; "
+            f"line-height:1.1;'>{streak}</div>"
+            f"<div style='font-size:12px; color:#666;'>current streak</div>"
+            f"<div style='font-size:11px; color:#555; margin-top:4px;'>"
+            f"personal best: <b style='color:#888;'>{best}</b> &nbsp;·&nbsp; "
+            f"DiMaggio's record: <b style='color:#f59e0b;'>56</b></div>"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
+
+        _s1, _s2, _s3 = st.columns(3)
+        with _s1:
+            if st.button("✅ Both Hit  +1", use_container_width=True,
+                         type="primary", key="bts_win"):
+                st.session_state["bts_streak"] += 1
+                if st.session_state["bts_streak"] > st.session_state["bts_best"]:
+                    st.session_state["bts_best"] = st.session_state["bts_streak"]
+                st.rerun()
+        with _s2:
+            if st.button("❌ Missed — Reset", use_container_width=True,
+                         key="bts_lose"):
+                st.session_state["bts_streak"] = 0
+                st.rerun()
+        with _s3:
+            if st.button("🔄 Reset All", use_container_width=True, key="bts_reset"):
+                st.session_state["bts_streak"] = 0
+                st.session_state["bts_best"]   = 0
+                st.rerun()
+
+        st.divider()
+
+        if not bts_pool:
+            st.warning("No players with confirmed lineup spots and Statcast data available yet. "
+                       "Check back after lineups post (~3–4 h before first pitch).")
+        else:
+            pick1 = bts_pool[0]
+            pick2 = bts_pool[1] if len(bts_pool) > 1 else None
+
+            p1      = pick1["player"]
+            p1_prob = pick1["hit_prob"]
+            p1_xba  = _pf(p1.get("xba"), 0.0)
+            p1_pa   = float(p1.get("expected_pa") or 0)
+            p1_spot = p1.get("lineup_spot") or "--"
+            p1_sf   = float(p1.get("streak_factor") or 1.0)
+
+            # ── Pick 1 card ──────────────────────────────────────────────
+            pc = "#4ade80" if p1_prob >= 75 else "#f59e0b" if p1_prob >= 60 else "#60a5fa"
+            st.markdown(
+                f"<div style='background:#0a1628; border:2px solid {pc}; "
+                f"border-radius:12px; padding:16px 20px; margin-bottom:10px;'>"
+                f"<div style='font-size:11px; color:#888; letter-spacing:1px; "
+                f"text-transform:uppercase; margin-bottom:4px;'>🥇 Pick 1</div>"
+                f"<div style='display:flex; justify-content:space-between; align-items:baseline;'>"
+                f"<div style='font-size:17px; font-weight:900; color:#f0f0f0;'>"
+                f"{p1.get('player_name','')}</div>"
+                f"<div style='font-size:26px; font-weight:900; color:{pc};'>"
+                f"{p1_prob:.1f}%</div>"
+                f"</div>"
+                f"<div style='font-size:12px; color:#888; margin:2px 0 10px;'>"
+                f"{p1.get('team','')} vs {p1.get('opponent','')} "
+                f"&nbsp;·&nbsp; vs {p1.get('pitcher_name','TBD')} "
+                f"&nbsp;·&nbsp; Spot #{p1_spot}</div>"
+                f"<div style='display:grid; grid-template-columns:repeat(4,1fr); "
+                f"gap:6px; font-size:11px;'>"
+                f"<div style='background:#111828; border-radius:5px; padding:5px 8px;'>"
+                f"<div style='color:#555;'>xBA</div>"
+                f"<div style='color:#f0f0f0; font-weight:700;'>{p1_xba:.3f}</div></div>"
+                f"<div style='background:#111828; border-radius:5px; padding:5px 8px;'>"
+                f"<div style='color:#555;'>Exp PA</div>"
+                f"<div style='color:#f0f0f0; font-weight:700;'>{p1_pa:.1f}</div></div>"
+                f"<div style='background:#111828; border-radius:5px; padding:5px 8px;'>"
+                f"<div style='color:#555;'>Hot</div>"
+                f"<div style='color:{'#4ade80' if p1_sf >= 1.05 else '#888'}; font-weight:700;'>"
+                f"{'🔥' if p1_sf >= 1.10 else '▲' if p1_sf >= 1.05 else '—'}</div></div>"
+                f"<div style='background:#111828; border-radius:5px; padding:5px 8px;'>"
+                f"<div style='color:#555;'>K-Fac</div>"
+                f"<div style='color:#f0f0f0; font-weight:700;'>"
+                f"{float(p1.get('k_factor') or 1.0):.2f}</div></div>"
+                f"</div></div>",
+                unsafe_allow_html=True,
+            )
+            _pb1, _pb2 = st.columns(2)
+            with _pb1:
+                if st.button("ℹ️ Player Info", key="bts_p1_info",
+                             use_container_width=True, type="primary"):
+                    st.session_state["show_modal"] = p1
+                    st.rerun()
+            with _pb2:
+                st.link_button("📲 Open on FanDuel", _fanduel_url(p1.get("player_name", "")),
+                               use_container_width=True)
+
+            # ── Pick 2 card ──────────────────────────────────────────────
+            if pick2:
+                p2      = pick2["player"]
+                p2_prob = pick2["hit_prob"]
+                p2_xba  = _pf(p2.get("xba"), 0.0)
+                p2_pa   = float(p2.get("expected_pa") or 0)
+                p2_spot = p2.get("lineup_spot") or "--"
+                p2_sf   = float(p2.get("streak_factor") or 1.0)
+                combo   = round(p1_prob * p2_prob / 100.0, 1)
+
+                pc2 = "#4ade80" if p2_prob >= 75 else "#f59e0b" if p2_prob >= 60 else "#60a5fa"
+                st.markdown(
+                    f"<div style='background:#0a1628; border:2px solid {pc2}; "
+                    f"border-radius:12px; padding:16px 20px; margin-bottom:10px;'>"
+                    f"<div style='font-size:11px; color:#888; letter-spacing:1px; "
+                    f"text-transform:uppercase; margin-bottom:4px;'>🥈 Pick 2</div>"
+                    f"<div style='display:flex; justify-content:space-between; align-items:baseline;'>"
+                    f"<div style='font-size:17px; font-weight:900; color:#f0f0f0;'>"
+                    f"{p2.get('player_name','')}</div>"
+                    f"<div style='font-size:26px; font-weight:900; color:{pc2};'>"
+                    f"{p2_prob:.1f}%</div>"
+                    f"</div>"
+                    f"<div style='font-size:12px; color:#888; margin:2px 0 10px;'>"
+                    f"{p2.get('team','')} vs {p2.get('opponent','')} "
+                    f"&nbsp;·&nbsp; vs {p2.get('pitcher_name','TBD')} "
+                    f"&nbsp;·&nbsp; Spot #{p2_spot}</div>"
+                    f"<div style='display:grid; grid-template-columns:repeat(4,1fr); "
+                    f"gap:6px; font-size:11px;'>"
+                    f"<div style='background:#111828; border-radius:5px; padding:5px 8px;'>"
+                    f"<div style='color:#555;'>xBA</div>"
+                    f"<div style='color:#f0f0f0; font-weight:700;'>{p2_xba:.3f}</div></div>"
+                    f"<div style='background:#111828; border-radius:5px; padding:5px 8px;'>"
+                    f"<div style='color:#555;'>Exp PA</div>"
+                    f"<div style='color:#f0f0f0; font-weight:700;'>{p2_pa:.1f}</div></div>"
+                    f"<div style='background:#111828; border-radius:5px; padding:5px 8px;'>"
+                    f"<div style='color:#555;'>Hot</div>"
+                    f"<div style='color:{'#4ade80' if p2_sf >= 1.05 else '#888'}; font-weight:700;'>"
+                    f"{'🔥' if p2_sf >= 1.10 else '▲' if p2_sf >= 1.05 else '—'}</div></div>"
+                    f"<div style='background:#111828; border-radius:5px; padding:5px 8px;'>"
+                    f"<div style='color:#555;'>K-Fac</div>"
+                    f"<div style='color:#f0f0f0; font-weight:700;'>"
+                    f"{float(p2.get('k_factor') or 1.0):.2f}</div></div>"
+                    f"</div></div>",
+                    unsafe_allow_html=True,
+                )
+                _pb3, _pb4 = st.columns(2)
+                with _pb3:
+                    if st.button("ℹ️ Player Info", key="bts_p2_info",
+                                 use_container_width=True, type="primary"):
+                        st.session_state["show_modal"] = p2
+                        st.rerun()
+                with _pb4:
+                    st.link_button("📲 Open on FanDuel", _fanduel_url(p2.get("player_name", "")),
+                                   use_container_width=True)
+
+                # Combined probability banner
+                cc = "#4ade80" if combo >= 55 else "#f59e0b" if combo >= 40 else "#f87171"
+                st.markdown(
+                    f"<div style='background:#111128; border:1px solid #2a2a50; "
+                    f"border-radius:8px; padding:10px 16px; margin-top:6px; "
+                    f"display:flex; justify-content:space-between; align-items:center;'>"
+                    f"<span style='font-size:12px; color:#888;'>Both hit combined probability</span>"
+                    f"<span style='font-size:20px; font-weight:900; color:{cc};'>{combo:.1f}%</span>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+
+            st.divider()
+
+            # Full ranked BTS leaderboard
+            st.markdown("<div style='font-size:13px; color:#888; margin-bottom:6px;'>"
+                        "All players ranked by hit probability (confirmed lineup only)</div>",
+                        unsafe_allow_html=True)
+            bts_rows = []
+            for i, entry in enumerate(bts_pool):
+                pp = entry["player"]
+                bts_rows.append({
+                    "#":        i + 1,
+                    "Player":   pp.get("player_name", ""),
+                    "Team":     pp.get("team", ""),
+                    "Opp":      pp.get("opponent", ""),
+                    "Spot":     pp.get("lineup_spot") or "--",
+                    "Hit%":     entry["hit_prob"],
+                    "xBA":      f"{_pf(pp.get('xba'), 0.0):.3f}",
+                    "Exp PA":   f"{float(pp.get('expected_pa') or 0):.1f}",
+                    "Hot":      "🔥" if float(pp.get("streak_factor") or 1.0) >= 1.10 else
+                                "▲"  if float(pp.get("streak_factor") or 1.0) >= 1.05 else "",
+                    "Pitcher":  pp.get("pitcher_name", "TBD"),
+                })
+            _bts_ver = st.session_state.get("_bts_all_ver", 0)
+            _bts_sel = st.dataframe(
+                pd.DataFrame(bts_rows), hide_index=True, use_container_width=True,
+                on_select="rerun", selection_mode="single-row",
+                key=f"bts_df_{_bts_ver}",
+                column_config={
+                    "Hit%": st.column_config.ProgressColumn(
+                        "Hit%", min_value=0, max_value=100, format="%.1f%%"),
+                },
+            )
+            _bts_rows = getattr(getattr(_bts_sel, "selection", None), "rows", [])
+            if _bts_rows and 0 <= _bts_rows[0] < len(bts_pool):
+                st.session_state["_bts_all_ver"] = _bts_ver + 1
+                st.session_state["show_modal"] = bts_pool[_bts_rows[0]]["player"]
+                st.rerun()
+            st.caption("💡 Click any row to view full player details.")
 
     with _hq:
         if not qualified:
