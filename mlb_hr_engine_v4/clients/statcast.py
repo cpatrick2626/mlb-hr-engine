@@ -463,13 +463,13 @@ def _parse_statcast_csv(raw: str, year: int = None, player_ids: frozenset[int] =
     result: dict[int, dict] = {}
     reader = csv.DictReader(io.StringIO(raw.lstrip("\ufeff")))
 
-    def _f(row, *keys, div: float = 1.0) -> Optional[float]:
+    def _f(row, *keys, div: float = 1.0, allow_negative: bool = False) -> Optional[float]:
         for k in keys:
             v = row.get(k)
             if v not in (None, "", "null", "NA", "N/A"):
                 try:
                     f = float(v) / div
-                    return f if f >= 0 else None
+                    return f if (allow_negative or f >= 0) else None
                 except ValueError:
                     pass
         return None
@@ -488,7 +488,7 @@ def _parse_statcast_csv(raw: str, year: int = None, player_ids: frozenset[int] =
             barrel_bip  = _f(row, "brl_percent",      div=100.0)
             ev          = _f(row, "avg_hit_speed",     "exit_velocity_avg")
             hard_hit    = _f(row, "ev95percent",       "hard_hit_percent", div=100.0)
-            avg_la      = _f(row, "avg_launch_angle",  "launch_angle_avg")
+            avg_la      = _f(row, "avg_launch_angle",  "launch_angle_avg", allow_negative=True)
             sweet_spot  = _f(row, "sweet_spot_percent","anglesweetspotpercent",
                               "sweet_spot_pct",         div=100.0)
             xslg        = _f(row, "xslg", "expected_slg", "xSLG")
