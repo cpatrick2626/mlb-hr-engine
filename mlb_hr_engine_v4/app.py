@@ -1,4 +1,4 @@
-"""
+﻿"""
 Codex HR Engine — Streamlit Dashboard
 """
 
@@ -2076,6 +2076,189 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 # TAB 2 — PARLAYS
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# TAB — JIG
+# ═══════════════════════════════════════════════════════════════════════════════
+def tab_jig(data: dict):
+    all_players = data.get("all_players", [])
+
+    st.markdown(
+        "<div style='font-size:22px; font-weight:900; color:#FF6666; "
+        "letter-spacing:2px; margin-bottom:2px;'>⚙️ JIG</div>"
+        "<div style='font-size:12px; color:#888; margin-bottom:12px;'>"
+        "Power contact index — SLG · ISO · Hard Hit · Barrel · Launch Angle · Pitcher Mix</div>",
+        unsafe_allow_html=True,
+    )
+
+    with st.expander("⚙️ JIG Thresholds", expanded=False):
+        tc1, tc2, tc3 = st.columns(3)
+        with tc1:
+            slg_min = st.slider("Min SLG",           0.30, 0.70, 0.50, 0.01, key="jig_slg")
+            iso_min = st.slider("Min ISO",            0.10, 0.45, 0.30, 0.01, key="jig_iso")
+        with tc2:
+            hh_min  = st.slider("Min Hard Hit%",     25.0, 60.0, 40.0, 0.5,  key="jig_hh")
+            brl_min = st.slider("Min Barrel%",        2.0, 25.0,  8.0, 0.5,  key="jig_brl")
+        with tc3:
+            la_min  = st.slider("Min Launch Angle°",  5.0, 25.0, 15.0, 0.5,  key="jig_la")
+            pit_min = st.slider("Min Pitcher Factor", 0.90, 1.30, 1.00, 0.01, key="jig_pit")
+
+    def _pf(val, default=0.0):
+        try:
+            v = str(val).replace("%", "").strip()
+            return float(v) if v and v != "--" else default
+        except (TypeError, ValueError):
+            return default
+
+    def _jig_metrics(p):
+        slg = float(p.get("actual_slg", 0) or 0)
+        iso = float(p.get("xiso", 0) or 0)
+        hh  = _pf(p.get("hard_hit"))
+        brl = _pf(p.get("barrel_pct"))
+        la  = float(p.get("avg_launch_angle") or 0)
+        pit = float(p.get("pitcher_factor", 1.0) or 1.0)
+        return slg, iso, hh, brl, la, pit
+
+    def _jig_score(p):
+        slg, iso, hh, brl, la, pit = _jig_metrics(p)
+        def _n(val, thr, scale):
+            return min(max((val - thr) / scale + 0.5, 0.0), 1.0)
+        s = (_n(slg, slg_min, 0.15) + _n(iso, iso_min, 0.12) +
+             _n(hh,  hh_min,  12.0) + _n(brl, brl_min, 6.0) +
+             _n(la,  la_min,  10.0) + _n(pit, pit_min, 0.15)) / 6.0
+        return round(s * 100, 1)
+
+    def _passes_all(p):
+        slg, iso, hh, brl, la, pit = _jig_metrics(p)
+        return (slg >= slg_min and iso >= iso_min and hh >= hh_min
+                and brl >= brl_min and la >= la_min and pit >= pit_min)
+
+    def _badge(val, thr, fmt):
+        c = "#4ade80" if val >= thr else "#f87171"
+        return f"<span style='color:{c}; font-weight:700;'>{fmt}</span>"
+
+    def _jig_card(entry):
+        p   = entry["player"]
+        jig = entry["jig"]
+        slg, iso, hh, brl, la, pit = _jig_metrics(p)
+        name  = p.get("player_name", "Unknown")
+        team  = p.get("team", "")
+        opp   = p.get("opponent", "")
+        pit_n = p.get("pitcher_name", "TBD")
+        odds  = p.get("best_american")
+        ev    = p.get("ev_pct", 0)
+        ev_c  = "#4ade80" if ev > 0 else "#f87171"
+        jc    = "#4ade80" if jig >= 60 else "#f59e0b" if jig >= 40 else "#f87171"
+        st.markdown(
+            f"<div style='background:#0d0d1e; border:1px solid #2a2a50; border-radius:10px; "
+            f"padding:14px 16px; margin-bottom:10px;'>"
+            f"<div style='display:flex; justify-content:space-between; align-items:baseline;'>"
+            f"<div style='font-size:15px; font-weight:800; color:#f0f0f0;'>{name}</div>"
+            f"<div style='font-size:18px; font-weight:900; color:{jc};'>JIG {jig:.0f}</div>"
+            f"</div>"
+            f"<div style='font-size:12px; color:#888; margin:2px 0 10px;'>"
+            f"{team} vs {opp} &nbsp;·&nbsp; vs {pit_n}</div>"
+            f"<div style='display:grid; grid-template-columns:repeat(3,1fr); gap:6px; font-size:11px;'>"
+            f"<div style='background:#111128; border-radius:5px; padding:5px 8px;'>"
+            f"<div style='color:#666;'>SLG</div>{_badge(slg, slg_min, f'{slg:.3f}')}</div>"
+            f"<div style='background:#111128; border-radius:5px; padding:5px 8px;'>"
+            f"<div style='color:#666;'>ISO</div>{_badge(iso, iso_min, f'{iso:.3f}')}</div>"
+            f"<div style='background:#111128; border-radius:5px; padding:5px 8px;'>"
+            f"<div style='color:#666;'>Hard Hit</div>{_badge(hh, hh_min, f'{hh:.1f}%')}</div>"
+            f"<div style='background:#111128; border-radius:5px; padding:5px 8px;'>"
+            f"<div style='color:#666;'>Barrel</div>{_badge(brl, brl_min, f'{brl:.1f}%')}</div>"
+            f"<div style='background:#111128; border-radius:5px; padding:5px 8px;'>"
+            f"<div style='color:#666;'>Launch°</div>{_badge(la, la_min, f'{la:.1f}°')}</div>"
+            f"<div style='background:#111128; border-radius:5px; padding:5px 8px;'>"
+            f"<div style='color:#666;'>Pit Fac</div>{_badge(pit, pit_min, f'{pit:.3f}x')}</div>"
+            f"</div>"
+            + (f"<div style='margin-top:8px; font-size:12px; display:flex; gap:16px;'>"
+               f"<span style='color:#FF6666; font-weight:700;'>{_fmt_american(odds)}</span>"
+               f"<span style='color:{ev_c};'>EV {ev:+.1f}%</span>"
+               f"<span style='color:#888;'>Model {p.get('model_prob',0)*100:.1f}%</span>"
+               f"</div>" if odds else "")
+            + "</div>",
+            unsafe_allow_html=True,
+        )
+        _bc, _fc = st.columns(2)
+        with _bc:
+            if st.button("View Details", key=f"jig_modal_{p.get('player_id','')}{name[:4]}",
+                         use_container_width=True):
+                st.session_state["show_modal"] = p
+                st.rerun()
+        with _fc:
+            st.link_button("Open FanDuel", _fanduel_url(name), use_container_width=True)
+
+    scored    = sorted(
+        [{"player": p, "jig": _jig_score(p), "passes": _passes_all(p)} for p in all_players],
+        key=lambda x: x["jig"], reverse=True,
+    )
+    qualified = [x for x in scored if x["passes"]]
+    prime     = [x for x in qualified
+                 if x["player"].get("best_american") and x["player"].get("ev_pct", 0) > 0]
+
+    _jq, _jp, _ja, _jpr = st.tabs([
+        "📱 Quick Picks",
+        f"⚡ Picks ({len(qualified)})",
+        f"📊 All ({len(scored)})",
+        f"⭐ Prime ({len(prime)})",
+    ])
+
+    with _jq:
+        if not qualified:
+            st.info("No players meet all JIG thresholds — lower thresholds in the expander above.")
+        else:
+            for entry in qualified[:3]:
+                _jig_card(entry)
+            if len(qualified) > 3:
+                st.caption(f"Top 3 of {len(qualified)} qualified. See Picks tab for all.")
+
+    with _jp:
+        if not qualified:
+            st.info("No players meet all JIG thresholds — lower thresholds in the expander above.")
+        else:
+            st.caption(f"{len(qualified)} players pass all 6 JIG criteria — ranked by JIG score.")
+            for entry in qualified:
+                _jig_card(entry)
+
+    with _ja:
+        import pandas as pd
+        rows = []
+        for entry in scored:
+            p = entry["player"]
+            slg, iso, hh, brl, la, pit = _jig_metrics(p)
+            rows.append({
+                "Player":   p.get("player_name", ""),
+                "Team":     p.get("team", ""),
+                "JIG":      entry["jig"],
+                "All":      "YES" if entry["passes"] else "",
+                "SLG":      f"{slg:.3f}",
+                "ISO":      f"{iso:.3f}" if iso else "--",
+                "Hard Hit": f"{hh:.1f}%" if hh else "--",
+                "Barrel":   f"{brl:.1f}%" if brl else "--",
+                "Launch":   f"{la:.1f}" if la else "--",
+                "Pit Fac":  f"{pit:.3f}",
+                "Odds":     _fmt_american(p.get("best_american")),
+                "EV%":      f"{p.get('ev_pct',0):+.1f}%",
+                "Model%":   f"{p.get('model_prob',0)*100:.1f}%",
+            })
+        if rows:
+            st.dataframe(
+                pd.DataFrame(rows), hide_index=True, use_container_width=True,
+                column_config={
+                    "JIG": st.column_config.ProgressColumn("JIG", min_value=0, max_value=100, format="%.0f"),
+                },
+            )
+
+    with _jpr:
+        if not prime:
+            st.info("No prime JIG plays — need qualified players with positive-EV odds.")
+        else:
+            st.caption(f"{len(prime)} players pass all JIG criteria with positive EV.")
+            for entry in prime:
+                _jig_card(entry)
+
 def tab_parlays(data: dict):
     ranked          = data.get("ranked", [])
     team_players    = data.get("team_players", {})
@@ -3200,10 +3383,11 @@ The app will open full-screen like a native app.
     if _banner.exists():
         st.image(str(_banner), use_container_width=True)
     st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
-    tab1, tab2, tab3 = st.tabs([
+    tab1, tab2, tab3, tab4 = st.tabs([
         "📋  TODAY'S PICKS",
         "📊  PERFORMANCE",
         "🎯  ADVANCED STRATEGIES",
+        "⚙️  JIG",
     ])
 
     with tab1:
@@ -3245,6 +3429,13 @@ The app will open full-screen like a native app.
             st.error(f"Advanced strategies tab error: {_e}")
             st.code(_tb.format_exc())
 
+    with tab4:
+        try:
+            data = get_data()
+            tab_jig(data)
+        except Exception as _e:
+            st.error(f"JIG tab error: {_e}")
+            st.code(_tb.format_exc())
 
 
 if __name__ == "__main__":
