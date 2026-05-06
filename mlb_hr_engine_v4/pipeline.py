@@ -173,7 +173,7 @@ def _build_player_profile(
         "early_season_suppressor": round(early_supp, 3),
         "avg_launch_angle": sc_summary.get("avg_launch_angle"),
         "xslg": sc_summary.get("xslg"),
-        "xba": xba_raw,
+        "xba": xba_float,
         "xiso": xiso,
         "xslg_diff": xslg_diff,
         "actual_slg": round(actual_slg, 3),
