@@ -2079,6 +2079,202 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+# ═══════════════════════════════════════════════════════════════════════════════
+# TAB — HITS
+# ═══════════════════════════════════════════════════════════════════════════════
+def tab_hits(data: dict):
+    all_players = data.get("all_players", [])
+
+    st.markdown(
+        "<div style='font-size:22px; font-weight:900; color:#60a5fa; "
+        "letter-spacing:2px; margin-bottom:2px;'>🏃 HITS</div>"
+        "<div style='font-size:12px; color:#888; margin-bottom:12px;'>"
+        "Contact quality index — xBA · Line Drive · Sweet Spot · Hard Hit · K-Factor · PA Opportunity</div>",
+        unsafe_allow_html=True,
+    )
+
+    with st.expander("⚙️ Hit Thresholds", expanded=False):
+        hc1, hc2, hc3 = st.columns(3)
+        with hc1:
+            xba_min = st.slider("Min xBA",          0.220, 0.340, 0.260, 0.005, key="hit_xba")
+            ld_min  = st.slider("Min LD%",           12.0,  30.0,  20.0,  0.5,   key="hit_ld")
+        with hc2:
+            ss_min  = st.slider("Min Sweet Spot%",   20.0,  45.0,  28.0,  0.5,   key="hit_ss")
+            hh_min  = st.slider("Min Hard Hit%",     25.0,  55.0,  35.0,  0.5,   key="hit_hh")
+        with hc3:
+            kf_min  = st.slider("Min K-Factor",      0.75,  1.15,  0.90,  0.01,  key="hit_kf")
+            pa_min  = st.slider("Min Exp PA",         2.0,   5.0,   3.0,  0.1,   key="hit_pa")
+
+    def _pf(val, default=0.0):
+        try:
+            v = str(val).replace("%", "").strip()
+            return float(v) if v and v != "--" else default
+        except (TypeError, ValueError):
+            return default
+
+    def _hit_metrics(p):
+        xba = _pf(p.get("xba"), 0.0)
+        ld  = _pf(p.get("ld_pct"))
+        ss  = _pf(p.get("sweet_spot_pct"))
+        hh  = _pf(p.get("hard_hit"))
+        kf  = float(p.get("k_factor") or 1.0)
+        pa  = float(p.get("expected_pa") or 0.0)
+        return xba, ld, ss, hh, kf, pa
+
+    def _hit_score(p):
+        xba, ld, ss, hh, kf, pa = _hit_metrics(p)
+        def _n(val, thr, scale):
+            return min(max((val - thr) / scale + 0.5, 0.0), 1.0)
+        # xBA carries 2x weight — it's the most direct hit predictor
+        s = (_n(xba, xba_min, 0.05) * 2.0 +
+             _n(ld,  ld_min,  5.0)         +
+             _n(ss,  ss_min,  8.0)         +
+             _n(hh,  hh_min,  10.0)        +
+             _n(kf,  kf_min,  0.15)        +
+             _n(pa,  pa_min,  1.0)) / 7.0
+        return round(s * 100, 1)
+
+    def _passes_all(p):
+        xba, ld, ss, hh, kf, pa = _hit_metrics(p)
+        return (xba >= xba_min and ld >= ld_min and ss >= ss_min
+                and hh >= hh_min and kf >= kf_min and pa >= pa_min)
+
+    def _badge(val, thr, fmt):
+        c = "#4ade80" if val >= thr else "#f87171"
+        return f"<span style='color:{c}; font-weight:700;'>{fmt}</span>"
+
+    def _hit_card(entry, key_prefix="hit"):
+        p    = entry["player"]
+        hsco = entry["hit"]
+        xba, ld, ss, hh, kf, pa = _hit_metrics(p)
+        name  = p.get("player_name", "Unknown")
+        team  = p.get("team", "")
+        opp   = p.get("opponent", "")
+        pit_n = p.get("pitcher_name", "TBD")
+        odds  = p.get("best_american")
+        ev    = p.get("ev_pct", 0)
+        ev_c  = "#4ade80" if ev > 0 else "#f87171"
+        hc    = "#4ade80" if hsco >= 60 else "#f59e0b" if hsco >= 40 else "#f87171"
+        st.markdown(
+            f"<div style='background:#0d0d1e; border:1px solid #1e3a5f; border-radius:10px; "
+            f"padding:14px 16px; margin-bottom:10px;'>"
+            f"<div style='display:flex; justify-content:space-between; align-items:baseline;'>"
+            f"<div style='font-size:15px; font-weight:800; color:#f0f0f0;'>{name}</div>"
+            f"<div style='font-size:18px; font-weight:900; color:{hc};'>HIT {hsco:.0f}</div>"
+            f"</div>"
+            f"<div style='font-size:12px; color:#888; margin:2px 0 10px;'>"
+            f"{team} vs {opp} &nbsp;·&nbsp; vs {pit_n}</div>"
+            f"<div style='display:grid; grid-template-columns:repeat(3,1fr); gap:6px; font-size:11px;'>"
+            f"<div style='background:#111128; border-radius:5px; padding:5px 8px;'>"
+            f"<div style='color:#666;'>xBA</div>{_badge(xba, xba_min, f'{xba:.3f}')}</div>"
+            f"<div style='background:#111128; border-radius:5px; padding:5px 8px;'>"
+            f"<div style='color:#666;'>LD%</div>{_badge(ld, ld_min, f'{ld:.1f}%')}</div>"
+            f"<div style='background:#111128; border-radius:5px; padding:5px 8px;'>"
+            f"<div style='color:#666;'>Sweet%</div>{_badge(ss, ss_min, f'{ss:.1f}%')}</div>"
+            f"<div style='background:#111128; border-radius:5px; padding:5px 8px;'>"
+            f"<div style='color:#666;'>Hard Hit</div>{_badge(hh, hh_min, f'{hh:.1f}%')}</div>"
+            f"<div style='background:#111128; border-radius:5px; padding:5px 8px;'>"
+            f"<div style='color:#666;'>K-Factor</div>{_badge(kf, kf_min, f'{kf:.2f}')}</div>"
+            f"<div style='background:#111128; border-radius:5px; padding:5px 8px;'>"
+            f"<div style='color:#666;'>Exp PA</div>{_badge(pa, pa_min, f'{pa:.1f}')}</div>"
+            f"</div>"
+            + (f"<div style='margin-top:8px; font-size:12px; display:flex; gap:16px;'>"
+               f"<span style='color:#60a5fa; font-weight:700;'>{_fmt_american(odds)}</span>"
+               f"<span style='color:{ev_c};'>EV {ev:+.1f}%</span>"
+               f"<span style='color:#888;'>HR Prob {p.get('model_prob',0)*100:.1f}%</span>"
+               f"</div>" if odds else "")
+            + "</div>",
+            unsafe_allow_html=True,
+        )
+        _bc, _fc = st.columns(2)
+        with _bc:
+            if st.button("ℹ️ Player Info",
+                         key=f"{key_prefix}_modal_{p.get('player_id','')}{name[:6]}",
+                         use_container_width=True, type="primary"):
+                st.session_state["show_modal"] = p
+                st.rerun()
+        with _fc:
+            st.link_button("📲 Open on FanDuel", _fanduel_url(name), use_container_width=True)
+
+    scored    = sorted(
+        [{"player": p, "hit": _hit_score(p), "passes": _passes_all(p)} for p in all_players],
+        key=lambda x: x["hit"], reverse=True,
+    )
+    qualified = [x for x in scored if x["passes"]]
+    prime     = [x for x in qualified
+                 if x["player"].get("best_american") and x["player"].get("ev_pct", 0) > 0]
+
+    _hq, _hp, _ha, _hpr = st.tabs([
+        "📱 Quick Picks",
+        f"⚡ Picks ({len(qualified)})",
+        f"📊 All ({len(scored)})",
+        f"⭐ Prime ({len(prime)})",
+    ])
+
+    with _hq:
+        if not qualified:
+            st.info("No players meet all Hit thresholds — lower thresholds in the expander above.")
+        else:
+            for entry in qualified[:3]:
+                _hit_card(entry, key_prefix="hq")
+            if len(qualified) > 3:
+                st.caption(f"Top 3 of {len(qualified)} qualified. See Picks tab for all.")
+
+    with _hp:
+        if not qualified:
+            st.info("No players meet all Hit thresholds — lower thresholds in the expander above.")
+        else:
+            st.caption(f"{len(qualified)} players pass all Hit criteria — ranked by HIT score.")
+            for entry in qualified:
+                _hit_card(entry, key_prefix="hp")
+
+    with _ha:
+        import pandas as pd
+        _ha_ver = st.session_state.get("_hit_all_ver", 0)
+        rows = []
+        for entry in scored:
+            p = entry["player"]
+            xba, ld, ss, hh, kf, pa = _hit_metrics(p)
+            rows.append({
+                "Player":   p.get("player_name", ""),
+                "Team":     p.get("team", ""),
+                "HIT":      entry["hit"],
+                "Passes":   "✅" if entry["passes"] else "",
+                "xBA":      f"{xba:.3f}" if xba else "--",
+                "LD%":      f"{ld:.1f}%" if ld else "--",
+                "Sweet%":   f"{ss:.1f}%" if ss else "--",
+                "Hard Hit": f"{hh:.1f}%" if hh else "--",
+                "K-Factor": f"{kf:.2f}",
+                "Exp PA":   f"{pa:.1f}",
+                "Odds":     _fmt_american(p.get("best_american")),
+                "EV%":      f"{p.get('ev_pct', 0):+.1f}%",
+                "HR Prob":  f"{p.get('model_prob', 0)*100:.1f}%",
+            })
+        if rows:
+            _ha_sel = st.dataframe(
+                pd.DataFrame(rows), hide_index=True, use_container_width=True,
+                on_select="rerun", selection_mode="single-row",
+                key=f"hit_all_df_{_ha_ver}",
+                column_config={
+                    "HIT": st.column_config.ProgressColumn(
+                        "HIT", min_value=0, max_value=100, format="%.0f"),
+                },
+            )
+            _ha_rows = getattr(getattr(_ha_sel, "selection", None), "rows", [])
+            if _ha_rows and 0 <= _ha_rows[0] < len(scored):
+                st.session_state["_hit_all_ver"] = _ha_ver + 1
+                st.session_state["show_modal"] = scored[_ha_rows[0]]["player"]
+                st.rerun()
+            st.caption("💡 Click any row to view full player details.")
+
+    with _hpr:
+        if not prime:
+            st.info("No prime Hit plays — need qualified players with positive-EV odds.")
+        else:
+            st.caption(f"{len(prime)} players pass all Hit criteria with positive EV.")
+            for entry in prime:
+                _hit_card(entry, key_prefix="hpr")
+
 # TAB — JIG
 # ═══════════════════════════════════════════════════════════════════════════════
 def tab_jig(data: dict):
@@ -3397,11 +3593,12 @@ The app will open full-screen like a native app.
     if _banner.exists():
         st.image(str(_banner), use_container_width=True)
     st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
-    tab1, tab2, tab3, tab4 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "📋  TODAY'S PICKS",
         "📊  PERFORMANCE",
         "🎯  ADVANCED STRATEGIES",
         "⚙️  JIG",
+        "🏃  HITS",
     ])
 
     with tab1:
@@ -3449,6 +3646,14 @@ The app will open full-screen like a native app.
             tab_jig(data)
         except Exception as _e:
             st.error(f"JIG tab error: {_e}")
+            st.code(_tb.format_exc())
+
+    with tab5:
+        try:
+            data = get_data()
+            tab_hits(data)
+        except Exception as _e:
+            st.error(f"Hits tab error: {_e}")
             st.code(_tb.format_exc())
 
 
