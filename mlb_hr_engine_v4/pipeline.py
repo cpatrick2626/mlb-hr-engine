@@ -187,6 +187,8 @@ def _ascii_fold(name: str) -> str:
     """Strip accents for robust fuzzy matching (e.g. 'José' → 'Jose')."""
     return unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode("ascii")
 
+_NAME_MATCH_CACHE: dict[str, str | None] = {}
+
 
 def _build_odds_lookup(all_props):
     """Pre-build a lookup structure for O(1) odds matching."""
@@ -213,14 +215,16 @@ def _match_odds(player, odds_lookup, unique_names):
 
     # Fold accents before matching so 'José' == 'Jose' at the fuzzy layer
     folded_name = _ascii_fold(player["player_name"])
-    match = fuzz_process.extractOne(
-        folded_name, unique_names,
-        scorer=fuzz.token_sort_ratio, score_cutoff=82,
-    )
-    if not match:
+    if folded_name not in _NAME_MATCH_CACHE:
+        m = fuzz_process.extractOne(
+            folded_name, unique_names,
+            scorer=fuzz.token_sort_ratio, score_cutoff=82,
+        )
+        _NAME_MATCH_CACHE[folded_name] = m[0] if m else None
+    matched_name = _NAME_MATCH_CACHE[folded_name]
+    if not matched_name:
         return player
 
-    matched_name = match[0]
     matches = odds_lookup.get(matched_name, [])
     if not matches:
         return player
@@ -407,6 +411,17 @@ def load_game_data(
                 if not pid:
                     continue
                 tasks.append((pid, name, batter.get("lineup_spot"), team, opp, home, opp_pitcher, game_time_utc))
+
+    # Pre-warm weather cache: fetch each unique (lat, lon, hour) combo in parallel
+    # before the 16-thread profile pool starts, so threads never race on the same park.
+    _unique_wx = {
+        (get_park(home_team)["lat"], get_park(home_team)["lon"],
+         _utc_to_local_hour(game_time_utc, get_park(home_team).get("tz_offset", -5)))
+        for _, _, _, _, _, home_team, _, game_time_utc in tasks
+    }
+    if _unique_wx:
+        with ThreadPoolExecutor(max_workers=min(len(_unique_wx), 8)) as _wx_exec:
+            list(_wx_exec.map(lambda t: weather_client.get_game_weather(*t), _unique_wx))
 
     _cb(f"Building profiles for {len(tasks)} players...")
 

@@ -663,8 +663,8 @@ def _fetch_batch_stats(player_ids: list[int]) -> None:
             # Cache season stats
             _BULK_SEASON_STATS_CACHE[player_id] = season_stats
 
+            _GAME_LOG_CACHE[player_id] = game_logs  # cache empty list too — prevents individual re-fetch
             if game_logs:
-                _GAME_LOG_CACHE[player_id] = game_logs
                 recent_stats = _calculate_recent_from_logs(game_logs)
                 _BULK_RECENT_STATS_CACHE[player_id] = recent_stats
             else:
