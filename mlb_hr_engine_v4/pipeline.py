@@ -31,6 +31,14 @@ def _utc_to_local_hour(game_time_utc: str, tz_offset: int) -> int:
         return 19  # fallback to 7pm local
 
 
+def _safe_float(val) -> "float | None":
+    """Convert a Statcast value that may be '--', None, or a numeric string to float."""
+    try:
+        return float(val) if val and str(val) != '--' else None
+    except (ValueError, TypeError):
+        return None
+
+
 def _build_player_profile(
     player_id, player_name, lineup_spot, team, opponent,
     home_team, pitcher, batter_data, pitcher_data,
@@ -58,20 +66,9 @@ def _build_player_profile(
     sc_summary = statcast_client.statcast_summary(player_id, batter_data)
 
     # Derived contact-quality fields used by profile-based parlay scoring
-    xba_raw    = sc_stats.get("xba")
-    xslg_raw   = sc_stats.get("xslg")
     actual_slg = float(season_stats.get("sluggingPercentage", 0) or 0)
-
-    # Safe conversion for xslg and xba which may contain '--' strings
-    try:
-        xba_float = float(xba_raw) if xba_raw and str(xba_raw) != '--' else None
-    except (ValueError, TypeError):
-        xba_float = None
-
-    try:
-        xslg_float = float(xslg_raw) if xslg_raw and str(xslg_raw) != '--' else None
-    except (ValueError, TypeError):
-        xslg_float = None
+    xba_float  = _safe_float(sc_stats.get("xba"))
+    xslg_float = _safe_float(sc_stats.get("xslg"))
 
     xiso       = (round(xslg_float - xba_float, 3)
                   if (xslg_float is not None and xba_float is not None) else None)
@@ -282,19 +279,13 @@ def _enrich_with_ev(player):
     except (ValueError, TypeError):
         pitcher_hr9 = 0.0
 
-    xslg_raw = player.get("xslg")
-    try:
-        xslg_float = float(xslg_raw) if xslg_raw and str(xslg_raw) != '--' else None
-    except (ValueError, TypeError):
-        xslg_float = None
-
     player["confidence"] = prob.confidence_score(
         player.get("season_pa", 0), player.get("recent_pa", 0),
         model_p, market_p,
         statcast_source=player.get("statcast_source", "none"),
         barrel_rate=barrel_raw,
         pitcher_hr9=pitcher_hr9,
-        xslg=xslg_float,
+        xslg=_safe_float(player.get("xslg")),
     )
     player["bet_dollars"] = sizing.bet_dollars(model_p, player["best_american"])
     return player
@@ -458,24 +449,28 @@ def load_game_data(
         _match_odds(p, odds_lookup, unique_names)
         _enrich_with_ev(p)
 
-    qualified = []
+    qualified    = []
+    team_players: dict[str, list[dict]] = {}
+    sc_counts    = {"current": 0, "blended": 0, "prior": 0, "none": 0}
+    pit_ids: set = set()
     for p in all_players:
         passed, reasons = filters.apply_filters(p)
         p["filter_reasons"] = reasons
         p["soft_flags"]     = filters.soft_flags(p)
         if passed:
             qualified.append(p)
+        if p.get("best_american"):
+            team_players.setdefault(p["team"], []).append(p)
+        src = p.get("statcast_source") or ""
+        sc_counts[src if src in sc_counts else "none"] += 1
+        if p.get("pitcher_id"):
+            pit_ids.add(p["pitcher_id"])
+
+    for team in team_players:
+        team_players[team].sort(key=lambda x: x.get("model_prob", 0), reverse=True)
 
     ranked      = ranker.rank_picks(qualified)
     all_by_model = ranker.rank_all_by_model(all_players)
-
-    # Build team → players map for manual parlay builder
-    team_players: dict[str, list[dict]] = {}
-    for p in all_players:
-        if p.get("best_american"):
-            team_players.setdefault(p["team"], []).append(p)
-    for team in team_players:
-        team_players[team].sort(key=lambda x: x.get("model_prob", 0), reverse=True)
 
     # Auto parlay combos (legacy leg-count view + new profile-based view)
     auto_parlays    = parlay_engine.build_auto_parlays(ranked)
@@ -500,13 +495,11 @@ def load_game_data(
             "players":   len(all_players),
             "qualified": len(qualified),
             "filtered":  len(all_players) - len(qualified),
-            # Statcast coverage breakdown across today's player pool
-            "sc_current":  sum(1 for p in all_players if p.get("statcast_source") == "current"),
-            "sc_blended":  sum(1 for p in all_players if p.get("statcast_source") == "blended"),
-            "sc_prior":    sum(1 for p in all_players if p.get("statcast_source") == "prior"),
-            "sc_none":     sum(1 for p in all_players if p.get("statcast_source") in ("none", None, "")),
-            # Pitcher Statcast coverage (pitcher_data keyed by pitcher_id)
+            "sc_current":  sc_counts["current"],
+            "sc_blended":  sc_counts["blended"],
+            "sc_prior":    sc_counts["prior"],
+            "sc_none":     sc_counts["none"],
             "pit_sc_count": len(pitcher_data),
-            "pit_total":   len({p.get("pitcher_id") for p in all_players if p.get("pitcher_id")}),
+            "pit_total":   len(pit_ids),
         },
     }

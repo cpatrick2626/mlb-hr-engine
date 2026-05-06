@@ -392,7 +392,7 @@ def game_hr_probability(
 def hot_streak_factor(short_form: dict, season_stats: dict) -> float:
     """
     Detect hot/cold form over the last SHORT_FORM_GAMES games vs season average.
-    Conservative — capped at ±8% to avoid over-reacting to small samples.
+    Capped at ±12%: a 3× hot rate yields ~7% boost; true ice-cold streaks reach -11%.
     """
     short_pa = int(short_form.get("plateAppearances", 0))
     short_hr = int(short_form.get("homeRuns", 0))
@@ -407,9 +407,9 @@ def hot_streak_factor(short_form: dict, season_stats: dict) -> float:
 
     short_rate = short_hr / short_pa
     relative   = short_rate / season_rate
-    # tanh softens extreme ratios; max ±8% adjustment
-    factor = 1.0 + 0.08 * math.tanh(math.log(max(relative, 0.05)) / 1.5)
-    return max(0.93, min(1.08, factor))
+    # tanh softens extreme ratios; expanded from ±8% — prior ceiling left hot streaks underweighted
+    factor = 1.0 + 0.12 * math.tanh(math.log(max(relative, 0.05)) / 1.5)
+    return max(0.89, min(1.12, factor))
 
 
 def confidence_score(
