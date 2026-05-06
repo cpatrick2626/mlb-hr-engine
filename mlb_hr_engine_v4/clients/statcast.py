@@ -488,7 +488,7 @@ def _parse_statcast_csv(raw: str, year: int = None, player_ids: frozenset[int] =
             barrel_bip  = _f(row, "brl_percent",      div=100.0)
             ev          = _f(row, "avg_hit_speed",     "exit_velocity_avg")
             hard_hit    = _f(row, "ev95percent",       "hard_hit_percent", div=100.0)
-            avg_la      = _f(row, "avg_launch_angle",  "launch_angle_avg", allow_negative=True)
+            avg_la      = _f(row, "avg_hit_angle", "avg_launch_angle", "launch_angle_avg", allow_negative=True)
             sweet_spot  = _f(row, "sweet_spot_percent","anglesweetspotpercent",
                               "sweet_spot_pct",         div=100.0)
             xslg        = _f(row, "xslg", "expected_slg", "xSLG")
