@@ -119,7 +119,7 @@ def statcast_blended_rate(
     # Only applies to "blended" players (curr_pa < MIN_CURRENT_YEAR_PA=50) — "current"
     # players by definition have >= 50 PA so 0 < pa < 50 is never true for them.
     # "prior" is a full prior season and earns full base weight.
-    if statcast_source == "blended" and 0 < statcast_pa < 50:
+    if statcast_source == "blended" and 0 < statcast_pa < config.MIN_CURRENT_YEAR_PA:
         pa_weight *= 0.50
 
     suppression_signal = max(0.0, 1.0 - statcast_power_mult)
@@ -367,7 +367,7 @@ def fly_ball_adjusted_park_factor(park_factor: float, statcast_fb_pct: float = N
     return max(0.70, min(1.45, adjusted))
 
 
-def park_factor(home_team: str, batter_is_home: bool) -> float:
+def park_factor(home_team: str) -> float:
     return get_park(home_team).get("hr_factor", 1.0)
 
 

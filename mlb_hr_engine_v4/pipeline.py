@@ -82,7 +82,7 @@ def _build_player_profile(
     k_fac      = prob.batter_k_suppressor(season_stats)
 
     exp_pa    = prob.expected_pa(lineup_spot)
-    pk_factor = prob.park_factor(home_team, team == home_team)
+    pk_factor = prob.park_factor(home_team)
     pk_factor = prob.fly_ball_adjusted_park_factor(pk_factor, sc_stats.get("fb_pct"))
 
     pitcher_id   = pitcher.get("id")
