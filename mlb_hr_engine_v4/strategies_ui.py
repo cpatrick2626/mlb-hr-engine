@@ -162,7 +162,7 @@ def tab_advanced_strategies(data: dict, parlays_callback=None):
                 )
 
             _cache_key = tuple(p.get("player_name", "") for p in all_players)
-            corr_parlays = _cached_corr_parlays(_cache_key)
+            corr_parlays = _diverse_top(_cached_corr_parlays(_cache_key))
 
             if corr_parlays:
                 for i, parlay in enumerate(corr_parlays[:5], 1):
@@ -206,7 +206,15 @@ def tab_advanced_strategies(data: dict, parlays_callback=None):
                 )
 
             _stack_key = tuple(p.get("player_name", "") for p in all_players)
-            stacks = _cached_stacks(_stack_key)
+            _raw_stacks = _cached_stacks(_stack_key)
+            # Deduplicate: each player in at most one displayed stack
+            _used_in_stack: set = set()
+            stacks = []
+            for _s in (_raw_stacks or []):
+                _snames = _s.get("players", [])
+                if not any(n in _used_in_stack for n in _snames):
+                    stacks.append(_s)
+                    _used_in_stack.update(_snames)
 
             if stacks:
                 all_stack_teams = sorted({s["team"] for s in stacks})
