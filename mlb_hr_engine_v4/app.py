@@ -4128,6 +4128,43 @@ def main():
 
         st.divider()
 
+        # ── Push Notifications ────────────────────────────────────────────────
+        with st.expander("🔔 Push Notifications (ntfy.sh)"):
+            try:
+                from tracking import notify as _notify
+                import os as _notify_os
+                _cur_topic = _notify_os.getenv("NTFY_TOPIC", "").strip()
+                st.markdown(
+                    "**Setup:** Install the free [ntfy app](https://ntfy.sh) on your phone, "
+                    "enter your topic below, then subscribe to it in the app. "
+                    "You'll get a notification for every HR and a daily summary when you settle results."
+                )
+                _new_topic = st.text_input(
+                    "ntfy Topic",
+                    value=st.session_state.get("ntfy_topic", _cur_topic),
+                    placeholder="e.g. mlb-hr-my-secret-topic",
+                    help="Pick something hard to guess — anyone who knows it can subscribe.",
+                )
+                if _new_topic != st.session_state.get("ntfy_topic", _cur_topic):
+                    st.session_state["ntfy_topic"] = _new_topic
+                    _notify_os.environ["NTFY_TOPIC"] = _new_topic
+
+                _topic_live = st.session_state.get("ntfy_topic", _cur_topic)
+                if _topic_live:
+                    st.success(f"Notifications active — topic: `{_topic_live}`")
+                    if st.button("Send test notification", key="ntfy_test"):
+                        ok = _notify.send_hr_hit("Test Player", "MLB", "+600", 60.0, "test")
+                        if ok:
+                            st.success("Test sent! Check your phone.")
+                        else:
+                            st.error("Failed — check your topic name and internet connection.")
+                else:
+                    st.info("Enter a topic to enable notifications.")
+            except Exception as _ne:
+                st.error(f"Notify error: {_ne}")
+
+        st.divider()
+
         with st.expander("📱 Add to Home Screen"):
             st.markdown("""
 **iPhone (Safari)**

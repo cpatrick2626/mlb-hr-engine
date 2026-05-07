@@ -193,6 +193,8 @@ def _settle_date(date_str: str) -> dict:
 
     settled = 0
     result_rows = []
+    hr_hits: list[dict] = []   # collect HRs for notifications
+
     for pick in pending:
         name     = pick["player_name"]
         hit_hr   = outcomes.get(name)
@@ -207,19 +209,34 @@ def _settle_date(date_str: str) -> dict:
         if hit_hr is None:
             continue
 
+        pl = _compute_pl(bet, odds, hit_hr)
         result_rows.append({
             **pick,
             "hr_result":   1 if hit_hr else 0,
-            "profit_loss": _compute_pl(bet, odds, hit_hr),
+            "profit_loss": pl,
             "notes":       "",
         })
         settled += 1
+        if hit_hr:
+            hr_hits.append({"name": name, "team": pick.get("team", ""), "odds": odds_raw, "pl": pl})
 
     if result_rows:
         if _sheets.available():
             _sheets.append_rows("results", RESULTS_FIELDS, result_rows)
         else:
             _upsert_results(result_rows)
+
+    # Push notifications
+    try:
+        from tracking import notify as _notify
+        if _notify.enabled() and result_rows:
+            for h in hr_hits:
+                _notify.send_hr_hit(h["name"], h["team"], h["odds"], h["pl"], date_str)
+            misses  = settled - len(hr_hits)
+            net_pl  = sum(r["profit_loss"] for r in result_rows)
+            _notify.send_settlement_summary(date_str, len(hr_hits), misses, net_pl)
+    except Exception:
+        pass
 
     # Propagate settled outcomes to all sub-trackers
     if outcomes:
