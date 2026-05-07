@@ -2665,18 +2665,34 @@ def tab_jig(data: dict):
     def _slg_label(p):
         return "xSLG" if _pf(p.get("xslg"), 0.0) > 0.0 else "SLG"
 
-    def _jig_score(p):
-        slg, iso, hh, brl, la, pull, pit = _jig_metrics(p)
-        def _n(val, thr, scale):
-            return min(max((val - thr) / scale + 0.5, 0.0), 1.0)
-        s = (_n(slg,  slg_min,  0.15) + _n(iso, iso_min, 0.12) +
-             _n(hh,   hh_min,   12.0) + _n(brl, brl_min, 6.0) +
-             _n(la,   la_min,   10.0) + _n(pull, pull_min, 8.0) +
-             _n(pit,  pit_min,  0.15)) / 7.0
-        return round(s * 100, 1)
+    def _n(val, thr, scale):
+        return min(max((val - thr) / scale + 0.5, 0.0), 1.0)
 
-    def _passes_all(p):
-        return _jig_score(p) >= score_min
+    def _jig_ai_score(p):
+        # AI-optimized: barrel-first weighting based on HR-prediction importance
+        slg, iso, hh, brl, la, pull, pit = _jig_metrics(p)
+        return round((
+            _n(brl,  brl_min,  6.0)  * 0.25 +
+            _n(slg,  slg_min,  0.15) * 0.20 +
+            _n(pit,  pit_min,  0.15) * 0.20 +
+            _n(hh,   hh_min,   12.0) * 0.15 +
+            _n(iso,  iso_min,  0.12) * 0.10 +
+            _n(pull, pull_min, 8.0)  * 0.07 +
+            _n(la,   la_min,   10.0) * 0.03
+        ) * 100, 1)
+
+    def _jig_way_score(p):
+        # The JIG Way: SLG → Pitcher → Pull% → ISO → Barrel% → Hard Hit → Launch
+        slg, iso, hh, brl, la, pull, pit = _jig_metrics(p)
+        return round((
+            _n(slg,  slg_min,  0.15) * 0.25 +
+            _n(pit,  pit_min,  0.15) * 0.20 +
+            _n(pull, pull_min, 8.0)  * 0.15 +
+            _n(iso,  iso_min,  0.12) * 0.15 +
+            _n(brl,  brl_min,  6.0)  * 0.10 +
+            _n(hh,   hh_min,   12.0) * 0.10 +
+            _n(la,   la_min,   10.0) * 0.05
+        ) * 100, 1)
 
     def _badge(val, thr, fmt):
         c = "#4ade80" if val >= thr else "#f87171"
@@ -2708,7 +2724,7 @@ def tab_jig(data: dict):
             f"<div style='font-size:12px; color:#888; margin:2px 0 4px;'>"
             f"{team} vs {opp} &nbsp;·&nbsp; vs {pit_n}</div>"
             f"{status_row}"
-            f"<div style='display:grid; grid-template-columns:repeat(3,1fr); gap:6px; font-size:11px;'>"
+            f"<div style='display:grid; grid-template-columns:repeat(4,1fr); gap:6px; font-size:11px;'>"
             f"<div style='background:#111128; border-radius:5px; padding:5px 8px;'>"
             f"<div style='color:#666;'>{_slg_label(p)}</div>{_badge(slg, slg_min, f'{slg:.3f}')}</div>"
             f"<div style='background:#111128; border-radius:5px; padding:5px 8px;'>"
@@ -2741,104 +2757,116 @@ def tab_jig(data: dict):
         with _fc:
             st.link_button("📲 Open on FanDuel", _fanduel_url(name), use_container_width=True)
 
-    scored    = sorted(
-        [{"player": p, "jig": _jig_score(p), "passes": _passes_all(p)} for p in all_players],
-        key=lambda x: x["jig"], reverse=True,
-    )
-    qualified = [x for x in scored if x["passes"]]
-    prime     = [x for x in qualified
-                 if x["player"].get("best_american") and x["player"].get("ev_pct", 0) > 0]
+    def _render_jig_views(score_fn, key_sfx):
+        _entries = []
+        for p in all_players:
+            s = score_fn(p)
+            _entries.append({"player": p, "jig": s, "passes": s >= score_min})
+        scored    = sorted(_entries, key=lambda x: x["jig"], reverse=True)
+        qualified = [x for x in scored if x["passes"]]
+        prime     = [x for x in qualified
+                     if x["player"].get("best_american") and x["player"].get("ev_pct", 0) > 0]
 
-    with st.expander(f"🔍 Debug — {len(all_players)} players in pool, {len(qualified)} qualified", expanded=len(qualified)==0):
-        st.write(f"**Gate:** JIG ≥ {score_min} | **Scoring targets:** slg {slg_min} iso {iso_min} hh {hh_min} brl {brl_min} la {la_min} pull {pull_min} pit {pit_min}")
-        if all_players:
+        with st.expander(f"🔍 Debug — {len(all_players)} players, {len(qualified)} qualified", expanded=len(qualified)==0):
+            st.write(f"**Gate:** JIG ≥ {score_min} | slg {slg_min} iso {iso_min} hh {hh_min} brl {brl_min} la {la_min} pull {pull_min} pit {pit_min}")
+            if all_players:
+                import pandas as pd
+                dbg = []
+                for entry in scored[:20]:
+                    p = entry["player"]
+                    slg, iso, hh, brl, la, pull, pit = _jig_metrics(p)
+                    dbg.append({
+                        "Name": p.get("player_name","")[:18], "JIG": entry["jig"],
+                        "passes": entry["passes"],
+                        "slg→": round(slg,3), "iso→": round(iso,3),
+                        "hh→": round(hh,1),   "brl→": round(brl,1),
+                        "la→": round(la,1),   "pull→": round(pull,1),
+                        "pit→": round(pit,3),
+                    })
+                st.dataframe(pd.DataFrame(dbg), hide_index=True, use_container_width=True)
+            else:
+                st.warning("all_players is EMPTY — pipeline returned no players.")
+
+        _jq, _jp, _ja, _jpr = st.tabs([
+            "📱 Quick Picks",
+            f"⚡ Picks ({len(qualified)})",
+            f"📊 All ({len(scored)})",
+            f"⭐ Prime ({len(prime)})",
+        ])
+
+        with _jq:
+            if not qualified:
+                st.info("No players meet all JIG thresholds — lower thresholds in the expander above.")
+            else:
+                for entry in qualified[:3]:
+                    _jig_card(entry, key_prefix=f"jq_{key_sfx}")
+                if len(qualified) > 3:
+                    st.caption(f"Top 3 of {len(qualified)} qualified. See Picks tab for all.")
+
+        with _jp:
+            if not qualified:
+                st.info("No players meet all JIG thresholds — lower thresholds in the expander above.")
+            else:
+                st.caption(f"{len(qualified)} players pass all JIG criteria — ranked by JIG score.")
+                for entry in qualified:
+                    _jig_card(entry, key_prefix=f"jp_{key_sfx}")
+
+        with _ja:
             import pandas as pd
-            dbg = []
-            for entry in scored[:20]:
+            _ja_ver = st.session_state.get(f"_jig_all_ver_{key_sfx}", 0)
+            rows = []
+            for entry in scored:
                 p = entry["player"]
                 slg, iso, hh, brl, la, pull, pit = _jig_metrics(p)
-                dbg.append({
-                    "Name":   p.get("player_name","")[:18],
-                    "JIG":    entry["jig"],
-                    "passes": entry["passes"],
-                    "slg→":   round(slg,3), "iso→": round(iso,3),
-                    "hh→":    round(hh,1),  "brl→": round(brl,1),
-                    "la→":    round(la,1),  "pull→": round(pull,1),
-                    "pit→":   round(pit,3),
+                rows.append({
+                    "Player":   p.get("player_name", ""),
+                    "Team":     p.get("team", ""),
+                    "JIG":      entry["jig"],
+                    "Passes":   "✅" if entry["passes"] else "",
+                    "xSLG":     f"{slg:.3f}",
+                    "ISO":      f"{iso:.3f}" if iso else "--",
+                    "Hard Hit": f"{hh:.1f}%" if hh else "--",
+                    "Barrel":   f"{brl:.1f}%" if brl else "--",
+                    "Launch°":  f"{la:.1f}" if la else "--",
+                    "Pull%":    f"{pull:.1f}%" if pull else "--",
+                    "Pit Fac":  f"{pit:.3f}",
+                    "Odds":     _fmt_american(p.get("best_american")),
+                    "EV%":      f"{p.get('ev_pct',0):+.1f}%",
+                    "Model%":   f"{p.get('model_prob',0)*100:.1f}%",
                 })
-            st.dataframe(pd.DataFrame(dbg), hide_index=True, use_container_width=True)
-        else:
-            st.warning("all_players is EMPTY — pipeline returned no players.")
+            if rows:
+                _ja_sel = st.dataframe(
+                    pd.DataFrame(rows), hide_index=True, use_container_width=True,
+                    on_select="rerun", selection_mode="single-row",
+                    key=f"jig_all_df_{key_sfx}_{_ja_ver}",
+                    column_config={
+                        "JIG": st.column_config.ProgressColumn("JIG", min_value=0, max_value=100, format="%.0f"),
+                    },
+                )
+                _ja_rows = getattr(getattr(_ja_sel, "selection", None), "rows", [])
+                if _ja_rows and 0 <= _ja_rows[0] < len(scored):
+                    st.session_state[f"_jig_all_ver_{key_sfx}"] = _ja_ver + 1
+                    st.session_state["show_modal"] = scored[_ja_rows[0]]["player"]
+                    st.rerun()
+                st.caption("💡 Click any row to view full player details.")
 
-    _jq, _jp, _ja, _jpr = st.tabs([
-        "📱 Quick Picks",
-        f"⚡ Picks ({len(qualified)})",
-        f"📊 All ({len(scored)})",
-        f"⭐ Prime ({len(prime)})",
-    ])
+        with _jpr:
+            if not prime:
+                st.info("No prime JIG plays — need qualified players with positive-EV odds.")
+            else:
+                st.caption(f"{len(prime)} players pass all JIG criteria with positive EV.")
+                for entry in prime:
+                    _jig_card(entry, key_prefix=f"jpr_{key_sfx}")
 
-    with _jq:
-        if not qualified:
-            st.info("No players meet all JIG thresholds — lower thresholds in the expander above.")
-        else:
-            for entry in qualified[:3]:
-                _jig_card(entry, key_prefix="jq")
-            if len(qualified) > 3:
-                st.caption(f"Top 3 of {len(qualified)} qualified. See Picks tab for all.")
+    _outer_ai, _outer_way = st.tabs(["⚡ JIG AI", "🎯 The JIG Way"])
 
-    with _jp:
-        if not qualified:
-            st.info("No players meet all JIG thresholds — lower thresholds in the expander above.")
-        else:
-            st.caption(f"{len(qualified)} players pass all 6 JIG criteria — ranked by JIG score.")
-            for entry in qualified:
-                _jig_card(entry, key_prefix="jp")
+    with _outer_ai:
+        st.caption("Barrel (25%) · xSLG (20%) · Pitcher (20%) · Hard Hit (15%) · ISO (10%) · Pull% (7%) · Launch (3%)")
+        _render_jig_views(_jig_ai_score, "ai")
 
-    with _ja:
-        import pandas as pd
-        _ja_ver = st.session_state.get("_jig_all_ver", 0)
-        rows = []
-        for entry in scored:
-            p = entry["player"]
-            slg, iso, hh, brl, la, pit = _jig_metrics(p)
-            rows.append({
-                "Player":   p.get("player_name", ""),
-                "Team":     p.get("team", ""),
-                "JIG":      entry["jig"],
-                "Passes":   "✅" if entry["passes"] else "",
-                "xSLG":     f"{slg:.3f}",
-                "ISO":      f"{iso:.3f}" if iso else "--",
-                "Hard Hit": f"{hh:.1f}%" if hh else "--",
-                "Barrel":   f"{brl:.1f}%" if brl else "--",
-                "Launch°":  f"{la:.1f}" if la else "--",
-                "Pit Fac":  f"{pit:.3f}",
-                "Odds":     _fmt_american(p.get("best_american")),
-                "EV%":      f"{p.get('ev_pct',0):+.1f}%",
-                "Model%":   f"{p.get('model_prob',0)*100:.1f}%",
-            })
-        if rows:
-            _ja_sel = st.dataframe(
-                pd.DataFrame(rows), hide_index=True, use_container_width=True,
-                on_select="rerun", selection_mode="single-row",
-                key=f"jig_all_df_{_ja_ver}",
-                column_config={
-                    "JIG": st.column_config.ProgressColumn("JIG", min_value=0, max_value=100, format="%.0f"),
-                },
-            )
-            _ja_rows = getattr(getattr(_ja_sel, "selection", None), "rows", [])
-            if _ja_rows and 0 <= _ja_rows[0] < len(scored):
-                st.session_state["_jig_all_ver"] = _ja_ver + 1
-                st.session_state["show_modal"] = scored[_ja_rows[0]]["player"]
-                st.rerun()
-            st.caption("💡 Click any row to view full player details.")
-
-    with _jpr:
-        if not prime:
-            st.info("No prime JIG plays — need qualified players with positive-EV odds.")
-        else:
-            st.caption(f"{len(prime)} players pass all JIG criteria with positive EV.")
-            for entry in prime:
-                _jig_card(entry, key_prefix="jpr")
+    with _outer_way:
+        st.caption("xSLG (25%) · Pitcher (20%) · Pull% (15%) · ISO (15%) · Barrel (10%) · Hard Hit (10%) · Launch (5%)")
+        _render_jig_views(_jig_way_score, "way")
 
 def tab_parlays(data: dict):
     ranked          = data.get("ranked", [])
