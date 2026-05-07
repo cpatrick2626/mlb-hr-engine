@@ -166,8 +166,10 @@ def batter_k_suppressor(season_stats: dict) -> float:
     if pa < 50:
         return 1.0
     k_pct = k / pa
-    factor = 1.0 - max(0.0, 0.60 * (k_pct - 0.225))
-    return round(max(0.85, min(1.0, factor)), 3)
+    # Reduced 0.60→0.45: Statcast barrel%/exit velo already captures much of the
+    # contact-quality impact of high K rates; 0.60 was partially double-counting.
+    factor = 1.0 - max(0.0, 0.45 * (k_pct - 0.225))
+    return round(max(0.87, min(1.0, factor)), 3)
 
 
 def pitcher_recent_factor(recent_pitcher_stats: dict) -> float:
@@ -436,7 +438,14 @@ def confidence_score(
     # xSLG: >0.500 (~1 SD above league avg 0.407) captures elite power ceiling independently.
     # Pitcher: 1.25× league avg HR/9 (~1.36 at 2026 avg of 1.09) captures notably hittable tier.
     barrel_bonus  = 5.0 if barrel_rate > config.LEAGUE_AVG_BARREL_RATE * 2.0 else 0.0
-    xslg_bonus    = 3.0 if (xslg is not None and xslg > 0.500)               else 0.0
+    if xslg is None:
+        xslg_bonus = 0.0
+    elif xslg > 0.500:
+        xslg_bonus = 3.0
+    elif xslg < 0.350:
+        xslg_bonus = -2.0   # penalize well-below-avg contact quality symmetrically
+    else:
+        xslg_bonus = 0.0
     pitcher_bonus = 4.0 if pitcher_hr9 > config.LEAGUE_AVG_HR9 * 1.25        else 0.0
 
     edge = abs(model_prob - market_prob)

@@ -2668,9 +2668,9 @@ def tab_jig(data: dict):
     def _n(val, thr, scale):
         return min(max((val - thr) / scale + 0.5, 0.0), 1.0)
 
-    def _jig_ai_score(p):
+    def _jig_ai_score(metrics):
         # AI-optimized: barrel-first weighting based on HR-prediction importance
-        slg, iso, hh, brl, la, pull, pit = _jig_metrics(p)
+        slg, iso, hh, brl, la, pull, pit = metrics
         return round((
             _n(brl,  brl_min,  6.0)  * 0.25 +
             _n(slg,  slg_min,  0.15) * 0.20 +
@@ -2681,9 +2681,9 @@ def tab_jig(data: dict):
             _n(la,   la_min,   10.0) * 0.03
         ) * 100, 1)
 
-    def _jig_way_score(p):
+    def _jig_way_score(metrics):
         # The JIG Way: SLG → Pitcher → Pull% → ISO → Barrel% → Hard Hit → Launch
-        slg, iso, hh, brl, la, pull, pit = _jig_metrics(p)
+        slg, iso, hh, brl, la, pull, pit = metrics
         return round((
             _n(slg,  slg_min,  0.15) * 0.25 +
             _n(pit,  pit_min,  0.15) * 0.20 +
@@ -2701,7 +2701,7 @@ def tab_jig(data: dict):
     def _jig_card(entry, key_prefix="jig"):
         p   = entry["player"]
         jig = entry["jig"]
-        slg, iso, hh, brl, la, pull, pit = _jig_metrics(p)
+        slg, iso, hh, brl, la, pull, pit = entry["metrics"]
         name  = p.get("player_name", "Unknown")
         team  = p.get("team", "")
         opp   = p.get("opponent", "")
@@ -2760,8 +2760,9 @@ def tab_jig(data: dict):
     def _render_jig_views(score_fn, key_sfx):
         _entries = []
         for p in all_players:
-            s = score_fn(p)
-            _entries.append({"player": p, "jig": s, "passes": s >= score_min})
+            m = _jig_metrics(p)   # compute once; reused in card, debug, and All tab
+            s = score_fn(m)
+            _entries.append({"player": p, "jig": s, "metrics": m, "passes": s >= score_min})
         scored    = sorted(_entries, key=lambda x: x["jig"], reverse=True)
         qualified = [x for x in scored if x["passes"]]
         prime     = [x for x in qualified
@@ -2774,7 +2775,7 @@ def tab_jig(data: dict):
                 dbg = []
                 for entry in scored[:20]:
                     p = entry["player"]
-                    slg, iso, hh, brl, la, pull, pit = _jig_metrics(p)
+                    slg, iso, hh, brl, la, pull, pit = entry["metrics"]
                     dbg.append({
                         "Name": p.get("player_name","")[:18], "JIG": entry["jig"],
                         "passes": entry["passes"],
@@ -2817,7 +2818,7 @@ def tab_jig(data: dict):
             rows = []
             for entry in scored:
                 p = entry["player"]
-                slg, iso, hh, brl, la, pull, pit = _jig_metrics(p)
+                slg, iso, hh, brl, la, pull, pit = entry["metrics"]
                 rows.append({
                     "Player":   p.get("player_name", ""),
                     "Team":     p.get("team", ""),
