@@ -13,6 +13,24 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 
+
+def _pf(val, default=0.0):
+    """Parse a percent-or-float display value to float (strips '%', handles '--'/None)."""
+    if val is None:
+        return default
+    try:
+        v = str(val).replace("%", "").strip()
+        return float(v) if v and v != "--" else default
+    except ValueError:
+        return default
+
+
+def _badge(val, thr, fmt):
+    """Green span if val >= thr, red otherwise."""
+    c = "#4ade80" if val >= thr else "#f87171"
+    return f"<span style='color:{c}; font-weight:700;'>{fmt}</span>"
+
+
 st.set_page_config(
     page_title="Codex HR Engine",
     page_icon="⚾",
@@ -2198,15 +2216,6 @@ def tab_hits(data: dict):
             kf_min  = st.slider("Min K-Factor",      0.75,  1.15,  0.90,  0.01,  key="hit_kf")
             pa_min  = st.slider("Min Exp PA",         2.0,   5.0,   3.0,  0.1,   key="hit_pa")
 
-    def _pf(val, default=0.0):
-        if val is None:
-            return default
-        try:
-            v = str(val).replace("%", "").strip()
-            return float(v) if v and v != "--" else default
-        except ValueError:
-            return default
-
     def _hit_metrics(p):
         xba = _pf(p.get("xba"), 0.0)
         ld  = _pf(p.get("ld_pct"))
@@ -2233,10 +2242,6 @@ def tab_hits(data: dict):
         xba, ld, ss, hh, kf, pa = _hit_metrics(p)
         return (xba >= xba_min and ld >= ld_min and ss >= ss_min
                 and hh >= hh_min and kf >= kf_min and pa >= pa_min)
-
-    def _badge(val, thr, fmt):
-        c = "#4ade80" if val >= thr else "#f87171"
-        return f"<span style='color:{c}; font-weight:700;'>{fmt}</span>"
 
     def _hit_card(entry, key_prefix="hit"):
         p    = entry["player"]
@@ -2330,8 +2335,6 @@ def tab_hits(data: dict):
 
     # ── Beat The Streak tab ──────────────────────────────────────────────────
     with _hbts:
-        import pandas as pd
-
         # Streak tracker
         if "bts_streak" not in st.session_state:
             st.session_state["bts_streak"] = 0
@@ -2563,7 +2566,6 @@ def tab_hits(data: dict):
                 _hit_card(entry, key_prefix="hp")
 
     with _ha:
-        import pandas as pd
         _ha_ver = st.session_state.get("_hit_all_ver", 0)
         rows = []
         for entry in scored:
@@ -2641,15 +2643,6 @@ def tab_jig(data: dict):
             pit_min    = st.slider("Min Pitcher Factor", 0.70, 1.30, 0.95, 0.01, key="jig_pit")
         score_min  = st.slider("Min JIG Score (Picks gate)", 0, 100, 40, 1, key="jig_score")
 
-    def _pf(val, default=0.0):
-        if val is None:
-            return default
-        try:
-            v = str(val).replace("%", "").strip()
-            return float(v) if v and v != "--" else default
-        except ValueError:
-            return default
-
     def _jig_metrics(p):
         # Prefer xSLG (Statcast expected); fall back to actual season SLG
         xslg_v = _pf(p.get("xslg"), 0.0)
@@ -2694,10 +2687,6 @@ def tab_jig(data: dict):
             _n(la,   la_min,   10.0) * 0.05
         ) * 100, 1)
 
-    def _badge(val, thr, fmt):
-        c = "#4ade80" if val >= thr else "#f87171"
-        return f"<span style='color:{c}; font-weight:700;'>{fmt}</span>"
-
     def _jig_card(entry, key_prefix="jig"):
         p   = entry["player"]
         jig = entry["jig"]
@@ -2711,7 +2700,7 @@ def tab_jig(data: dict):
         ev_c  = "#4ade80" if ev > 0 else "#f87171"
         jc    = "#4ade80" if jig >= 60 else "#f59e0b" if jig >= 40 else "#f87171"
         status_html, is_live = _game_status_badge(p)
-        border = "#f87171" if is_live else "#2a2a50"
+        border = "#f87171" if is_live else "#1e3a5f"
         status_row = (f"<div style='font-size:11px; margin:2px 0 8px;'>{status_html}</div>"
                       if status_html else "")
         st.markdown(
@@ -2771,7 +2760,6 @@ def tab_jig(data: dict):
         with st.expander(f"🔍 Debug — {len(all_players)} players, {len(qualified)} qualified", expanded=len(qualified)==0):
             st.write(f"**Gate:** JIG ≥ {score_min} | slg {slg_min} iso {iso_min} hh {hh_min} brl {brl_min} la {la_min} pull {pull_min} pit {pit_min}")
             if all_players:
-                import pandas as pd
                 dbg = []
                 for entry in scored[:20]:
                     p = entry["player"]
@@ -2813,7 +2801,6 @@ def tab_jig(data: dict):
                     _jig_card(entry, key_prefix=f"jp_{key_sfx}")
 
         with _ja:
-            import pandas as pd
             _ja_ver = st.session_state.get(f"_jig_all_ver_{key_sfx}", 0)
             rows = []
             for entry in scored:
@@ -3359,7 +3346,7 @@ def tab_performance():
     # ── Manual Result Entry ───────────────────────────────────────────────────
     # Always uses unfiltered data — pending picks need resolution regardless of window
     try:
-        from datetime import date as _today_cls, timedelta as _td
+        from datetime import date as _today_cls
         _all_log     = pnl_tracker.get_picks_log()
         _all_results = {
             r.get("player_name","") + "|" + r.get("date",""): r
