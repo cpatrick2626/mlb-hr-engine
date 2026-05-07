@@ -207,6 +207,8 @@ st.markdown("""
 }
 .ev-pos { background: #062014; border: 1px solid #2ea043; color: #4ade80; }
 .ev-neg { background: #200808; border: 1px solid #cc2222; color: #f87171; }
+.stat-box { background: #111128; border-radius: 5px; padding: 5px 8px; font-size: 11px; }
+.stat-box-green { background: #111828; border-radius: 5px; padding: 5px 8px; font-size: 11px; }
 
 /* â"€â"€ Section headers â"€â"€ */
 .section-header {
@@ -245,7 +247,7 @@ st.markdown("""
     box-shadow: 0 4px 18px rgba(0,0,0,0.5);
 }
 [data-testid="stMetricLabel"] {
-    color: #777777 !important; font-size: 10px !important;
+    color: #666666 !important; font-size: 10px !important;
     letter-spacing: 1.5px; text-transform: uppercase;
 }
 [data-testid="stMetricValue"] {
@@ -716,10 +718,8 @@ def _show_player_modal(player: dict):
     c3.metric("EV%",      f"{player.get('ev_pct', 0):+.1f}%")
     c4.metric("Edge%",    f"{player.get('edge_pct', 0):+.1f}%")
 
-    st.divider()
-
     # ── Factor breakdown ──────────────────────────────────────────────────
-    st.caption("**Game-day factors**")
+    st.caption("Game-day factors")
     f1, f2, f3, f4, f5 = st.columns(5)
     f1.metric("Park",    f"{player.get('park_factor',    1.0):.3f}×")
     f2.metric("Pitcher", f"{player.get('pitcher_factor', 1.0):.3f}×")
@@ -753,8 +753,6 @@ def _show_player_modal(player: dict):
                 unsafe_allow_html=True,
             )
 
-    st.divider()
-
     # ── Statcast power profile ────────────────────────────────────────────
     def _pct(val, mult=100, suffix="%", dec=1):
         try:
@@ -768,7 +766,7 @@ def _show_player_modal(player: dict):
         except (TypeError, ValueError):
             return "--"
 
-    st.caption(f"**Statcast power profile** — source: *{sc_src}*")
+    st.caption(f"Statcast power profile — source: {sc_src}")
     s1, s2, s3, s4 = st.columns(4)
     s1.metric("Barrel%",    _pct(player.get("barrel_pct")))
     s2.metric("Exit Velo",  _pct(player.get("exit_velo"), mult=1, suffix="", dec=1))
@@ -781,10 +779,7 @@ def _show_player_modal(player: dict):
     s7.metric("xSLG",       _pct(player.get("xslg"), mult=1, suffix="", dec=3))
     s8.metric("xBA",        _pct(player.get("xba"),  mult=1, suffix="", dec=3))
 
-    st.divider()
-
     # ── Season stats ──────────────────────────────────────────────────────
-    st.caption("**Season / recent stats**")
     t1, t2, t3, t4 = st.columns(4)
     t1.metric("Season PA",  player.get("season_pa", "--"))
     t2.metric("Season HR",  player.get("season_hr", "--"))
@@ -794,8 +789,7 @@ def _show_player_modal(player: dict):
     # ── Odds by book ──────────────────────────────────────────────────────
     _pbk = player.get("prices_by_book", {})
     if _pbk:
-        st.divider()
-        st.caption("**Odds by sportsbook** — tap best price to open FanDuel")
+        st.caption("Odds by sportsbook — ★ = best price")
         _BOOK_ORDER = ["fanduel", "draftkings", "betmgm", "caesars",
                        "pointsbet", "betrivers", "bet365", "bovada"]
         _best_odds_val = player.get("best_american")
@@ -838,7 +832,6 @@ def _show_player_modal(player: dict):
     _score      = player.get("score")
     if any(x is not None for x in [_bet_size, _confidence, _score]):
         st.divider()
-        st.caption("**Engine recommendation**")
         _eng_cols = st.columns(3)
         if _bet_size is not None:
             try:
@@ -1529,11 +1522,11 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
     with sub1:
         roster_confirmed = [p for p in ranked if p.get("lineup_spot") is not None]
         _quick_tab, _timeline_tab, _slate_tab, _confirmed_tab, _movement_tab, _odds_cmp_tab = st.tabs([
-            "📱 Quick",
-            "⏰ Timeline",
-            f"📋 Slate ({len(ranked)})",
+            "📱 Quick View",
+            "⏰ By Game Time",
+            f"📊 All Picks ({len(ranked)})",
             f"✅ Confirmed ({len(roster_confirmed)})",
-            "📈 Movement",
+            "📊 Line Movement",
             "📊 Odds",
         ])
 
@@ -1801,7 +1794,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                     st.caption(
                         "Line movement since first load today. "
                         "▲ shortened = market gaining confidence (sharp agreement). "
-                        "▼ lengthened = market fading. Click any row to view full player details."
+                        "▼ lengthened = market fading."
                     )
                     # Build a name→player lookup from all_players for modal support
                     _mv_player_map = {p.get("player_name", ""): p for p in all_players}
@@ -1855,7 +1848,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                     for bk in all_books:
                         row[bk.title()] = _fmt_american(pbk.get(bk)) if bk in pbk else "--"
                     cmp_rows.append(row)
-                st.caption("Best odds per sportsbook for each qualified pick. Click any row to view full player details & add to FD Slip.")
+                st.caption("Best odds per sportsbook for each qualified pick.")
                 _oc_tver = st.session_state.get("_table_ver", 0)
                 _oc_sel = st.dataframe(
                     pd.DataFrame(cmp_rows), hide_index=True, width="stretch",
@@ -2121,7 +2114,6 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                 st.session_state["_table_ver"] = _mtver + 1
                 st.session_state["show_modal"] = players[_mrows[0]]
                 st.rerun()
-            st.caption("💡 Click any row to view full player details & add to FD Slip.")
 
         prime = [p for p in all_by_model if p.get("model_prob", 0) >= PRIME_FLOOR][:60]
         watch = [p for p in all_by_model if p.get("model_prob", 0) < PRIME_FLOOR][:20]
@@ -2270,17 +2262,17 @@ def tab_hits(data: dict):
             f"{team} vs {opp} &nbsp;·&nbsp; vs {pit_n}</div>"
             f"{status_row}"
             f"<div style='display:grid; grid-template-columns:repeat(3,1fr); gap:6px; font-size:11px;'>"
-            f"<div style='background:#111128; border-radius:5px; padding:5px 8px;'>"
+            f"<div class='stat-box'>"
             f"<div style='color:#666;'>xBA</div>{_badge(xba, xba_min, f'{xba:.3f}')}</div>"
-            f"<div style='background:#111128; border-radius:5px; padding:5px 8px;'>"
+            f"<div class='stat-box'>"
             f"<div style='color:#666;'>LD%</div>{_badge(ld, ld_min, f'{ld:.1f}%')}</div>"
-            f"<div style='background:#111128; border-radius:5px; padding:5px 8px;'>"
+            f"<div class='stat-box'>"
             f"<div style='color:#666;'>Sweet%</div>{_badge(ss, ss_min, f'{ss:.1f}%')}</div>"
-            f"<div style='background:#111128; border-radius:5px; padding:5px 8px;'>"
+            f"<div class='stat-box'>"
             f"<div style='color:#666;'>Hard Hit</div>{_badge(hh, hh_min, f'{hh:.1f}%')}</div>"
-            f"<div style='background:#111128; border-radius:5px; padding:5px 8px;'>"
+            f"<div class='stat-box'>"
             f"<div style='color:#666;'>K-Factor</div>{_badge(kf, kf_min, f'{kf:.2f}')}</div>"
-            f"<div style='background:#111128; border-radius:5px; padding:5px 8px;'>"
+            f"<div class='stat-box'>"
             f"<div style='color:#666;'>Exp PA</div>{_badge(pa, pa_min, f'{pa:.1f}')}</div>"
             f"</div>"
             + (f"<div style='margin-top:8px; font-size:12px; display:flex; gap:16px;'>"
@@ -2415,17 +2407,17 @@ def tab_hits(data: dict):
                 f"&nbsp;·&nbsp; Spot #{p1_spot}</div>"
                 f"<div style='display:grid; grid-template-columns:repeat(4,1fr); "
                 f"gap:6px; font-size:11px;'>"
-                f"<div style='background:#111828; border-radius:5px; padding:5px 8px;'>"
+                f"<div class='stat-box-green'>"
                 f"<div style='color:#555;'>xBA</div>"
                 f"<div style='color:#f0f0f0; font-weight:700;'>{p1_xba:.3f}</div></div>"
-                f"<div style='background:#111828; border-radius:5px; padding:5px 8px;'>"
+                f"<div class='stat-box-green'>"
                 f"<div style='color:#555;'>Exp PA</div>"
                 f"<div style='color:#f0f0f0; font-weight:700;'>{p1_pa:.1f}</div></div>"
-                f"<div style='background:#111828; border-radius:5px; padding:5px 8px;'>"
+                f"<div class='stat-box-green'>"
                 f"<div style='color:#555;'>Hot</div>"
                 f"<div style='color:{'#4ade80' if p1_sf >= 1.05 else '#888'}; font-weight:700;'>"
                 f"{'🔥' if p1_sf >= 1.10 else '▲' if p1_sf >= 1.05 else '—'}</div></div>"
-                f"<div style='background:#111828; border-radius:5px; padding:5px 8px;'>"
+                f"<div class='stat-box-green'>"
                 f"<div style='color:#555;'>K-Fac</div>"
                 f"<div style='color:#f0f0f0; font-weight:700;'>"
                 f"{float(p1.get('k_factor') or 1.0):.2f}</div></div>"
@@ -2470,17 +2462,17 @@ def tab_hits(data: dict):
                     f"&nbsp;·&nbsp; Spot #{p2_spot}</div>"
                     f"<div style='display:grid; grid-template-columns:repeat(4,1fr); "
                     f"gap:6px; font-size:11px;'>"
-                    f"<div style='background:#111828; border-radius:5px; padding:5px 8px;'>"
+                    f"<div class='stat-box-green'>"
                     f"<div style='color:#555;'>xBA</div>"
                     f"<div style='color:#f0f0f0; font-weight:700;'>{p2_xba:.3f}</div></div>"
-                    f"<div style='background:#111828; border-radius:5px; padding:5px 8px;'>"
+                    f"<div class='stat-box-green'>"
                     f"<div style='color:#555;'>Exp PA</div>"
                     f"<div style='color:#f0f0f0; font-weight:700;'>{p2_pa:.1f}</div></div>"
-                    f"<div style='background:#111828; border-radius:5px; padding:5px 8px;'>"
+                    f"<div class='stat-box-green'>"
                     f"<div style='color:#555;'>Hot</div>"
                     f"<div style='color:{'#4ade80' if p2_sf >= 1.05 else '#888'}; font-weight:700;'>"
                     f"{'🔥' if p2_sf >= 1.10 else '▲' if p2_sf >= 1.05 else '—'}</div></div>"
-                    f"<div style='background:#111828; border-radius:5px; padding:5px 8px;'>"
+                    f"<div class='stat-box-green'>"
                     f"<div style='color:#555;'>K-Fac</div>"
                     f"<div style='color:#f0f0f0; font-weight:700;'>"
                     f"{float(p2.get('k_factor') or 1.0):.2f}</div></div>"
@@ -2546,7 +2538,6 @@ def tab_hits(data: dict):
                 st.session_state["_bts_all_ver"] = _bts_ver + 1
                 st.session_state["show_modal"] = bts_pool[_bts_rows[0]]["player"]
                 st.rerun()
-            st.caption("💡 Click any row to view full player details.")
 
     with _hq:
         if not qualified:
@@ -2601,7 +2592,6 @@ def tab_hits(data: dict):
                 st.session_state["_hit_all_ver"] = _ha_ver + 1
                 st.session_state["show_modal"] = scored[_ha_rows[0]]["player"]
                 st.rerun()
-            st.caption("💡 Click any row to view full player details.")
 
     with _hpr:
         if not prime:
@@ -2714,19 +2704,19 @@ def tab_jig(data: dict):
             f"{team} vs {opp} &nbsp;·&nbsp; vs {pit_n}</div>"
             f"{status_row}"
             f"<div style='display:grid; grid-template-columns:repeat(4,1fr); gap:6px; font-size:11px;'>"
-            f"<div style='background:#111128; border-radius:5px; padding:5px 8px;'>"
+            f"<div class='stat-box'>"
             f"<div style='color:#666;'>{_slg_label(p)}</div>{_badge(slg, slg_min, f'{slg:.3f}')}</div>"
-            f"<div style='background:#111128; border-radius:5px; padding:5px 8px;'>"
+            f"<div class='stat-box'>"
             f"<div style='color:#666;'>ISO</div>{_badge(iso, iso_min, f'{iso:.3f}')}</div>"
-            f"<div style='background:#111128; border-radius:5px; padding:5px 8px;'>"
+            f"<div class='stat-box'>"
             f"<div style='color:#666;'>Hard Hit</div>{_badge(hh, hh_min, f'{hh:.1f}%')}</div>"
-            f"<div style='background:#111128; border-radius:5px; padding:5px 8px;'>"
+            f"<div class='stat-box'>"
             f"<div style='color:#666;'>Barrel</div>{_badge(brl, brl_min, f'{brl:.1f}%')}</div>"
-            f"<div style='background:#111128; border-radius:5px; padding:5px 8px;'>"
+            f"<div class='stat-box'>"
             f"<div style='color:#666;'>Launch°</div>{_badge(la, la_min, '--' if p.get('avg_launch_angle') in (None, '--') else f'{la:.1f}°')}</div>"
-            f"<div style='background:#111128; border-radius:5px; padding:5px 8px;'>"
+            f"<div class='stat-box'>"
             f"<div style='color:#666;'>Pull%</div>{_badge(pull, pull_min, '--' if p.get('pull_pct') in (None, '--') else f'{pull:.1f}%')}</div>"
-            f"<div style='background:#111128; border-radius:5px; padding:5px 8px;'>"
+            f"<div class='stat-box'>"
             f"<div style='color:#666;'>Pit Fac</div>{_badge(pit, pit_min, f'{pit:.3f}x')}</div>"
             f"</div>"
             + (f"<div style='margin-top:8px; font-size:12px; display:flex; gap:16px;'>"
@@ -2836,7 +2826,6 @@ def tab_jig(data: dict):
                     st.session_state[f"_jig_all_ver_{key_sfx}"] = _ja_ver + 1
                     st.session_state["show_modal"] = scored[_ja_rows[0]]["player"]
                     st.rerun()
-                st.caption("💡 Click any row to view full player details.")
 
         with _jpr:
             if not prime:
