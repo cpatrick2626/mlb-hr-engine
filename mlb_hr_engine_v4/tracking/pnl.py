@@ -221,6 +221,19 @@ def _settle_date(date_str: str) -> dict:
         else:
             _upsert_results(result_rows)
 
+    # Propagate settled outcomes to all sub-trackers
+    if outcomes:
+        try:
+            from tracking import strategy_log as _sl
+            _sl.settle_date(date_str, outcomes)
+        except Exception:
+            pass
+        try:
+            from tracking import pick_tracker as _pt
+            _pt.settle_date(date_str, outcomes)
+        except Exception:
+            pass
+
     return {"settled": settled, "not_found": len(pending) - settled, "date": date_str}
 
 

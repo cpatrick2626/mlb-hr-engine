@@ -868,6 +868,16 @@ def _show_player_modal(player: dict):
             if st.button("➕ Add to FD Slip", type="primary", use_container_width=True, key="modal_slip_add"):
                 st.session_state["fd_slip"] = list(_current) + [_label]
                 st.session_state.pop("fd_slip_select", None)
+                _modal_src = st.session_state.get("modal_source_tab", "Player Modal")
+                _modal_sec = st.session_state.get("modal_source_section", "")
+                _sources = dict(st.session_state.get("fd_slip_sources", {}))
+                _sources[_label] = {"tab": _modal_src, "section": _modal_sec}
+                st.session_state["fd_slip_sources"] = _sources
+                try:
+                    from tracking import pick_tracker as _pt
+                    _pt.log_pick(player, _modal_src, _modal_sec)
+                except Exception:
+                    pass
                 st.rerun()
     with fd_col:
         st.link_button("📲 Open on FanDuel", _fanduel_url(name), use_container_width=True)
@@ -883,19 +893,30 @@ def _open_player_modal(player: dict):
     st.rerun()
 
 
-def _add_legs_to_fd_slip(legs: list[dict]) -> int:
+def _add_legs_to_fd_slip(legs: list[dict], source_tab: str = "Parlays", source_section: str = "") -> int:
     """Merge parlay legs into the FanDuel slip and force sidebar rerender."""
     current = list(st.session_state.get("fd_slip", []))
+    sources = dict(st.session_state.get("fd_slip_sources", {}))
     added = 0
+    logged = []
     for p in legs:
         odds = p.get("fanduel_american") or p.get("best_american")
         label = f"{p['player_name']} ({p.get('team', '')}) {_fmt_american(odds)}"
         if label not in current:
             current.append(label)
+            sources[label] = {"tab": source_tab, "section": source_section}
             added += 1
+            logged.append(p)
     st.session_state["fd_slip"] = current
+    st.session_state["fd_slip_sources"] = sources
     st.session_state.pop("fd_slip_select", None)
     if added:
+        try:
+            from tracking import pick_tracker as _pt
+            for p in logged:
+                _pt.log_pick(p, source_tab, source_section)
+        except Exception:
+            pass
         st.toast(f"✅ {added} player{'s' if added != 1 else ''} added to FD Slip!")
         st.rerun()
     return added
@@ -1236,6 +1257,8 @@ def _render_qualified_table(
     if _sel_rows and 0 <= _sel_rows[0] < len(ranked):
         st.session_state["_table_ver"] = _tver + 1
         st.session_state["show_modal"] = ranked[_sel_rows[0]]
+        st.session_state["modal_source_tab"] = "Picks Table"
+        st.session_state["modal_source_section"] = key_suffix or "Picks Table"
         st.rerun()
     st.caption("💡 Click any row to view full player details & add to FD Slip.")
 
@@ -1341,6 +1364,8 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                 use_container_width=True,
             ):
                 st.session_state["show_modal"] = _top
+                st.session_state["modal_source_tab"] = "Quick View"
+                st.session_state["modal_source_section"] = "Top Pick"
                 st.rerun()
             st.markdown(
                 f"<div style='font-size:12px; color:#888; margin:-4px 0 2px 6px;'>"
@@ -1584,6 +1609,8 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                         use_container_width=True,
                     ):
                         st.session_state["show_modal"] = _qp
+                        st.session_state["modal_source_tab"] = "Quick View"
+                        st.session_state["modal_source_section"] = "Quick View"
                         st.rerun()
                     _spot_str = f" · Bat #{_qspot}" if _qspot else ""
                     _bet_str  = f"<span style='color:#888;font-size:11px;'> · Bet ${float(_qbet):.0f}</span>" if _qbet else ""
@@ -1705,6 +1732,8 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                                 disabled=_is_past,
                             ):
                                 st.session_state["show_modal"] = _p
+                                st.session_state["modal_source_tab"] = "By Game Time"
+                                st.session_state["modal_source_section"] = "By Game Time"
                                 st.rerun()
                             st.markdown(
                                 f"<div style='font-size:11px; color:#666; margin:-4px 0 2px 6px;'>"
@@ -1811,6 +1840,8 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                         if _mv_p:
                             st.session_state["_table_ver"] = _mv_tver + 1
                             st.session_state["show_modal"] = _mv_p
+                            st.session_state["modal_source_tab"] = "Line Movement"
+                            st.session_state["modal_source_section"] = "Line Movement"
                             st.rerun()
                 else:
                     st.info("Not enough snapshots yet to show movement.")
@@ -1859,6 +1890,8 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                 if _oc_rows_sel and 0 <= _oc_rows_sel[0] < len(odds_pool):
                     st.session_state["_table_ver"] = _oc_tver + 1
                     st.session_state["show_modal"] = odds_pool[_oc_rows_sel[0]]
+                    st.session_state["modal_source_tab"] = "Odds"
+                    st.session_state["modal_source_section"] = "Odds Comparison"
                     st.rerun()
 
     if all_by_model:
@@ -2113,6 +2146,8 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
             if _mrows and 0 <= _mrows[0] < len(players):
                 st.session_state["_table_ver"] = _mtver + 1
                 st.session_state["show_modal"] = players[_mrows[0]]
+                st.session_state["modal_source_tab"] = "All Players"
+                st.session_state["modal_source_section"] = "All Players"
                 st.rerun()
 
         prime = [p for p in all_by_model if p.get("model_prob", 0) >= PRIME_FLOOR][:60]
@@ -2288,7 +2323,10 @@ def tab_hits(data: dict):
             if st.button("ℹ️ Player Info",
                          key=f"{key_prefix}_modal_{p.get('player_id','')}{name[:6]}",
                          use_container_width=True, type="primary"):
+                _jig_src = "JIG AI" if "ai" in key_prefix else ("JIG Way" if "way" in key_prefix else "JIG")
                 st.session_state["show_modal"] = p
+                st.session_state["modal_source_tab"] = _jig_src
+                st.session_state["modal_source_section"] = _jig_src
                 st.rerun()
         with _fc:
             st.link_button("📲 Open on FanDuel", _fanduel_url(name), use_container_width=True)
@@ -2429,6 +2467,8 @@ def tab_hits(data: dict):
                 if st.button("ℹ️ Player Info", key="bts_p1_info",
                              use_container_width=True, type="primary"):
                     st.session_state["show_modal"] = p1
+                    st.session_state["modal_source_tab"] = "Hits"
+                    st.session_state["modal_source_section"] = "Beat the Shift"
                     st.rerun()
             with _pb2:
                 st.link_button("📲 Open on FanDuel", _fanduel_url(p1.get("player_name", "")),
@@ -2484,6 +2524,8 @@ def tab_hits(data: dict):
                     if st.button("ℹ️ Player Info", key="bts_p2_info",
                                  use_container_width=True, type="primary"):
                         st.session_state["show_modal"] = p2
+                        st.session_state["modal_source_tab"] = "Hits"
+                        st.session_state["modal_source_section"] = "Beat the Shift"
                         st.rerun()
                 with _pb4:
                     st.link_button("📲 Open on FanDuel", _fanduel_url(p2.get("player_name", "")),
@@ -2537,6 +2579,8 @@ def tab_hits(data: dict):
             if _bts_rows and 0 <= _bts_rows[0] < len(bts_pool):
                 st.session_state["_bts_all_ver"] = _bts_ver + 1
                 st.session_state["show_modal"] = bts_pool[_bts_rows[0]]["player"]
+                st.session_state["modal_source_tab"] = "Hits"
+                st.session_state["modal_source_section"] = "Beat the Shift"
                 st.rerun()
 
     with _hq:
@@ -2591,6 +2635,8 @@ def tab_hits(data: dict):
             if _ha_rows and 0 <= _ha_rows[0] < len(scored):
                 st.session_state["_hit_all_ver"] = _ha_ver + 1
                 st.session_state["show_modal"] = scored[_ha_rows[0]]["player"]
+                st.session_state["modal_source_tab"] = "Hits"
+                st.session_state["modal_source_section"] = "Hits All"
                 st.rerun()
 
     with _hpr:
@@ -2824,7 +2870,10 @@ def tab_jig(data: dict):
                 _ja_rows = getattr(getattr(_ja_sel, "selection", None), "rows", [])
                 if _ja_rows and 0 <= _ja_rows[0] < len(scored):
                     st.session_state[f"_jig_all_ver_{key_sfx}"] = _ja_ver + 1
+                    _jig_all_src = "JIG AI" if key_sfx == "ai" else "JIG Way"
                     st.session_state["show_modal"] = scored[_ja_rows[0]]["player"]
+                    st.session_state["modal_source_tab"] = _jig_all_src
+                    st.session_state["modal_source_section"] = _jig_all_src
                     st.rerun()
 
         with _jpr:
@@ -2897,7 +2946,7 @@ def tab_parlays(data: dict):
                     st.markdown(html, unsafe_allow_html=True)
                     if st.button("🎰 Add to FD Slip", key=f"fd_prof_{pi}_{i}",
                                  width='stretch'):
-                        _add_legs_to_fd_slip(combo["legs"])
+                        _add_legs_to_fd_slip(combo["legs"], source_tab="Parlays", source_section=profile.get("name", "Profile Parlay"))
 
     st.divider()
 
@@ -2966,7 +3015,7 @@ def tab_parlays(data: dict):
 
             if fd_clicked:
                 if len(legs_built) == n_legs:
-                    _add_legs_to_fd_slip(legs_built)
+                    _add_legs_to_fd_slip(legs_built, source_tab="Parlays", source_section="Manual Builder")
                 else:
                     st.error(f"Select all {n_legs} legs first.")
 
@@ -3493,8 +3542,137 @@ def tab_performance():
     except Exception as e:
         st.error(f"Could not load picks log: {e}")
 
+    # ── Model Insights & Auto-Learn ──────────────────────────────────────────
+    st.divider()
+    st.markdown('<div class="section-header">🧠 MODEL INSIGHTS & AUTO-LEARN</div>',
+                unsafe_allow_html=True)
+    try:
+        from tracking import auto_learn as _al
+        from tracking import pick_tracker as _pt
+        import pandas as _pd_al
 
-# â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+        _pt_summary  = _pt.total_summary()
+        _pt_tab_perf = _pt.summary_by("source_tab")
+        _pt_sec_perf = _pt.summary_by("source_section")
+        _n_settled   = _pt_summary.get("decided", 0)
+        _n_total     = _pt_summary.get("picks", 0)
+
+        if _n_total > 0:
+            _ov = st.columns(5)
+            _ov[0].metric("Tracked Picks", _n_total)
+            _ov[1].metric("Settled", _n_settled)
+            _ov[2].metric("Win Rate",  f"{_pt_summary.get('win_rate',0)*100:.1f}%" if _n_settled else "—")
+            _ov[3].metric("Net P&L",   f"${_pt_summary.get('profit',0):+.2f}"       if _n_settled else "—")
+            _ov[4].metric("ROI",       f"{_pt_summary.get('roi',0):+.1f}%"          if _n_settled else "—")
+        else:
+            st.info("No picks tracked yet. Add players to your FD Slip from any tab — "
+                    "they are logged automatically with their source. "
+                    "Results settle when you click **Update Yesterday** in the sidebar.")
+
+        if _pt_tab_perf:
+            with st.expander(f"📊 Performance by Tab ({len(_pt_tab_perf)} sources)", expanded=_n_settled >= 5):
+                _tab_df = _pd_al.DataFrame(_pt_tab_perf).rename(columns={"source_tab": "Tab"})
+                _disp = ["Tab","Picks","Wins","Losses","Pending","Win%","Net P&L","ROI%","Last Pick"]
+                st.dataframe(_tab_df[_disp], hide_index=True, use_container_width=True)
+                _sec_decided = [r for r in _pt_sec_perf if r["_decided"] >= 3]
+                if _sec_decided:
+                    st.markdown("**By Section / Strategy** (≥3 settled picks)")
+                    _sec_df = _pd_al.DataFrame(_sec_decided).rename(columns={"source_section": "Section"})
+                    st.dataframe(_sec_df[["Section","Picks","Wins","Losses","Win%","Net P&L","ROI%"]],
+                                 hide_index=True, use_container_width=True)
+
+        if _n_settled >= 15:
+            _analysis = _al.analyze()
+            if _analysis.get("sufficient_data"):
+                with st.expander(f"🔬 Feature Analysis ({_n_settled} settled picks)", expanded=False):
+                    st.markdown("#### Which factors actually predict home runs?")
+                    st.caption("Point-biserial correlation with actual HR outcomes. "
+                               "Green = strong predictor. Red = may be noise or reversed.")
+                    _corrs = _analysis.get("correlations", [])
+                    if _corrs:
+                        _corr_rows = [{"Factor": c["label"], "Correlation": f"{c['corr']:+.4f}",
+                                       "Strength": c["strength"], "N": c["n"]} for c in _corrs]
+                        def _cc(val):
+                            try:
+                                v = float(val)
+                                if v >= 0.15:  return "color:#4ade80;font-weight:700"
+                                if v >= 0.05:  return "color:#86efac"
+                                if v <= -0.10: return "color:#f87171"
+                                return "color:#888"
+                            except (ValueError, TypeError):
+                                return ""
+                        st.dataframe(_pd_al.DataFrame(_corr_rows).style.applymap(_cc, subset=["Correlation"]),
+                                     hide_index=True, use_container_width=True)
+
+                    _calib = _analysis.get("calibration", [])
+                    if _calib:
+                        st.markdown("#### Model Calibration — Predicted vs Actual Hit Rate")
+                        _cal_df = _pd_al.DataFrame(_calib).rename(columns={
+                            "bucket": "Model%", "avg_predicted": "Predicted%",
+                            "avg_actual": "Actual%", "bias_pct": "Bias(pp)", "n": "N"})
+                        def _cb(val):
+                            try:
+                                v = float(str(val))
+                                if abs(v) <= 2: return "color:#4ade80"
+                                if abs(v) <= 5: return "color:#f59e0b"
+                                return "color:#f87171"
+                            except (ValueError, TypeError):
+                                return ""
+                        st.dataframe(_cal_df.style.applymap(_cb, subset=["Bias(pp)"]),
+                                     hide_index=True, use_container_width=True)
+
+                    _jig = _analysis.get("jig_comparison", {})
+                    if _jig.get("ai") and _jig.get("way"):
+                        st.markdown("#### JIG AI vs The JIG Way")
+                        _jc1, _jc2 = st.columns(2)
+                        with _jc1:
+                            st.metric("⚡ JIG AI", _jig["ai"].get("Win%","—"),
+                                      delta=_jig["ai"].get("ROI%","—"), delta_color="normal")
+                            st.caption(f"{_jig['ai'].get('Picks',0)} picks · {_jig['ai'].get('Net P&L','—')}")
+                        with _jc2:
+                            st.metric("🎯 The JIG Way", _jig["way"].get("Win%","—"),
+                                      delta=_jig["way"].get("ROI%","—"), delta_color="normal")
+                            st.caption(f"{_jig['way'].get('Picks',0)} picks · {_jig['way'].get('Net P&L','—')}")
+
+                _suggestions = _analysis.get("suggestions", [])
+                if _suggestions:
+                    with st.expander(f"💡 Adjustment Suggestions ({len(_suggestions)})", expanded=False):
+                        st.caption("Derived from your settled pick history. Click Apply to persist a change to "
+                                   "learned_adjustments.json — the engine reads this on next refresh.")
+                        _applied = _analysis.get("applied_adjustments", {})
+                        for _sug in _suggestions:
+                            _ic = {"high":"#f87171","medium":"#f59e0b","low":"#888"}.get(_sug.get("impact","low"),"#888")
+                            _sid = _sug["id"]
+                            _done = _sid in _applied
+                            st.markdown(
+                                f"<div style='background:#0d0d1a;border:1px solid #1a1a3a;"
+                                f"border-radius:8px;padding:10px 14px;margin-bottom:8px;'>"
+                                f"<div style='font-size:13px;font-weight:700;color:#f0f0f0;'>"
+                                f"#{_sug['sid']} {_sug['title']}</div>"
+                                f"<div style='font-size:11px;color:#888;margin-top:4px;'>{_sug['detail']}</div>"
+                                f"<div style='font-size:10px;color:{_ic};margin-top:6px;'>"
+                                f"Impact: {_sug.get('impact','?').upper()}"
+                                f"{'  ·  ✅ Applied' if _done else ''}</div></div>",
+                                unsafe_allow_html=True)
+                            if not _done:
+                                if st.button(f"✅ Apply #{_sug['sid']}", key=f"apply_{_sid}", type="primary"):
+                                    if _al.apply_suggestion(_sid):
+                                        st.success(f"Suggestion #{_sug['sid']} applied!")
+                                        st.rerun()
+                        _rc, _ = st.columns([1, 3])
+                        with _rc:
+                            if st.button("🔄 Reset Adjustments", key="reset_adj", type="secondary"):
+                                _al.reset_adjustments()
+                                st.success("Cleared.")
+                                st.rerun()
+        elif _n_total > 0:
+            st.caption(f"💡 Feature analysis unlocks after {max(0,15-_n_settled)} more settled picks "
+                       f"({_n_settled} settled so far).")
+    except Exception as _al_err:
+        st.caption(f"Model insights unavailable: {_al_err}")
+
+
+#â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 # MAIN
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 def main():
@@ -3828,6 +4006,19 @@ def main():
                             st.info("All selected players already logged today.")
                     except Exception as e:
                         st.error(f"Log failed: {e}")
+                    # Also log to unified pick_tracker with source context
+                    try:
+                        from tracking import pick_tracker as _pt
+                        _sources = st.session_state.get("fd_slip_sources", {})
+                        for _s in _selected:
+                            _sp = _slip_map.get(_s)
+                            if _sp:
+                                _src = _sources.get(_s, {})
+                                _pt.log_pick(_sp,
+                                             _src.get("tab", "FD Slip"),
+                                             _src.get("section", "Manual Selection"))
+                    except Exception:
+                        pass
                 st.link_button(
                     "📲 FanDuel HR Props", _fanduel_url(),
                     width='stretch', type="primary",

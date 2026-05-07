@@ -48,6 +48,7 @@ def tab_advanced_strategies(data: dict, parlays_callback=None):
         player_map = {p["player_name"]: p for p in all_players if p.get("player_name")}
         current = list(st.session_state.get("fd_slip", []))
         added = 0
+        logged_players = []
         for name in player_names:
             p = player_map.get(name)
             if not p:
@@ -57,14 +58,138 @@ def tab_advanced_strategies(data: dict, parlays_callback=None):
             if label not in current:
                 current.append(label)
                 added += 1
+                logged_players.append(p)
         if added:
             st.session_state["fd_slip"] = current
             st.session_state.pop("fd_slip_select", None)
+            # Log to strategy tracker and unified pick tracker
+            try:
+                from tracking import strategy_log as _sl
+                from tracking import pick_tracker as _pt
+                for p in logged_players:
+                    _sl.log_pick(p, strategy_type)
+                    _pt.log_pick(p, "Strategies", strategy_type)
+            except Exception:
+                pass
             st.toast(f"✅ {added} player{'s' if added != 1 else ''} added to FD Slip!")
             st.rerun()
         return added
 
     st.markdown('<div class="section-header">🎯 ADVANCED BETTING STRATEGIES</div>', unsafe_allow_html=True)
+
+    # ── Strategy Performance Dashboard ────────────────────────────────────────
+    try:
+        from tracking import strategy_log as _sl
+        _perf_data = _sl.summary()
+        _all_picks = _sl.all_picks()
+    except Exception:
+        _perf_data = []
+        _all_picks = []
+
+    _total_tracked = sum(r["Picks"] for r in _perf_data)
+    _total_decided = sum(r["_decided"] for r in _perf_data)
+    _total_wins    = sum(r["Wins"] for r in _perf_data)
+    _total_profit  = sum(r["_profit"] for r in _perf_data)
+    _perf_label = (
+        f"📊 Strategy Performance  —  {_total_tracked} picks tracked"
+        + (f"  ·  {_total_wins}/{_total_decided} wins" if _total_decided else "")
+        + (f"  ·  Net ${_total_profit:+.2f}" if _total_decided else "")
+    )
+
+    with st.expander(_perf_label, expanded=False):
+        if not _perf_data:
+            st.info("No strategy picks logged yet. Add players to your FD Slip from any strategy below to start tracking.")
+        else:
+            # Summary table
+            import pandas as pd
+            _display_cols = ["Strategy", "Picks", "Wins", "Losses", "Pending", "Win%", "Net P&L", "ROI%", "Last Pick"]
+            _df = pd.DataFrame(_perf_data)[_display_cols]
+
+            def _color_roi(val):
+                if val == "—":
+                    return "color: #666666"
+                return "color: #4ade80" if val.startswith("+") else "color: #f87171"
+
+            def _color_pl(val):
+                if val == "—":
+                    return "color: #666666"
+                return "color: #4ade80" if val.startswith("$+") else "color: #f87171"
+
+            styled = (
+                _df.style
+                .applymap(_color_roi, subset=["ROI%"])
+                .applymap(_color_pl, subset=["Net P&L"])
+                .set_properties(**{"font-size": "12px"})
+            )
+            st.dataframe(styled, hide_index=True, use_container_width=True)
+
+            # Per-strategy breakdown (bar chart style using metrics)
+            if _total_decided > 0:
+                st.markdown("**Win Rate by Strategy** (decided picks only)")
+                _decided_strats = [r for r in _perf_data if r["_decided"] > 0]
+                if _decided_strats:
+                    _cols = st.columns(min(len(_decided_strats), 4))
+                    for _ci, _r in enumerate(_decided_strats[:4]):
+                        with _cols[_ci % 4]:
+                            _wr = _r["_win_rate"] * 100
+                            _roi_val = _r["_roi"]
+                            _roi_str = f"{_roi_val:+.1f}%"
+                            st.metric(
+                                _r["Strategy"][:22],
+                                f"{_wr:.0f}% ({_r['Wins']}/{_r['_decided']})",
+                                delta=_roi_str,
+                                delta_color="normal",
+                            )
+
+            st.divider()
+
+            # Recent picks log
+            st.markdown("**Recent Strategy Picks**")
+            if _all_picks:
+                _recent = _all_picks[:25]
+                _pick_rows = []
+                for _pk in _recent:
+                    _hr = _pk.get("hr_result", "")
+                    _pl_val = _pk.get("profit_loss", "")
+                    _result_str = "✅ HR" if _hr == "1" else ("❌ No HR" if _hr == "0" else "⏳ Pending")
+                    _pl_str = f"${float(_pl_val):+.2f}" if _pl_val else "—"
+                    _pick_rows.append({
+                        "Date":       _pk.get("date", ""),
+                        "Strategy":   _pk.get("strategy", ""),
+                        "Player":     _pk.get("player_name", ""),
+                        "Team":       _pk.get("team", ""),
+                        "Odds":       _pk.get("american_odds", ""),
+                        "Model%":     _pk.get("model_prob_pct", ""),
+                        "EV%":        _pk.get("ev_pct", ""),
+                        "Result":     _result_str,
+                        "P&L":        _pl_str,
+                    })
+                _log_df = pd.DataFrame(_pick_rows)
+
+                def _color_result(val):
+                    if "HR" in val and "No" not in val:
+                        return "color: #4ade80"
+                    if "No HR" in val:
+                        return "color: #f87171"
+                    return "color: #888888"
+
+                def _color_pnl(val):
+                    if val == "—":
+                        return "color: #666666"
+                    try:
+                        return "color: #4ade80" if float(val.replace("$","").replace("+","")) > 0 else "color: #f87171"
+                    except ValueError:
+                        return "color: #666666"
+
+                _log_styled = (
+                    _log_df.style
+                    .applymap(_color_result, subset=["Result"])
+                    .applymap(_color_pnl,   subset=["P&L"])
+                    .set_properties(**{"font-size": "11px"})
+                )
+                st.dataframe(_log_styled, hide_index=True, use_container_width=True)
+            else:
+                st.caption("No picks logged yet.")
 
     # Strategy selector
     strategy_type = st.selectbox(
@@ -82,6 +207,10 @@ def tab_advanced_strategies(data: dict, parlays_callback=None):
             "Weather Boost Parlays",
             "Hot Streak Parlays",
             "Stars Aligned",
+            "xStats Regression",
+            "Short Rest Pitcher Target",
+            "Long Shot Value",
+            "Multi-Edge Confirmation",
             "Same-Game Builder",
             "Hedge Calculator",
             "Progressive Staking",
@@ -1031,6 +1160,385 @@ def tab_advanced_strategies(data: dict, parlays_callback=None):
                     "No stars-aligned plays found — today's games may have mixed conditions "
                     "(suppressive park, tough pitcher, or bad weather for some players)."
                 )
+                st.link_button("📲 Browse FanDuel HR Props", _fd_url())
+
+        elif strategy_type == "xStats Regression":
+            st.markdown("### 📈 xStats Regression Candidates")
+            st.info(
+                "Players where expected SLG (xSLG) is ≥15% higher than actual SLG — "
+                "their underlying contact quality exceeds their results. "
+                "Positive regression is likely: the market underprices them."
+            )
+
+            @st.cache_data(ttl=3600, show_spinner=False)
+            def _cached_xstats_regression(player_ids: tuple):
+                def _to_float(val, default=0.0):
+                    try:
+                        return float(str(val).replace("%", "").strip())
+                    except (TypeError, ValueError):
+                        return default
+
+                candidates = []
+                for p in all_players:
+                    xslg = _to_float(p.get("xslg") or p.get("x_slg"))
+                    slg  = _to_float(p.get("slg"))
+                    if xslg <= 0 or slg <= 0:
+                        continue
+                    regression_gap = (xslg - slg) / slg if slg > 0 else 0
+                    if regression_gap < 0.15:
+                        continue
+                    if p.get("model_prob", 0) < 0.06:
+                        continue
+                    candidates.append({
+                        **p,
+                        "_xslg": xslg,
+                        "_slg":  slg,
+                        "_gap":  regression_gap,
+                    })
+                return sorted(candidates, key=lambda x: x["_gap"], reverse=True)[:15]
+
+            _xsr_key = tuple(p.get("player_name", "") for p in all_players)
+            xsr_players = _cached_xstats_regression(_xsr_key)
+
+            if xsr_players:
+                # Deduplicate: each player once
+                _used_xsr: set = set()
+                for i, p in enumerate(xsr_players, 1):
+                    name = p.get("player_name", "")
+                    if name in _used_xsr:
+                        continue
+                    _used_xsr.add(name)
+                    gap_pct = p["_gap"] * 100
+                    label = (
+                        f"#{i} {name}  |  "
+                        f"xSLG {p['_xslg']:.3f} vs SLG {p['_slg']:.3f}  |  "
+                        f"Gap +{gap_pct:.1f}%  |  Model {p.get('model_prob',0)*100:.1f}%"
+                    )
+                    with st.expander(label):
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("xSLG", f"{p['_xslg']:.3f}")
+                            st.metric("Actual SLG", f"{p['_slg']:.3f}")
+                        with col2:
+                            st.metric("Regression Gap", f"+{gap_pct:.1f}%")
+                            st.metric("Model Prob", f"{p.get('model_prob',0)*100:.1f}%")
+                        with col3:
+                            st.metric("Market Odds", _fmt_american(p.get("best_american")))
+                            st.metric("EV%", f"{p.get('ev_pct',0):+.1f}%")
+                        _player_row(name, p.get("team",""), f"xSLG {p['_xslg']:.3f}  ·  SLG {p['_slg']:.3f}  ·  Gap +{gap_pct:.1f}%", f"modal_xsr_{i}")
+                        fd_col, _ = st.columns([1, 2])
+                        with fd_col:
+                            if st.button("📲 Add to FD Slip", key=f"fd_xsr_{i}"):
+                                n = _add_to_fd_slip([name], all_players)
+                                if not n:
+                                    st.info("Already in slip.")
+            else:
+                st.warning("No xStats regression candidates found — xSLG data may not be loaded yet.")
+                st.link_button("📲 Browse FanDuel HR Props", _fd_url())
+
+        elif strategy_type == "Short Rest Pitcher Target":
+            st.markdown("### ⏱️ Short Rest Pitcher Target")
+            st.info(
+                "Batters facing a starting pitcher on ≤3 days rest. "
+                "Short-rest arms show measurably lower velocity and command — "
+                "more mistakes in the zone means more HR opportunity for hitters."
+            )
+
+            @st.cache_data(ttl=3600, show_spinner=False)
+            def _cached_short_rest(player_ids: tuple):
+                from collections import defaultdict
+                sr_players = [
+                    p for p in all_players
+                    if p.get("pitcher_days_rest") is not None
+                    and int(p.get("pitcher_days_rest", 99)) <= 3
+                    and p.get("model_prob", 0) >= 0.06
+                    and p.get("best_american")
+                ]
+                by_pitcher = defaultdict(list)
+                for p in sr_players:
+                    by_pitcher[p.get("pitcher_name", "TBD")].append(p)
+
+                parlays = []
+                for pit_name, hitters in by_pitcher.items():
+                    days = int(hitters[0].get("pitcher_days_rest", 99))
+                    pit_fac = hitters[0].get("pitcher_factor", 1.0)
+                    # Short rest boost: 1 day = +12%, 2 days = +8%, 3 days = +5%
+                    rest_boost = {1: 1.12, 2: 1.08, 3: 1.05}.get(days, 1.0)
+                    hitters_sorted = sorted(hitters, key=lambda h: h.get("model_prob", 0), reverse=True)
+                    for n_legs in (2, 3) if len(hitters_sorted) >= 2 else (1,):
+                        if n_legs == 1:
+                            h = hitters_sorted[0]
+                            parlays.append({
+                                "pitcher_name": pit_name,
+                                "days_rest": days,
+                                "rest_boost": rest_boost,
+                                "pitcher_factor": round(pit_fac, 3),
+                                "legs": [h["player_name"]],
+                                "teams": [h.get("team", "")],
+                                "model_probs": [round(h.get("model_prob", 0) * 100, 1)],
+                                "odds_each": [h.get("best_american")],
+                                "base_prob": h.get("model_prob", 0),
+                                "adj_prob": min(h.get("model_prob", 0) * rest_boost, 0.35),
+                                "parlay_odds": _ato_d(h["best_american"]),
+                                "american_odds": h["best_american"],
+                                "ev_pct": ((_ato_d(h["best_american"]) * min(h.get("model_prob",0)*rest_boost, 0.35)) - 1) * 100,
+                                "n_legs": 1,
+                            })
+                            continue
+                        pool = hitters_sorted[:min(n_legs + 2, len(hitters_sorted))]
+                        for combo in itertools.combinations(pool, n_legs):
+                            base_prob = 1.0
+                            parlay_odds = 1.0
+                            for h in combo:
+                                base_prob *= h.get("model_prob", 0)
+                                parlay_odds *= _ato_d(h["best_american"])
+                            adj_prob = min(base_prob * rest_boost * (1.0 + 0.06 * (n_legs - 1)), 0.35)
+                            ev = (parlay_odds * adj_prob) - 1
+                            if ev > 0:
+                                parlays.append({
+                                    "pitcher_name": pit_name,
+                                    "days_rest": days,
+                                    "rest_boost": rest_boost,
+                                    "pitcher_factor": round(pit_fac, 3),
+                                    "legs": [h["player_name"] for h in combo],
+                                    "teams": [h.get("team", "") for h in combo],
+                                    "model_probs": [round(h.get("model_prob",0)*100,1) for h in combo],
+                                    "odds_each": [h["best_american"] for h in combo],
+                                    "base_prob": base_prob,
+                                    "adj_prob": adj_prob,
+                                    "parlay_odds": parlay_odds,
+                                    "american_odds": _dta(parlay_odds),
+                                    "ev_pct": ev * 100,
+                                    "n_legs": n_legs,
+                                })
+                return _diverse_top(sorted(parlays, key=lambda x: x["ev_pct"], reverse=True))
+
+            _sr_key = tuple(p.get("player_name", "") for p in all_players)
+            sr_parlays = _cached_short_rest(_sr_key)
+
+            if sr_parlays:
+                for i, sr in enumerate(sr_parlays, 1):
+                    rest_tag = f"{sr['days_rest']}d rest" if sr['days_rest'] else "short rest"
+                    label = (
+                        f"vs {sr['pitcher_name']} ({rest_tag})  |  "
+                        f"{sr['n_legs']}-leg  |  EV {sr['ev_pct']:+.1f}%  |  "
+                        f"Rest Boost +{(sr['rest_boost']-1)*100:.0f}%"
+                    )
+                    with st.expander(label):
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("Parlay EV", f"{sr['ev_pct']:+.1f}%")
+                            st.metric("Adj. Probability", f"{sr['adj_prob']*100:.2f}%")
+                        with col2:
+                            st.metric("American Odds", _fmt_american(sr['american_odds']))
+                            st.metric("Rest Boost", f"+{(sr['rest_boost']-1)*100:.0f}%")
+                        with col3:
+                            st.metric("Days Rest", sr['days_rest'])
+                            st.metric("Pitcher Factor", f"{sr['pitcher_factor']:.2f}x")
+                        st.write(f"**Hitters vs {sr['pitcher_name']} ({rest_tag}):**")
+                        for j, (player, team, mp, odds_e) in enumerate(zip(
+                            sr['legs'], sr['teams'], sr['model_probs'], sr['odds_each']
+                        )):
+                            _player_row(player, team, f"Model {mp:.1f}%  {_fmt_american(odds_e)}", f"modal_sr_{i}_{j}")
+                        fd_col, _ = st.columns([1, 2])
+                        with fd_col:
+                            if st.button("📲 Add All to FD Slip", key=f"fd_sr_{i}"):
+                                n = _add_to_fd_slip(sr['legs'], all_players)
+                                if not n:
+                                    st.info("Already in slip.")
+            else:
+                st.warning("No short-rest pitcher matchups found — all starters appear to be on normal rest.")
+                st.link_button("📲 Browse FanDuel HR Props", _fd_url())
+
+        elif strategy_type == "Long Shot Value":
+            st.markdown("### 🎲 Long Shot Value")
+            st.info(
+                "Players priced at +350 or longer where the model finds positive EV and ≥6% probability. "
+                "These are mispriced long shots — the market overestimates the difficulty. "
+                "Small stakes, big upside."
+            )
+
+            @st.cache_data(ttl=3600, show_spinner=False)
+            def _cached_long_shots(player_ids: tuple):
+                candidates = sorted(
+                    [p for p in all_players
+                     if p.get("best_american", 0) >= 350
+                     and p.get("ev_pct", 0) > 0
+                     and p.get("model_prob", 0) >= 0.06],
+                    key=lambda p: p.get("ev_pct", 0),
+                    reverse=True,
+                )[:20]
+                # Build single-player slips and 2-leg combos
+                result = []
+                _used: set = set()
+                for p in candidates:
+                    name = p.get("player_name", "")
+                    if name not in _used:
+                        result.append({
+                            "legs": [name],
+                            "teams": [p.get("team", "")],
+                            "model_probs": [round(p.get("model_prob", 0) * 100, 1)],
+                            "odds_each": [p.get("best_american")],
+                            "ev_pcts": [round(p.get("ev_pct", 0), 1)],
+                            "barrel_pcts": [p.get("barrel_pct") or p.get("brl_pct")],
+                            "american_odds": p.get("best_american"),
+                            "base_prob": p.get("model_prob", 0),
+                            "ev_pct": p.get("ev_pct", 0),
+                            "n_legs": 1,
+                        })
+                        _used.add(name)
+                # Add 2-leg long shot parlays
+                for combo in itertools.combinations(candidates[:10], 2):
+                    p1, p2 = combo
+                    if p1.get("player_name") in _used or p2.get("player_name") in _used:
+                        continue
+                    base_prob = p1.get("model_prob", 0) * p2.get("model_prob", 0)
+                    parlay_odds = _ato_d(p1["best_american"]) * _ato_d(p2["best_american"])
+                    ev = (parlay_odds * base_prob) - 1
+                    if ev > 0:
+                        result.append({
+                            "legs": [p1["player_name"], p2["player_name"]],
+                            "teams": [p1.get("team",""), p2.get("team","")],
+                            "model_probs": [round(p1.get("model_prob",0)*100,1), round(p2.get("model_prob",0)*100,1)],
+                            "odds_each": [p1["best_american"], p2["best_american"]],
+                            "ev_pcts": [round(p1.get("ev_pct",0),1), round(p2.get("ev_pct",0),1)],
+                            "barrel_pcts": [p1.get("barrel_pct") or p1.get("brl_pct"), p2.get("barrel_pct") or p2.get("brl_pct")],
+                            "american_odds": _dta(parlay_odds),
+                            "base_prob": base_prob,
+                            "ev_pct": ev * 100,
+                            "n_legs": 2,
+                        })
+                return sorted(result, key=lambda x: x["ev_pct"], reverse=True)[:15]
+
+            _ls_key = tuple(p.get("player_name", "") for p in all_players)
+            long_shots = _cached_long_shots(_ls_key)
+
+            if long_shots:
+                for i, ls in enumerate(long_shots, 1):
+                    legs_tag = "Single" if ls['n_legs'] == 1 else f"{ls['n_legs']}-Leg Parlay"
+                    label = (
+                        f"{legs_tag} #{i}  |  "
+                        f"Odds {_fmt_american(ls['american_odds'])}  |  "
+                        f"EV {ls['ev_pct']:+.1f}%"
+                    )
+                    with st.expander(label):
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.metric("Market Odds", _fmt_american(ls['american_odds']))
+                            st.metric("Model Prob", f"{ls['base_prob']*100:.1f}%")
+                        with col2:
+                            st.metric("EV%", f"{ls['ev_pct']:+.1f}%")
+                            st.metric("Legs", ls['n_legs'])
+                        st.write("**Players:**")
+                        for j, (player, team, mp, odds_e, ev_e) in enumerate(zip(
+                            ls['legs'], ls['teams'], ls['model_probs'], ls['odds_each'], ls['ev_pcts']
+                        )):
+                            _player_row(player, team, f"Model {mp:.1f}%  {_fmt_american(odds_e)}  EV {ev_e:+.1f}%", f"modal_ls_{i}_{j}")
+                        fd_col, _ = st.columns([1, 2])
+                        with fd_col:
+                            if st.button("📲 Add to FD Slip", key=f"fd_ls_{i}"):
+                                n = _add_to_fd_slip(ls['legs'], all_players)
+                                if not n:
+                                    st.info("Already in slip.")
+            else:
+                st.warning("No mispriced long shots found — market pricing looks accurate at +350+ today.")
+                st.link_button("📲 Browse FanDuel HR Props", _fd_url())
+
+        elif strategy_type == "Multi-Edge Confirmation":
+            st.markdown("### 🔬 Multi-Edge Confirmation")
+            st.info(
+                "Players simultaneously clearing 3 or more independent edge criteria: "
+                "park factor ≥1.05, pitcher factor ≥1.05, platoon factor ≥1.05, "
+                "weather factor ≥1.04, streak factor ≥1.03. "
+                "Each confirmed edge is independent — stacking them materially increases conviction."
+            )
+
+            @st.cache_data(ttl=3600, show_spinner=False)
+            def _cached_multi_edge(player_ids: tuple):
+                _THRESHOLDS = {
+                    "park":    ("park_factor",    1.05),
+                    "pitcher": ("pitcher_factor", 1.05),
+                    "platoon": ("platoon_factor", 1.05),
+                    "weather": ("weather_factor", 1.04),
+                    "streak":  ("streak_factor",  1.03),
+                }
+
+                candidates = []
+                for p in all_players:
+                    if p.get("model_prob", 0) < 0.06 or not p.get("best_american"):
+                        continue
+                    confirmed = [
+                        edge for edge, (field, threshold) in _THRESHOLDS.items()
+                        if p.get(field, 1.0) >= threshold
+                    ]
+                    if len(confirmed) < 3:
+                        continue
+                    edge_product = 1.0
+                    for edge, (field, _) in _THRESHOLDS.items():
+                        if edge in confirmed:
+                            edge_product *= p.get(field, 1.0)
+                    candidates.append({
+                        **p,
+                        "_confirmed": confirmed,
+                        "_edge_count": len(confirmed),
+                        "_edge_product": round(edge_product, 4),
+                    })
+                return sorted(candidates, key=lambda x: (x["_edge_count"], x["_edge_product"]), reverse=True)[:15]
+
+            _me_key = tuple(p.get("player_name", "") for p in all_players)
+            me_players = _cached_multi_edge(_me_key)
+
+            if me_players:
+                _used_me: set = set()
+                for i, p in enumerate(me_players, 1):
+                    name = p.get("player_name", "")
+                    if name in _used_me:
+                        continue
+                    _used_me.add(name)
+                    edge_labels = {
+                        "park":    f"Park {p.get('park_factor',1.0):.2f}x",
+                        "pitcher": f"Pit {p.get('pitcher_factor',1.0):.2f}x",
+                        "platoon": f"Plat {p.get('platoon_factor',1.0):.2f}x",
+                        "weather": f"Wx {p.get('weather_factor',1.0):.2f}x",
+                        "streak":  f"Streak {p.get('streak_factor',1.0):.3f}x",
+                    }
+                    confirmed_str = "  ·  ".join(edge_labels[e] for e in p["_confirmed"])
+                    label = (
+                        f"#{i} {name}  |  "
+                        f"{p['_edge_count']} edges confirmed  |  "
+                        f"Model {p.get('model_prob',0)*100:.1f}%  |  "
+                        f"EV {p.get('ev_pct',0):+.1f}%"
+                    )
+                    with st.expander(label):
+                        col1, col2, col3 = st.columns(3)
+                        with col1:
+                            st.metric("Edges Confirmed", p["_edge_count"])
+                            st.metric("Edge Product", f"{p['_edge_product']:.4f}x")
+                        with col2:
+                            st.metric("Model Prob", f"{p.get('model_prob',0)*100:.1f}%")
+                            st.metric("Market Odds", _fmt_american(p.get("best_american")))
+                        with col3:
+                            st.metric("EV%", f"{p.get('ev_pct',0):+.1f}%")
+                            not_confirmed = [e for e in ("park","pitcher","platoon","weather","streak") if e not in p["_confirmed"]]
+                            st.metric("Misses", len(not_confirmed))
+                        _player_row(name, p.get("team",""), confirmed_str, f"modal_me_{i}")
+                        if not_confirmed:
+                            miss_labels = {
+                                "park":    f"Park {p.get('park_factor',1.0):.2f}x",
+                                "pitcher": f"Pit {p.get('pitcher_factor',1.0):.2f}x",
+                                "platoon": f"Plat {p.get('platoon_factor',1.0):.2f}x",
+                                "weather": f"Wx {p.get('weather_factor',1.0):.2f}x",
+                                "streak":  f"Streak {p.get('streak_factor',1.0):.3f}x",
+                            }
+                            st.caption(f"Not cleared: {', '.join(miss_labels[e] for e in not_confirmed)}")
+                        fd_col, _ = st.columns([1, 2])
+                        with fd_col:
+                            if st.button("📲 Add to FD Slip", key=f"fd_me_{i}"):
+                                n = _add_to_fd_slip([name], all_players)
+                                if not n:
+                                    st.info("Already in slip.")
+            else:
+                st.warning("No players clearing 3+ simultaneous edges today.")
                 st.link_button("📲 Browse FanDuel HR Props", _fd_url())
 
         elif strategy_type == "Same-Game Builder":
