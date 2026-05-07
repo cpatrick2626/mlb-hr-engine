@@ -1,12 +1,14 @@
 """
-Unified Pick Tracker — logs every pick from every tab/section with full model context.
+Unified Pick Tracker
 
-Fields captured at pick time (snapshot of what the model saw) plus outcome fields
-filled in later by settle_date(). This gives auto_learn.py the feature vectors it
-needs to compute correlations and calibration.
+Logs every pick from every tab/section with full model context.
+Settlement fills in hr_result / profit_loss via pnl._settle_date().
 
-Storage: tracking/pick_tracker.csv  (local CSV; no Sheets dependency)
-Settlement: driven by pnl._settle_date() via settle_date() below.
+Performance notes:
+- _load_all() reads the CSV once; callers receive the rows list.
+- log_picks_bulk() does ONE read + ONE write regardless of batch size.
+- Dedup uses a frozenset for O(1) key lookup, not a per-pick linear scan.
+- summary_by() accepts an optional pre-loaded rows list to skip re-reads.
 """
 
 import csv
@@ -16,25 +18,15 @@ from pathlib import Path
 LOG_PATH = Path(__file__).parent / "pick_tracker.csv"
 
 FIELDS = [
-    # Context
     "date", "source_tab", "source_section",
-    # Identity
     "player_name", "team", "player_id",
-    # Market
     "american_odds", "bet_dollars",
-    # Model outputs
     "model_prob_pct", "ev_pct", "edge_pct", "confidence",
-    # Game-day factors (multiplicative adjustments applied to base rate)
     "park_factor", "pitcher_factor", "platoon_factor", "weather_factor", "streak_factor",
-    # Power / Statcast metrics (raw values)
     "barrel_pct", "exit_velo", "hard_hit_pct", "launch_angle",
-    # Slash stats
     "xslg", "slg", "iso", "pull_pct",
-    # Pitcher context
     "pitcher_hr9", "pitcher_k_pct",
-    # Lineup
     "lineup_spot",
-    # Outcome (filled by settle_date)
     "hr_result", "profit_loss",
 ]
 
@@ -42,85 +34,51 @@ FIELDS = [
 # ── Public API ────────────────────────────────────────────────────────────────
 
 def log_pick(player: dict, source_tab: str, source_section: str = "") -> bool:
-    """
-    Record one pick with its source and full model context.
-    Returns True if newly added; False if this player is already logged
-    today from the same source_tab + source_section.
-    """
-    today = date.today().isoformat()
-    name  = player.get("player_name", "")
-    rows  = _load_all()
-    for r in rows:
-        if (r.get("date") == today
-                and r.get("source_tab") == source_tab
-                and r.get("source_section") == source_section
-                and r.get("player_name") == name):
-            return False
-
-    def _f(key, default=0.0):
-        try:
-            v = player.get(key)
-            return float(str(v).replace("%", "").strip()) if v is not None else default
-        except (TypeError, ValueError):
-            return default
-
-    odds = player.get("fanduel_american") or player.get("best_american") or ""
-    bet  = _f("bet_dollars") or 10.0
-
-    _append([{
-        "date":            today,
-        "source_tab":      source_tab,
-        "source_section":  source_section,
-        "player_name":     name,
-        "team":            player.get("team", ""),
-        "player_id":       player.get("player_id", ""),
-        "american_odds":   str(odds),
-        "bet_dollars":     f"{bet:.2f}",
-        "model_prob_pct":  f"{_f('model_prob') * 100:.2f}",
-        "ev_pct":          f"{_f('ev_pct'):.2f}",
-        "edge_pct":        f"{_f('edge_pct'):.2f}",
-        "confidence":      f"{_f('confidence'):.1f}",
-        "park_factor":     f"{_f('park_factor', 1.0):.4f}",
-        "pitcher_factor":  f"{_f('pitcher_factor', 1.0):.4f}",
-        "platoon_factor":  f"{_f('platoon_factor', 1.0):.4f}",
-        "weather_factor":  f"{_f('weather_factor', 1.0):.4f}",
-        "streak_factor":   f"{_f('streak_factor', 1.0):.4f}",
-        "barrel_pct":      f"{_f('barrel_pct') or _f('brl_pct'):.2f}",
-        "exit_velo":       f"{_f('exit_velo'):.1f}",
-        "hard_hit_pct":    f"{_f('hard_hit_pct') or _f('hh_pct'):.2f}",
-        "launch_angle":    f"{_f('launch_angle') or _f('la'):.1f}",
-        "xslg":            f"{_f('xslg') or _f('x_slg'):.4f}",
-        "slg":             f"{_f('slg'):.4f}",
-        "iso":             f"{_f('iso'):.4f}",
-        "pull_pct":        f"{_f('pull_pct'):.2f}",
-        "pitcher_hr9":     f"{_f('pitcher_hr9'):.3f}",
-        "pitcher_k_pct":   f"{_f('pitcher_k_pct'):.4f}",
-        "lineup_spot":     str(player.get("lineup_spot", "")),
-        "hr_result":       "",
-        "profit_loss":     "",
-    }])
-    return True
+    """Log one pick. Returns True if newly added."""
+    return log_picks_bulk([player], source_tab, source_section) == 1
 
 
 def log_picks_bulk(players: list[dict], source_tab: str, source_section: str = "") -> int:
-    """Log multiple players at once; returns count of newly logged."""
-    return sum(1 for p in players if log_pick(p, source_tab, source_section))
+    """
+    Log multiple players in one read + one write.
+    Returns count of newly added rows (skips duplicates).
+    """
+    if not players:
+        return 0
+
+    today     = date.today().isoformat()
+    all_rows  = _load_all()
+    # Build O(1) dedup key set
+    existing  = frozenset(
+        (r.get("date"), r.get("source_tab"), r.get("source_section"), r.get("player_name"))
+        for r in all_rows
+    )
+
+    new_rows = []
+    for player in players:
+        name = player.get("player_name", "")
+        key  = (today, source_tab, source_section, name)
+        if key in existing:
+            continue
+        existing = existing | {key}   # update so duplicates within the batch are also caught
+        new_rows.append(_build_row(player, today, source_tab, source_section))
+
+    if new_rows:
+        _append(new_rows)
+    return len(new_rows)
 
 
 def settle_date(date_str: str, outcomes: dict[str, bool]) -> int:
     """
     Fill hr_result / profit_loss for unsettled picks on date_str.
-    outcomes maps player_name → True (HR) / False (no HR).
-    Returns count of rows newly settled.
+    Returns count of newly settled rows.
     """
     if not LOG_PATH.exists():
         return 0
-    rows = _load_all()
+    rows    = _load_all()
     changed = 0
     for row in rows:
-        if row.get("date") != date_str:
-            continue
-        if row.get("hr_result") not in ("", None):
+        if row.get("date") != date_str or row.get("hr_result") not in ("", None):
             continue
         name = row.get("player_name", "")
         if name not in outcomes:
@@ -143,19 +101,26 @@ def settle_date(date_str: str, outcomes: dict[str, bool]) -> int:
 
 
 def all_picks(limit: int = 0) -> list[dict]:
-    """All picks, newest first. limit=0 means no limit."""
+    """All picks newest-first. limit=0 means no limit."""
     rows = list(reversed(_load_all()))
     return rows[:limit] if limit else rows
 
 
-def summary_by(group_field: str) -> list[dict]:
+def settled_rows(rows: list[dict] | None = None) -> list[dict]:
+    """Rows with a definitive outcome. Pass pre-loaded rows to skip re-read."""
+    src = rows if rows is not None else _load_all()
+    return [r for r in src if r.get("hr_result") in ("0", "1")]
+
+
+def summary_by(group_field: str, rows: list[dict] | None = None) -> list[dict]:
     """
     Aggregate performance by any field (source_tab, source_section, etc.).
-    Returns list of dicts sorted by decided picks desc then ROI desc.
+    Pass pre-loaded rows to avoid re-reading the CSV.
+    Returns list sorted by decided picks desc then ROI desc.
     """
-    rows = _load_all()
+    src = rows if rows is not None else _load_all()
     agg: dict[str, dict] = {}
-    for row in rows:
+    for row in src:
         key = row.get(group_field, "Unknown") or "Unknown"
         if key not in agg:
             agg[key] = {"picks": 0, "wins": 0, "losses": 0, "pending": 0,
@@ -174,6 +139,7 @@ def summary_by(group_field: str) -> list[dict]:
         else:
             a["wagered"] += bet
             a["profit"]  += float(pl) if pl else 0.0
+            (a["wins"] if hr == "1" else a["losses"]).__class__  # just a reference holder
             if hr == "1":
                 a["wins"] += 1
             else:
@@ -181,9 +147,9 @@ def summary_by(group_field: str) -> list[dict]:
 
     result = []
     for key, a in agg.items():
-        decided   = a["wins"] + a["losses"]
-        win_rate  = a["wins"] / decided if decided else None
-        roi       = (a["profit"] / a["wagered"] * 100) if a["wagered"] > 0 else None
+        decided  = a["wins"] + a["losses"]
+        win_rate = a["wins"] / decided if decided else None
+        roi      = (a["profit"] / a["wagered"] * 100) if a["wagered"] > 0 else None
         result.append({
             group_field:  key,
             "Picks":      a["picks"],
@@ -202,16 +168,11 @@ def summary_by(group_field: str) -> list[dict]:
     return sorted(result, key=lambda x: (x["_decided"], x["_roi"]), reverse=True)
 
 
-def settled_rows() -> list[dict]:
-    """All rows with a definitive outcome (hr_result = '0' or '1')."""
-    return [r for r in _load_all() if r.get("hr_result") in ("0", "1")]
-
-
-def total_summary() -> dict:
-    """Overall totals across all picks."""
-    rows = _load_all()
+def total_summary(rows: list[dict] | None = None) -> dict:
+    """Overall totals. Pass pre-loaded rows to avoid re-read."""
+    src = rows if rows is not None else _load_all()
     picks, wins, losses, pending, wagered, profit = 0, 0, 0, 0, 0.0, 0.0
-    for r in rows:
+    for r in src:
         picks += 1
         hr = r.get("hr_result", "")
         try:
@@ -241,6 +202,11 @@ def total_summary() -> dict:
     }
 
 
+def load_all() -> list[dict]:
+    """Public read — returns all rows. Use this when you need the raw rows."""
+    return _load_all()
+
+
 # ── Internal ──────────────────────────────────────────────────────────────────
 
 def _load_all() -> list[dict]:
@@ -264,6 +230,50 @@ def _rewrite(rows: list[dict]) -> None:
         w = csv.DictWriter(f, fieldnames=FIELDS, extrasaction="ignore")
         w.writeheader()
         w.writerows(rows)
+
+
+def _build_row(player: dict, today: str, source_tab: str, source_section: str) -> dict:
+    def _f(key, default=0.0):
+        try:
+            v = player.get(key)
+            return float(str(v).replace("%", "").strip()) if v is not None else default
+        except (TypeError, ValueError):
+            return default
+
+    odds = player.get("fanduel_american") or player.get("best_american") or ""
+    bet  = _f("bet_dollars") or 10.0
+    return {
+        "date":           today,
+        "source_tab":     source_tab,
+        "source_section": source_section,
+        "player_name":    player.get("player_name", ""),
+        "team":           player.get("team", ""),
+        "player_id":      player.get("player_id", ""),
+        "american_odds":  str(odds),
+        "bet_dollars":    f"{bet:.2f}",
+        "model_prob_pct": f"{_f('model_prob') * 100:.2f}",
+        "ev_pct":         f"{_f('ev_pct'):.2f}",
+        "edge_pct":       f"{_f('edge_pct'):.2f}",
+        "confidence":     f"{_f('confidence'):.1f}",
+        "park_factor":    f"{_f('park_factor', 1.0):.4f}",
+        "pitcher_factor": f"{_f('pitcher_factor', 1.0):.4f}",
+        "platoon_factor": f"{_f('platoon_factor', 1.0):.4f}",
+        "weather_factor": f"{_f('weather_factor', 1.0):.4f}",
+        "streak_factor":  f"{_f('streak_factor', 1.0):.4f}",
+        "barrel_pct":     f"{_f('barrel_pct') or _f('brl_pct'):.2f}",
+        "exit_velo":      f"{_f('exit_velo'):.1f}",
+        "hard_hit_pct":   f"{_f('hard_hit_pct') or _f('hh_pct'):.2f}",
+        "launch_angle":   f"{_f('launch_angle') or _f('la'):.1f}",
+        "xslg":           f"{_f('xslg') or _f('x_slg'):.4f}",
+        "slg":            f"{_f('slg'):.4f}",
+        "iso":            f"{_f('iso'):.4f}",
+        "pull_pct":       f"{_f('pull_pct'):.2f}",
+        "pitcher_hr9":    f"{_f('pitcher_hr9'):.3f}",
+        "pitcher_k_pct":  f"{_f('pitcher_k_pct'):.4f}",
+        "lineup_spot":    str(player.get("lineup_spot", "")),
+        "hr_result":      "",
+        "profit_loss":    "",
+    }
 
 
 def _pl(bet: float, odds: int, hit_hr: bool) -> float:

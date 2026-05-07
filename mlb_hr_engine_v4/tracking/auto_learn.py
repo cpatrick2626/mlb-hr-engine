@@ -5,6 +5,12 @@ and generate specific, numbered formula adjustment suggestions.
 Called by the Performance tab to display insights and by apply_suggestion()
 to write approved changes to learned_adjustments.json.
 
+Performance notes:
+- analyze() calls _pt_load_all() ONCE, then passes rows through the whole pipeline.
+- summary_by() receives the pre-loaded rows list; no extra CSV reads.
+- _generate_suggestions() receives the settled rows list; no module-level cache.
+- apply_suggestion() also does a single read pass.
+
 Learning targets:
   - Feature correlations   → which model inputs actually predict HRs
   - Model calibration      → is model_prob accurate vs actual hit rate
@@ -17,9 +23,8 @@ import json
 import math
 import statistics
 from pathlib import Path
-from typing import Optional
 
-from tracking.pick_tracker import settled_rows, summary_by, total_summary
+from tracking.pick_tracker import load_all as _pt_load_all, settled_rows, summary_by, total_summary
 
 ADJUSTMENTS_PATH = Path(__file__).parent / "learned_adjustments.json"
 
@@ -65,11 +70,13 @@ MIN_PICKS_PER_FEATURE  = 10
 
 def analyze() -> dict:
     """
-    Full analysis pass. Returns a dict with keys:
+    Full analysis pass. ONE CSV read; rows passed through the entire pipeline.
+    Returns a dict with keys:
       correlations, calibration, tab_performance, source_section_performance,
       jig_comparison, suggestions, total_picks, sufficient_data
     """
-    rows = settled_rows()
+    all_rows = _pt_load_all()
+    rows     = settled_rows(all_rows)
     n = len(rows)
     if n < MIN_PICKS_FOR_ANALYSIS:
         return {
@@ -80,12 +87,13 @@ def analyze() -> dict:
 
     outcomes = [int(r.get("hr_result", 0)) for r in rows]
 
-    correlations       = _feature_correlations(rows, outcomes)
-    calibration        = _calibration(rows, outcomes)
-    tab_perf           = summary_by("source_tab")
-    section_perf       = summary_by("source_section")
-    jig_comparison     = _jig_comparison(tab_perf, section_perf)
-    suggestions        = _generate_suggestions(correlations, calibration, tab_perf, jig_comparison)
+    correlations   = _feature_correlations(rows, outcomes)
+    calibration    = _calibration(rows, outcomes)
+    # Pass pre-loaded rows so summary_by() skips its own CSV read
+    tab_perf       = summary_by("source_tab",     all_rows)
+    section_perf   = summary_by("source_section", all_rows)
+    jig_comparison = _jig_comparison(tab_perf, section_perf)
+    suggestions    = _generate_suggestions(correlations, calibration, tab_perf, jig_comparison, rows)
 
     return {
         "sufficient_data":       True,
@@ -105,8 +113,9 @@ def apply_suggestion(suggestion_id: str, value=None) -> bool:
     Write an approved suggestion to learned_adjustments.json.
     Returns True on success.
     """
-    adj = load_adjustments()
-    rows  = settled_rows()
+    adj      = load_adjustments()
+    all_rows = _pt_load_all()
+    rows     = settled_rows(all_rows)
     if not rows:
         return False
 
@@ -171,12 +180,12 @@ def _feature_correlations(rows: list[dict], outcomes: list[int]) -> list[dict]:
         corr = _point_biserial(vals, paired)
         n_hits = sum(paired)
         results.append({
-            "field":   field,
-            "label":   label,
-            "note":    note,
-            "corr":    round(corr, 4),
-            "n":       len(vals),
-            "n_hits":  n_hits,
+            "field":    field,
+            "label":    label,
+            "note":     note,
+            "corr":     round(corr, 4),
+            "n":        len(vals),
+            "n_hits":   n_hits,
             "strength": _corr_strength(corr),
         })
     return sorted(results, key=lambda x: abs(x["corr"]), reverse=True)
@@ -214,7 +223,7 @@ def _calibration(rows: list[dict], outcomes: list[int]) -> list[dict]:
         avg_actual = statistics.mean(actuals)
         bias = avg_actual - avg_pred
         buckets.append({
-            "bucket":       f"{avg_pred*100:.0f}%",
+            "bucket":        f"{avg_pred*100:.0f}%",
             "avg_predicted": round(avg_pred * 100, 1),
             "avg_actual":    round(avg_actual * 100, 1),
             "bias_pct":      round(bias * 100, 1),
@@ -235,7 +244,9 @@ def _generate_suggestions(
     calibration:  list[dict],
     tab_perf:     list[dict],
     jig_comp:     dict,
+    settled:      list[dict],
 ) -> list[dict]:
+    """Build numbered suggestion list. `settled` is the pre-loaded settled rows list."""
     suggestions = []
     sid = 0
 
@@ -246,16 +257,16 @@ def _generate_suggestions(
         new_weights = _compute_jig_weight_suggestion(correlations)
         weight_lines = [f"{lbl}: {new_weights.get(field, '—'):.0%}" for field, lbl in JIG_FIELDS if field in new_weights]
         suggestions.append({
-            "id":        "jig_weights",
-            "sid":       sid,
-            "title":     "Rebalance JIG Formula Weights",
-            "detail":    (
+            "id":     "jig_weights",
+            "sid":    sid,
+            "title":  "Rebalance JIG Formula Weights",
+            "detail": (
                 "Based on feature-outcome correlations from your settled picks, "
                 "the highest-predicting metrics should carry more weight. "
                 "Suggested new weights: " + ", ".join(weight_lines) + "."
             ),
-            "value":     new_weights,
-            "impact":    "medium",
+            "value":  new_weights,
+            "impact": "medium",
         })
 
     # ── 2. Model probability calibration ──────────────────────────────────
@@ -279,7 +290,6 @@ def _generate_suggestions(
             })
 
     # ── 3. EV threshold adjustment ─────────────────────────────────────────
-    settled = [r for r in _load_settled_cached()]
     low_ev  = [r for r in settled if 0 < float(r.get("ev_pct", 0) or 0) < 3.0]
     high_ev = [r for r in settled if float(r.get("ev_pct", 0) or 0) >= 5.0]
     if len(low_ev) >= 10 and len(high_ev) >= 10:
@@ -451,16 +461,6 @@ def _win_rate(rows: list[dict]) -> float:
     if not settled:
         return 0.0
     return sum(1 for r in settled if r.get("hr_result") == "1") / len(settled)
-
-
-_settled_cache: list[dict] = []
-
-
-def _load_settled_cached() -> list[dict]:
-    global _settled_cache
-    if not _settled_cache:
-        _settled_cache = settled_rows()
-    return _settled_cache
 
 
 def _save_adjustments(adj: dict) -> None:

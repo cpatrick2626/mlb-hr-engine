@@ -80,8 +80,14 @@ def tab_advanced_strategies(data: dict, parlays_callback=None):
     # ── Strategy Performance Dashboard ────────────────────────────────────────
     try:
         from tracking import strategy_log as _sl
-        _perf_data = _sl.summary()
-        _all_picks = _sl.all_picks()
+        import os as _os
+
+        @st.cache_data(ttl=120, show_spinner=False)
+        def _cached_strategy_perf(mtime: float):
+            return _sl.summary(), _sl.all_picks()
+
+        _sl_mtime = _os.path.getmtime(_sl.LOG_PATH) if _sl.LOG_PATH.exists() else 0.0
+        _perf_data, _all_picks = _cached_strategy_perf(_sl_mtime)
     except Exception:
         _perf_data = []
         _all_picks = []

@@ -3564,9 +3564,10 @@ def tab_performance():
         from tracking import pick_tracker as _pt
         import pandas as _pd_al
 
-        _pt_summary  = _pt.total_summary()
-        _pt_tab_perf = _pt.summary_by("source_tab")
-        _pt_sec_perf = _pt.summary_by("source_section")
+        _all_pt_rows = _pt.load_all()
+        _pt_summary  = _pt.total_summary(_all_pt_rows)
+        _pt_tab_perf = _pt.summary_by("source_tab",     _all_pt_rows)
+        _pt_sec_perf = _pt.summary_by("source_section", _all_pt_rows)
         _n_settled   = _pt_summary.get("decided", 0)
         _n_total     = _pt_summary.get("picks", 0)
 
@@ -3595,7 +3596,11 @@ def tab_performance():
                                  hide_index=True, use_container_width=True)
 
         if _n_settled >= 15:
-            _analysis = _al.analyze()
+            @st.cache_data(ttl=300, show_spinner=False)
+            def _cached_analyze():
+                from tracking import auto_learn as _al_inner
+                return _al_inner.analyze()
+            _analysis = _cached_analyze()
             if _analysis.get("sufficient_data"):
                 with st.expander(f"🔬 Feature Analysis ({_n_settled} settled picks)", expanded=False):
                     st.markdown("#### Which factors actually predict home runs?")

@@ -29,12 +29,14 @@ def log_pick(player: dict, strategy: str) -> bool:
     Record a strategy-sourced pick.
     Returns True if newly added, False if already logged today for this strategy.
     """
-    today = date.today().isoformat()
-    name  = player.get("player_name", "")
-    existing = _load_all()
-    for row in existing:
-        if row.get("date") == today and row.get("strategy") == strategy and row.get("player_name") == name:
-            return False
+    today    = date.today().isoformat()
+    name     = player.get("player_name", "")
+    existing = frozenset(
+        (r.get("date"), r.get("strategy"), r.get("player_name"))
+        for r in _load_all()
+    )
+    if (today, strategy, name) in existing:
+        return False
 
     odds = player.get("fanduel_american") or player.get("best_american") or ""
     bet  = player.get("bet_dollars", 0) or 10.0
