@@ -922,12 +922,13 @@ def _game_time_utc_hour(game_time_utc: str) -> int | None:
 
 
 def _gate_data(data: dict, cutoff: "int | None") -> dict:
-    """Return data with all_players and ranked filtered to games at or after cutoff UTC hour."""
+    """Return data with all_players and ranked filtered to games at or after cutoff ET hour."""
     if cutoff is None:
         return data
+    cutoff_et_hour = (cutoff - 4) % 24
     def _keep(p):
-        gh = _game_time_utc_hour(p.get("game_time_utc", ""))
-        return gh is None or gh >= cutoff
+        gt_et = _game_time_et(p.get("game_time_utc", ""))
+        return gt_et is None or gt_et.hour >= cutoff_et_hour
     gated = dict(data)
     gated["all_players"] = [p for p in data.get("all_players", []) if _keep(p)]
     gated["ranked"]      = [p for p in data.get("ranked", []) if _keep(p)]
@@ -1024,11 +1025,14 @@ def _apply_ui_filters(
             continue
         if p.get("pitcher_factor", 1.0) < config.MAX_PITCHER_SUPPRESSOR:
             continue
-        # Time gate: skip players whose game starts before the UTC cutoff
+        # Time gate: skip players whose game starts before the ET cutoff.
+        # Comparison done in ET to avoid midnight-UTC rollover for late games.
         if cutoff_utc_hour is not None:
-            gh = _game_time_utc_hour(p.get("game_time_utc", ""))
-            if gh is not None and gh < cutoff_utc_hour:
-                continue
+            gt_et = _game_time_et(p.get("game_time_utc", ""))
+            if gt_et is not None:
+                cutoff_et_hour = (cutoff_utc_hour - 4) % 24
+                if gt_et.hour < cutoff_et_hour:
+                    continue
         result.append(p)
     return _rank_picks(result)
 
@@ -2614,11 +2618,11 @@ def tab_jig(data: dict):
         "<div style='font-size:22px; font-weight:900; color:#FF6666; "
         "letter-spacing:2px; margin-bottom:2px;'>⚙️ JIG</div>"
         "<div style='font-size:12px; color:#888; margin-bottom:12px;'>"
-        "Power contact index — xSLG · ISO · Hard Hit · Barrel · Launch Angle · Pitcher Mix</div>",
+        "Power contact index — xSLG · ISO · Hard Hit · Barrel · Launch Angle · Pull% · Pitcher Mix</div>",
         unsafe_allow_html=True,
     )
 
-    _JIG_SLIDER_KEYS = ["jig_slg","jig_iso","jig_hh","jig_brl","jig_la","jig_pit","jig_score"]
+    _JIG_SLIDER_KEYS = ["jig_slg","jig_iso","jig_hh","jig_brl","jig_la","jig_pull","jig_pit","jig_score"]
     with st.expander("⚙️ JIG Thresholds", expanded=False):
         if st.button("↺ Reset to defaults", key="jig_reset"):
             for _k in _JIG_SLIDER_KEYS:
@@ -2633,6 +2637,7 @@ def tab_jig(data: dict):
             brl_min    = st.slider("Min Barrel%",         0.0, 25.0,  5.0, 0.5,  key="jig_brl")
         with tc3:
             la_min     = st.slider("Min Launch Angle°",  0.0, 25.0, 10.0, 0.5,  key="jig_la")
+            pull_min   = st.slider("Min Pull%",          0.0, 60.0, 38.0, 0.5,  key="jig_pull")
             pit_min    = st.slider("Min Pitcher Factor", 0.70, 1.30, 0.95, 0.01, key="jig_pit")
         score_min  = st.slider("Min JIG Score (Picks gate)", 0, 100, 40, 1, key="jig_score")
 
@@ -2648,24 +2653,26 @@ def tab_jig(data: dict):
     def _jig_metrics(p):
         # Prefer xSLG (Statcast expected); fall back to actual season SLG
         xslg_v = _pf(p.get("xslg"), 0.0)
-        slg = xslg_v if xslg_v > 0.0 else _pf(p.get("actual_slg"), 0.0)
-        iso = _pf(p.get("xiso"), 0.0)
-        hh  = _pf(p.get("hard_hit"))
-        brl = _pf(p.get("barrel_pct"))
-        la  = _pf(p.get("avg_launch_angle"))
-        pit = _pf(p.get("pitcher_factor"), 1.0)
-        return slg, iso, hh, brl, la, pit
+        slg  = xslg_v if xslg_v > 0.0 else _pf(p.get("actual_slg"), 0.0)
+        iso  = _pf(p.get("xiso"), 0.0)
+        hh   = _pf(p.get("hard_hit"))
+        brl  = _pf(p.get("barrel_pct"))
+        la   = _pf(p.get("avg_launch_angle"))
+        pull = _pf(p.get("pull_pct"))
+        pit  = _pf(p.get("pitcher_factor"), 1.0)
+        return slg, iso, hh, brl, la, pull, pit
 
     def _slg_label(p):
         return "xSLG" if _pf(p.get("xslg"), 0.0) > 0.0 else "SLG"
 
     def _jig_score(p):
-        slg, iso, hh, brl, la, pit = _jig_metrics(p)
+        slg, iso, hh, brl, la, pull, pit = _jig_metrics(p)
         def _n(val, thr, scale):
             return min(max((val - thr) / scale + 0.5, 0.0), 1.0)
-        s = (_n(slg, slg_min, 0.15) + _n(iso, iso_min, 0.12) +
-             _n(hh,  hh_min,  12.0) + _n(brl, brl_min, 6.0) +
-             _n(la,  la_min,  10.0) + _n(pit, pit_min, 0.15)) / 6.0
+        s = (_n(slg,  slg_min,  0.15) + _n(iso, iso_min, 0.12) +
+             _n(hh,   hh_min,   12.0) + _n(brl, brl_min, 6.0) +
+             _n(la,   la_min,   10.0) + _n(pull, pull_min, 8.0) +
+             _n(pit,  pit_min,  0.15)) / 7.0
         return round(s * 100, 1)
 
     def _passes_all(p):
@@ -2678,7 +2685,7 @@ def tab_jig(data: dict):
     def _jig_card(entry, key_prefix="jig"):
         p   = entry["player"]
         jig = entry["jig"]
-        slg, iso, hh, brl, la, pit = _jig_metrics(p)
+        slg, iso, hh, brl, la, pull, pit = _jig_metrics(p)
         name  = p.get("player_name", "Unknown")
         team  = p.get("team", "")
         opp   = p.get("opponent", "")
@@ -2713,6 +2720,8 @@ def tab_jig(data: dict):
             f"<div style='background:#111128; border-radius:5px; padding:5px 8px;'>"
             f"<div style='color:#666;'>Launch°</div>{_badge(la, la_min, '--' if p.get('avg_launch_angle') in (None, '--') else f'{la:.1f}°')}</div>"
             f"<div style='background:#111128; border-radius:5px; padding:5px 8px;'>"
+            f"<div style='color:#666;'>Pull%</div>{_badge(pull, pull_min, '--' if p.get('pull_pct') in (None, '--') else f'{pull:.1f}%')}</div>"
+            f"<div style='background:#111128; border-radius:5px; padding:5px 8px;'>"
             f"<div style='color:#666;'>Pit Fac</div>{_badge(pit, pit_min, f'{pit:.3f}x')}</div>"
             f"</div>"
             + (f"<div style='margin-top:8px; font-size:12px; display:flex; gap:16px;'>"
@@ -2741,20 +2750,21 @@ def tab_jig(data: dict):
                  if x["player"].get("best_american") and x["player"].get("ev_pct", 0) > 0]
 
     with st.expander(f"🔍 Debug — {len(all_players)} players in pool, {len(qualified)} qualified", expanded=len(qualified)==0):
-        st.write(f"**Gate:** JIG ≥ {score_min} | **Scoring targets:** slg {slg_min} iso {iso_min} hh {hh_min} brl {brl_min} la {la_min} pit {pit_min}")
+        st.write(f"**Gate:** JIG ≥ {score_min} | **Scoring targets:** slg {slg_min} iso {iso_min} hh {hh_min} brl {brl_min} la {la_min} pull {pull_min} pit {pit_min}")
         if all_players:
             import pandas as pd
             dbg = []
             for entry in scored[:20]:
                 p = entry["player"]
-                slg, iso, hh, brl, la, pit = _jig_metrics(p)
+                slg, iso, hh, brl, la, pull, pit = _jig_metrics(p)
                 dbg.append({
                     "Name":   p.get("player_name","")[:18],
                     "JIG":    entry["jig"],
                     "passes": entry["passes"],
                     "slg→":   round(slg,3), "iso→": round(iso,3),
                     "hh→":    round(hh,1),  "brl→": round(brl,1),
-                    "la→":    round(la,1),  "pit→": round(pit,3),
+                    "la→":    round(la,1),  "pull→": round(pull,1),
+                    "pit→":   round(pit,3),
                 })
             st.dataframe(pd.DataFrame(dbg), hide_index=True, use_container_width=True)
         else:

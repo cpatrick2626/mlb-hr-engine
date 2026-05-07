@@ -122,7 +122,7 @@ def _get_events() -> list[dict]:
     global _last_error
     now_utc = datetime.now(timezone.utc)
     today_start = now_utc.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(hours=9)   # ~5 AM ET
-    today_end   = today_start + timedelta(hours=20)  # ~1 AM next-day ET
+    today_end   = today_start + timedelta(hours=23)  # ~4 AM next-day ET — covers all late west-coast games
     try:
         resp = _SESSION.get(
             f"{BASE}/sports/baseball_mlb/events",
