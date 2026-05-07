@@ -466,7 +466,8 @@ def get_data():
                     state="complete", expanded=False,
                 )
 
-                ranked = data.get("ranked", [])
+                ranked      = data.get("ranked", [])
+                all_players = data.get("all_players", [])
                 if ranked:
                     try:
                         logged = pnl_tracker.log_picks(ranked, model_version="v4")
@@ -478,6 +479,18 @@ def get_data():
                         lm_tracker.log_current_odds(ranked)
                     except Exception as e:
                         st.warning(f"Line movement tracking error: {e}")
+
+                # Auto-log all formula picks to unified pick tracker (no FD slip needed)
+                try:
+                    from tracking import pick_tracker as _pt
+                    # Qualified picks — these passed all 7 filters
+                    _pt.log_picks_bulk(ranked, source_tab="Engine", source_section="Qualified Picks")
+                    # All players the engine scored (for calibration across the full prob range)
+                    _ranked_names = {p.get("player_name") for p in ranked}
+                    non_ranked = [p for p in all_players if p.get("player_name") not in _ranked_names]
+                    _pt.log_picks_bulk(non_ranked, source_tab="Engine", source_section="All Players")
+                except Exception as e:
+                    pass  # never block the UI for tracking errors
 
                 try:
                     pnl_tracker.settle_all_unsettled()
