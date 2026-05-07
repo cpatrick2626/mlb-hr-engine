@@ -4151,6 +4151,8 @@ def main():
 
                 _topic_live = st.session_state.get("ntfy_topic", _cur_topic)
                 if _topic_live:
+                    # Always keep env var in sync so _notify._topic() reads it correctly
+                    _notify_os.environ["NTFY_TOPIC"] = _topic_live
                     st.success(f"Notifications active — topic: `{_topic_live}`")
                     if st.button("Send test notification", key="ntfy_test"):
                         ok = _notify.send_hr_hit("Test Player", "MLB", "+600", 60.0, "test")
