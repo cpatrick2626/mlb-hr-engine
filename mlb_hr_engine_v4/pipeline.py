@@ -336,7 +336,8 @@ def load_game_data(
     batter_ids = set()
     pitcher_ids = set()
 
-    # Pre-scan games to collect all player IDs
+    # Pre-scan games to collect all player IDs; cache rosters to avoid double API calls
+    _roster_cache: dict[int, list] = {}
     for game in games:
         # Add starting pitchers
         if game.get("home_pitcher", {}).get("id"):
@@ -354,8 +355,9 @@ def load_game_data(
                     if batter.get("id"):
                         batter_ids.add(batter["id"])
             elif tid:
-                roster = mlb_stats.get_team_active_roster(tid)
-                for player in roster:
+                if tid not in _roster_cache:
+                    _roster_cache[tid] = mlb_stats.get_team_active_roster(tid)
+                for player in _roster_cache[tid]:
                     if player.get("id"):
                         batter_ids.add(player["id"])
 
@@ -393,7 +395,9 @@ def load_game_data(
         ]:
             if not lineup:
                 if team_id:
-                    lineup = mlb_stats.get_team_active_roster(team_id)
+                    if team_id not in _roster_cache:
+                        _roster_cache[team_id] = mlb_stats.get_team_active_roster(team_id)
+                    lineup = _roster_cache[team_id]
                 if not lineup:
                     continue
             for batter in lineup:

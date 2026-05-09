@@ -326,8 +326,7 @@ def _evaluate_parlay(legs: list[dict]) -> dict:
 def parlay_bet_size(parlay: dict, bankroll: float = None) -> float:
     """Kelly-sized parlay bet (more conservative: use 1/8 Kelly for parlays)."""
     if bankroll is None:
-        import config as cfg
-        bankroll = cfg.BANKROLL
+        bankroll = config.BANKROLL
 
     dec = parlay["combined_decimal"]
     # Use combined_ev_prob (capped at 1.4× market per leg) to match the EV

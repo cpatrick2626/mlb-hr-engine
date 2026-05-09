@@ -25,6 +25,9 @@ import requests
 
 import config
 
+_SESSION = requests.Session()
+_SESSION.headers.update({"User-Agent": "Codex-HR-Engine/clv"})
+
 CLV_LOG = Path(__file__).parent / "clv_log.csv"
 
 CLV_FIELDS = [
@@ -197,7 +200,7 @@ def _fetch_current_hr_odds() -> dict[str, int]:
         now_utc     = datetime.now(timezone.utc)
         today_start = now_utc.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(hours=9)
         today_end   = today_start + timedelta(hours=20)
-        resp = requests.get(
+        resp = _SESSION.get(
             "https://api.the-odds-api.com/v4/sports/baseball_mlb/events",
             params={
                 "apiKey":             config.ODDS_API_KEY,
@@ -210,7 +213,7 @@ def _fetch_current_hr_odds() -> dict[str, int]:
         events = resp.json() if resp.status_code == 200 else []
         best: dict[str, int] = {}
         for event in events:
-            r2 = requests.get(
+            r2 = _SESSION.get(
                 f"https://api.the-odds-api.com/v4/sports/baseball_mlb/events/{event['id']}/odds",
                 params={"apiKey": config.ODDS_API_KEY, "regions": "us",
                         "markets": "batter_home_runs", "oddsFormat": "american"},

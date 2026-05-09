@@ -958,13 +958,6 @@ def _game_time_et(game_time_utc: str) -> "_dt.time | None":
 
 
 
-def _game_time_utc_hour(game_time_utc: str) -> int | None:
-    """Return UTC hour (0-23) from a game_time_utc string, or None if unparseable."""
-    try:
-        return int(game_time_utc[11:13])
-    except (TypeError, ValueError, IndexError):
-        return None
-
 
 def _gate_data(data: dict, cutoff: "int | None") -> dict:
     """Return data with all_players and ranked filtered to games at or after cutoff ET hour."""
@@ -1449,11 +1442,14 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
             st.caption("Select all text above and copy (⌘A / Ctrl+A → ⌘C / Ctrl+C).")
 
     all_by_model = data.get("all_by_model", [])
-    # Apply time gate to all_by_model so All/Prime/Watch tabs respect the cutoff too
+    # Apply time gate to all_by_model so All/Prime/Watch tabs respect the cutoff too.
+    # Must compare in ET, not raw UTC — late games (9pm+ ET) cross midnight UTC and would
+    # have UTC hours 01/02, failing a raw >= 23 check even though they're after the cutoff.
     if cutoff_utc_hour is not None:
+        _abm_cutoff_et = (cutoff_utc_hour - 4) % 24
         all_by_model = [
             p for p in all_by_model
-            if (gh := _game_time_utc_hour(p.get("game_time_utc", ""))) is None or gh >= cutoff_utc_hour
+            if (gt := _game_time_et(p.get("game_time_utc", ""))) is None or gt.hour >= _abm_cutoff_et
         ]
     PRIME_FLOOR  = 0.15
     _n_prime = len([p for p in all_by_model if p.get("model_prob", 0) >= PRIME_FLOOR])
@@ -3854,7 +3850,9 @@ def main():
                 _selected_sorted = sorted(
                     _selected,
                     key=lambda s: (
-                        _game_time_utc_hour(_slip_map[s].get("game_time_utc", "")) or 99
+                        (lambda t: t.hour * 60 + t.minute if t else 9999)(
+                            _game_time_et(_slip_map[s].get("game_time_utc", ""))
+                        )
                     )
                 )
                 for i, s in enumerate(_selected_sorted):

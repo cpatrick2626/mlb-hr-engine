@@ -22,6 +22,9 @@ import requests
 
 from tracking import sheets as _sheets
 
+_SESSION = requests.Session()
+_SESSION.headers.update({"User-Agent": "Codex-HR-Engine/pnl"})
+
 LOG_PATH     = Path(__file__).parent / "picks_log.csv"
 RESULTS_PATH = Path(__file__).parent / "results.csv"
 
@@ -402,7 +405,7 @@ def _read_existing_dates(path: Path) -> set[str]:
 
 def _mlb_hr_result(player_id: int, date_str: str) -> Optional[bool]:
     try:
-        resp = requests.get(
+        resp = _SESSION.get(
             f"https://statsapi.mlb.com/api/v1/people/{player_id}/stats",
             params={"stats": "gameLog", "group": "hitting", "season": date_str[:4]},
             timeout=10,
