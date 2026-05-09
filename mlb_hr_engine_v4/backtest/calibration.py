@@ -147,7 +147,7 @@ def calibration_report(rows: list[dict], date_range: str) -> None:
             mp = r.get("model_prob", 0)
             odds = _est_odds(mp)
             if r.get("hit_hr"):
-                pnl += (odds / 100) * FLAT_BET if odds > 0 else (100 / abs(odds)) * FLAT_BET
+                pnl += (odds / 100) * FLAT_BET
             else:
                 pnl -= FLAT_BET
         roi = pnl / total_bet * 100 if total_bet > 0 else 0

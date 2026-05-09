@@ -113,7 +113,7 @@ def get_batter_statcast(year: int = None, player_ids: set[int] = None) -> dict[i
             continue   # already flagged as prior
         curr_pa = curr[pid].get("pa", 0)
         if 0 < curr_pa < MIN_CURRENT_YEAR_PA and pid in prior:
-            trust   = curr_pa / MIN_CURRENT_YEAR_PA   # 0..1 over 0..30 PA
+            trust   = curr_pa / MIN_CURRENT_YEAR_PA   # 0..1 over 0..50 PA
             blended = dict(curr[pid])
             for key in _BATTER_BLEND_KEYS:
                 cv = curr[pid].get(key)
@@ -485,7 +485,6 @@ def _parse_statcast_csv(raw: str, year: int = None, player_ids: frozenset[int] =
                 continue
 
             barrel_rate = _f(row, "brl_pa",           div=100.0)
-            barrel_bip  = _f(row, "brl_percent",      div=100.0)
             ev          = _f(row, "avg_hit_speed",     "exit_velocity_avg")
             hard_hit    = _f(row, "ev95percent",       "hard_hit_percent", div=100.0)
             avg_la      = _f(row, "avg_hit_angle", "avg_launch_angle", "launch_angle_avg", allow_negative=True)
@@ -496,7 +495,6 @@ def _parse_statcast_csv(raw: str, year: int = None, player_ids: frozenset[int] =
 
             row_out: dict = {"season": _year}
             if barrel_rate is not None: row_out["barrel_rate"]       = barrel_rate
-            if barrel_bip  is not None: row_out["barrel_bip_rate"]   = barrel_bip
             if ev          is not None: row_out["exit_velocity_avg"] = ev
             if hard_hit    is not None: row_out["hard_hit_pct"]      = hard_hit
             if avg_la      is not None: row_out["avg_launch_angle"]  = avg_la

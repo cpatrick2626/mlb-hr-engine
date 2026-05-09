@@ -300,24 +300,21 @@ def get_player_recent_stats(player_id: int) -> dict:
     # Fall back to individual fetch
     splits = _game_log_splits(player_id)  # already sorted newest-first
     recent = splits[:config.RECENT_GAMES]
-    totals = {"homeRuns": 0, "plateAppearances": 0, "atBats": 0,
-              "sluggingPercentage": 0, "avg": 0, "games": 0}
-    total_ab = 0
+    totals = {"homeRuns": 0, "plateAppearances": 0, "atBats": 0, "games": 0}
     total_hits = 0
     total_tb = 0
     for split in recent:
         st = split.get("stat", {})
         totals["homeRuns"]         += int(st.get("homeRuns", 0))
         totals["plateAppearances"] += int(st.get("plateAppearances", 0))
-        ab = int(st.get("atBats", 0))
-        totals["atBats"]           += ab
+        totals["atBats"]           += int(st.get("atBats", 0))
         totals["games"]            += 1
-        total_ab   += ab
         total_hits += int(st.get("hits", 0))
         total_tb   += int(st.get("totalBases", 0))
-    if total_ab > 0:
-        totals["avg"]              = total_hits / total_ab
-        totals["sluggingPercentage"] = total_tb / total_ab
+    ab = totals["atBats"]
+    if ab > 0:
+        totals["avg"]                = total_hits / ab
+        totals["sluggingPercentage"] = total_tb / ab
     return totals
 
 
@@ -728,10 +725,8 @@ def _calculate_recent_from_logs(game_logs: list) -> dict:
         totals["onBasePercentage"] = round(
             (totals["hits"] + totals["baseOnBalls"]) / totals["plateAppearances"], 3
         )
-        totals["ops"] = totals["onBasePercentage"] + totals["sluggingPercentage"]
     else:
         totals["onBasePercentage"] = 0.0
-        totals["ops"] = 0.0
 
     return totals
 

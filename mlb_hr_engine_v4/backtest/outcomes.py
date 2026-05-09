@@ -64,7 +64,7 @@ def _get_schedule_final(date_str: str) -> list[dict]:
     data = _get("/schedule", {
         "sportId": 1,
         "date": date_str,
-        "hydrate": "probablePitcher,team,lineups",
+        "hydrate": "team",
     })
     games = []
     for date_entry in data.get("dates", []):
@@ -75,10 +75,9 @@ def _get_schedule_final(date_str: str) -> list[dict]:
             home = g.get("teams", {}).get("home", {})
             away = g.get("teams", {}).get("away", {})
             games.append({
-                "game_pk":    g.get("gamePk"),
-                "home_team":  home.get("team", {}).get("abbreviation", ""),
-                "away_team":  away.get("team", {}).get("abbreviation", ""),
-                "lineups":    g.get("lineups", {}),
+                "game_pk":   g.get("gamePk"),
+                "home_team": home.get("team", {}).get("abbreviation", ""),
+                "away_team": away.get("team", {}).get("abbreviation", ""),
             })
     return games
 
