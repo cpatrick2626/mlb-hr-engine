@@ -341,11 +341,11 @@ def load_game_data(
         valid_games.append(g)
     games = valid_games
 
-        # Collect odds result with error handling
-        try:
-            all_props, odds_source, odds_quota = future_odds.result()
-        except Exception:
-            all_props, odds_source, odds_quota = [], "none", {"used": None, "remaining": None}
+    # Collect odds result with error handling
+    try:
+        all_props, odds_source, odds_quota = future_odds.result()
+    except Exception:
+        all_props, odds_source, odds_quota = [], "none", {"used": None, "remaining": None}
 
     # Collect all player and pitcher IDs from lineups first (for Statcast filtering)
     _cb("Collecting lineup players...")
