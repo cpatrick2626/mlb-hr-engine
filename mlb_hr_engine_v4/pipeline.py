@@ -133,7 +133,7 @@ def _build_player_profile(
     interaction    = batter_excess * pitcher_excess * 0.20
 
     early_supp    = prob.early_season_suppressor(season_pa, sc_source)
-    adjusted_rate = hr_rate * streak_fac * k_fac * early_supp * (1.0 + interaction)
+    adjusted_rate = min(0.15, hr_rate * streak_fac * k_fac * early_supp * (1.0 + interaction))
     model_prob = prob.game_hr_probability(
         adjusted_rate, exp_pa,
         pk_factor=pk_factor, pitcher_fac=pit_factor,
@@ -215,7 +215,7 @@ def _match_odds(player, odds_lookup, unique_names):
     if folded_name not in _NAME_MATCH_CACHE:
         m = fuzz_process.extractOne(
             folded_name, unique_names,
-            scorer=fuzz.token_sort_ratio, score_cutoff=82,
+            scorer=fuzz.token_sort_ratio, score_cutoff=90,
         )
         _NAME_MATCH_CACHE[folded_name] = m[0] if m else None
     matched_name = _NAME_MATCH_CACHE[folded_name]
@@ -286,6 +286,8 @@ def _enrich_with_ev(player):
         barrel_rate=barrel_raw,
         pitcher_hr9=pitcher_hr9,
         xslg=_safe_float(player.get("xslg")),
+        lineup_confirmed=bool(player.get("lineup_spot")),
+        n_books=player.get("n_books", 1),
     )
     player["bet_dollars"] = sizing.bet_dollars(model_p, player["best_american"])
     return player
@@ -323,7 +325,21 @@ def load_game_data(
         future_odds = executor.submit(odds_api.get_hr_odds_all_games)
 
         # Collect schedule result
-        games = future_schedule.result()
+        try:
+            games = future_schedule.result()
+        except Exception as e:
+            print(f"[pipeline] schedule fetch failed: {e}")
+            games = []
+
+    # Validate game dates — reject stale cached games from wrong date
+    valid_games = []
+    for g in games:
+        g_date = g.get("game_date") or (g.get("game_time_utc", "")[:10] if g.get("game_time_utc") else "")
+        if g_date and g_date != game_date:
+            print(f"[pipeline] WARNING: skipping game {g.get('game_pk')} dated {g_date} (expected {game_date})")
+            continue
+        valid_games.append(g)
+    games = valid_games
 
         # Collect odds result with error handling
         try:

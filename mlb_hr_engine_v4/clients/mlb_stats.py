@@ -79,6 +79,15 @@ def _game_log_splits(player_id: int) -> list:
     return _GAME_LOG_CACHE[player_id]
 
 
+def _safe_int(val, default: int = 0, min_val: int = 0) -> int:
+    """Convert an API stat value to int, tolerating None, '', '--', and floats.
+    Clamps to min_val (default 0) to reject impossible negative counts."""
+    try:
+        return max(min_val, int(val or default))
+    except (ValueError, TypeError):
+        return default
+
+
 def parse_ip(innings_raw) -> float:
     """Parse MLB Stats API inningsPitched ('6.2' means 6⅔ IP) to a float."""
     try:
@@ -98,7 +107,10 @@ def _get(path: str, params: dict = None) -> dict:
             if resp.status_code in (404, 403):
                 return {}  # permanent client error — don't retry
             resp.raise_for_status()
-            return resp.json()
+            try:
+                return resp.json()
+            except ValueError:
+                raise requests.RequestException(f"Non-JSON response from MLB API (status={resp.status_code})")
         except requests.RequestException:
             if attempt == 2:
                 raise
@@ -305,12 +317,12 @@ def get_player_recent_stats(player_id: int) -> dict:
     total_tb = 0
     for split in recent:
         st = split.get("stat", {})
-        totals["homeRuns"]         += int(st.get("homeRuns", 0))
-        totals["plateAppearances"] += int(st.get("plateAppearances", 0))
-        totals["atBats"]           += int(st.get("atBats", 0))
+        totals["homeRuns"]         += _safe_int(st.get("homeRuns"))
+        totals["plateAppearances"] += _safe_int(st.get("plateAppearances"))
+        totals["atBats"]           += _safe_int(st.get("atBats"))
         totals["games"]            += 1
-        total_hits += int(st.get("hits", 0))
-        total_tb   += int(st.get("totalBases", 0))
+        total_hits += _safe_int(st.get("hits"))
+        total_tb   += _safe_int(st.get("totalBases"))
     ab = totals["atBats"]
     if ab > 0:
         totals["avg"]                = total_hits / ab
@@ -380,9 +392,9 @@ def get_player_short_form(player_id: int, days: int = 14) -> dict:
     totals = {"homeRuns": 0, "plateAppearances": 0, "atBats": 0, "games": 0}
     for split in recent:
         st = split.get("stat", {})
-        totals["homeRuns"]         += int(st.get("homeRuns", 0))
-        totals["plateAppearances"] += int(st.get("plateAppearances", 0))
-        totals["atBats"]           += int(st.get("atBats", 0))
+        totals["homeRuns"]         += _safe_int(st.get("homeRuns"))
+        totals["plateAppearances"] += _safe_int(st.get("plateAppearances"))
+        totals["atBats"]           += _safe_int(st.get("atBats"))
         totals["games"]            += 1
     return totals
 
@@ -410,7 +422,7 @@ def get_player_platoon_splits(player_id: int) -> dict:
             st   = split.get("stat", {})
             pa   = int(st.get("plateAppearances", 0))
             hr   = int(st.get("homeRuns", 0))
-            if pa > 0:
+            if pa >= 30:
                 result[code]           = hr / pa
                 result[f"{code}_pa"]   = pa
         # Cache even when empty — player has no PA vs each hand yet this season.
@@ -434,12 +446,12 @@ def get_pitcher_recent_stats(pitcher_id: int, days: int = 30) -> dict:
                     "strikeOuts": 0, "groundOuts": 0, "airOuts": 0, "baseOnBalls": 0}
     for split in recent:
         st = split.get("stat", {})
-        totals["homeRuns"]     += int(st.get("homeRuns", 0))
-        totals["battersFaced"] += int(st.get("battersFaced", 0))
-        totals["strikeOuts"]   += int(st.get("strikeOuts", 0))
-        totals["groundOuts"]   += int(st.get("groundOuts", 0))
-        totals["airOuts"]      += int(st.get("airOuts", 0))
-        totals["baseOnBalls"]  += int(st.get("baseOnBalls", 0))
+        totals["homeRuns"]     += _safe_int(st.get("homeRuns"))
+        totals["battersFaced"] += _safe_int(st.get("battersFaced"))
+        totals["strikeOuts"]   += _safe_int(st.get("strikeOuts"))
+        totals["groundOuts"]   += _safe_int(st.get("groundOuts"))
+        totals["airOuts"]      += _safe_int(st.get("airOuts"))
+        totals["baseOnBalls"]  += _safe_int(st.get("baseOnBalls"))
         totals["inningsPitched"] += parse_ip(st.get("inningsPitched", "0.0"))
     return totals
 
@@ -497,7 +509,10 @@ def _acc_hitting(splits: list) -> dict:
     for s in splits:
         st = s.get("stat", {})
         for k in keys:
-            totals[k] += int(st.get(k, 0))
+            try:
+                totals[k] += int(st.get(k) or 0)
+            except (ValueError, TypeError):
+                pass
 
     ab = totals["atBats"]
     hr = totals["homeRuns"]
@@ -535,12 +550,12 @@ def _acc_pitching(splits: list) -> dict:
                     "strikeOuts": 0, "groundOuts": 0, "airOuts": 0, "baseOnBalls": 0}
     for s in splits:
         st = s.get("stat", {})
-        totals["homeRuns"]     += int(st.get("homeRuns", 0))
-        totals["battersFaced"] += int(st.get("battersFaced", 0))
-        totals["strikeOuts"]   += int(st.get("strikeOuts", 0))
-        totals["groundOuts"]   += int(st.get("groundOuts", 0))
-        totals["airOuts"]      += int(st.get("airOuts", 0))
-        totals["baseOnBalls"]  += int(st.get("baseOnBalls", 0))
+        totals["homeRuns"]     += _safe_int(st.get("homeRuns"))
+        totals["battersFaced"] += _safe_int(st.get("battersFaced"))
+        totals["strikeOuts"]   += _safe_int(st.get("strikeOuts"))
+        totals["groundOuts"]   += _safe_int(st.get("groundOuts"))
+        totals["airOuts"]      += _safe_int(st.get("airOuts"))
+        totals["baseOnBalls"]  += _safe_int(st.get("baseOnBalls"))
         totals["inningsPitched"] += parse_ip(st.get("inningsPitched", "0.0"))
     # Keep inningsPitched as a float so pitcher_recent_factor can use < comparisons directly.
     # pitcher_hr_factor also accepts float (handled via isinstance check in probability.py).
@@ -559,6 +574,23 @@ def get_pitcher_days_rest(pitcher_id: int) -> int:
         last_date = date.fromisoformat(last_date_str)
         today = date.fromisoformat(config.TARGET_DATE) if config.TARGET_DATE else date.today()
         return max(0, (today - last_date).days)
+    except Exception:
+        return 5
+
+
+def get_pitcher_days_rest_as_of(pitcher_id: int, date_str: str) -> int:
+    """Days since pitcher's last start strictly before date_str. Used by backtest."""
+    splits = _pitcher_game_log_splits(pitcher_id)
+    prior = [s for s in splits if s.get("date", "") < date_str]
+    if not prior:
+        return 5
+    last_date_str = prior[0].get("date", "")
+    if not last_date_str:
+        return 5
+    try:
+        last_date = date.fromisoformat(last_date_str)
+        target = date.fromisoformat(date_str)
+        return max(0, (target - last_date).days)
     except Exception:
         return 5
 
@@ -710,7 +742,7 @@ def _calculate_recent_from_logs(game_logs: list) -> dict:
 
     for stat in recent_logs:
         for key in totals:
-            totals[key] += int(stat.get(key, 0))
+            totals[key] += _safe_int(stat.get(key))
 
     # Calculate percentages
     if totals["atBats"] > 0:

@@ -271,7 +271,11 @@ def pnl_summary() -> dict:
         if pl == "" or pl is None:
             pending += 1
         else:
-            profit = float(pl)
+            try:
+                profit = float(pl)
+            except (ValueError, TypeError):
+                pending += 1
+                continue
             total_profit += profit
             if profit > 0:
                 wins += 1
@@ -425,6 +429,10 @@ def _mlb_hr_result(player_id: int, date_str: str) -> Optional[bool]:
 def _compute_pl(bet: float, odds: int, hit_hr: bool) -> float:
     """Calculate profit/loss for a settled pick."""
     if hit_hr:
-        return round(bet * odds / 100, 2) if odds > 0 else round(bet * 100 / abs(odds), 2)
+        if odds > 0:
+            return round(bet * odds / 100, 2)
+        if odds == 0:
+            return 0.0
+        return round(bet * 100 / abs(odds), 2)
     return round(-bet, 2)
 

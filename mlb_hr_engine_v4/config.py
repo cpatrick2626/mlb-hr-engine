@@ -45,6 +45,8 @@ PITCHER_RECENT_GAMES: int = 5 # last N starts for pitcher recent form
 # early-season noise vs capturing genuine rate changes.
 RECENT_WEIGHT: float = 0.30
 SEASON_WEIGHT: float = 0.70
+assert abs(RECENT_WEIGHT + SEASON_WEIGHT - 1.0) < 0.001, \
+    f"RECENT_WEIGHT + SEASON_WEIGHT must equal 1.0 (got {RECENT_WEIGHT + SEASON_WEIGHT})"
 LEAGUE_AVG_HR_PA: float = 0.030    # 2026 MLB May-6: broader Apr sample=0.028; qualified-only May=0.032 (biased); 0.030 splits
 REGRESSION_PA: int = 200            # Bayes regression towards league mean
 MIN_RECENT_PA: int = 20             # Need ≥20 recent PA to trust recent rate

@@ -186,10 +186,17 @@ def _get_event_props(event_id: str) -> list[dict]:
                     price = outcome.get("price")
                     if not price:
                         continue
+                    try:
+                        price = int(price)
+                    except (ValueError, TypeError):
+                        continue
+                    # Reject impossible American odds (must be ≥+100 or ≤-100)
+                    if -100 < price < 100:
+                        continue
                     props.append({
                         "player_name": player_name,
                         "description": f"Over {outcome.get('point', 0.5)} HR",
-                        "price": int(price),
+                        "price": price,
                         "bookmaker": bookmaker.get("key", ""),
                         "game_id": event_id,
                     })

@@ -3,6 +3,7 @@ Codex HR Engine — Streamlit Dashboard
 """
 
 import sys
+import html
 import traceback as _tb
 import urllib.parse
 import datetime as _dt
@@ -437,7 +438,7 @@ def _auto_refresh_ticker():
         st.cache_data.clear()
         for k in ["data", "cache_key", "data_loaded_at"]:
             st.session_state.pop(k, None)
-        st.toast("↻ Data refreshed")
+        st.toast("↻ Auto-refreshing data now — page will reload momentarily")
         st.rerun()
 
 
@@ -522,8 +523,15 @@ def get_data():
 
             except Exception as e:
                 _status.update(label="❌ Load failed — see error below", state="error")
-                st.error(f"Failed to load game data: {e}")
-                st.code(_tb.format_exc())
+                _err_str = str(e).lower()
+                if "odds" in _err_str or "api key" in _err_str or "401" in _err_str or "403" in _err_str:
+                    st.error("Odds API failed. Check your API key in the sidebar Settings section.")
+                elif "mlb" in _err_str or "statsapi" in _err_str or "connection" in _err_str or "timeout" in _err_str:
+                    st.error("MLB Stats API unreachable. Check your internet connection and try Force Refresh.")
+                else:
+                    st.error(f"Failed to load game data: {e}")
+                if __import__("os").getenv("DEBUG") == "true":
+                    st.code(_tb.format_exc())
                 st.session_state["data"] = {
                     "ranked": [], "date": target_date, "stats": {},
                     "odds_source": "error", "batter_count": 0,
@@ -1047,21 +1055,30 @@ def _apply_ui_filters(
     cutoff_utc_hour: int | None = None,
 ) -> list:
     """Re-filter all_players using sidebar thresholds (post-cache, no reload needed)."""
+    import math as _math
+
+    def _safe_float(val, default):
+        try:
+            v = float(val)
+            return default if _math.isnan(v) or _math.isinf(v) else v
+        except (TypeError, ValueError):
+            return default
+
     result = []
     for p in players:
         if not p.get("best_american"):
             continue
-        if p.get("ev_pct", -999) < min_ev:
+        if _safe_float(p.get("ev_pct"), -999) < min_ev:
             continue
-        if p.get("edge_pct", -999) < min_edge:
+        if _safe_float(p.get("edge_pct"), -999) < min_edge:
             continue
-        if p.get("expected_pa", 0) < config.MIN_PA_THRESHOLD:
+        if _safe_float(p.get("expected_pa"), 0) < config.MIN_PA_THRESHOLD:
             continue
-        if p.get("park_factor", 1.0) < config.MAX_PARK_PENALTY:
+        if _safe_float(p.get("park_factor"), 1.0) < config.MAX_PARK_PENALTY:
             continue
-        if p.get("weather_factor", 1.0) < config.MAX_WEATHER_PENALTY:
+        if _safe_float(p.get("weather_factor"), 1.0) < config.MAX_WEATHER_PENALTY:
             continue
-        if p.get("pitcher_factor", 1.0) < config.MAX_PITCHER_SUPPRESSOR:
+        if _safe_float(p.get("pitcher_factor"), 1.0) < config.MAX_PITCHER_SUPPRESSOR:
             continue
         # Time gate: skip players whose game starts before the ET cutoff.
         # Comparison done in ET to avoid midnight-UTC rollover for late games.
@@ -1091,7 +1108,7 @@ def _render_qualified_table(
         return v
 
     def _rng(vals, fmt=".1f", suffix="", sign=False):
-        clean = [v for v in vals if v is not None]
+        clean = [v for v in vals if v is not None and not (isinstance(v, float) and (math.isnan(v) or math.isinf(v)))]
         if not clean:
             return "N/A"
         lo, hi = min(clean), max(clean)
@@ -1235,7 +1252,7 @@ def _render_qualified_table(
             "Edge":    st.column_config.TextColumn("Edge",
                 help=f"Model% − Market%. Active threshold +{min_edge:.1f}%.\nRange: {edge_rng}"),
             "EV%":     st.column_config.TextColumn("EV%",
-                help=f"Expected value per $100 wagered. Active threshold +{min_ev:.0f}%.\nRange: {ev_rng}"),
+                help=f"Expected value per $100 wagered. Active threshold +{min_ev:.1f}%.\nRange: {ev_rng}"),
             "Bet $":   st.column_config.TextColumn("Bet $",
                 help=f"Quarter-Kelly sizing on ${session_br:,.0f} bankroll (5% cap = ${session_br*config.MAX_BET_PCT:.0f} max).\nRange: {bet_rng}"),
             "Conf":    st.column_config.TextColumn("Conf",
@@ -1325,7 +1342,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
     age_str      = ""
     if loaded_at:
         age_min  = int((_dt.datetime.now() - loaded_at).total_seconds() / 60)
-        age_str  = f" &nbsp;|&nbsp; Loaded: <b style='color:#888'>{loaded_at.strftime('%-I:%M %p')}</b>"
+        age_str  = f" &nbsp;|&nbsp; Loaded: <b style='color:#888'>{loaded_at.strftime('%I:%M %p').lstrip('0')}</b>"
         if age_min >= 60:
             age_str += f" <span style='color:#FF6666'>({age_min//60}h old — refresh?)</span>"
 
@@ -1497,7 +1514,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                     f"margin-bottom:4px; padding:4px 8px; background:#{'111100' if x[4] else '0d0d00'}; "
                     f"border-radius:4px;'>"
                     f"<span style='color:{'#FFD700' if x[4] else '#aaaaaa'}; font-weight:{'700' if x[4] else '400'};'>"
-                    f"{'✅ ' if x[4] else '○ '}{x[0]}</span>"
+                    f"{'✅ ' if x[4] else '○ '}{html.escape(x[0])}</span>"
                     f"<span style='color:#888; font-size:12px;'>"
                     f"{_fmt_american(x[1])} → {_fmt_american(x[2])} "
                     f"<b style='color:#FF6666'>({x[3]:+.1f}pp shorter)</b></span>"
@@ -1529,7 +1546,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                 f"font-weight:{'700' if _is_pick_team else '400'};'>"
                 f"{'⚠️ ' if _is_pick_team else '○ '}{team}</span>"
                 f"<span style='color:#888; font-size:12px;'>"
-                f"<s>{ch['old']}</s> → <b style='color:#FF6666'>{ch['new']}</b></span>"
+                f"<s>{html.escape(ch['old'])}</s> → <b style='color:#FF6666'>{html.escape(ch['new'])}</b></span>"
                 f"</div>"
             )
         st.markdown(
@@ -1567,7 +1584,11 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
         with _quick_tab:
             _quick_pool = ranked[:10] if ranked else []
             if not _quick_pool:
-                st.info("No qualified picks. Adjust EV/Edge filters in the sidebar.")
+                st.info(
+                    f"No qualified picks (EV ≥ {min_ev:.1f}%, Edge ≥ {min_edge:.1f}%). "
+                    "Try sliding both filters left in the sidebar — or click 'Force Refresh Data' "
+                    "to reload market odds."
+                )
             else:
                 _now_et = _dt.datetime.now(_EDT)
                 st.caption("Top picks — tap player name to view details & add to FD Slip.")
@@ -1587,7 +1608,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                     # Game time + urgency
                     _qgt = _game_time_et(_qp.get("game_time_utc", ""))
                     if _qgt:
-                        _qgt_str  = _qgt.strftime("%-I:%M %p ET")
+                        _qgt_str  = _qgt.strftime('%I:%M %p ET').lstrip('0')
                         _qgt_dt   = _dt.datetime.combine(_now_et.date(), _qgt, tzinfo=_EDT)
                         _mins_to  = int((_qgt_dt - _now_et).total_seconds() / 60)
                         if _mins_to < 0:
@@ -1686,7 +1707,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                     if _gt:
                         # Round down to 5-min slot for grouping
                         _slot_min = (_gt.hour * 60 + _gt.minute // 5 * 5)
-                        _slot_lbl = f"{_gt.strftime('%-I:%M %p')} ET"
+                        _slot_lbl = f"{_gt.strftime('%I:%M %p').lstrip('0')} ET"
                     else:
                         _slot_min = 9999
                         _slot_lbl = "Time TBD"
@@ -3081,6 +3102,21 @@ def tab_performance():
         unsafe_allow_html=True,
     )
 
+    # Pending-picks nudge — surfaces unsettled work without blocking
+    try:
+        _pending_count = sum(
+            1 for r in pnl_tracker._load_results()
+            if r.get("profit_loss", "") in ("", None)
+        )
+        if _pending_count > 0:
+            st.info(
+                f"⏳ {_pending_count} pick{'s' if _pending_count != 1 else ''} "
+                "pending settlement. Expand **Settle Yesterday's Results** below "
+                "or enter results manually in the Pending Results section."
+            )
+    except Exception:
+        pass
+
     # ── Recency filter ────────────────────────────────────────────────────────
     _WINDOWS = {"7D": 7, "14D": 14, "30D": 30, "All": None}
     _pw_cols = st.columns(len(_WINDOWS))
@@ -3100,6 +3136,20 @@ def tab_performance():
     else:
         _cutoff_date = None
         st.caption("Showing all-time performance")
+
+    # Quick-settle button — contextually placed where it's relevant
+    with st.expander("✅ Settle Yesterday's Results", expanded=False):
+        st.caption("Fetch yesterday's game outcomes from MLB Stats API and settle all pending picks.")
+        if st.button("✅ Update Yesterday's Results", key="perf_update_yesterday"):
+            with st.spinner("Fetching outcomes from MLB…"):
+                try:
+                    _settle_res = pnl_tracker.update_yesterday()
+                    st.success(
+                        f"Settled {_settle_res['settled']} pick(s). "
+                        f"{_settle_res['not_found']} not found."
+                    )
+                except Exception as _se:
+                    st.error(f"Error: {_se}")
 
     # Load and filter raw data once — everything below uses these filtered lists
     try:
@@ -3803,7 +3853,7 @@ def main():
             # MLB season runs in EDT (UTC-4). Convert ET cutoff → UTC hour.
             _cutoff_utc_hour = (_cutoff_et.hour + 4) % 24
             st.caption(
-                f"Showing games starting at/after {_cutoff_et.strftime('%-I:%M %p')} ET "
+                f"Showing games starting at/after {_cutoff_et.strftime('%I:%M %p').lstrip('0')} ET "
                 f"({_cutoff_utc_hour:02d}:00 UTC)"
             )
         st.session_state["cutoff_utc_hour"] = _cutoff_utc_hour
@@ -3868,7 +3918,7 @@ def main():
                     # Game time + urgency
                     _sgt = _game_time_et(p.get("game_time_utc", ""))
                     if _sgt:
-                        _sgt_str = _sgt.strftime("%-I:%M %p")
+                        _sgt_str = _sgt.strftime('%I:%M %p ET').lstrip('0')
                         _sgt_dt  = _dt.datetime.combine(_slip_now_et.date(), _sgt, tzinfo=_EDT)
                         _smins   = int((_sgt_dt - _slip_now_et).total_seconds() / 60)
                         if _smins < 0:
@@ -4011,8 +4061,9 @@ def main():
                                 st.success("No pitcher changes detected ✓")
                         except Exception as ex:
                             st.warning(f"Pitcher check failed: {ex}")
-                if st.button("📋 Log to Picks Tracker", width='stretch',
-                             key="log_fd_slip"):
+                if st.button("📋 Save for Results Tracking", width='stretch',
+                             key="log_fd_slip",
+                             help="Log these picks before placing bets on FanDuel — required to track P&L and closing line value."):
                     slip_players = [_slip_map[s] for s in _selected]
                     try:
                         n = pnl_tracker.log_slip_picks(slip_players)
@@ -4039,10 +4090,23 @@ def main():
                     "📲 FanDuel HR Props", _fanduel_url(),
                     width='stretch', type="primary",
                 )
-                if st.button("🗑️ Clear Slip", width='stretch', key="clear_fd_slip"):
-                    st.session_state["fd_slip"] = []
-                    st.session_state.pop("fd_slip_select", None)
-                    st.rerun()
+                if not st.session_state.get("clear_slip_confirm"):
+                    if st.button("🗑️ Clear Slip", width='stretch', key="clear_fd_slip"):
+                        st.session_state["clear_slip_confirm"] = True
+                        st.rerun()
+                else:
+                    st.warning("Remove all picks from the slip?")
+                    _cc1, _cc2 = st.columns(2)
+                    with _cc1:
+                        if st.button("✅ Yes, clear", key="clear_slip_yes", use_container_width=True):
+                            st.session_state["fd_slip"] = []
+                            st.session_state.pop("fd_slip_select", None)
+                            st.session_state.pop("clear_slip_confirm", None)
+                            st.rerun()
+                    with _cc2:
+                        if st.button("❌ Cancel", key="clear_slip_no", use_container_width=True):
+                            st.session_state.pop("clear_slip_confirm", None)
+                            st.rerun()
             else:
                 st.caption("Search above to add players to your slip.")
                 st.link_button("📲 Browse FanDuel HR Props", _fanduel_url(), width='stretch')
@@ -4056,7 +4120,7 @@ def main():
         if loaded_at:
             age_min = int((_dt.datetime.now() - loaded_at).total_seconds() / 60)
             age_str = f"{age_min}m ago" if age_min < 60 else f"{age_min // 60}h {age_min % 60}m ago"
-            st.caption(f"Data loaded {age_str} ({loaded_at.strftime('%-I:%M %p')})")
+            st.caption(f"Data loaded {age_str} ({loaded_at.strftime('%I:%M %p').lstrip('0')})")
 
         _sc_stats = st.session_state["data"].get("stats", {}) if "data" in st.session_state else {}
         if _sc_stats.get("players"):
@@ -4069,7 +4133,15 @@ def main():
             _pit_tot = _sc_stats.get("pit_total", 1) or 1
             _batter_cov = round((_sc_cur + _sc_bl + _sc_pr) / _sc_tot * 100)
             _pit_cov    = round(_pit_sc / _pit_tot * 100)
-            with st.expander(f"📡 Coverage — batters {_batter_cov}% / pitchers {_pit_cov}%"):
+            with st.expander(
+                f"📡 Coverage — batters {_batter_cov}% / pitchers {_pit_cov}%",
+                help=(
+                    "Current = 2026 season Statcast data available. "
+                    "Blended = 2026 + 2025 prior-year regression. "
+                    "Prior = 2025 only. "
+                    "None = no Statcast, uses park/pitcher factors only."
+                ),
+            ):
                 st.caption(
                     f"**Batter Statcast:** {_sc_cur} current · {_sc_bl} blended · "
                     f"{_sc_pr} prior · {_sc_no} none  \n"
@@ -4194,12 +4266,15 @@ The app will open full-screen like a native app.
             placeholder="Paste key from the-odds-api.com",
         )
         if _ui_key and _ui_key != config.ODDS_API_KEY:
-            import os
-            os.environ["ODDS_API_KEY"] = _ui_key
-            config.ODDS_API_KEY = _ui_key
-            from clients import odds_api as _oapi_mod
-            _oapi_mod._last_error = ""
-            st.caption("Key updated — click Force Refresh to apply.")
+            import os, re as _re
+            if not _re.match(r'^[a-f0-9]{32}$', _ui_key.lower()):
+                st.warning("Invalid key format (expected 32 hex characters).")
+            else:
+                os.environ["ODDS_API_KEY"] = _ui_key
+                config.ODDS_API_KEY = _ui_key
+                from clients import odds_api as _oapi_mod
+                _oapi_mod._last_error = ""
+                st.caption("Key updated — click Force Refresh to apply.")
         elif config.ODDS_API_KEY:
             st.caption("Odds API key active.")
         else:
@@ -4230,14 +4305,16 @@ The app will open full-screen like a native app.
                       cutoff_utc_hour=st.session_state.get("cutoff_utc_hour"))
         except Exception as _e:
             st.error(f"Picks tab error: {_e}")
-            st.code(_tb.format_exc())
+            if __import__("os").getenv("DEBUG") == "true":
+                    st.code(_tb.format_exc())
 
     with tab2:
         try:
             tab_performance()
         except Exception as _e:
             st.error(f"Performance tab error: {_e}")
-            st.code(_tb.format_exc())
+            if __import__("os").getenv("DEBUG") == "true":
+                    st.code(_tb.format_exc())
 
     with tab3:
         try:
@@ -4247,21 +4324,24 @@ The app will open full-screen like a native app.
             )
         except Exception as _e:
             st.error(f"Advanced strategies tab error: {_e}")
-            st.code(_tb.format_exc())
+            if __import__("os").getenv("DEBUG") == "true":
+                    st.code(_tb.format_exc())
 
     with tab4:
         try:
             tab_jig(_gate_data(get_data(), st.session_state.get("cutoff_utc_hour")))
         except Exception as _e:
             st.error(f"JIG tab error: {_e}")
-            st.code(_tb.format_exc())
+            if __import__("os").getenv("DEBUG") == "true":
+                    st.code(_tb.format_exc())
 
     with tab5:
         try:
             tab_hits(_gate_data(get_data(), st.session_state.get("cutoff_utc_hour")))
         except Exception as _e:
             st.error(f"Hits tab error: {_e}")
-            st.code(_tb.format_exc())
+            if __import__("os").getenv("DEBUG") == "true":
+                    st.code(_tb.format_exc())
 
 
 if __name__ == "__main__":
@@ -4269,5 +4349,6 @@ if __name__ == "__main__":
         main()
     except Exception as _top_e:
         st.error(f"App crash: {_top_e}")
-        st.code(_tb.format_exc())
+        if __import__("os").getenv("DEBUG") == "true":
+                    st.code(_tb.format_exc())
 

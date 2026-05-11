@@ -493,6 +493,20 @@ def _parse_statcast_csv(raw: str, year: int = None, player_ids: frozenset[int] =
             xslg        = _f(row, "xslg", "expected_slg", "xSLG")
             pa          = _f(row, "pa", "attempts")
 
+            # Range validation — reject values outside physical/statistical bounds
+            if barrel_rate is not None and not (0.0 <= barrel_rate <= 0.35):
+                barrel_rate = None
+            if ev is not None and not (60.0 <= ev <= 125.0):
+                ev = None
+            if hard_hit is not None and not (0.0 <= hard_hit <= 1.0):
+                hard_hit = None
+            if avg_la is not None and not (-90.0 <= avg_la <= 90.0):
+                avg_la = None
+            if sweet_spot is not None and not (0.0 <= sweet_spot <= 1.0):
+                sweet_spot = None
+            if xslg is not None and not (0.0 <= xslg <= 4.0):
+                xslg = None
+
             row_out: dict = {"season": _year}
             if barrel_rate is not None: row_out["barrel_rate"]       = barrel_rate
             if ev          is not None: row_out["exit_velocity_avg"] = ev

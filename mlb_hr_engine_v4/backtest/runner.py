@@ -117,11 +117,14 @@ def _score_player(r: dict, date_str: str, batter_data: dict, pitcher_data: dict)
         recent_pit_stats = mlb_stats.get_pitcher_recent_stats_as_of(pitcher_id, date_str)
         recent_pit_fac   = prob.pitcher_recent_factor(recent_pit_stats)
         pit_factor       = max(0.55, min(1.60, pit_factor * recent_pit_fac))
+        # Fatigue factor — mirrors pipeline.py exactly
+        days_rest  = mlb_stats.get_pitcher_days_rest_as_of(pitcher_id, date_str)
+        fatigue_fac = prob.pitcher_fatigue_factor(days_rest)
+        pit_factor  = max(0.55, min(1.60, pit_factor * fatigue_fac))
         # Pitcher handedness for platoon (lru_cached)
         pitcher_info = mlb_stats.get_player_info(pitcher_id)
         pitcher_hand = pitcher_info.get("pitchHand", {}).get("code", "")
     else:
-        sc_pit_fac = 1.0
         pit_factor = 1.0
 
     # Platoon factor

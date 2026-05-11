@@ -87,7 +87,7 @@ def base_hr_rate(
             pa_trust = min(1.0, (season_pa - 100) / 150.0)
             rate = rate * (1.0 - pa_trust * (1.0 - low_hr_fac))
 
-    return max(rate, 0.001)
+    return max(0.001, min(0.15, rate))
 
 
 def statcast_blended_rate(
@@ -137,7 +137,7 @@ def statcast_blended_rate(
         effective_mult = statcast_power_mult
 
     statcast_rate = raw_rate * effective_mult
-    return max(raw_weight * raw_rate + statcast_weight * statcast_rate, 0.001)
+    return max(0.001, min(0.15, raw_weight * raw_rate + statcast_weight * statcast_rate))
 
 
 def early_season_suppressor(season_pa: int, statcast_source: str) -> float:
@@ -401,7 +401,7 @@ def hot_streak_factor(short_form: dict, season_stats: dict) -> float:
     season_pa = int(season_stats.get("plateAppearances", 0))
     season_hr = int(season_stats.get("homeRuns", 0))
 
-    if short_pa < 8 or season_pa < 30:
+    if short_pa < 15 or season_pa < 30:
         return 1.0
     season_rate = season_hr / season_pa
     if season_rate < 0.005:
@@ -422,11 +422,22 @@ def confidence_score(
     barrel_rate: float = 0.0,
     pitcher_hr9: float = 0.0,
     xslg: float = None,
+    lineup_confirmed: bool = True,
+    n_books: int = 1,
 ) -> float:
     """
-    Confidence score 0-100.
-    Threshold bonuses: Barrel > 12% (+5), xSLG > 0.500 (+3), Pitcher HR/9 > 1.4 (+4).
-    Statcast source bonus: current=+8, blended=+5, prior=+3, none=+0.
+    Confidence score 0–100. Higher = more reliable signal.
+
+    Component breakdown:
+      Sample size      0–35  (season PA / 400, capped at 1.0)
+      Recent form      0–20  (recent PA / 80, capped at 1.0)
+      Model/market SNR 0–28  (edge / standard error, signal-to-noise ratio)
+      Statcast source  0– 8  (current=+8, blended=+5, prior=+3, none=+0)
+      Barrel rate      0– 5  (>2× league avg: elite power-contact tier)
+      xSLG           -2– 3   (>0.500: +3, <0.350: -2, mirror of xslg_bonus in scoring)
+      Pitcher HR/9     0– 4  (>1.25× league avg: notably hittable starter)
+      Lineup confirmed 0, -8  (-8 if lineup not yet posted; mirrors 0.82 prob discount)
+      Market consensus 0–4   (+2 for 2 books, +4 for 3+ books: consensus is more reliable)
     """
     sample_conf    = min(season_pa / 400.0, 1.0) * 35.0
     recent_conf    = min(recent_pa / 80.0,  1.0) * 20.0
@@ -446,7 +457,15 @@ def confidence_score(
         xslg_bonus = -2.0   # penalize well-below-avg contact quality symmetrically
     else:
         xslg_bonus = 0.0
-    pitcher_bonus = 4.0 if pitcher_hr9 > config.LEAGUE_AVG_HR9 * 1.25        else 0.0
+    pitcher_bonus = 4.0 if pitcher_hr9 > config.LEAGUE_AVG_HR9 * 1.25 else 0.0
+
+    # Lineup confirmation: -8 if lineup not yet posted — mirrors the 0.82 model_prob discount.
+    # When lineup is confirmed we know the player is starting; unconfirmed adds roster uncertainty.
+    lineup_bonus = 0.0 if lineup_confirmed else -8.0
+
+    # Market consensus: more books pricing the same player = more reliable no-vig baseline.
+    # Single-book pricing can be stale or an outlier; 3+ books form a genuine market.
+    books_bonus = 4.0 if n_books >= 3 else (2.0 if n_books == 2 else 0.0)
 
     edge = abs(model_prob - market_prob)
     se   = math.sqrt(model_prob * (1 - model_prob) / max(season_pa, 1))
@@ -454,5 +473,6 @@ def confidence_score(
     edge_conf = snr * 28.0
 
     total = (sample_conf + recent_conf + edge_conf
-             + statcast_bonus + barrel_bonus + xslg_bonus + pitcher_bonus)
-    return round(min(total, 100.0), 1)
+             + statcast_bonus + barrel_bonus + xslg_bonus + pitcher_bonus
+             + lineup_bonus + books_bonus)
+    return round(min(max(total, 0.0), 100.0), 1)

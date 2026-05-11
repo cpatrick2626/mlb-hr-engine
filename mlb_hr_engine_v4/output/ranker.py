@@ -1,25 +1,28 @@
 """
 Composite score and ranking.
 
-Score = EV%  × 0.40
-      + Edge% × 0.35
-      + Confidence (0-100 → 0-2.5 pts) × 0.25
+Score = (EV% × 0.55 + Edge% × 0.45) × confidence_scale
 
-Confidence is scaled to 0-10 before weighting so all three components are in
-comparable magnitude (~2-10 for typical picks). Using 25 instead of 10 caused
-confidence to dominate (47% of score for typical picks) vs the intended 25%.
+confidence_scale = 0.50 + 0.50 × (confidence / 100)
+  conf=100 → scale=1.00  (full signal)
+  conf= 75 → scale=0.875 (slight haircut)
+  conf= 50 → scale=0.75  (meaningful haircut for uncertain picks)
+  conf= 25 → scale=0.625 (heavily discounted)
+
+Multiplicative design: confidence is a data-quality multiplier on the core
+signal, not just an additive bonus. A high-EV pick with low confidence gets
+suppressed, so it can't crowd out a well-substantiated lower-EV pick. This
+prevents noisy early-season or single-book picks from dominating the ranking.
 """
 
 
 def composite_score(ev_pct: float, edge_pct: float, confidence: float) -> float:
     """
-    Weighted composite score for ranking qualified picks.
-    Higher = better bet.
+    Confidence-weighted composite score. Higher = better bet.
     """
-    ev_component   = ev_pct * 0.40
-    edge_component = edge_pct * 0.35
-    conf_component = (confidence / 100.0) * 10.0 * 0.25
-    return round(ev_component + edge_component + conf_component, 2)
+    signal     = ev_pct * 0.55 + edge_pct * 0.45
+    conf_scale = 0.50 + 0.50 * (confidence / 100.0)
+    return round(signal * conf_scale, 2)
 
 
 def rank_picks(picks: list[dict]) -> list[dict]:

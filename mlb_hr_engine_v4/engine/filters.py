@@ -13,6 +13,11 @@ def apply_filters(pick: dict) -> tuple[bool, list[str]]:
     """
     fails: list[str] = []
 
+    # Sanity check — model probability must be in a physically realistic range
+    model_prob = pick.get("model_prob", 0)
+    if model_prob <= 0 or model_prob > config.MAX_GAME_HR_PROB:
+        fails.append(f"Model prob out of bounds: {model_prob:.1%} (must be 0–{config.MAX_GAME_HR_PROB:.0%})")
+
     # Rule 1 — Minimum EV
     ev = pick.get("ev_pct", -999)
     if ev < config.MIN_EV_PCT:

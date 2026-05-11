@@ -12,6 +12,7 @@ Performance notes:
 """
 
 import csv
+import unicodedata
 from datetime import date
 from pathlib import Path
 
@@ -81,9 +82,10 @@ def settle_date(date_str: str, outcomes: dict[str, bool]) -> int:
         if row.get("date") != date_str or row.get("hr_result") not in ("", None):
             continue
         name = row.get("player_name", "")
-        if name not in outcomes:
+        norm_name = _norm(name)
+        hit_hr = next((v for k, v in outcomes.items() if _norm(k) == norm_name), None)
+        if hit_hr is None:
             continue
-        hit_hr = outcomes[name]
         try:
             odds = int(float(row.get("american_odds", "0") or "0"))
         except (ValueError, TypeError):
@@ -183,7 +185,10 @@ def total_summary(rows: list[dict] | None = None) -> dict:
             pending += 1
         else:
             wagered += bet
-            profit  += float(r.get("profit_loss", 0) or 0)
+            try:
+                profit += float(r.get("profit_loss", 0) or 0)
+            except (ValueError, TypeError):
+                pass
             if hr == "1":
                 wins += 1
             else:
@@ -208,6 +213,11 @@ def load_all() -> list[dict]:
 
 
 # ── Internal ──────────────────────────────────────────────────────────────────
+
+def _norm(name: str) -> str:
+    """Fold accents and lowercase for robust name matching (e.g. 'José' → 'jose')."""
+    return unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode("ascii").lower().strip()
+
 
 def _load_all() -> list[dict]:
     if not LOG_PATH.exists():

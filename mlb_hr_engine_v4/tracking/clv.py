@@ -88,12 +88,16 @@ def fetch_and_compute_clv(target_date: Optional[str] = None) -> list[dict]:
             updated.append({**pick, "notes": "closing line unavailable"})
             continue
 
-        open_implied  = float(pick.get("opening_implied_pct", 0)) / 100.0
+        try:
+            open_implied = float(pick.get("opening_implied_pct", 0)) / 100.0
+        except (ValueError, TypeError):
+            open_implied = 0.0
         close_implied = _implied(close_odds)
         # Apply no-vig correction: divide by (1 + vig) so CLV reflects fair-value shift,
         # not the bookmaker margin embedded in raw implied probabilities.
         vig = config.VIG_FACTOR
         clv = (close_implied - open_implied) / (1.0 + vig) * 100  # positive = we got better price
+        clv = max(-100.0, min(100.0, clv))  # sanity bounds: ±100% is physically impossible
 
         updated.append({
             **pick,

@@ -14,6 +14,8 @@ def american_to_decimal(american: int) -> float:
     """Convert American moneyline odds to decimal (European) format."""
     if american > 0:
         return american / 100.0 + 1.0
+    if not american:
+        return 1.01  # treat 0 as near-certain favourite rather than crashing
     return 100.0 / abs(american) + 1.0
 
 
