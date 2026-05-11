@@ -4135,13 +4135,13 @@ def main():
             _pit_cov    = round(_pit_sc / _pit_tot * 100)
             with st.expander(
                 f"📡 Coverage — batters {_batter_cov}% / pitchers {_pit_cov}%",
-                help=(
-                    "Current = 2026 season Statcast data available. "
-                    "Blended = 2026 + 2025 prior-year regression. "
+            ):
+                st.caption(
+                    "Current = 2026 season Statcast. "
+                    "Blended = 2026 + 2025 regression. "
                     "Prior = 2025 only. "
                     "None = no Statcast, uses park/pitcher factors only."
-                ),
-            ):
+                )
                 st.caption(
                     f"**Batter Statcast:** {_sc_cur} current · {_sc_bl} blended · "
                     f"{_sc_pr} prior · {_sc_no} none  \n"

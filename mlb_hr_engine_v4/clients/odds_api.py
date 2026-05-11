@@ -23,15 +23,6 @@ CACHE_TTL_MINUTES = 45
 _SESSION = requests.Session()
 
 
-def _configure_session() -> None:
-    """Set API key as header so it stays out of URL query strings and server logs."""
-    if config.ODDS_API_KEY:
-        _SESSION.headers.update({"X-Api-Key": config.ODDS_API_KEY})
-
-
-_configure_session()
-
-
 # ──────────────────────────────────────────────────────────────────────────────
 # Public interface
 # ──────────────────────────────────────────────────────────────────────────────
@@ -48,9 +39,6 @@ def get_hr_odds_all_games() -> tuple[list[dict], str, dict]:
     if not config.ODDS_API_KEY:
         _last_error = "No API key — paste your key in the sidebar."
         return [], "none", {"used": None, "remaining": None}
-
-    # Keep header in sync with key that may be set at runtime via the sidebar
-    _SESSION.headers.update({"X-Api-Key": config.ODDS_API_KEY})
 
     cached = _load_cache()
     if cached is not None:
@@ -139,6 +127,7 @@ def _get_events() -> list[dict]:
         resp = _SESSION.get(
             f"{BASE}/sports/baseball_mlb/events",
             params={
+                "apiKey": config.ODDS_API_KEY,
                 "dateFormat": "iso",
                 "commenceTimeFrom": today_start.strftime("%Y-%m-%dT%H:%M:%SZ"),
                 "commenceTimeTo":   today_end.strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -172,6 +161,7 @@ def _get_event_props(event_id: str) -> list[dict]:
         resp = _SESSION.get(
             f"{BASE}/sports/baseball_mlb/events/{event_id}/odds",
             params={
+                "apiKey": config.ODDS_API_KEY,
                 "regions": "us",
                 "markets": "batter_home_runs",
                 "oddsFormat": "american",
@@ -214,5 +204,3 @@ def _get_event_props(event_id: str) -> list[dict]:
     except Exception as e:
         print(f"[odds_api] props fetch failed for event {event_id}: {e}")
         return []
-
-
