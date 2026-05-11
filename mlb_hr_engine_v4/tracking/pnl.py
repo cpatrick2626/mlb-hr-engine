@@ -18,6 +18,8 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Optional
 
+_STALE_DAYS = 7   # picks older than this with no game log result are auto-voided
+
 import requests
 
 from tracking import sheets as _sheets
@@ -176,7 +178,56 @@ def settle_all_unsettled() -> dict:
         result = _settle_date(d)
         if result["settled"] + result["not_found"] > 0:
             summary[d] = result["settled"]
+
+    expired = auto_expire_stale_picks()
+    if expired:
+        summary["_expired"] = expired
     return summary
+
+
+def auto_expire_stale_picks(days: int = _STALE_DAYS) -> int:
+    """
+    Mark picks older than `days` that still have no MLB game log result as void.
+    Writes them to results.csv with hr_result='void', profit_loss=0.
+    Returns count newly expired.
+    """
+    if not LOG_PATH.exists():
+        return 0
+
+    cutoff = (date.today() - timedelta(days=days)).isoformat()
+
+    with open(LOG_PATH, newline="", encoding="utf-8") as f:
+        all_picks = list(csv.DictReader(f))
+
+    # Collect already-settled names per date (any non-empty hr_result counts)
+    settled: dict[str, set] = {}
+    if RESULTS_PATH.exists():
+        with open(RESULTS_PATH, newline="", encoding="utf-8") as f:
+            for row in csv.DictReader(f):
+                d = row.get("date", "")
+                if row.get("hr_result", ""):
+                    settled.setdefault(d, set()).add(row.get("player_name", ""))
+
+    expire_rows = []
+    for pick in all_picks:
+        d = pick.get("date", "")
+        if not d or d >= cutoff:
+            continue
+        if pick.get("player_name", "") in settled.get(d, set()):
+            continue
+        expire_rows.append({
+            **pick,
+            "hr_result":   "void",
+            "profit_loss": "0.00",
+            "notes":       "auto-expired: no game result after 7 days",
+        })
+
+    if expire_rows:
+        if _sheets.available():
+            _sheets.append_rows("results", RESULTS_FIELDS, expire_rows)
+        else:
+            _upsert_results(expire_rows)
+    return len(expire_rows)
 
 
 def _settle_date(date_str: str) -> dict:
@@ -267,6 +318,9 @@ def pnl_summary() -> dict:
     for row in rows:
         bet = float(row.get("bet_dollars") or 0)
         pl  = row.get("profit_loss", "")
+        hr  = row.get("hr_result", "")
+        if hr == "void":
+            continue   # postponed/expired picks excluded from all P&L totals
         total_bet += bet
         if pl == "" or pl is None:
             pending += 1
@@ -385,19 +439,29 @@ def _upsert_results(new_rows: list[dict]) -> None:
                 if key not in incoming:
                     existing.append(row)
     merged = existing + list(incoming.values())
-    with open(RESULTS_PATH, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=RESULTS_FIELDS, extrasaction="ignore")
-        writer.writeheader()
-        writer.writerows(merged)
+    _atomic_csv_write(RESULTS_PATH, RESULTS_FIELDS, merged)
 
 
 def _append_csv(path: Path, fields: list[str], rows: list[dict]) -> None:
-    write_header = not path.exists()
-    with open(path, "a", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
-        if write_header:
+    existing: list[dict] = []
+    if path.exists():
+        with open(path, newline="", encoding="utf-8") as f:
+            existing = list(csv.DictReader(f))
+    _atomic_csv_write(path, fields, existing + rows)
+
+
+def _atomic_csv_write(path: Path, fields: list[str], rows: list[dict]) -> None:
+    tmp = path.with_suffix(".tmp")
+    try:
+        with open(tmp, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=fields, extrasaction="ignore")
             writer.writeheader()
-        writer.writerows(rows)
+            writer.writerows(rows)
+        os.replace(tmp, path)
+    except Exception:
+        if tmp.exists():
+            tmp.unlink()
+        raise
 
 
 def _read_existing_dates(path: Path) -> set[str]:

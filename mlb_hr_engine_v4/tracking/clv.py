@@ -204,10 +204,10 @@ def _fetch_current_hr_odds() -> dict[str, int]:
         now_utc     = datetime.now(timezone.utc)
         today_start = now_utc.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(hours=9)
         today_end   = today_start + timedelta(hours=20)
+        _SESSION.headers.update({"X-Api-Key": config.ODDS_API_KEY})
         resp = _SESSION.get(
             "https://api.the-odds-api.com/v4/sports/baseball_mlb/events",
             params={
-                "apiKey":             config.ODDS_API_KEY,
                 "dateFormat":         "iso",
                 "commenceTimeFrom":   today_start.strftime("%Y-%m-%dT%H:%M:%SZ"),
                 "commenceTimeTo":     today_end.strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -219,8 +219,7 @@ def _fetch_current_hr_odds() -> dict[str, int]:
         for event in events:
             r2 = _SESSION.get(
                 f"https://api.the-odds-api.com/v4/sports/baseball_mlb/events/{event['id']}/odds",
-                params={"apiKey": config.ODDS_API_KEY, "regions": "us",
-                        "markets": "batter_home_runs", "oddsFormat": "american"},
+                params={"regions": "us", "markets": "batter_home_runs", "oddsFormat": "american"},
                 timeout=12,
             )
             if r2.status_code != 200:

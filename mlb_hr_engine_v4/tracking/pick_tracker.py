@@ -12,8 +12,9 @@ Performance notes:
 """
 
 import csv
+import os
 import unicodedata
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 LOG_PATH = Path(__file__).parent / "pick_tracker.csv"
@@ -136,12 +137,13 @@ def summary_by(group_field: str, rows: list[dict] | None = None) -> list[dict]:
             bet = float(row.get("bet_dollars", "10") or "10")
         except (ValueError, TypeError):
             bet = 10.0
-        if hr == "":
+        if hr == "void":
+            pass   # excluded from all P&L totals
+        elif hr == "":
             a["pending"] += 1
         else:
             a["wagered"] += bet
             a["profit"]  += float(pl) if pl else 0.0
-            (a["wins"] if hr == "1" else a["losses"]).__class__  # just a reference holder
             if hr == "1":
                 a["wins"] += 1
             else:
@@ -181,7 +183,9 @@ def total_summary(rows: list[dict] | None = None) -> dict:
             bet = float(r.get("bet_dollars", "10") or "10")
         except (ValueError, TypeError):
             bet = 10.0
-        if hr == "":
+        if hr == "void":
+            pass   # excluded from all P&L totals
+        elif hr == "":
             pending += 1
         else:
             wagered += bet
@@ -212,6 +216,27 @@ def load_all() -> list[dict]:
     return _load_all()
 
 
+def expire_stale(days: int = 7) -> int:
+    """
+    Mark pending picks older than `days` with no settled result as void.
+    Returns count newly expired.
+    """
+    cutoff = (date.today() - timedelta(days=days)).isoformat()
+    rows   = _load_all()
+    changed = 0
+    for row in rows:
+        if row.get("date", "") >= cutoff:
+            continue
+        if row.get("hr_result", "") not in ("", None):
+            continue
+        row["hr_result"]   = "void"
+        row["profit_loss"] = "0.00"
+        changed += 1
+    if changed:
+        _rewrite(rows)
+    return changed
+
+
 # ── Internal ──────────────────────────────────────────────────────────────────
 
 def _norm(name: str) -> str:
@@ -227,19 +252,25 @@ def _load_all() -> list[dict]:
 
 
 def _append(rows: list[dict]) -> None:
-    write_header = not LOG_PATH.exists()
-    with open(LOG_PATH, "a", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, fieldnames=FIELDS, extrasaction="ignore")
-        if write_header:
-            w.writeheader()
-        w.writerows(rows)
+    _atomic_write(_load_all() + rows)
 
 
 def _rewrite(rows: list[dict]) -> None:
-    with open(LOG_PATH, "w", newline="", encoding="utf-8") as f:
-        w = csv.DictWriter(f, fieldnames=FIELDS, extrasaction="ignore")
-        w.writeheader()
-        w.writerows(rows)
+    _atomic_write(rows)
+
+
+def _atomic_write(rows: list[dict]) -> None:
+    tmp = LOG_PATH.with_suffix(".tmp")
+    try:
+        with open(tmp, "w", newline="", encoding="utf-8") as f:
+            w = csv.DictWriter(f, fieldnames=FIELDS, extrasaction="ignore")
+            w.writeheader()
+            w.writerows(rows)
+        os.replace(tmp, LOG_PATH)
+    except Exception:
+        if tmp.exists():
+            tmp.unlink()
+        raise
 
 
 def _build_row(player: dict, today: str, source_tab: str, source_section: str) -> dict:
