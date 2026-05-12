@@ -2707,7 +2707,12 @@ def tab_hits(data: dict):
 # TAB — JIG
 # ═══════════════════════════════════════════════════════════════════════════════
 def tab_jig(data: dict):
-    all_players = data.get("all_players", [])
+    _cutoff = st.session_state.get("cutoff_utc_hour")
+    all_players_raw = data.get("all_players", [])
+    all_players = (
+        _gate_data(data, _cutoff).get("all_players", [])
+        if _cutoff is not None else all_players_raw
+    )
 
     st.markdown(
         "<div style='font-size:22px; font-weight:900; color:#FF6666; "
@@ -2847,8 +2852,21 @@ def tab_jig(data: dict):
             _entries.append({"player": p, "jig": s, "metrics": m, "passes": s >= score_min})
         scored    = sorted(_entries, key=lambda x: x["jig"], reverse=True)
         qualified = [x for x in scored if x["passes"]]
-        prime     = [x for x in qualified
+        prime_timed = [x for x in qualified
+                       if x["player"].get("best_american") and x["player"].get("ev_pct", 0) > 0]
+
+        # Prime (unfiltered) — rescore raw players when time gate is active
+        if _cutoff is not None and all_players_raw is not all_players:
+            _raw_entries = []
+            for p in all_players_raw:
+                m = _jig_metrics(p)
+                s = score_fn(m)
+                _raw_entries.append({"player": p, "jig": s, "metrics": m, "passes": s >= score_min})
+            _raw_qual = [x for x in _raw_entries if x["passes"]]
+            prime = [x for x in _raw_qual
                      if x["player"].get("best_american") and x["player"].get("ev_pct", 0) > 0]
+        else:
+            prime = prime_timed
 
         with st.expander(f"🔍 Debug — {len(all_players)} players, {len(qualified)} qualified", expanded=len(qualified)==0):
             st.write(f"**Gate:** JIG ≥ {score_min} | slg {slg_min} iso {iso_min} hh {hh_min} brl {brl_min} la {la_min} pull {pull_min} pit {pit_min}")
@@ -2884,7 +2902,7 @@ def tab_jig(data: dict):
             f"⚡ Picks ({len(qualified)})",
             f"📊 All ({len(scored)})",
             f"⭐ Prime ({len(prime)})",
-            f"⏰ Prime Time ({len(prime)})",
+            f"⏰ Prime Time ({len(prime_timed)})",
         ])
 
         with _jq:
@@ -2955,14 +2973,14 @@ def tab_jig(data: dict):
         with _jpt:
             if _jig_cutoff is None:
                 st.info("No game start time selected. Set 'Only show games starting after…' in the sidebar to show prime JIG plays for later games only.")
-            elif not prime:
+            elif not prime_timed:
                 st.info(f"No prime JIG plays for games at/after {_jig_time_label}.")
             else:
                 st.caption(
-                    f"⏰ {len(prime)} prime JIG player{'s' if len(prime) != 1 else ''} "
+                    f"⏰ {len(prime_timed)} prime JIG player{'s' if len(prime_timed) != 1 else ''} "
                     f"for games at/after {_jig_time_label} — ranked by JIG score."
                 )
-                for entry in prime:
+                for entry in prime_timed:
                     _jig_card(entry, key_prefix=f"jpt_{key_sfx}")
 
     _outer_ai, _outer_way = st.tabs(["⚡ JIG AI", "🎯 The JIG Way"])
@@ -4380,7 +4398,7 @@ The app will open full-screen like a native app.
 
     with tab4:
         try:
-            tab_jig(_gate_data(get_data(), st.session_state.get("cutoff_utc_hour")))
+            tab_jig(get_data())
         except Exception as _e:
             st.error(f"JIG tab error: {_e}")
             if __import__("os").getenv("DEBUG") == "true":
