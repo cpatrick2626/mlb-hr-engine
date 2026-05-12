@@ -174,10 +174,11 @@ def calculate_middle_opportunity(
 
 def american_to_decimal(american: int) -> float:
     """Convert American odds to decimal."""
+    if american == 0:
+        return 1.01
     if american >= 100:
         return (american / 100.0) + 1
-    else:
-        return (100.0 / abs(american)) + 1
+    return (100.0 / abs(american)) + 1
 
 
 def decimal_to_american(decimal: float) -> int:

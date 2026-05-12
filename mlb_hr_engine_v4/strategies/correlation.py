@@ -138,6 +138,8 @@ def find_correlated_parlays(
 
 
 def american_to_decimal(american: int) -> float:
+    if american == 0:
+        return 1.01
     if american >= 100:
         return (american / 100.0) + 1
     return (100.0 / abs(american)) + 1
