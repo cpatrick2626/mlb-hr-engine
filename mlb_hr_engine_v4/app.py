@@ -1458,19 +1458,23 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
             )
             st.caption("Select all text above and copy (⌘A / Ctrl+A → ⌘C / Ctrl+C).")
 
-    all_by_model = data.get("all_by_model", [])
-    # Apply time gate to all_by_model so All/Prime/Watch tabs respect the cutoff too.
+    all_by_model_raw = data.get("all_by_model", [])
+    # Apply time gate separately so Prime tab (all prime plays) and Prime Time tab
+    # (time-filtered prime plays) can show different counts and players.
     # Must compare in ET, not raw UTC — late games (9pm+ ET) cross midnight UTC and would
     # have UTC hours 01/02, failing a raw >= 23 check even though they're after the cutoff.
     if cutoff_utc_hour is not None:
         _abm_cutoff_et = (cutoff_utc_hour - 4) % 24
         all_by_model = [
-            p for p in all_by_model
+            p for p in all_by_model_raw
             if (gt := _game_time_et(p.get("game_time_utc", ""))) is None or gt.hour >= _abm_cutoff_et
         ]
-    PRIME_FLOOR  = 0.15
-    _n_prime = len([p for p in all_by_model if p.get("model_prob", 0) >= PRIME_FLOOR])
-    _n_watch = len([p for p in all_by_model if p.get("model_prob", 0) < PRIME_FLOOR])
+    else:
+        all_by_model = all_by_model_raw
+    PRIME_FLOOR    = 0.15
+    _n_prime       = len([p for p in all_by_model_raw if p.get("model_prob", 0) >= PRIME_FLOOR])
+    _n_prime_timed = len([p for p in all_by_model     if p.get("model_prob", 0) >= PRIME_FLOOR])
+    _n_watch       = len([p for p in all_by_model     if p.get("model_prob", 0) < PRIME_FLOOR])
 
     # Compute steam moves: players whose implied prob shortened ≥2pp since first snapshot
     _steam_names: set = set()
@@ -1562,10 +1566,11 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
             unsafe_allow_html=True,
         )
 
-    sub1, sub2, sub3, sub4 = st.tabs([
+    sub1, sub2, sub3, sub4, sub5 = st.tabs([
         f"⚡ Picks ({len(ranked)})",
         f"📊 All ({len(all_by_model)})",
         f"⭐ Prime ({_n_prime})",
+        f"⏰ Prime Time ({_n_prime_timed})",
         f"📋 Watch ({min(_n_watch, 20)})",
     ])
 
@@ -2180,8 +2185,9 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                 st.session_state["modal_source_section"] = "All Players"
                 st.rerun()
 
-        prime = [p for p in all_by_model if p.get("model_prob", 0) >= PRIME_FLOOR][:60]
-        watch = [p for p in all_by_model if p.get("model_prob", 0) < PRIME_FLOOR][:20]
+        prime      = [p for p in all_by_model_raw if p.get("model_prob", 0) >= PRIME_FLOOR][:60]
+        prime_time = [p for p in all_by_model     if p.get("model_prob", 0) >= PRIME_FLOOR][:60]
+        watch      = [p for p in all_by_model     if p.get("model_prob", 0) < PRIME_FLOOR][:20]
 
         # Shared search bar — filters all three model tabs simultaneously
         _search_query = st.text_input(
@@ -2227,15 +2233,36 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
         with sub3:
             _prime_filtered = _apply_search(prime)
             if not _prime_filtered:
-                st.info(f"No {'matches for "' + _search_query + '"' if _sq else 'players with ≥15% model HR probability today'}.")
+                st.info(f"No {'matches for \"' + _search_query + '\"' if _sq else 'players with ≥15% model HR probability today'}.")
             else:
                 st.caption(f"⭐ {len(_prime_filtered)} player{'s' if len(_prime_filtered) != 1 else ''} with model HR probability ≥ 15%{' matching search' if _sq else ''}.")
                 _render_model_df(_prime_filtered)
 
         with sub4:
+            _ptf_filtered = _apply_search(prime_time)
+            _ptf_et = ((cutoff_utc_hour - 4) % 24) if cutoff_utc_hour is not None else None
+            if _ptf_et is not None:
+                _ptf_h12  = _ptf_et % 12 or 12
+                _ptf_ampm = "AM" if _ptf_et < 12 else "PM"
+                _ptf_label = f"games at/after {_ptf_h12}:00 {_ptf_ampm} ET"
+            else:
+                _ptf_label = None
+            if not _ptf_filtered:
+                if cutoff_utc_hour is None:
+                    st.info("No game start time selected. Set 'Only show games starting after…' in the sidebar to filter prime plays by game time.")
+                else:
+                    st.info(f"No prime players for {_ptf_label}{' matching \"' + _search_query + '\"' if _sq else ''}.")
+            else:
+                _ptf_hdr = (f"⏰ {len(_ptf_filtered)} prime player{'s' if len(_ptf_filtered) != 1 else ''} "
+                            + (f"for {_ptf_label}" if _ptf_label else "— no time filter active")
+                            + (" matching search" if _sq else "") + ".")
+                st.caption(_ptf_hdr)
+                _render_model_df(_ptf_filtered)
+
+        with sub5:
             _watch_filtered = _apply_search(watch)
             if not _watch_filtered:
-                st.info(f"No {'matches for "' + _search_query + '"' if _sq else 'watch list players today'}.")
+                st.info(f"No {'matches for \"' + _search_query + '\"' if _sq else 'watch list players today'}.")
             else:
                 st.caption(f"📋 {len(_watch_filtered)} player{'s' if len(_watch_filtered) != 1 else ''} with model HR probability < 15%{' matching search' if _sq else ''}.")
                 _render_model_df(_watch_filtered)
@@ -2842,11 +2869,22 @@ def tab_jig(data: dict):
             else:
                 st.warning("all_players is EMPTY — pipeline returned no players.")
 
-        _jq, _jp, _ja, _jpr = st.tabs([
+        # Read time-gate info for Prime Time tab label
+        _jig_cutoff = st.session_state.get("cutoff_utc_hour")
+        if _jig_cutoff is not None:
+            _jig_et_h  = (_jig_cutoff - 4) % 24
+            _jig_h12   = _jig_et_h % 12 or 12
+            _jig_ampm  = "AM" if _jig_et_h < 12 else "PM"
+            _jig_time_label = f"{_jig_h12}:00 {_jig_ampm} ET"
+        else:
+            _jig_time_label = None
+
+        _jq, _jp, _ja, _jpr, _jpt = st.tabs([
             "📱 Quick Picks",
             f"⚡ Picks ({len(qualified)})",
             f"📊 All ({len(scored)})",
             f"⭐ Prime ({len(prime)})",
+            f"⏰ Prime Time ({len(prime)})",
         ])
 
         with _jq:
@@ -2913,6 +2951,19 @@ def tab_jig(data: dict):
                 st.caption(f"{len(prime)} players pass all JIG criteria with positive EV.")
                 for entry in prime:
                     _jig_card(entry, key_prefix=f"jpr_{key_sfx}")
+
+        with _jpt:
+            if _jig_cutoff is None:
+                st.info("No game start time selected. Set 'Only show games starting after…' in the sidebar to show prime JIG plays for later games only.")
+            elif not prime:
+                st.info(f"No prime JIG plays for games at/after {_jig_time_label}.")
+            else:
+                st.caption(
+                    f"⏰ {len(prime)} prime JIG player{'s' if len(prime) != 1 else ''} "
+                    f"for games at/after {_jig_time_label} — ranked by JIG score."
+                )
+                for entry in prime:
+                    _jig_card(entry, key_prefix=f"jpt_{key_sfx}")
 
     _outer_ai, _outer_way = st.tabs(["⚡ JIG AI", "🎯 The JIG Way"])
 
