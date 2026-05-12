@@ -1864,7 +1864,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                     _mv_player_map = {p.get("player_name", ""): p for p in all_players}
                     _mv_tver = st.session_state.get("_table_ver", 0)
                     _mv_sel = st.dataframe(
-                        pd.DataFrame(mv_rows), hide_index=True, width="stretch",
+                        pd.DataFrame(mv_rows), hide_index=True, use_container_width=True,
                         on_select="rerun", selection_mode="single-row",
                         key=f"mv_df_{_mv_tver}",
                     )
@@ -1917,7 +1917,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                 st.caption("Best odds per sportsbook for each qualified pick.")
                 _oc_tver = st.session_state.get("_table_ver", 0)
                 _oc_sel = st.dataframe(
-                    pd.DataFrame(cmp_rows), hide_index=True, width="stretch",
+                    pd.DataFrame(cmp_rows), hide_index=True, use_container_width=True,
                     on_select="rerun", selection_mode="single-row",
                     key=f"odds_cmp_df_{_oc_tver}",
                 )
@@ -3398,7 +3398,7 @@ def tab_performance():
                         "ROI":     f"{roi:+.1f}%",
                     })
                 if tier_rows:
-                    st.dataframe(pd.DataFrame(tier_rows), hide_index=True, width="stretch")
+                    st.dataframe(pd.DataFrame(tier_rows), hide_index=True, use_container_width=True)
                     st.caption("Tier assigned at pick time using EV%, Edge%, and Confidence — same logic as the Rating column in Today's Picks.")
     except Exception as e:
         st.warning(f"Performance by tier unavailable: {e}")
@@ -3504,7 +3504,7 @@ def tab_performance():
                     "Consistent over-prediction means the model is too aggressive; under-prediction means it's conservative."
                 )
                 cal_df = pd.DataFrame(cal_rows)
-                st.dataframe(cal_df, hide_index=True, width="stretch")
+                st.dataframe(cal_df, hide_index=True, use_container_width=True)
                 st.bar_chart(cal_df.set_index("Bucket")[["Avg Model%", "Actual HR%"]], height=220)
     except Exception as e:
         st.warning(f"Calibration chart unavailable: {e}")
@@ -3654,7 +3654,7 @@ def tab_performance():
 
             st.dataframe(
                 _log_df,
-                width="stretch",
+                use_container_width=True,
                 hide_index=True,
                 column_config={
                     "Result": st.column_config.TextColumn("Result", width="small"),
