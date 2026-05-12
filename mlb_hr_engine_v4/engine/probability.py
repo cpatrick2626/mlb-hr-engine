@@ -20,6 +20,7 @@ def base_hr_rate(
     season_stats: dict,
     recent_stats: dict,
     statcast_mult: float = 1.0,
+    recent_weight: float | None = None,
 ) -> float:
     season_pa = int(season_stats.get("plateAppearances", 0))
     season_hr = int(season_stats.get("homeRuns", 0))
@@ -48,7 +49,8 @@ def base_hr_rate(
         recent_rate = recent_hr / recent_pa
         recent_trust = min(recent_pa / 100.0, 1.0)
         blended_recent = recent_rate * recent_trust + regressed_season * (1 - recent_trust)
-        rate = config.RECENT_WEIGHT * blended_recent + config.SEASON_WEIGHT * regressed_season
+        _rw = config.RECENT_WEIGHT if recent_weight is None else recent_weight
+        rate = _rw * blended_recent + (1.0 - _rw) * regressed_season
     else:
         rate = regressed_season
 

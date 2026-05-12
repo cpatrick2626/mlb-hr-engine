@@ -1,7 +1,10 @@
 """
 Composite score and ranking.
 
-Score = (EV% × 0.55 + Edge% × 0.45) × confidence_scale
+Score = (EV% × ev_w + Edge% × (1-ev_w)) × confidence_scale
+
+Default ev_w = 0.55 (EV) / 0.45 (Edge). Auto-learn may adjust this ratio
+based on which signal better predicts actual HR outcomes.
 
 confidence_scale = 0.50 + 0.50 × (confidence / 100)
   conf=100 → scale=1.00  (full signal)
@@ -15,12 +18,20 @@ suppressed, so it can't crowd out a well-substantiated lower-EV pick. This
 prevents noisy early-season or single-book picks from dominating the ranking.
 """
 
+from tracking import adaptive_weights
+
+_DEFAULT_EV_WEIGHT   = 0.55
+_DEFAULT_EDGE_WEIGHT = 0.45
+
 
 def composite_score(ev_pct: float, edge_pct: float, confidence: float) -> float:
     """
     Confidence-weighted composite score. Higher = better bet.
+    EV/Edge weights are adaptive — auto-learn adjusts them based on win-rate data.
     """
-    signal     = ev_pct * 0.55 + edge_pct * 0.45
+    ev_w   = adaptive_weights.get("ranker_ev_weight", _DEFAULT_EV_WEIGHT)
+    edge_w = 1.0 - ev_w
+    signal     = ev_pct * ev_w + edge_pct * edge_w
     conf_scale = 0.50 + 0.50 * (confidence / 100.0)
     return round(signal * conf_scale, 2)
 

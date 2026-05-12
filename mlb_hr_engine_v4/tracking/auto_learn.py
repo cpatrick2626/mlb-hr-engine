@@ -21,9 +21,11 @@ Learning targets:
 
 import json
 import math
+import os
 import statistics
 from pathlib import Path
 
+import config
 from tracking.pick_tracker import load_all as _pt_load_all, settled_rows, summary_by, total_summary
 
 ADJUSTMENTS_PATH = Path(__file__).parent / "learned_adjustments.json"
@@ -131,6 +133,18 @@ def apply_suggestion(suggestion_id: str, value=None) -> bool:
         adj["min_model_prob"] = _compute_prob_threshold(rows)
     elif suggestion_id == "prob_scale":
         adj["prob_scale"] = _compute_prob_scale(calib)
+    elif suggestion_id == "ranker_weights":
+        new_w = _compute_ranker_ev_weight(rows)
+        if new_w is not None:
+            adj["ranker_ev_weight"] = round(new_w, 2)
+        else:
+            return False
+    elif suggestion_id == "recent_weight":
+        new_rw = _compute_recent_weight(rows)
+        if new_rw is not None:
+            adj["recent_weight"] = round(new_rw, 2)
+        else:
+            return False
     elif suggestion_id == "custom" and value is not None:
         adj.update(value)
     else:
@@ -155,6 +169,89 @@ def reset_adjustments() -> None:
     """Remove all learned adjustments."""
     if ADJUSTMENTS_PATH.exists():
         ADJUSTMENTS_PATH.unlink()
+
+
+def auto_apply_safe() -> dict:
+    """
+    Automatically apply low-risk weight adjustments based on settled picks.
+
+    Skips if results.csv hasn't changed since learned_adjustments.json was last
+    written — so there's no overhead on runs with no new settled picks.
+
+    Returns {"applied": list[str], "skipped": str | None}.
+    """
+    results_path = Path(__file__).parent / "results.csv"
+
+    # Skip if no new results since last adjustment write
+    if results_path.exists() and ADJUSTMENTS_PATH.exists():
+        if os.path.getmtime(str(results_path)) <= os.path.getmtime(str(ADJUSTMENTS_PATH)):
+            return {"applied": [], "skipped": "no new results"}
+
+    all_rows = _pt_load_all()
+    rows     = settled_rows(all_rows)
+    n        = len(rows)
+    if n < 15:
+        return {"applied": [], "skipped": f"insufficient data ({n} settled picks, need 15)"}
+
+    outcomes = [int(r.get("hr_result", 0)) for r in rows]
+    calib    = _calibration(rows, outcomes)
+    adj      = load_adjustments()
+    applied  = []
+
+    # 1. Probability calibration scale
+    if n >= 20 and calib:
+        total_bias = sum(b["bias_pct"] for b in calib) / len(calib)
+        if abs(total_bias) >= 2.0:
+            scale = _compute_prob_scale(calib)
+            scale = round(max(0.88, min(1.12, scale)), 3)  # tighter auto-apply bounds
+            if abs(scale - adj.get("prob_scale", 1.0)) >= 0.02:
+                adj["prob_scale"] = scale
+                applied.append(f"prob_scale→{scale:.3f} (avg bias {total_bias:+.1f}%)")
+
+    # 2. EV threshold — only raise when low-EV picks clearly underperform
+    if n >= 20:
+        low_ev  = [r for r in rows if 0 < float(r.get("ev_pct", 0) or 0) < 3.0]
+        high_ev = [r for r in rows if float(r.get("ev_pct", 0) or 0) >= 5.0]
+        if len(low_ev) >= 8 and len(high_ev) >= 8:
+            low_wr  = _win_rate(low_ev)
+            high_wr = _win_rate(high_ev)
+            if low_wr < high_wr - 0.10:
+                new_min = _compute_ev_threshold(rows)
+                new_min = round(max(2.0, min(6.0, new_min)), 1)
+                if abs(new_min - adj.get("min_ev_pct", config.MIN_EV_PCT)) >= 0.5:
+                    adj["min_ev_pct"] = new_min
+                    applied.append(
+                        f"min_ev_pct→{new_min:.1f}% "
+                        f"(low-EV win rate {low_wr:.0%} vs {high_wr:.0%})"
+                    )
+
+    # 3. Ranker weights (EV vs Edge ratio)
+    if n >= 30:
+        new_ev_w = _compute_ranker_ev_weight(rows)
+        if new_ev_w is not None:
+            new_ev_w = round(max(0.40, min(0.70, new_ev_w)), 2)
+            if abs(new_ev_w - adj.get("ranker_ev_weight", 0.55)) >= 0.05:
+                adj["ranker_ev_weight"] = new_ev_w
+                applied.append(f"ranker_ev_weight→{new_ev_w:.2f}")
+
+    # 4. Recent/season blend (needs streak_factor in picks log)
+    if n >= 25:
+        new_rw = _compute_recent_weight(rows)
+        if new_rw is not None:
+            new_rw = round(max(0.20, min(0.45, new_rw)), 2)
+            if abs(new_rw - adj.get("recent_weight", config.RECENT_WEIGHT)) >= 0.04:
+                adj["recent_weight"] = new_rw
+                applied.append(f"recent_weight→{new_rw:.2f}")
+
+    if applied:
+        _save_adjustments(adj)
+        try:
+            from tracking import adaptive_weights as _aw
+            _aw.invalidate_cache()
+        except Exception:
+            pass
+
+    return {"applied": applied, "skipped": None if applied else "no improvements found"}
 
 
 # ── Analysis helpers ──────────────────────────────────────────────────────────
@@ -350,6 +447,48 @@ def _generate_suggestions(
                 "impact": "low",
             })
 
+    # ── 6. Ranker EV/Edge weight rebalancing ──────────────────────────────
+    new_ev_w = _compute_ranker_ev_weight(settled)
+    if new_ev_w is not None:
+        current_ev_w = load_adjustments().get("ranker_ev_weight", 0.55)
+        delta_w = abs(new_ev_w - current_ev_w)
+        if delta_w >= 0.05:
+            sid += 1
+            suggestions.append({
+                "id":     "ranker_weights",
+                "sid":    sid,
+                "title":  f"Rebalance ranking formula (EV weight {new_ev_w:.0%} / Edge {1-new_ev_w:.0%})",
+                "detail": (
+                    f"Grid-search across your {len(settled)} settled picks shows EV weight "
+                    f"{new_ev_w:.0%} (Edge {1-new_ev_w:.0%}) better separates winners "
+                    f"from losers than the current {current_ev_w:.0%}/{1-current_ev_w:.0%} split. "
+                    "This affects pick ordering, not probability estimates."
+                ),
+                "value":  {"ranker_ev_weight": new_ev_w},
+                "impact": "medium",
+            })
+
+    # ── 7. Recent/season weight ────────────────────────────────────────────
+    new_rw = _compute_recent_weight(settled)
+    if new_rw is not None:
+        current_rw = load_adjustments().get("recent_weight", config.RECENT_WEIGHT)
+        if abs(new_rw - current_rw) >= 0.04:
+            direction = "increase" if new_rw > current_rw else "decrease"
+            sid += 1
+            suggestions.append({
+                "id":     "recent_weight",
+                "sid":    sid,
+                "title":  f"{'Increase' if new_rw > current_rw else 'Decrease'} recent-form weight → {new_rw:.0%}",
+                "detail": (
+                    f"Hot-streak picks (streak_factor > 1.05) are winning at a "
+                    f"meaningfully different rate than neutral picks across your settled history. "
+                    f"Adjusting RECENT_WEIGHT {current_rw:.0%}→{new_rw:.0%} will {direction} "
+                    "how much the last-20-game HR rate influences each prediction."
+                ),
+                "value":  {"recent_weight": new_rw},
+                "impact": "medium",
+            })
+
     return suggestions
 
 
@@ -461,6 +600,68 @@ def _win_rate(rows: list[dict]) -> float:
     if not settled:
         return 0.0
     return sum(1 for r in settled if r.get("hr_result") == "1") / len(settled)
+
+
+def _compute_ranker_ev_weight(rows: list[dict]) -> "float | None":
+    """
+    Grid-search EV weight (0.30–0.80) to find the ratio that best separates
+    winners from losers in the top-ranked half of settled picks.
+    """
+    settled = [r for r in rows if r.get("hr_result") in ("0", "1")]
+    if len(settled) < 30:
+        return None
+
+    best_w, best_score = 0.55, -1.0
+    for ev_w_int in range(30, 85, 5):
+        ev_w = ev_w_int / 100.0
+        edge_w = 1.0 - ev_w
+        scored = []
+        for r in settled:
+            ev   = float(r.get("ev_pct",   0) or 0)
+            edge = float(r.get("edge_pct", 0) or 0)
+            conf = float(r.get("confidence", 50) or 50)
+            signal = ev * ev_w + edge * edge_w
+            score  = signal * (0.50 + 0.50 * conf / 100)
+            scored.append((score, int(r.get("hr_result", 0))))
+        scored.sort(key=lambda x: x[0], reverse=True)
+        top = scored[:max(1, len(scored) // 2)]
+        wr  = sum(o for _, o in top) / len(top)
+        if wr > best_score:
+            best_score, best_w = wr, ev_w
+
+    return best_w
+
+
+def _compute_recent_weight(rows: list[dict]) -> "float | None":
+    """
+    Compare win rates of hot-streak vs neutral picks to infer whether the
+    recent 20-game HR rate should carry more or less weight than the season rate.
+    Requires streak_factor column (added to LOG_FIELDS in v4).
+    """
+    settled = [r for r in rows if r.get("hr_result") in ("0", "1")]
+    # Require at least some rows with streak_factor data
+    with_streak = [r for r in settled
+                   if r.get("streak_factor") and r.get("streak_factor") not in ("", "None")]
+    if len(with_streak) < 20:
+        return None
+
+    hot     = [r for r in with_streak if float(r["streak_factor"]) > 1.05]
+    cold    = [r for r in with_streak if float(r["streak_factor"]) < 0.95]
+    neutral = [r for r in with_streak if 0.95 <= float(r["streak_factor"]) <= 1.05]
+    if len(hot) < 5 or len(neutral) < 5:
+        return None
+
+    hot_wr     = _win_rate(hot)
+    neutral_wr = _win_rate(neutral)
+    delta      = hot_wr - neutral_wr
+    if abs(delta) < 0.05:
+        return None
+
+    current = config.RECENT_WEIGHT  # 0.30
+    if delta > 0:
+        return round(current + min(0.10, delta), 2)
+    else:
+        return round(current - min(0.08, abs(delta)), 2)
 
 
 def _save_adjustments(adj: dict) -> None:

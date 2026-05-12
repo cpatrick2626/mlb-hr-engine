@@ -18,6 +18,7 @@ from data.park_factors import get_park
 from engine import market as mkt, probability as prob, ev as ev_engine, sizing, filters
 from output import ranker, parlay as parlay_engine
 from output.parlay import build_profile_parlays
+from tracking import adaptive_weights as _aw
 
 
 # ── Core helpers (same logic as v3 main.py, extracted here) ──────────────────
@@ -58,7 +59,8 @@ def _build_player_profile(
     # Default to "current" only when the player IS in batter_data (tier-1 rows have no key set);
     # players absent entirely get "none" so confidence_score awards no Statcast bonus.
     sc_source  = sc_stats.get("statcast_source", "current" if sc_stats else "none")
-    raw_rate   = prob.base_hr_rate(season_stats, recent_stats, statcast_mult=power_mult)
+    raw_rate   = prob.base_hr_rate(season_stats, recent_stats, statcast_mult=power_mult,
+                                    recent_weight=_aw.get("recent_weight"))
     hr_rate    = prob.statcast_blended_rate(
         raw_rate, power_mult, season_pa,
         statcast_pa=sc_pa, statcast_source=sc_source,
@@ -127,10 +129,11 @@ def _build_player_profile(
     # Stage 6: batter × pitcher interaction term (non-additive matchup synergy).
     # Uses pit_factor (full combined signal) instead of sc_pit_fac alone — sc_pit_fac
     # is already embedded in pit_factor at 40% weight, so using it directly double-counted
-    # the Statcast signal. Coefficient reduced 0.35→0.20 to match reduced amplitude.
+    # the Statcast signal. Coefficient adaptive (default 0.20, tuned by auto-learn).
     batter_excess  = max(0.0, power_mult - 1.0)
     pitcher_excess = max(0.0, pit_factor - 1.0)
-    interaction    = batter_excess * pitcher_excess * 0.20
+    _ic = _aw.get("interaction_coeff", 0.20)
+    interaction    = batter_excess * pitcher_excess * _ic
 
     early_supp    = prob.early_season_suppressor(season_pa, sc_source)
     adjusted_rate = min(0.15, hr_rate * streak_fac * k_fac * early_supp * (1.0 + interaction))
@@ -143,6 +146,9 @@ def _build_player_profile(
     # 0.82 discount ≈ 82% probability of actually being in the lineup.
     if not lineup_spot:
         model_prob = round(model_prob * 0.82, 4)
+
+    # Apply adaptive calibration scale (moves model_prob toward observed hit rate)
+    model_prob = round(_aw.apply_prob_scale(model_prob), 4)
 
     return {
         "player_id": player_id, "player_name": player_name,
@@ -316,6 +322,16 @@ def load_game_data(
             progress_cb(msg)
 
     game_date = target_date or (config.TARGET_DATE or date.today().strftime("%Y-%m-%d"))
+
+    # Run adaptive learning if new settled picks are available since last run
+    try:
+        from tracking import auto_learn as _al
+        result = _al.auto_apply_safe()
+        if result.get("applied"):
+            _aw.invalidate_cache()
+            _cb(f"Adaptive weights updated: {', '.join(result['applied'])}")
+    except Exception as _e:
+        print(f"[pipeline] auto_apply_safe skipped: {_e}")
 
     # Fetch schedule and odds in parallel for improved performance
     _cb("Fetching schedule and odds concurrently...")

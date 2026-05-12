@@ -3,6 +3,7 @@ Filter rules — a pick must pass ALL rules to be a recommended bet.
 """
 
 import config
+from tracking import adaptive_weights
 
 
 def apply_filters(pick: dict) -> tuple[bool, list[str]]:
@@ -18,10 +19,16 @@ def apply_filters(pick: dict) -> tuple[bool, list[str]]:
     if model_prob <= 0 or model_prob > config.MAX_GAME_HR_PROB:
         fails.append(f"Model prob out of bounds: {model_prob:.1%} (must be 0–{config.MAX_GAME_HR_PROB:.0%})")
 
-    # Rule 1 — Minimum EV
+    # Optional adaptive floor on model probability
+    min_prob = adaptive_weights.get("min_model_prob")
+    if min_prob and model_prob < min_prob:
+        fails.append(f"Model prob {model_prob:.1%} below adaptive floor {min_prob:.1%}")
+
+    # Rule 1 — Minimum EV (threshold adaptive if auto-learn has updated it)
     ev = pick.get("ev_pct", -999)
-    if ev < config.MIN_EV_PCT:
-        fails.append(f"EV {ev:+.1f}% (need ≥ +{config.MIN_EV_PCT:.0f}%)")
+    min_ev = adaptive_weights.get("min_ev_pct", config.MIN_EV_PCT)
+    if ev < min_ev:
+        fails.append(f"EV {ev:+.1f}% (need ≥ +{min_ev:.0f}%)")
 
     # Rule 2 — Minimum edge vs no-vig market
     edge = pick.get("edge_pct", -999)

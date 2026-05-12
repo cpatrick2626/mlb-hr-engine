@@ -36,6 +36,8 @@ LOG_FIELDS = [
     "ev_pct", "edge_pct", "american_odds", "bet_dollars",
     "park_factor", "pitcher_factor", "weather_factor",
     "season_pa", "recent_pa", "confidence", "score",
+    # Signal fields for adaptive learning
+    "streak_factor", "barrel_pct", "xslg", "platoon_factor", "statcast_source",
 ]
 
 RESULTS_FIELDS = LOG_FIELDS + ["hr_result", "profit_loss", "notes"]
@@ -50,6 +52,8 @@ def storage_backend() -> str:
 def log_picks(picks: list[dict], model_version: str = "v4") -> int:
     """Append today's qualified picks. Returns number logged (0 if already done)."""
     today = date.today().isoformat()
+    _migrate_schema(LOG_PATH, LOG_FIELDS)
+    _migrate_schema(RESULTS_PATH, RESULTS_FIELDS)
 
     if _sheets.available():
         if today in _sheets.existing_dates("picks_log"):
@@ -364,6 +368,15 @@ def get_picks_log() -> list[dict]:
 
 # â”€â”€ Internal helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
+def _fmtf(val, fmt=".4f") -> str:
+    """Format a float field that may be None, '--', or numeric."""
+    try:
+        f = float(val) if val is not None and str(val) not in ("--", "None", "") else None
+        return format(f, fmt) if f is not None else ""
+    except (ValueError, TypeError):
+        return ""
+
+
 def _pick_row(p: dict, today: str, model_version: str) -> dict:
     return {
         "date":            today,
@@ -387,6 +400,12 @@ def _pick_row(p: dict, today: str, model_version: str) -> dict:
         "recent_pa":       p.get("recent_pa", ""),
         "confidence":      f"{p.get('confidence', 0):.1f}",
         "score":           f"{p.get('score', 0):.2f}",
+        # Signal fields for adaptive learning
+        "streak_factor":   _fmtf(p.get("streak_factor"), ".3f"),
+        "barrel_pct":      _fmtf(p.get("barrel_pct"), ".4f"),
+        "xslg":            _fmtf(p.get("xslg"), ".3f"),
+        "platoon_factor":  _fmtf(p.get("platoon_factor"), ".3f"),
+        "statcast_source": p.get("statcast_source", "none"),
     }
 
 
@@ -440,6 +459,34 @@ def _upsert_results(new_rows: list[dict]) -> None:
                     existing.append(row)
     merged = existing + list(incoming.values())
     _atomic_csv_write(RESULTS_PATH, RESULTS_FIELDS, merged)
+
+
+def _migrate_schema(path: Path, fields: list[str]) -> None:
+    """Add any missing columns to an existing CSV (new columns get empty values)."""
+    if not path.exists():
+        return
+    with open(path, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        existing_fields = list(reader.fieldnames or [])
+        rows = list(reader)
+    missing = [f for f in fields if f not in existing_fields]
+    if not missing:
+        return
+    new_fields = existing_fields + missing
+    tmp = path.with_suffix(".tmp")
+    try:
+        with open(tmp, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=new_fields, extrasaction="ignore")
+            writer.writeheader()
+            for row in rows:
+                writer.writerow(row)
+        os.replace(tmp, path)
+    except Exception:
+        if tmp.exists():
+            try:
+                tmp.unlink()
+            except Exception:
+                pass
 
 
 def _append_csv(path: Path, fields: list[str], rows: list[dict]) -> None:
