@@ -174,6 +174,7 @@ def _build_player_profile(
         "pitcher_days_rest": pitcher_days_rest, "fatigue_factor": round(fatigue_fac, 3),
         "weather_factor": round(w_factor, 3), "platoon_factor": round(plat_factor, 3),
         "batter_side": batter_side,
+        "pitcher_hand": pitcher_hand,
         "model_prob": round(model_prob, 4), "weather": weather,
         "pitcher_hr9": pitcher_hr9,
         "short_form_pa": int(short_form.get("plateAppearances", 0)),
