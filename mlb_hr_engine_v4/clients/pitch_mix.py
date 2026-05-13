@@ -31,7 +31,7 @@ MLB_API = "https://statsapi.mlb.com/api/v1"
 SAVANT  = "https://baseballsavant.mlb.com"
 
 # Bump this whenever the context schema changes — forces Streamlit session-state cache to refresh.
-HVY_CACHE_VERSION = "5"
+HVY_CACHE_VERSION = "6"
 
 # {pitcher_id: {"hand_splits": {...}, "pitch_stats": {...}, "data_year": int}}
 _PITCHER_SAVANT_CACHE: dict[int, dict] = {}
@@ -40,6 +40,14 @@ _BATTER_PT_CACHE:      dict[int, dict] = {}
 
 # Minimum PA-ending events to consider a season's data usable
 _MIN_PITCHER_PA = 20
+
+
+def clear_caches() -> None:
+    """Clear all module-level caches. Call this when the user forces a data refresh
+    so stale empty-result entries (e.g. from a failed initial load) are evicted."""
+    _PITCHER_SAVANT_CACHE.clear()
+    _H2H_CACHE.clear()
+    _BATTER_PT_CACHE.clear()
 
 # Human-readable pitch type labels
 PITCH_LABELS: dict[str, str] = {
@@ -383,7 +391,7 @@ def load_hvy_contexts_batch(players: list[dict], arsenal_data: dict | None = Non
     Returns {player_id: context_dict}.
     """
     contexts: dict[int, dict] = {}
-    with ThreadPoolExecutor(max_workers=16) as ex:
+    with ThreadPoolExecutor(max_workers=6) as ex:
         futures = {
             ex.submit(load_hvy_context, p, arsenal_data): p.get("player_id")
             for p in players

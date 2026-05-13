@@ -3137,10 +3137,20 @@ def tab_jig(data: dict):
 
                 # ── Batter vs pitch types ──────────────────────────────────────
                 st.markdown("**🎯 Batter vs These Pitches (2026)**")
-                if pitcher_arsenal and batter_vs:
+                if batter_vs:
+                    # When we have the pitcher's arsenal, order rows by pitcher
+                    # usage so the batter's numbers line up against what he'll
+                    # actually see. When no arsenal exists (new/IL pitcher), fall
+                    # back to showing the batter's top-PA pitch types instead.
+                    if pitcher_arsenal:
+                        _bvp_pitches = [px.get("pitch_type", "") for px in pitches[:5]]
+                    else:
+                        _bvp_pitches = [pt for pt, _ in
+                                        sorted(batter_vs.items(),
+                                               key=lambda x: x[1].get("pa", 0),
+                                               reverse=True)[:5]]
                     brows = ""
-                    for px in pitches[:5]:
-                        pt  = px.get("pitch_type", "")
+                    for pt in _bvp_pitches:
                         lbl = pitch_label(pt)
                         pc  = pitch_color(pt)
                         bpt = batter_vs.get(pt, {})
@@ -3159,14 +3169,17 @@ def tab_jig(data: dict):
                             f"<td>{bpt.get('k_pct',0)*100:.0f}%</td></tr>"
                         )
                     if brows:
+                        _bvp_note = "" if pitcher_arsenal else " (all pitch types — no pitcher arsenal)"
                         st.markdown(
                             "<table style='width:100%;font-size:11px;border-collapse:collapse;margin-top:4px;'>"
                             "<tr style='color:#888;border-bottom:1px solid #333;'>"
-                            "<th align='left'>Pitch</th><th>PA</th><th>HR</th>"
+                            f"<th align='left'>Pitch{_bvp_note}</th><th>PA</th><th>HR</th>"
                             "<th>BA</th><th>SLG</th><th>K%</th></tr>"
                             f"{brows}</table>",
                             unsafe_allow_html=True,
                         )
+                    else:
+                        st.caption("Batter has < 3 PA vs any pitch type this season.")
                 else:
                     st.caption("No batter split data available.")
 
@@ -3423,6 +3436,11 @@ def tab_jig(data: dict):
         _col_refresh, _ = st.columns([1, 4])
         with _col_refresh:
             if st.button("🔄 Refresh Pitch Data", key="hvy_refresh"):
+                # Clear both the session-state cache AND the module-level
+                # in-process caches so stale empty-result entries are evicted.
+                from clients import pitch_mix as _pm_clear, arsenal as _ar_clear
+                _pm_clear.clear_caches()
+                _ar_clear.clear_caches()
                 st.session_state.pop(_hvy_ck, None)
                 st.rerun()
 

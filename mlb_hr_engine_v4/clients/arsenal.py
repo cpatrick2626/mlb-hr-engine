@@ -43,6 +43,11 @@ _ARSENAL_CACHE: dict[int, dict[int, list]] = {}
 _FASTBALL_TYPES = frozenset({"FF", "SI", "FC"})
 
 
+def clear_caches() -> None:
+    """Evict stale cache entries so the next fetch hits the network."""
+    _ARSENAL_CACHE.clear()
+
+
 # ── Public API ─────────────────────────────────────────────────────────────────
 
 def get_pitcher_arsenal(year: int = None) -> dict[int, list[dict]]:
