@@ -183,6 +183,8 @@ def batter_power_multiplier(
     if not stats:
         return 1.0
 
+    pa = stats.get("pa", 0) or 0
+
     barrel_rate  = _safe(stats, "barrel_rate",      LEAGUE_AVG_BARREL_RATE, lo=0.0,   hi=0.30)
     ev           = _safe(stats, "exit_velocity_avg", LEAGUE_AVG_EXIT_VELO,   lo=60.0,  hi=120.0)
     xslg         = _safe(stats, "xslg",             LEAGUE_AVG_XSLG,        lo=0.05,  hi=1.20)
@@ -190,6 +192,17 @@ def batter_power_multiplier(
     sweet_spot   = _safe(stats, "sweet_spot_pct",   LEAGUE_AVG_SWEET_SPOT,  lo=0.0,   hi=0.70)
     fb_pct       = _safe(stats, "fb_pct",           LEAGUE_AVG_FB_PCT,      lo=0.05,  hi=0.70)
     pull_pct     = _safe(stats, "pull_pct",         LEAGUE_AVG_PULL_PCT,    lo=0.10,  hi=0.75)
+
+    # Per-metric stabilization: shrink each signal toward league avg based on sample PA.
+    # Half-lives from config — each metric has its own stabilization rate.
+    _stab = config.STATCAST_STABILIZATION_PA
+    barrel_rate = _stabilize_metric(barrel_rate, LEAGUE_AVG_BARREL_RATE, pa, _stab["barrel_rate"])
+    ev          = _stabilize_metric(ev,          LEAGUE_AVG_EXIT_VELO,   pa, _stab["exit_velocity_avg"])
+    xslg        = _stabilize_metric(xslg,        LEAGUE_AVG_XSLG,        pa, _stab["xslg"])
+    hard_hit    = _stabilize_metric(hard_hit,    LEAGUE_AVG_HARD_HIT,    pa, _stab["hard_hit_pct"])
+    sweet_spot  = _stabilize_metric(sweet_spot,  LEAGUE_AVG_SWEET_SPOT,  pa, _stab["sweet_spot_pct"])
+    fb_pct      = _stabilize_metric(fb_pct,      LEAGUE_AVG_FB_PCT,      pa, _stab["fb_pct"])
+    pull_pct    = _stabilize_metric(pull_pct,    LEAGUE_AVG_PULL_PCT,    pa, _stab["pull_pct"])
 
     # Lower barrel floor (0.30 vs 0.40): true zero-barrel players score meaningfully lower.
     barrel_mult     = _clamp(barrel_rate  / LEAGUE_AVG_BARREL_RATE,  0.30, 2.50)
@@ -236,10 +249,18 @@ def pitcher_contact_suppressor(
     if not stats:
         return 1.0
 
+    pa = stats.get("pa", 0) or 0
+
     barrel_against   = _safe(stats, "barrel_rate",       LEAGUE_AVG_BARREL_RATE, lo=0.0,  hi=0.25)
     ev_against       = _safe(stats, "exit_velocity_avg", LEAGUE_AVG_EXIT_VELO,   lo=60.0, hi=120.0)
     hard_hit_against = _safe(stats, "hard_hit_pct",      LEAGUE_AVG_HARD_HIT,    lo=0.0,  hi=0.80)
     fb_against       = _safe(stats, "fb_pct",            LEAGUE_AVG_FB_PCT,      lo=0.05, hi=0.70)
+
+    _stab = config.STATCAST_STABILIZATION_PA
+    barrel_against   = _stabilize_metric(barrel_against,   LEAGUE_AVG_BARREL_RATE, pa, _stab["barrel_rate"])
+    ev_against       = _stabilize_metric(ev_against,       LEAGUE_AVG_EXIT_VELO,   pa, _stab["exit_velocity_avg"])
+    hard_hit_against = _stabilize_metric(hard_hit_against, LEAGUE_AVG_HARD_HIT,    pa, _stab["hard_hit_pct"])
+    fb_against       = _stabilize_metric(fb_against,       LEAGUE_AVG_FB_PCT,      pa, _stab["fb_pct"])
 
     barrel_mult  = _clamp(barrel_against   / LEAGUE_AVG_BARREL_RATE, 0.40, 2.50)
     fb_mult      = _clamp(fb_against       / LEAGUE_AVG_FB_PCT,      0.55, 1.70)
@@ -300,6 +321,21 @@ def statcast_summary(
         "season":          stats.get("season", config.CURRENT_SEASON),
         "statcast_source": stats.get("statcast_source", "current"),
     }
+
+
+def pulled_air_ball_metric(player_id: int, batter_data: dict[int, dict]) -> float:
+    """
+    Joint pull × fly-ball probability, normalized to league average = 1.0.
+    Captures the interaction between pull tendency and air-ball rate — a pulled
+    fly ball is far more likely to be a HR than an opposite-field fly ball.
+    Returns a raw multiplier [0.50, 1.80] used by probability.pulled_air_ball_factor().
+    """
+    stats = batter_data.get(player_id) or {}
+    pull_pct = _safe(stats, "pull_pct", LEAGUE_AVG_PULL_PCT, lo=0.0, hi=1.0)
+    fb_pct   = _safe(stats, "fb_pct",   LEAGUE_AVG_FB_PCT,   lo=0.0, hi=1.0)
+    league_joint = LEAGUE_AVG_PULL_PCT * LEAGUE_AVG_FB_PCT
+    result = (pull_pct * fb_pct) / league_joint if league_joint > 0 else 1.0
+    return _clamp(result, 0.50, 1.80)
 
 
 # ── Internal merge helpers ─────────────────────────────────────────────────────
@@ -639,6 +675,13 @@ def _safe(d: dict, key: str, default: float,
 
 def _clamp(v: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, v))
+
+
+def _stabilize_metric(value: float, league_avg: float, pa: int, half_life: int) -> float:
+    """Shrink metric toward league average using Bayesian half-life stabilization.
+    trust = pa / (pa + half_life): at pa == half_life the signal is 50% reliable."""
+    trust = pa / (pa + half_life) if pa > 0 else 0.0
+    return trust * value + (1.0 - trust) * league_avg
 
 
 def clear_all_caches() -> None:

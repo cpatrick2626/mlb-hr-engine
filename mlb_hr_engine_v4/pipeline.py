@@ -14,6 +14,7 @@ import config
 from clients import mlb_stats, odds_api
 from clients import weather as weather_client
 from clients import statcast as statcast_client
+from clients import arsenal as arsenal_client
 from data.park_factors import get_park
 from engine import market as mkt, probability as prob, ev as ev_engine, sizing, filters
 from output import ranker, parlay as parlay_engine
@@ -44,6 +45,7 @@ def _build_player_profile(
     player_id, player_name, lineup_spot, team, opponent,
     home_team, pitcher, batter_data, pitcher_data,
     game_time_utc: str = "",
+    arsenal_data: dict = None, arsenal_prior: dict = None,
 ):
     season_stats    = mlb_stats.get_player_season_stats(player_id)
     recent_stats    = mlb_stats.get_player_recent_stats(player_id)
@@ -80,8 +82,13 @@ def _build_player_profile(
     streak_fac = prob.hot_streak_factor(short_form, season_stats)
     k_fac      = prob.batter_k_suppressor(season_stats)
 
+    # Batter handedness needed for park factor — fetch before pk_factor computation
+    batter_info = mlb_stats.get_player_info(player_id)
+    batter_side = batter_info.get("batSide", {}).get("code", "")
+    splits      = mlb_stats.get_player_platoon_splits(player_id)
+
     exp_pa    = prob.expected_pa(lineup_spot)
-    pk_factor = prob.park_factor(home_team)
+    pk_factor = prob.park_factor(home_team, batter_side)
     pk_factor = prob.fly_ball_adjusted_park_factor(pk_factor, sc_stats.get("fb_pct"))
 
     pitcher_id   = pitcher.get("id")
@@ -111,6 +118,17 @@ def _build_player_profile(
     pit_hrs  = int(pitcher_stats.get("homeRuns", 0))
     pitcher_hr9 = round((pit_hrs / pit_ip) * 9.0, 2) if pit_ip >= 5 else 0.0
 
+    # Pitch arsenal matchup + velocity decline factors
+    _arsenal = arsenal_data or {}
+    _arsenal_prior = arsenal_prior or {}
+    arsenal_matchup_mult = arsenal_client.arsenal_matchup_factor(pitcher_id or 0, _arsenal)
+    velo_fac             = arsenal_client.pitcher_velo_decline_factor(pitcher_id or 0, _arsenal, _arsenal_prior)
+    arsenal_fac          = prob.arsenal_factor(arsenal_matchup_mult)
+
+    # Pulled air-ball factor
+    pab_mult  = statcast_client.pulled_air_ball_metric(player_id, batter_data)
+    pab_factor = prob.pulled_air_ball_factor(pab_mult)
+
     park_data  = get_park(home_team)
     is_dome    = home_team in weather_client.DOME_TEAMS
     cf_bearing = park_data.get("cf_bearing", 0.0)
@@ -119,11 +137,9 @@ def _build_player_profile(
     w_factor   = max(0.80, min(1.20,
         weather_client.temp_factor(weather["temp_f"])
         * weather_client.wind_factor(weather["wind_mph"], weather["wind_deg"], is_dome, cf_bearing)
+        * weather_client.humidity_factor(weather.get("humidity_pct", 55), is_dome)
     ))
 
-    batter_info = mlb_stats.get_player_info(player_id)
-    batter_side = batter_info.get("batSide", {}).get("code", "")
-    splits      = mlb_stats.get_player_platoon_splits(player_id)
     plat_factor = prob.platoon_factor(splits, pitcher_hand, batter_side, season_pa)
 
     # Stage 6: batter × pitcher interaction term (non-additive matchup synergy).
@@ -141,6 +157,7 @@ def _build_player_profile(
         adjusted_rate, exp_pa,
         pk_factor=pk_factor, pitcher_fac=pit_factor,
         w_factor=w_factor, plat_factor=plat_factor,
+        pab_fac=pab_factor, arsenal_fac=arsenal_fac, velo_fac=velo_fac,
     )
     # When lineup hasn't been posted (spot is None), the player may not start.
     # 0.82 discount ≈ 82% probability of actually being in the lineup.
@@ -170,6 +187,10 @@ def _build_player_profile(
         "park_factor": round(pk_factor, 3), "pitcher_factor": round(pit_factor, 3),
         "pitcher_days_rest": pitcher_days_rest, "fatigue_factor": round(fatigue_fac, 3),
         "weather_factor": round(w_factor, 3), "platoon_factor": round(plat_factor, 3),
+        "pulled_air_ball_factor": round(pab_factor, 3),
+        "arsenal_factor": round(arsenal_fac, 3),
+        "velo_decline_factor": round(velo_fac, 3),
+        "batter_side": batter_side,
         "model_prob": round(model_prob, 4), "weather": weather,
         "pitcher_hr9": pitcher_hr9,
         "short_form_pa": int(short_form.get("plateAppearances", 0)),
@@ -393,14 +414,16 @@ def load_game_data(
                     if player.get("id"):
                         batter_ids.add(player["id"])
 
-    # Fetch Statcast and MLB stats in parallel for maximum efficiency
+    # Fetch Statcast, MLB stats, and arsenal data in parallel for maximum efficiency
     _cb(f"Loading data for {len(batter_ids)} batters, {len(pitcher_ids)} pitchers...")
-    with ThreadPoolExecutor(max_workers=4) as executor:
+    with ThreadPoolExecutor(max_workers=6) as executor:
         futures = {
             executor.submit(statcast_client.get_batter_statcast, player_ids=batter_ids): "batter_statcast",
             executor.submit(statcast_client.get_pitcher_statcast, player_ids=pitcher_ids): "pitcher_statcast",
             executor.submit(mlb_stats.bulk_fetch_player_stats, batter_ids): "mlb_player_stats",
             executor.submit(mlb_stats.bulk_fetch_pitcher_stats, pitcher_ids): "mlb_pitcher_stats",
+            executor.submit(arsenal_client.get_pitcher_arsenal, config.CURRENT_SEASON): "arsenal_curr",
+            executor.submit(arsenal_client.get_pitcher_arsenal, config.CURRENT_SEASON - 1): "arsenal_prior",
         }
 
         results = {}
@@ -410,11 +433,13 @@ def load_game_data(
                 results[key] = future.result()
             except Exception as e:
                 print(f"Error fetching {key}: {e}")
-                results[key] = {} if "statcast" in key else None
+                results[key] = {} if key in ("batter_statcast", "pitcher_statcast", "arsenal_curr", "arsenal_prior") else None
 
     # Batted-ball data is already merged into batter_data/pitcher_data by get_*_statcast()
-    batter_data = results.get("batter_statcast", {})
-    pitcher_data = results.get("pitcher_statcast", {})
+    batter_data   = results.get("batter_statcast", {})
+    pitcher_data  = results.get("pitcher_statcast", {})
+    arsenal_data  = results.get("arsenal_curr", {})
+    arsenal_prior = results.get("arsenal_prior", {})
 
     # Collect tasks first so roster fallbacks run before the parallel phase.
     tasks: list[tuple] = []
@@ -460,6 +485,7 @@ def load_game_data(
                 pid, name, spot, team, opp, home_team, opp_pitcher,
                 batter_data, pitcher_data,
                 game_time_utc=game_time_utc,
+                arsenal_data=arsenal_data, arsenal_prior=arsenal_prior,
             )
             if profile:
                 profile["game_time_utc"] = game_time_utc

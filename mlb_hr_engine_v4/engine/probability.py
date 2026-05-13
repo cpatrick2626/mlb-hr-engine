@@ -12,7 +12,7 @@ import math
 from typing import Optional
 
 import config
-from data.park_factors import get_park
+from data.park_factors import get_park, get_park_hr_factor
 from clients import weather as weather_client
 
 
@@ -371,8 +371,20 @@ def fly_ball_adjusted_park_factor(park_factor: float, statcast_fb_pct: float = N
     return max(0.70, min(1.45, adjusted))
 
 
-def park_factor(home_team: str) -> float:
+def park_factor(home_team: str, batter_side: str = "") -> float:
+    if batter_side:
+        return get_park_hr_factor(home_team, batter_side)
     return get_park(home_team).get("hr_factor", 1.0)
+
+
+def pulled_air_ball_factor(pab_mult: float) -> float:
+    """Scale pulled-air-ball joint metric to a HR factor. Caps [0.85, 1.18]."""
+    return round(max(0.85, min(1.18, 1.0 + 0.30 * (pab_mult - 1.0))), 3)
+
+
+def arsenal_factor(matchup_mult: float) -> float:
+    """Convert raw arsenal matchup multiplier to a HR factor. Caps [0.82, 1.20]."""
+    return round(max(0.82, min(1.20, 1.0 + 0.60 * (matchup_mult - 1.0))), 3)
 
 
 
@@ -382,11 +394,11 @@ def game_hr_probability(
     hr_rate: float, exp_pa: float,
     pk_factor: float = 1.0, pitcher_fac: float = 1.0,
     w_factor: float = 1.0, plat_factor: float = 1.0,
+    pab_fac: float = 1.0, arsenal_fac: float = 1.0, velo_fac: float = 1.0,
 ) -> float:
-    # Cap combined multiplier — prevents extreme stacking of park + pitcher + weather + platoon.
-    # 1.50 ceiling (reduced from 1.60): tightens 25-30% bucket calibration without hurting
-    # lower buckets. Coors (1.28) + hittable pitcher + platoon still reaches 1.45-1.50.
-    combined = pk_factor * pitcher_fac * w_factor * plat_factor
+    # Cap combined multiplier — prevents extreme stacking across all factors.
+    # 1.50 ceiling: Coors (1.28) + hittable pitcher + platoon + modest pab/arsenal still fits.
+    combined = pk_factor * pitcher_fac * w_factor * plat_factor * pab_fac * arsenal_fac * velo_fac
     combined = max(0.42, min(1.50, combined))
     lam = hr_rate * combined * exp_pa
     prob = max(0.001, 1.0 - math.exp(-lam))

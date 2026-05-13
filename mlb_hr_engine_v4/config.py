@@ -102,3 +102,27 @@ PARLAY_CANDIDATE_POOL: int = 8   # Top N picks to consider for parlay
 
 # ── Backtest simulation ───────────────────────────────────────────────────────
 BACKTEST_FLAT_BET: float = 10.0  # dollars per pick in calibration P&L simulation
+
+# ── Metric Stabilization Half-Lives ──────────────────────────────────────────
+# PA count where each Statcast metric is ~50% reliable (n/(n+half_life)=0.5).
+# Applied in statcast.py to shrink low-sample signals toward league average.
+STATCAST_STABILIZATION_PA: dict = {
+    "barrel_rate":       60,   # fastest-stabilizing batted-ball metric
+    "exit_velocity_avg": 50,   # EV stabilizes very quickly (~50 PA)
+    "hard_hit_pct":      80,
+    "sweet_spot_pct":   120,
+    "xslg":              60,
+    "fb_pct":           150,   # batted-ball direction metrics stabilize slower
+    "pull_pct":         100,
+}
+
+# ── Pitch Arsenal ─────────────────────────────────────────────────────────────
+ARSENAL_LEAGUE_AVG_WHIFF: float = 0.245  # ~24.5% league-average whiff rate 2026
+ARSENAL_RV_SCALE:         float = 40.0   # RV/100 ±2.0 → ±5% factor via division
+
+# ── Velocity Decline ──────────────────────────────────────────────────────────
+VELO_DECLINE_THRESHOLD_MPH: float = 0.5   # minimum YoY drop to apply factor
+VELO_DECLINE_RATE:          float = 0.012 # HR factor boost per mph beyond threshold
+
+# ── Humidity ──────────────────────────────────────────────────────────────────
+LEAGUE_AVG_HUMIDITY: float = 55.0  # % RH baseline for neutral factor
