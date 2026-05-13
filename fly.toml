@@ -1,0 +1,32 @@
+app            = "mlb-hr-api"
+primary_region = "iad"   # Washington DC — closest to MLB data centers
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "8080"
+
+[http_service]
+  internal_port        = 8080
+  force_https          = true
+  auto_stop_machines   = true    # machine sleeps when idle — free tier friendly
+  auto_start_machines  = true    # cold-starts on first request (~2s)
+  min_machines_running = 0
+
+[[vm]]
+  cpu_kind  = "shared"
+  cpus      = 1
+  memory_mb = 512   # pipeline needs ~300MB; 512 gives headroom
+
+[[mounts]]
+  source      = "mlb_tracking"
+  destination = "/app/tracking"    # persists picks_log.csv etc. across deploys
+  processes   = ["app"]
+
+# Secrets to set with `fly secrets set KEY=value`:
+#   SUPABASE_URL
+#   SUPABASE_SERVICE_KEY
+#   SUPABASE_JWT_SECRET
+#   ODDS_API_KEY
+#   CRON_SECRET

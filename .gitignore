@@ -25,6 +25,9 @@ compare_v2.json
 codex_hr_engine_v1/manual_odds.csv
 codex_hr_engine_v2/manual_odds.csv
 
+# Fly.io
+.fly/
+
 # OS
 .DS_Store
 Thumbs.db
