@@ -2201,8 +2201,8 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
 
         # â"€â"€ Column selector â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
         # Column selection persists via session_state; widget lives in All Players tab
-        _default_cols = ["Brl%", "SwSp%", "FB%", "GB%", "Pull%", "Exit Velo", "PwrMult", "Park", "Pitcher"]
-        selected_toggle = st.session_state.get("model_col_picker", _default_cols)
+        _default_cols = ["Odds", "Mkt%", "Edge%", "EV%", "Brl%", "SwSp%", "Exit Velo", "PwrMult", "Park", "Pitcher"]
+        selected_toggle = st.session_state.get("model_col_picker_v2", _default_cols)
         visible_cols = _FIXED_COLS + selected_toggle
 
         def _model_rows(players):
@@ -2267,7 +2267,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                     options=_TOGGLE_COLS,
                     default=selected_toggle,
                     format_func=lambda c: _COL_FULL.get(c, c),
-                    key="model_col_picker",
+                    key="model_col_picker_v2",
                 )
             _all_filtered = _apply_search(all_by_model)
             if _sq and not _all_filtered:
