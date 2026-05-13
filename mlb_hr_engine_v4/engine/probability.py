@@ -54,16 +54,15 @@ def base_hr_rate(
     else:
         rate = regressed_season
 
-    # ISO adjustment: stabilizes in ~150-200 PA vs ~300 PA for HR/PA.
-    # Linear fade: max 20% weight at ≤50 PA, fully phased out by 250 PA.
-    # Aligns with ISO stabilization rate — use it early, drop it once HR/PA is reliable.
+    # ISO adjustment: stabilizes in ~150 PA vs ~300 PA for HR/PA.
+    # Fades linearly from 20% weight at 0 PA to 0% at 150 PA — matches stabilization point.
     try:
         slg = float(season_stats.get("sluggingPercentage", 0) or 0)
         avg = float(season_stats.get("avg", 0) or 0)
         iso = max(0.0, slg - avg)
         if iso > 0 and season_pa >= 30:
             iso_mult = max(0.70, min(1.50, iso / config.LEAGUE_AVG_ISO))
-            iso_trust = max(0.0, min(0.20, (250.0 - season_pa) / 1000.0))
+            iso_trust = max(0.0, 0.20 * (1.0 - min(season_pa / 150.0, 1.0)))
             rate = rate * (1.0 - iso_trust) + rate * iso_mult * iso_trust
     except (ValueError, TypeError):
         pass
@@ -340,8 +339,14 @@ def platoon_factor(splits: dict, pitcher_hand: str, batter_side: str, season_pa:
     total_rate = ((vl_rate * vl_pa + vr_rate * vr_pa) / total_pa
                   if total_pa > 0 else (vl_rate + vr_rate) / 2.0)
 
-    # Bayesian shrinkage — use actual split PA if available, else season proxy
-    n = split_pa if split_pa > 0 else int(season_pa * 0.4)
+    # Bayesian shrinkage — use actual split PA if available.
+    # Proxy: ~28% of MLB PA come vs LHP, ~72% vs RHP (league-wide averages).
+    if split_pa > 0:
+        n = split_pa
+    elif split_key == "vl":
+        n = int(season_pa * 0.28)
+    else:
+        n = int(season_pa * 0.72)
     SHRINK = 50   # standard constant: 50 PA to trust a split halfway
     trust     = n / (n + SHRINK)
     regressed = trust * split_rate + (1 - trust) * total_rate
