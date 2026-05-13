@@ -31,7 +31,7 @@ MLB_API = "https://statsapi.mlb.com/api/v1"
 SAVANT  = "https://baseballsavant.mlb.com"
 
 # Bump this whenever the context schema changes — forces Streamlit session-state cache to refresh.
-HVY_CACHE_VERSION = "3"
+HVY_CACHE_VERSION = "4"
 
 # {pitcher_id: {"hand_splits": {...}, "pitch_stats": {...}, "data_year": int}}
 _PITCHER_SAVANT_CACHE: dict[int, dict] = {}
@@ -370,7 +370,7 @@ def load_hvy_contexts_batch(players: list[dict], arsenal_data: dict | None = Non
     Returns {player_id: context_dict}.
     """
     contexts: dict[int, dict] = {}
-    with ThreadPoolExecutor(max_workers=8) as ex:
+    with ThreadPoolExecutor(max_workers=16) as ex:
         futures = {
             ex.submit(load_hvy_context, p, arsenal_data): p.get("player_id")
             for p in players

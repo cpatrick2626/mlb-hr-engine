@@ -3340,15 +3340,19 @@ def tab_jig(data: dict):
         from clients.pitch_mix import HVY_CACHE_VERSION as _HVY_VER
         _hvy_ck = f"hvy_ctx_{data.get('date', '')}_{_HVY_VER}"
         if _hvy_ck not in st.session_state:
-            with st.spinner("Loading pitch mix & matchup data for top picks..."):
+            _hvy_candidates = [p for p in all_players if p.get("best_american")]
+            _spinner_msg = (
+                f"Loading pitch mix data for {len(_hvy_candidates)} players "
+                f"across {len({p.get('pitcher_id') for p in _hvy_candidates if p.get('pitcher_id')})} pitchers…"
+            )
+            with st.spinner(_spinner_msg):
                 from clients import arsenal as _ar_client
                 from clients import pitch_mix as _pm_client
                 try:
                     _ar_data = _ar_client.get_pitcher_arsenal(config.CURRENT_SEASON)
                 except Exception:
                     _ar_data = {}
-                _top_hvy = [p for p in all_players if p.get("best_american")][:30]
-                _hvy_ctxs = _pm_client.load_hvy_contexts_batch(_top_hvy, _ar_data)
+                _hvy_ctxs = _pm_client.load_hvy_contexts_batch(_hvy_candidates, _ar_data)
                 for _p in all_players:
                     _pid = _p.get("player_id")
                     if _pid and _pid not in _hvy_ctxs:
