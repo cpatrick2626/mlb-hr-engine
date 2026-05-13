@@ -296,6 +296,27 @@ def pitcher_contact_suppressor(
     return round(_clamp(composite, 0.55, 1.50), 3)
 
 
+def pull_air_pct_from_fractions(
+    pull_pct: Optional[float],
+    fb_pct: Optional[float],
+    ld_pct: Optional[float],
+) -> Optional[float]:
+    """
+    Canonical Pull AIR% on a 0–100 scale: pulled share × airborne share,
+    using Statcast batted-ball rates as fractions (0–1).
+
+    Matches the legacy HVY display-scale formula pull * (fb + ld) / 100 when
+    pull, fb, ld are expressed as whole percentages.
+    """
+    if pull_pct is None or fb_pct is None or ld_pct is None:
+        return None
+    try:
+        p, f, l = float(pull_pct), float(fb_pct), float(ld_pct)
+    except (TypeError, ValueError):
+        return None
+    return round(100.0 * p * (f + l), 4)
+
+
 def statcast_summary(
     player_id: int,
     batter_data: dict[int, dict],
@@ -324,6 +345,9 @@ def statcast_summary(
         "gb_pct":          _pct("gb_pct"),
         "ld_pct":          _pct("ld_pct"),
         "pull_pct":        _pct("pull_pct"),
+        "pull_air_pct":    pull_air_pct_from_fractions(
+            stats.get("pull_pct"), stats.get("fb_pct"), stats.get("ld_pct"),
+        ),
         "oppo_pct":        _pct("oppo_pct"),
         "season":          stats.get("season", config.CURRENT_SEASON),
         "statcast_source": stats.get("statcast_source", "current"),
