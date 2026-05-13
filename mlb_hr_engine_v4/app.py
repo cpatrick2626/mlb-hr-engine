@@ -614,6 +614,46 @@ def _stat_css(col: str, val) -> str:
         if raw >= 0.90: return ""
         if raw >= 0.70: return _RED
         return _DARK_RED
+    if col == "Confidence":
+        if raw >= 70: return _DARK_GREEN
+        if raw >= 50: return _GREEN
+        if raw >= 30: return ""
+        return _RED
+    if col in ("Hard Hit%", "Hard Hit"):
+        if raw >= 47: return _DARK_GREEN
+        if raw >= 40: return _GREEN
+        if raw >= 35: return _RED
+        return _DARK_RED
+    if col == "HR Win%":
+        if raw >= 40: return _DARK_GREEN
+        if raw >= 34: return _GREEN
+        if raw >= 28: return _RED
+        return _DARK_RED
+    if col == "xSLG":
+        if raw >= 0.500: return _DARK_GREEN
+        if raw >= 0.420: return _GREEN
+        if raw >= 0.350: return _RED
+        return _DARK_RED
+    if col == "Barrel%":
+        if raw >= 10:  return _DARK_GREEN
+        if raw >= 5.2: return _GREEN
+        if raw >= 3:   return _RED
+        return _DARK_RED
+    if col == "Pull AIR":
+        if raw >= 25: return _DARK_GREEN
+        if raw >= 18: return _GREEN
+        if raw >= 12: return _RED
+        return _DARK_RED
+    if col == "ISO":
+        if raw >= 0.230: return _DARK_GREEN
+        if raw >= 0.170: return _GREEN
+        if raw >= 0.130: return _RED
+        return _DARK_RED
+    if col in ("HVY", "HVY Base"):
+        if raw >= 70: return _DARK_GREEN
+        if raw >= 50: return _GREEN
+        if raw >= 35: return _RED
+        return _DARK_RED
     return ""
 
 def _stat_badge(col: str, val) -> str:
@@ -624,6 +664,36 @@ def _stat_badge(col: str, val) -> str:
     if css == _RED:        return f"🔴 {val}"
     if css == _DARK_RED:   return f"⛔ {val}"
     return str(val)
+
+
+_HEAT_COLS = {
+    "Brl%", "SwSp%", "EV mph", "Exit Velo", "FB%", "GB%", "EV%", "Edge", "Edge%",
+    "Model%", "Conf", "PwrMult", "Confidence", "Hard Hit%", "Hard Hit",
+    "HR Win%", "xSLG", "Barrel%", "Pull AIR", "ISO", "HVY", "HVY Base",
+}
+
+_HEAT_NEUTRAL = "background-color:#0f172a; color:#94a3b8"
+_HEAT_BASE    = "background-color:#0f172a; color:#e2e8f0; font-size:12px"
+
+
+def _apply_heatmap(df: "pd.DataFrame") -> "pd.io.formats.style.Styler":
+    """Apply per-cell background colors to stat columns using _stat_css thresholds."""
+    styler = df.style.set_properties(**{
+        "background-color": "#0f172a",
+        "color": "#e2e8f0",
+        "font-size": "12px",
+    })
+    for col in df.columns:
+        if col in _HEAT_COLS:
+            styler = styler.apply(
+                lambda s, c=col: [
+                    _stat_css(c, v) or _HEAT_NEUTRAL
+                    for v in s
+                ],
+                axis=0,
+                subset=[col],
+            )
+    return styler
 
 
 def _edge_col(edge) -> str:
@@ -1161,17 +1231,17 @@ def _render_qualified_table(
             "Spot":    _spot_label(spot, plat_fac),
             "Pitcher": pitcher_cell,
             "Odds":    _fmt_american(p.get("best_american")),
-            "Model%":  _stat_badge("Model%", f"{model_p*100:.1f}%"),
+            "Model%":  f"{model_p*100:.1f}%",
             "Mkt%":    f"{p.get('market_no_vig_prob',0)*100:.1f}%",
-            "Edge":    _stat_badge("Edge", f"{edge:+.1f}%"),
-            "EV%":     _stat_badge("EV%", f"{ev:+.1f}%"),
+            "Edge":    f"{edge:+.1f}%",
+            "EV%":     f"{ev:+.1f}%",
             "Bet $":   f"${bet:.0f}",
-            "Conf":    _stat_badge("Conf", f"{conf:.0f}"),
-            "Brl%":    _stat_badge("Brl%", str(safe_val(p.get("barrel_pct"), "--"))),
-            "SwSp%":   _stat_badge("SwSp%", str(safe_val(p.get("sweet_spot_pct"), "--"))),
-            "EV mph":  _stat_badge("EV mph", str(safe_val(p.get("exit_velo"), "--"))),
-            "FB%":     _stat_badge("FB%", str(safe_val(p.get("fb_pct"), "--"))),
-            "GB%":     _stat_badge("GB%", str(safe_val(p.get("gb_pct"), "--"))),
+            "Conf":    f"{conf:.0f}",
+            "Brl%":    str(safe_val(p.get("barrel_pct"), "--")),
+            "SwSp%":   str(safe_val(p.get("sweet_spot_pct"), "--")),
+            "EV mph":  str(safe_val(p.get("exit_velo"), "--")),
+            "FB%":     str(safe_val(p.get("fb_pct"), "--")),
+            "GB%":     str(safe_val(p.get("gb_pct"), "--")),
             "Pull%":   str(safe_val(p.get("pull_pct"), "--")),
             "Score":   f"{p.get('score',0):.1f}",
         })
@@ -1227,6 +1297,7 @@ def _render_qualified_table(
     df = pd.DataFrame(rows)
     df = df.fillna("--")
     df = df.replace([np.nan, np.inf, -np.inf, float('inf'), -float('inf')], "--")
+    df = _apply_heatmap(df)
 
     _tver = st.session_state.get("_table_ver", 0)
     _df_sel = st.dataframe(
@@ -2011,22 +2082,22 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
             if col == "Team":         return _safe(m("team"), "")
             if col == "Spot":         return _spot_label(m("lineup_spot"), plat_fac)
             if col == "Vs":           return _pitcher_label(m("pitcher_name", "TBD"), pit_fac, plat_fac)
-            if col == "Model%":       return _stat_badge("Model%", f"{(m('model_prob') or 0)*100:.1f}%")
-            if col == "Brl%":         return _stat_badge("Brl%", _safe(m("barrel_pct")))
-            if col == "SwSp%":        return _stat_badge("SwSp%", _safe(m("sweet_spot_pct")))
-            if col == "FB%":          return _stat_badge("FB%", _safe(m("fb_pct")))
-            if col == "GB%":          return _stat_badge("GB%", _safe(m("gb_pct")))
+            if col == "Model%":       return f"{(m('model_prob') or 0)*100:.1f}%"
+            if col == "Brl%":         return _safe(m("barrel_pct"))
+            if col == "SwSp%":        return _safe(m("sweet_spot_pct"))
+            if col == "FB%":          return _safe(m("fb_pct"))
+            if col == "GB%":          return _safe(m("gb_pct"))
             if col == "LD%":          return _safe(m("ld_pct"))
             if col == "Pull%":        return _safe(m("pull_pct"))
             if col == "Oppo%":        return _safe(m("oppo_pct"))
             if col == "Hard Hit%":    return _safe(m("hard_hit"))
-            if col == "Exit Velo":    return _stat_badge("Exit Velo", _safe(m("exit_velo")))
+            if col == "Exit Velo":    return _safe(m("exit_velo"))
             if col == "Launch Angle":
                 v = m("avg_launch_angle")
                 return f"{v:.1f}" if isinstance(v, (int, float)) and v == v else "--"
             if col == "PwrMult":
                 v = m("statcast_power_mult") or 1.0
-                return _stat_badge("PwrMult", f"{v:.2f}")
+                return f"{v:.2f}"
             if col == "Park":         return f"{m('park_factor') or 1:.3f}"
             if col == "Pitcher":      return f"{m('pitcher_factor') or 1:.3f}"
             if col == "Weather":      return f"{m('weather_factor') or 1:.3f}"
@@ -2224,6 +2295,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
             _df_key = f"model_df_{_model_df_idx[0]}_{_mtver}"
             df = pd.DataFrame(_model_rows(players))
             df = df.fillna("--").replace([np.nan, np.inf, -np.inf, float('inf'), -float('inf')], "--")
+            df = _apply_heatmap(df)
             _msel = st.dataframe(df, width='stretch', hide_index=True, column_config=_col_cfg,
                                  on_select="rerun", selection_mode="single-row", key=_df_key)
             _mrows = getattr(getattr(_msel, "selection", None), "rows", [])
@@ -3505,13 +3577,11 @@ def tab_jig(data: dict):
                 })
             if rows:
                 _hvy_ver = st.session_state.get("_hvy_all_ver", 0)
+                _hvy_df = _apply_heatmap(pd.DataFrame(rows))
                 _sel = st.dataframe(
-                    pd.DataFrame(rows), hide_index=True, use_container_width=True,
+                    _hvy_df, hide_index=True, use_container_width=True,
                     on_select="rerun", selection_mode="single-row",
                     key=f"hvy_all_df_{_hvy_ver}",
-                    column_config={
-                        "HVY": st.column_config.ProgressColumn("HVY", min_value=0, max_value=100, format="%.0f"),
-                    },
                 )
                 _sel_rows = getattr(getattr(_sel, "selection", None), "rows", [])
                 if _sel_rows and 0 <= _sel_rows[0] < len(scored):
