@@ -168,6 +168,7 @@ def _build_player_profile(
         "sweet_spot_pct": sc_summary["sweet_spot_pct"],
         "fb_pct": sc_summary["fb_pct"], "gb_pct": sc_summary["gb_pct"],
         "ld_pct": sc_summary["ld_pct"], "pull_pct": sc_summary["pull_pct"],
+        "pull_air_pct": sc_summary.get("pull_air_pct"),
         "oppo_pct": sc_summary["oppo_pct"],
         "park_factor": round(pk_factor, 3), "pitcher_factor": round(pit_factor, 3),
         "pitcher_days_rest": pitcher_days_rest, "fatigue_factor": round(fatigue_fac, 3),
