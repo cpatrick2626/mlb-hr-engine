@@ -205,6 +205,7 @@ def tab_advanced_strategies(data: dict, parlays_callback=None):
         [
             "Stars Aligned",
             "Multi-Edge Confirmation",
+            "Player Edge Rankings",
             "Power Profile Parlays",
             "Pitcher Target Parlays",
             "xStats Regression",
@@ -1457,6 +1458,100 @@ def tab_advanced_strategies(data: dict, parlays_callback=None):
             else:
                 st.warning("No mispriced long shots found — market pricing looks accurate at +350+ today.")
                 st.link_button("📲 Browse FanDuel HR Props", _fd_url())
+
+        elif strategy_type == "Player Edge Rankings":
+            st.markdown("### 📊 Player Edge Rankings")
+            st.info(
+                "Every player with available odds ranked from highest Edge% to lowest. "
+                "Edge% = model probability − market no-vig probability. "
+                "Positive edge means the model sees more HR probability than the market prices — "
+                "the larger the gap, the stronger the value signal."
+            )
+
+            edge_players = sorted(
+                [p for p in all_players if p.get("best_american") and p.get("edge_pct") is not None],
+                key=lambda p: p.get("edge_pct", 0),
+                reverse=True,
+            )
+
+            if not edge_players:
+                st.warning("No players with odds and edge data available.")
+                st.link_button("📲 Browse FanDuel HR Props", _fd_url())
+            else:
+                _ranked_names = {p.get("player_name", "") for p in ranked}
+                _n_pos  = sum(1 for p in edge_players if p.get("edge_pct", 0) > 0)
+                _n_qual = sum(1 for p in edge_players if p.get("player_name", "") in _ranked_names)
+                st.caption(
+                    f"{len(edge_players)} players with odds · "
+                    f"{_n_pos} positive edge · "
+                    f"{_n_qual} currently qualified picks"
+                )
+
+                _er_c1, _er_c2 = st.columns(2)
+                with _er_c1:
+                    _er_min = st.slider("Min Edge%", -20.0, 20.0, 0.0, 0.5, key="er_min_edge")
+                with _er_c2:
+                    _er_n = st.slider("Show top N", 5, 50, 20, 5, key="er_show_n")
+
+                _er_filtered = [p for p in edge_players if p.get("edge_pct", 0) >= _er_min][: _er_n]
+
+                if not _er_filtered:
+                    st.warning(f"No players with Edge ≥ {_er_min:.1f}%.")
+                else:
+                    for i, p in enumerate(_er_filtered, 1):
+                        _er_name  = p.get("player_name", "")
+                        _er_team  = p.get("team", "")
+                        _er_pit   = p.get("pitcher_name", "TBD")
+                        _er_edge  = p.get("edge_pct", 0)
+                        _er_ev    = p.get("ev_pct", 0)
+                        _er_model = p.get("model_prob", 0) * 100
+                        _er_mkt   = (p.get("market_no_vig_prob") or 0) * 100
+                        _er_odds  = p.get("best_american")
+                        _er_conf  = p.get("confidence", 0)
+                        _er_qual  = _er_name in _ranked_names
+
+                        if _er_edge >= 10:  _er_ec = "#4ade80"
+                        elif _er_edge >= 5: _er_ec = "#86efac"
+                        elif _er_edge >= 2: _er_ec = "#f0f0f0"
+                        else:               _er_ec = "#f87171"
+
+                        _er_qual_tag = "  ✅" if _er_qual else ""
+                        _er_label = (
+                            f"#{i}  {_er_name}  ({_er_team})"
+                            f"  |  Edge {_er_edge:+.1f}%"
+                            f"  |  EV {_er_ev:+.1f}%"
+                            f"  |  Model {_er_model:.1f}%"
+                            f"{_er_qual_tag}"
+                        )
+
+                        with st.expander(_er_label):
+                            _ec1, _ec2, _ec3, _ec4 = st.columns(4)
+                            with _ec1:
+                                st.metric("Edge%", f"{_er_edge:+.1f}%")
+                            with _ec2:
+                                st.metric("EV%", f"{_er_ev:+.1f}%")
+                            with _ec3:
+                                st.metric("Model%", f"{_er_model:.1f}%")
+                            with _ec4:
+                                st.metric("Market%", f"{_er_mkt:.1f}%" if _er_mkt else "--")
+
+                            _ec5, _ec6, _ec7 = st.columns(3)
+                            with _ec5:
+                                st.metric("Best Odds", _fmt_american(_er_odds))
+                            with _ec6:
+                                st.metric("Confidence", f"{_er_conf:.0f}")
+                            with _ec7:
+                                st.metric("vs Pitcher", (_er_pit[:20] if _er_pit else "TBD"))
+
+                            _player_row(
+                                _er_name, _er_team,
+                                f"Edge {_er_edge:+.1f}% · EV {_er_ev:+.1f}% · Conf {_er_conf:.0f}",
+                                f"modal_er_{i}",
+                            )
+                            if st.button("📲 Add to FD Slip", key=f"fd_er_{i}"):
+                                n = _add_to_fd_slip([_er_name], all_players)
+                                if not n:
+                                    st.info("Already in slip.")
 
         elif strategy_type == "Multi-Edge Confirmation":
             st.markdown("### 🔬 Multi-Edge Confirmation")
