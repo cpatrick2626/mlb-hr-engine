@@ -1577,10 +1577,11 @@ def tab_advanced_strategies(data: dict, parlays_callback=None):
             conf_ranked = sorted(
                 ranked,
                 key=lambda p: (
-                    -float(p.get("confidence") or 0),
-                    _TIER_ORDER.get(p.get("confidence_tier", "C"), 3),
-                    -float(p.get("edge_pct") or 0),
+                    float(p.get("confidence") or 0),
+                    -_TIER_ORDER.get(p.get("confidence_tier", "C"), 3),
+                    float(p.get("edge_pct") or 0),
                 ),
+                reverse=True,
             )
 
             if not conf_ranked:

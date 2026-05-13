@@ -3210,9 +3210,9 @@ def tab_jig(data: dict):
                 st.markdown(
                     "<div style='display:flex;gap:12px;font-size:10px;margin-bottom:6px;"
                     "background:#0f172a;border-radius:4px;padding:5px 8px;'>"
-                    "<span><b style='color:#f87171;'>■</b> Red = Fastball (4-Seam, Sinker, Cutter)</span>"
-                    "<span><b style='color:#60a5fa;'>■</b> Blue = Breaking (Slider, Sweeper, Curve)</span>"
-                    "<span><b style='color:#4ade80;'>■</b> Green = Offspeed (Changeup, Splitter)</span>"
+                    "<span><b style='color:#4ade80;'>■</b> Green = Batter-Favoring</span>"
+                    "<span><b style='color:#f87171;'>■</b> Red = Pitcher-Favoring</span>"
+                    "<span><b style='color:#facc15;'>■</b> Yellow = Even</span>"
                     "</div>",
                     unsafe_allow_html=True,
                 )
@@ -3250,17 +3250,17 @@ def tab_jig(data: dict):
                         if whf_v is None and rv is None and hh_v is None:
                             kp = px.get("k_pct") or 0
                             _fav = -((kp - 0.22) * 2.0)
-                        pc = ("#4ade80" if _fav <= -0.15 else
-                              "#f87171" if _fav >= 0.15 else "#facc15")
+                        pc = ("#4ade80" if _fav >= 0.15 else
+                              "#f87171" if _fav <= -0.15 else "#facc15")
 
-                        # Cell background coloring
+                        # Cell background coloring (green = batter-favoring)
                         use_bg = ("#14532d" if use_v >= 35 else "#166534" if use_v >= 20 else "#0f172a")
-                        whf_bg = ("#14532d" if (whf_v or 0) >= 0.30 else "#166534" if (whf_v or 0) >= 0.22
-                                  else "#7f1d1d" if (whf_v or 0) < 0.15 and whf_v is not None else "#0f172a")
-                        hh_bg  = ("#7f1d1d" if (hh_v or 0) >= 0.50 else "#450a0a" if (hh_v or 0) >= 0.45
-                                  else "#166534" if (hh_v or 0) < 0.34 and hh_v is not None else "#0f172a")
-                        rv_bg  = ("#14532d" if (rv or 0) < -1.0 else "#166534" if (rv or 0) < 0
-                                  else "#7f1d1d" if (rv or 0) > 1.0 else "#450a0a" if (rv or 0) > 2.5 else "#0f172a")
+                        whf_bg = ("#7f1d1d" if (whf_v or 0) >= 0.30 else "#450a0a" if (whf_v or 0) >= 0.22
+                                  else "#166534" if (whf_v or 0) < 0.15 and whf_v is not None else "#0f172a")
+                        hh_bg  = ("#14532d" if (hh_v or 0) >= 0.50 else "#166534" if (hh_v or 0) >= 0.42
+                                  else "#7f1d1d" if (hh_v or 0) < 0.34 and hh_v is not None else "#0f172a")
+                        rv_bg  = ("#7f1d1d" if (rv or 0) < -1.0 else "#450a0a" if (rv or 0) < 0
+                                  else "#166534" if (rv or 0) > 1.0 else "#14532d" if (rv or 0) > 2.5 else "#0f172a")
                         _td = "padding:4px 6px;text-align:center;font-size:11px;"
                         rows += (
                             f"<tr>"
@@ -3341,10 +3341,10 @@ def tab_jig(data: dict):
                     brows = ""
                     for pt in _bvp_pitches:
                         lbl = pitch_label(pt)
-                        pc  = pitch_color(pt)
                         bpt = batter_vs.get(pt, {})
                         _td2 = "padding:4px 6px;text-align:center;font-size:11px;"
                         if bpt.get("pa", 0) < 3:
+                            pc = pitch_color(pt)
                             brows += (
                                 f"<tr><td style='padding:4px 6px;'><b style='color:{pc};font-size:11px;'>{lbl}</b></td>"
                                 f"<td colspan='5' style='color:#374151;font-size:10px;{_td2}'>< 3 PA</td></tr>"
@@ -3354,6 +3354,9 @@ def tab_jig(data: dict):
                         bba   = bpt.get("ba", 0.0)
                         bkpct = bpt.get("k_pct", 0.0)
                         bhr   = bpt.get("hr", 0)
+                        # Favorability: positive = batter winning, negative = pitcher winning
+                        _b_fav = (bslg - 0.380) * 2.0 - (bkpct - 0.22) * 1.5 + (bhr * 0.08)
+                        pc = ("#4ade80" if _b_fav >= 0.15 else "#f87171" if _b_fav <= -0.15 else "#facc15")
                         bpa   = bpt.get("pa", 0)
                         # Color cells: SLG green=high (batter wins), red=low; K% red=high (strikeouts)
                         slg_bg = ("#14532d" if bslg >= 0.550 else "#166534" if bslg >= 0.450
@@ -3384,7 +3387,8 @@ def tab_jig(data: dict):
                             f"<th style='{_th2}'>K%</th></tr>"
                             f"{brows}</table>"
                             "<div style='font-size:9px;color:#475569;margin-top:3px;'>"
-                            "SLG/BA: 🟢 green=batter-favorable · K%: 🔴 red=high strikeout risk</div>",
+                            "Pitch label: 🟢 green=batter wins this pitch · 🔴 red=pitcher wins · 🟡 even &nbsp;|&nbsp; "
+                            "SLG: 🟢 high · K%: 🔴 high</div>",
                             unsafe_allow_html=True,
                         )
                     else:
@@ -3395,6 +3399,69 @@ def tab_jig(data: dict):
             with _c2:
                 # ── Pitcher splits vs LHB / RHB ───────────────────────────────
                 st.markdown(f"**📈 {pit_n}{pit_hand_lbl} Splits{_yr_label}**")
+
+                # ── Pitcher aggregate arsenal stats (Whiff / HH / RV) ─────────
+                if pitcher_arsenal:
+                    _agg_tot = sum(px.get("pitch_pct", 0) for px in pitcher_arsenal)
+                    if _agg_tot > 0:
+                        _agg_whiff = sum(
+                            (px.get("display_whiff") or 0) * px.get("pitch_pct", 0)
+                            for px in pitcher_arsenal
+                            if px.get("display_whiff") is not None
+                        )
+                        _agg_hh = sum(
+                            (px.get("display_hh") or 0) * px.get("pitch_pct", 0)
+                            for px in pitcher_arsenal
+                            if px.get("display_hh") is not None
+                        )
+                        _agg_rv = sum(
+                            (px.get("display_rv100") or 0) * px.get("pitch_pct", 0)
+                            for px in pitcher_arsenal
+                            if px.get("display_rv100") is not None
+                        )
+                        _has_whiff = any(px.get("display_whiff") is not None for px in pitcher_arsenal)
+                        _has_hh    = any(px.get("display_hh")    is not None for px in pitcher_arsenal)
+                        _has_rv    = any(px.get("display_rv100") is not None for px in pitcher_arsenal)
+                        _wt_tot_w  = sum(px.get("pitch_pct", 0) for px in pitcher_arsenal if px.get("display_whiff") is not None)
+                        _wt_tot_h  = sum(px.get("pitch_pct", 0) for px in pitcher_arsenal if px.get("display_hh") is not None)
+                        _wt_tot_r  = sum(px.get("pitch_pct", 0) for px in pitcher_arsenal if px.get("display_rv100") is not None)
+                        _avg_w = (_agg_whiff / _wt_tot_w) if _has_whiff and _wt_tot_w > 0 else None
+                        _avg_h = (_agg_hh    / _wt_tot_h) if _has_hh    and _wt_tot_h > 0 else None
+                        _avg_r = (_agg_rv    / _wt_tot_r) if _has_rv    and _wt_tot_r > 0 else None
+
+                        def _pill_color(col, val):
+                            # Green = batter-favoring (good for HR bets)
+                            if col == "whiff" and val is not None:
+                                return "#f87171" if val >= 0.28 else "#4ade80" if val < 0.20 else "#facc15"
+                            if col == "hh" and val is not None:
+                                return "#4ade80" if val >= 0.42 else "#f87171" if val < 0.34 else "#facc15"
+                            if col == "rv" and val is not None:
+                                return "#4ade80" if val >= 1.0 else "#f87171" if val <= -1.0 else "#facc15"
+                            return "#64748b"
+
+                        _w_lbl = f"{_avg_w*100:.0f}%" if _avg_w is not None else "—"
+                        _h_lbl = f"{_avg_h*100:.0f}%" if _avg_h is not None else "—"
+                        _r_lbl = f"{_avg_r:+.1f}"    if _avg_r is not None else "—"
+                        _wc = _pill_color("whiff", _avg_w)
+                        _hc = _pill_color("hh",    _avg_h)
+                        _rc = _pill_color("rv",     _avg_r)
+                        _pill = ("background:#1e293b;border-radius:4px;padding:3px 8px;"
+                                 "text-align:center;flex:1;")
+                        st.markdown(
+                            f"<div style='display:flex;gap:6px;margin-bottom:6px;font-size:11px;'>"
+                            f"<div style='{_pill}'>"
+                            f"<div style='color:#64748b;font-size:9px;'>Whiff%</div>"
+                            f"<div style='color:{_wc};font-weight:700;'>{_w_lbl}</div></div>"
+                            f"<div style='{_pill}'>"
+                            f"<div style='color:#64748b;font-size:9px;'>Hard Hit%</div>"
+                            f"<div style='color:{_hc};font-weight:700;'>{_h_lbl}</div></div>"
+                            f"<div style='{_pill}'>"
+                            f"<div style='color:#64748b;font-size:9px;'>RV/100</div>"
+                            f"<div style='color:{_rc};font-weight:700;'>{_r_lbl}</div></div>"
+                            f"</div>",
+                            unsafe_allow_html=True,
+                        )
+
                 _this_hand = "L" if bat_side == "L" else "R"
                 _sp_rows = ""
                 for _hand, _lbl in [("Season", "Season"), ("R", "vs RHB"), ("L", "vs LHB")]:
