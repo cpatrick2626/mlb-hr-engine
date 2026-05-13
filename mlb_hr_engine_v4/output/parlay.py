@@ -181,8 +181,7 @@ def build_profile_parlays(
         # Evaluate every combination within the candidate pool
         scored_combos = []
         for combo in itertools.combinations(candidates, leg_size):
-            teams = [leg.get("team", "") for leg in combo]
-            if len(teams) != len(set(teams)):
+            if not _games_diverse(combo):
                 continue
             parlay = _evaluate_parlay(list(combo))
             parlay["profile_score"] = sum(score_fn(leg) for leg in combo) / leg_size
@@ -220,20 +219,41 @@ def build_profile_parlays(
     return results
 
 
+def _game_key(leg: dict) -> str:
+    """Unique key for the game a player is in. Both home and away players share home_team."""
+    gk = leg.get("game_pk")
+    return str(gk) if gk else leg.get("home_team", "")
+
+
+def _candidate_pool(picks: list[dict]) -> list[dict]:
+    """
+    Filter to picks with odds and positive edge×confidence, then rank by
+    edge_pct × confidence — the product of how much edge we have and how
+    reliable that edge signal is. More predictive than model_prob alone.
+    """
+    eligible = [
+        p for p in picks
+        if p.get("best_american")
+        and p.get("model_prob", 0) > 0
+        and p.get("edge_pct", 0) > 0
+    ]
+    eligible.sort(
+        key=lambda p: p.get("edge_pct", 0) * p.get("confidence", 0),
+        reverse=True,
+    )
+    return eligible[:config.PARLAY_CANDIDATE_POOL]
+
+
 def build_best_parlay(ranked_picks: list[dict]) -> Optional[dict]:
     """Single best parlay across all leg counts (used by CLI display)."""
-    pool = [p for p in ranked_picks[:config.PARLAY_CANDIDATE_POOL]
-            if p.get("best_american") and p.get("model_prob", 0) > 0]
+    pool = _candidate_pool(ranked_picks)
     if len(pool) < config.PARLAY_MIN_LEGS:
         return None
     best: Optional[dict] = None
     best_ev = float("-inf")
     for n_legs in range(config.PARLAY_MIN_LEGS, config.PARLAY_MAX_LEGS + 1):
         for combo in itertools.combinations(pool, n_legs):
-            # Reject same-team stacks: HR props within the same lineup share pitcher
-            # and weather exposure, directly violating the independence assumption.
-            teams = [leg.get("team", "") for leg in combo]
-            if len(teams) != len(set(teams)):
+            if not _games_diverse(combo):
                 continue
             parlay = _evaluate_parlay(list(combo))
             if parlay["ev_pct"] > best_ev:
@@ -251,11 +271,11 @@ def build_auto_parlays(
     Build N diverse top-EV combos for each leg size.
     Returns {2: [combo, combo, combo], 3: [...], 4: [...]}.
 
-    Diversity rule: each new combo must differ by at least 1 player from
-    every already-selected combo of the same leg size.
+    Candidates ranked by edge_pct × confidence. Game-diversity enforced:
+    no two legs may come from the same game. Combo diversity: each selected
+    combo must differ by at least 1 player from every already-selected combo.
     """
-    pool = [p for p in ranked_picks[:config.PARLAY_CANDIDATE_POOL]
-            if p.get("best_american") and p.get("model_prob", 0) > 0]
+    pool = _candidate_pool(ranked_picks)
 
     result: dict[int, list[dict]] = {}
     for n_legs in leg_sizes:
@@ -263,18 +283,13 @@ def build_auto_parlays(
             result[n_legs] = []
             continue
 
-        # Score every combination
         scored = []
         for combo in itertools.combinations(pool, n_legs):
-            teams = [leg.get("team", "") for leg in combo]
-            if len(teams) != len(set(teams)):
+            if not _games_diverse(combo):
                 continue
             scored.append(_evaluate_parlay(list(combo)))
         scored.sort(key=lambda x: x["ev_pct"], reverse=True)
 
-        # Pick diverse top-N — reject if >1 player overlaps with any selected combo.
-        # Allows one shared player between combos (avoids being too strict with a small pool)
-        # but prevents near-identical parlays that differ by only one leg.
         selected: list[dict] = []
         for candidate in scored:
             if len(selected) >= n_combos:
@@ -290,6 +305,12 @@ def build_auto_parlays(
         result[n_legs] = selected
 
     return result
+
+
+def _games_diverse(combo) -> bool:
+    """True when every leg comes from a different game."""
+    keys = [_game_key(leg) for leg in combo]
+    return len(keys) == len(set(keys))
 
 
 def _evaluate_parlay(legs: list[dict]) -> dict:
