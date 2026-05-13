@@ -2775,6 +2775,20 @@ def tab_jig(data: dict):
         pit  = _pf(p.get("pitcher_factor"), 1.0)
         return slg, iso, hh, brl, la, pull, pit
 
+    def _hvy_metrics(p):
+        """HVY-specific metrics: xSLG, ISO, Hard Hit, Barrel, Sweet Spot (HR window), Pull AIR."""
+        xslg_v   = _pf(p.get("xslg"), 0.0)
+        slg      = xslg_v if xslg_v > 0.0 else _pf(p.get("actual_slg"), 0.0)
+        iso      = _pf(p.get("xiso"), 0.0)
+        hh       = _pf(p.get("hard_hit"))
+        brl      = _pf(p.get("barrel_pct"))
+        ss       = _pf(p.get("sweet_spot_pct"))   # HR launch window proxy (8–32°)
+        pull     = _pf(p.get("pull_pct"))
+        fb       = _pf(p.get("fb_pct"))
+        ld       = _pf(p.get("ld_pct"))
+        pull_air = pull * (fb + ld) / 100.0        # pulled airborne contact only
+        return slg, iso, hh, brl, ss, pull_air
+
     def _slg_label(p):
         return "xSLG" if _pf(p.get("xslg"), 0.0) > 0.0 else "SLG"
 
@@ -3012,7 +3026,7 @@ def tab_jig(data: dict):
         hvy  = entry["jig"]
         base = entry.get("base_jig", hvy)
         ctx  = entry.get("ctx", {})
-        slg, iso, hh, brl, la, pull, pit = entry["metrics"]
+        slg, iso, hh, brl, ss, pull_air = entry["metrics"]
         name = p.get("player_name", "Unknown")
         team = p.get("team", ""); opp = p.get("opponent", "")
         pit_n = p.get("pitcher_name", "TBD")
@@ -3028,17 +3042,41 @@ def tab_jig(data: dict):
         status_row = (f"<div style='font-size:11px;margin:2px 0 8px;'>{status_html}</div>"
                       if status_html else "")
         odds_str = (f"+{odds}" if odds and odds > 0 else str(odds)) if odds else "—"
+        # Stat colors relative to league averages
+        slg_c = "#4ade80" if slg >= 0.450 else "#f87171" if slg < 0.350 else "#f0f0f0"
+        brl_c = "#4ade80" if brl >= 8.0   else "#f87171" if brl < 5.0   else "#f0f0f0"
+        ss_c  = "#4ade80" if ss  >= 35.0  else "#f87171" if ss  < 28.0  else "#f0f0f0"
+        pa_c  = "#4ade80" if pull_air >= 24.0 else "#f87171" if pull_air < 15.0 else "#f0f0f0"
+        hh_c  = "#4ade80" if hh  >= 45.0  else "#f87171" if hh  < 35.0  else "#f0f0f0"
+        iso_c = "#4ade80" if iso >= 0.200 else "#f87171" if iso < 0.150 else "#f0f0f0"
+        slg_lbl = _slg_label(p)
+        pa_str  = f"{pull_air:.1f}%" if pull_air > 0 else "—"
         st.markdown(
             f"<div style='background:#111827;border:1px solid {border};border-radius:10px;"
             f"padding:14px 16px;margin-bottom:6px;'>"
             f"<div style='display:flex;justify-content:space-between;align-items:baseline;'>"
             f"<div style='font-size:15px;font-weight:800;color:#f0f0f0;'>{name}</div>"
             f"<div style='font-size:18px;font-weight:900;color:{hc};'>HVY {hvy:.0f}"
-            f"<span style='font-size:10px;color:#666;margin-left:4px;'>(Way {base:.0f})</span></div>"
+            f"<span style='font-size:10px;color:#666;margin-left:4px;'>(Base {base:.0f})</span></div>"
             f"</div>"
             f"<div style='font-size:12px;color:#888;margin:2px 0 4px;'>"
             f"{team} vs {opp} &nbsp;·&nbsp; vs {pit_n}</div>"
             f"{status_row}"
+            f"<div style='display:grid;grid-template-columns:repeat(3,1fr);gap:4px;"
+            f"font-size:11px;margin:6px 0;'>"
+            f"<div class='stat-box'><div style='color:#666;'>{slg_lbl}</div>"
+            f"<div style='color:{slg_c};font-weight:700;'>{slg:.3f}</div></div>"
+            f"<div class='stat-box'><div style='color:#666;'>Barrel</div>"
+            f"<div style='color:{brl_c};font-weight:700;'>{brl:.1f}%</div></div>"
+            f"<div class='stat-box'><div style='color:#666;'>Hard Hit</div>"
+            f"<div style='color:{hh_c};font-weight:700;'>{hh:.1f}%</div></div>"
+            f"<div class='stat-box'><div style='color:#666;'>HR Window</div>"
+            f"<div style='color:{ss_c};font-weight:700;'>{ss:.1f}%</div></div>"
+            f"<div class='stat-box'><div style='color:#666;'>Pull AIR</div>"
+            f"<div style='color:{pa_c};font-weight:700;'>{pa_str}</div></div>"
+            f"<div class='stat-box'><div style='color:#666;'>ISO</div>"
+            f"<div style='color:{iso_c};font-weight:700;'>{iso:.3f}</div></div>"
+            f"</div>"
             f"<div style='display:flex;gap:14px;font-size:12px;margin-bottom:4px;'>"
             f"<span style='color:#f0f0f0;font-weight:700;'>{odds_str}</span>"
             f"<span>EV: <b style='color:{ev_c};'>{ev:+.1f}%</b></span>"
@@ -3210,18 +3248,44 @@ def tab_jig(data: dict):
             st.link_button("📲 Open on FanDuel", _fanduel_url(name), use_container_width=True)
 
     def _render_hvy_views(hvy_contexts: dict):
-        """Render HVY Pitch Mix views — JIG Way × pitch matchup modifier."""
+        """Render HVY Pitch Mix views — context-aware HR prediction engine."""
+        # ── HVY-specific sliders (independent of JIG Way sliders) ─────────────
+        _tc1, _tc2, _tc3 = st.columns(3)
+        with _tc1:
+            hvy_slg_min = st.slider("Min xSLG",       0.00, 0.70, 0.40, 0.01, key="hvy_slg")
+            hvy_iso_min = st.slider("Min ISO",         0.00, 0.45, 0.15, 0.01, key="hvy_iso")
+        with _tc2:
+            hvy_hh_min  = st.slider("Min Hard Hit%",   0.0, 60.0, 35.0, 0.5,  key="hvy_hh")
+            hvy_brl_min = st.slider("Min Barrel%",     0.0, 25.0,  5.0, 0.5,  key="hvy_brl")
+        with _tc3:
+            hvy_ss_min  = st.slider("Min HR Window%",  0.0, 50.0, 28.0, 0.5,  key="hvy_ss")
+            hvy_pa_min  = st.slider("Min Pull AIR%",   0.0, 40.0, 12.0, 0.5,  key="hvy_pa")
+        hvy_score_min = st.slider("Min HVY Score (Picks gate)", 0, 100, 40, 1, key="hvy_score")
+
+        def _hvy_base_score(metrics):
+            """xSLG 25% · Barrel 20% · ISO 15% · Pull AIR 15% · Hard Hit 15% · HR Window 10%"""
+            slg, iso, hh, brl, ss, pull_air = metrics
+            return round((
+                _n(slg,      hvy_slg_min, 0.15) * 0.25 +
+                _n(brl,      hvy_brl_min, 6.0)  * 0.20 +
+                _n(iso,      hvy_iso_min, 0.12) * 0.15 +
+                _n(pull_air, hvy_pa_min,  8.0)  * 0.15 +
+                _n(hh,       hvy_hh_min,  12.0) * 0.15 +
+                _n(ss,       hvy_ss_min,  8.0)  * 0.10
+            ) * 100, 1)
+
+        # ── Build scored entries ───────────────────────────────────────────────
         _entries = []
         for p in all_players:
-            m   = _jig_metrics(p)
+            m   = _hvy_metrics(p)
             pid = p.get("player_id")
             ctx = hvy_contexts.get(pid, {})
-            mod = ctx.get("hvy_modifier", 1.0)
-            base = _jig_way_score(m)
+            mod  = ctx.get("hvy_modifier", 1.0)
+            base = _hvy_base_score(m)
             hvy  = round(min(100.0, base * mod), 1)
             _entries.append({
                 "player": p, "jig": hvy, "base_jig": base,
-                "metrics": m, "ctx": ctx, "passes": hvy >= score_min,
+                "metrics": m, "ctx": ctx, "passes": hvy >= hvy_score_min,
             })
 
         scored    = sorted(_entries, key=lambda x: x["jig"], reverse=True)
@@ -3232,26 +3296,21 @@ def tab_jig(data: dict):
         if _cutoff is not None and all_players_raw is not all_players:
             _raw = []
             for p in all_players_raw:
-                m   = _jig_metrics(p)
+                m   = _hvy_metrics(p)
                 pid = p.get("player_id")
                 ctx = hvy_contexts.get(pid, {})
-                hvy = round(min(100.0, _jig_way_score(m) * ctx.get("hvy_modifier", 1.0)), 1)
-                _raw.append({"player": p, "jig": hvy, "metrics": m, "ctx": ctx, "passes": hvy >= score_min})
+                hvy = round(min(100.0, _hvy_base_score(m) * ctx.get("hvy_modifier", 1.0)), 1)
+                _raw.append({"player": p, "jig": hvy, "metrics": m, "ctx": ctx,
+                             "passes": hvy >= hvy_score_min})
             prime = [x for x in _raw
-                     if x["passes"] and x["player"].get("best_american") and x["player"].get("ev_pct", 0) > 0]
-
-        _hvy_cutoff = st.session_state.get("cutoff_utc_hour")
-        if _hvy_cutoff is not None:
-            _h12  = (_hvy_cutoff - 4) % 24
-            _tlbl = f"{_h12 % 12 or 12}:00 {'AM' if _h12 < 12 else 'PM'} ET"
-        else:
-            _tlbl = None
+                     if x["passes"] and x["player"].get("best_american")
+                     and x["player"].get("ev_pct", 0) > 0]
 
         with st.expander(f"🔍 Debug — {len(all_players)} players, {len(qualified)} qualified HVY",
                          expanded=len(qualified) == 0):
-            st.write(f"**Gate:** HVY ≥ {score_min} | "
-                     f"slg {slg_min} iso {iso_min} hh {hh_min} brl {brl_min} "
-                     f"la {la_min} pull {pull_min} pit {pit_min}")
+            st.write(f"**Gate:** HVY ≥ {hvy_score_min} | "
+                     f"xSLG {hvy_slg_min} ISO {hvy_iso_min} HH {hvy_hh_min} "
+                     f"Brl {hvy_brl_min} SS {hvy_ss_min} PullAIR {hvy_pa_min}")
 
         _hq, _hp, _ha, _hpr = st.tabs([
             "📱 Quick Picks",
@@ -3262,7 +3321,7 @@ def tab_jig(data: dict):
 
         with _hq:
             if not qualified:
-                st.info("No players meet all JIG thresholds — lower thresholds above.")
+                st.info("No players meet HVY thresholds — lower thresholds above.")
             else:
                 for entry in qualified[:3]:
                     _hvy_card(entry, key_prefix="hvyq")
@@ -3271,7 +3330,7 @@ def tab_jig(data: dict):
 
         with _hp:
             if not qualified:
-                st.info("No players meet all JIG thresholds.")
+                st.info("No players meet HVY thresholds.")
             else:
                 st.caption(f"{len(qualified)} players pass all HVY criteria — ranked by HVY score.")
                 for entry in qualified:
@@ -3282,20 +3341,22 @@ def tab_jig(data: dict):
             rows = []
             for entry in scored:
                 p   = entry["player"]
-                slg, iso, hh, brl, la, pull, pit = entry["metrics"]
+                slg, iso, hh, brl, ss, pull_air = entry["metrics"]
                 ctx = entry.get("ctx", {})
                 rows.append({
-                    "Player":   p.get("player_name", ""),
-                    "Team":     p.get("team", ""),
-                    "HVY":      entry["jig"],
-                    "Way Base": entry["base_jig"],
-                    "Modifier": f"{ctx.get('hvy_modifier', 1.0):.2f}×",
-                    "Pass":     "✅" if entry["passes"] else "",
-                    "xSLG":     f"{slg:.3f}",
-                    "ISO":      f"{iso:.3f}" if iso else "--",
-                    "HH%":      f"{hh:.1f}",
-                    "Brl%":     f"{brl:.1f}",
-                    "Pitcher":  p.get("pitcher_name", ""),
+                    "Player":    p.get("player_name", ""),
+                    "Team":      p.get("team", ""),
+                    "HVY":       entry["jig"],
+                    "HVY Base":  entry["base_jig"],
+                    "Modifier":  f"{ctx.get('hvy_modifier', 1.0):.2f}×",
+                    "Pass":      "✅" if entry["passes"] else "",
+                    "xSLG":      f"{slg:.3f}",
+                    "Barrel%":   f"{brl:.1f}",
+                    "Hard Hit":  f"{hh:.1f}",
+                    "HR Win%":   f"{ss:.1f}",
+                    "Pull AIR":  f"{pull_air:.1f}",
+                    "ISO":       f"{iso:.3f}" if iso else "--",
+                    "Pitcher":   p.get("pitcher_name", ""),
                 })
             if rows:
                 _hvy_ver = st.session_state.get("_hvy_all_ver", 0)
@@ -3336,7 +3397,7 @@ def tab_jig(data: dict):
         _render_jig_views(_jig_way_score, "way")
 
     with _outer_hvy:
-        st.caption("JIG Way base · Pitcher pitch mix · Batter vs pitch types · Head-to-head · Handedness splits")
+        st.caption("xSLG (25%) · Barrel (20%) · ISO (15%) · Pull AIR (15%) · Hard Hit (15%) · HR Window (10%) · Context modifier: arsenal matchup · hand splits · contact shape · environment · H2H")
         from clients.pitch_mix import HVY_CACHE_VERSION as _HVY_VER
         _hvy_ck = f"hvy_ctx_{data.get('date', '')}_{_HVY_VER}"
         if _hvy_ck not in st.session_state:

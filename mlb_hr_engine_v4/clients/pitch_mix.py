@@ -31,7 +31,7 @@ MLB_API = "https://statsapi.mlb.com/api/v1"
 SAVANT  = "https://baseballsavant.mlb.com"
 
 # Bump this whenever the context schema changes — forces Streamlit session-state cache to refresh.
-HVY_CACHE_VERSION = "4"
+HVY_CACHE_VERSION = "5"
 
 # {pitcher_id: {"hand_splits": {...}, "pitch_stats": {...}, "data_year": int}}
 _PITCHER_SAVANT_CACHE: dict[int, dict] = {}
@@ -51,6 +51,19 @@ PITCH_LABELS: dict[str, str] = {
 
 _FASTBALL_TYPES = frozenset({"FF", "SI", "FC"})
 _BREAKING_TYPES = frozenset({"SL", "CU", "KC", "SV", "ST"})
+
+# League-average baselines for modifier signals (%-scale where noted)
+_LG_HR_PA    = 0.028    # HR per PA
+_LG_SLG      = 0.410    # slugging pct
+_LG_OPS      = 0.720    # OPS
+_LG_K_PA     = 0.230    # strikeout rate
+_LG_BARREL   = 8.0      # barrel% (0-100 scale)
+_LG_SS       = 33.0     # sweet-spot% 8-32° (0-100 scale)
+_LG_PULL     = 43.0     # pull% (0-100 scale)
+_LG_FB       = 36.0     # fly-ball% (0-100 scale)
+_LG_LD       = 20.0     # line-drive% (0-100 scale)
+_LG_EV       = 88.5     # exit velocity mph
+_LG_PULL_AIR = _LG_PULL * (_LG_FB + _LG_LD) / 100.0   # ~24.1%
 
 _PA_EVENTS = frozenset({
     "home_run", "strikeout", "strikeout_double_play",
@@ -352,7 +365,7 @@ def load_hvy_context(player: dict, arsenal_data: dict | None = None) -> dict:
     batter_vs       = get_batter_vs_pitches(batter_id) if batter_id else {}
     data_year       = get_pitcher_data_year(pitcher_id) if pitcher_id else config.CURRENT_SEASON
 
-    modifier = _compute_modifier(batter_side, pitcher_arsenal, hand_splits, h2h, batter_vs)
+    modifier = _compute_modifier(player, pitcher_arsenal, hand_splits, h2h, batter_vs)
 
     return {
         "pitcher_arsenal": pitcher_arsenal,
@@ -436,67 +449,127 @@ def _build_pitcher_arsenal(pitcher_id: int | None, arsenal_data: dict | None) ->
 
 # ── Modifier computation ───────────────────────────────────────────────────────
 
+def _clamp(v: float, lo: float, hi: float) -> float:
+    return max(lo, min(hi, v))
+
+
 def _compute_modifier(
-    batter_side: str,
+    player: dict,
     pitcher_arsenal: list,
     hand_splits: dict,
     h2h: dict,
     batter_vs: dict,
 ) -> float:
     """
-    Composite HVY modifier on top of JIG Way base score [0.70, 1.40].
+    Context-aware HVY modifier [0.70, 1.40] — six reliability-scaled signals.
 
-    Three independent signals, each contributing ±5-12%:
-      1. Pitcher's HR rate vs this batter's handedness
-      2. Batter's SLG vs pitcher's primary pitch type
-      3. Career head-to-head history (≥5 PA required for signal)
+    Signal weights (additive, then multiplied by environment):
+      1. Pitcher HR rate vs batter handedness  ±0.10  reliability=PA/50
+      2. Weighted arsenal matchup              ±0.10  reliability=batter-PA/15 per pitch
+      3. Batter contact shape block            ±0.06  barrel/sweet-spot/pull-air/fb/EV
+      4. Pitch arsenal block                   ±0.06  weighted pitcher K% and HR rate
+      5. Environment multiplier               ×[0.92,1.18]  park × weather
+      6. Career H2H OPS                        ±0.06  reliability=PA/20, min 3 PA
     """
-    modifier = 1.0
+    batter_side = player.get("batter_side", "R")
 
-    # ── 1. Pitcher HR rate vs batter handedness ────────────────────────────────
+    # ── Signal 1: Pitcher HR rate vs batter handedness ────────────────────────
     hand_key = "L" if batter_side == "L" else "R"
     split    = hand_splits.get(hand_key, {})
-    if split.get("pa", 0) >= 20:
-        rate  = split["hr"] / split["pa"]
-        ratio = rate / 0.028  # league avg HR/PA
-        if ratio > 1.30:
-            modifier *= 1.12
-        elif ratio > 1.10:
-            modifier *= 1.06
-        elif ratio < 0.70:
-            modifier *= 0.90
-        elif ratio < 0.90:
-            modifier *= 0.95
+    sig1 = 0.0
+    hand_pa = split.get("pa", 0)
+    if hand_pa >= 3:
+        reliability = min(1.0, hand_pa / 50.0)
+        rate     = split.get("hr", 0) / hand_pa
+        rate_dev = (rate - _LG_HR_PA) / _LG_HR_PA
+        sig1 = _clamp(rate_dev * reliability * 0.10, -0.10, 0.10)
 
-    # ── 2. Batter vs pitcher's primary pitch type ──────────────────────────────
+    # ── Signal 2: Weighted arsenal matchup (batter SLG vs each pitch type) ────
+    sig2 = 0.0
     if pitcher_arsenal and batter_vs:
-        top = max(pitcher_arsenal, key=lambda p: p.get("pitch_pct", 0), default=None)
-        if top:
-            bpt = batter_vs.get(top.get("pitch_type", ""), {})
-            if bpt.get("pa", 0) >= 8:
-                ratio = bpt.get("slg", 0.0) / 0.410  # league avg SLG
-                if ratio > 1.25:
-                    modifier *= 1.10
-                elif ratio > 1.10:
-                    modifier *= 1.05
-                elif ratio < 0.75:
-                    modifier *= 0.92
-                elif ratio < 0.90:
-                    modifier *= 0.96
+        total_w    = 0.0
+        weighted_d = 0.0
+        for entry in pitcher_arsenal:
+            pct = entry.get("pitch_pct", 0.0)
+            if pct <= 0:
+                continue
+            pt  = entry.get("pitch_type", "")
+            bpt = batter_vs.get(pt, {})
+            b_pa = bpt.get("pa", 0)
+            if b_pa < 3:
+                continue
+            reliability = min(1.0, b_pa / 15.0)
+            bslg  = bpt.get("slg", _LG_SLG)
+            delta = (bslg - _LG_SLG) / _LG_SLG
+            weighted_d += pct * delta * reliability
+            total_w    += pct * reliability
+        if total_w > 0:
+            sig2 = _clamp((weighted_d / total_w) * 0.25, -0.10, 0.10)
 
-    # ── 3. Career head-to-head history ────────────────────────────────────────
-    if h2h.get("pa", 0) >= 5:
+    # ── Signal 3: Batter contact shape block ─────────────────────────────────
+    pull     = player.get("pull_pct")      or _LG_PULL
+    fb       = player.get("fb_pct")        or _LG_FB
+    ld       = player.get("ld_pct")        or _LG_LD
+    pull_air = pull * (fb + ld) / 100.0
+    brl      = player.get("barrel_pct")     or _LG_BARREL
+    ss       = player.get("sweet_spot_pct") or _LG_SS
+    ev       = player.get("exit_velo")      or _LG_EV
+
+    contact_score = (
+        ((brl  - _LG_BARREL)                  / _LG_BARREL)          * 0.30 +
+        ((ss   - _LG_SS)                       / _LG_SS)              * 0.20 +
+        ((pull_air - _LG_PULL_AIR)             / max(_LG_PULL_AIR, 1)) * 0.20 +
+        ((fb   - _LG_FB)                       / _LG_FB)              * 0.15 +
+        ((ev   - _LG_EV)                       / 5.0)                 * 0.15
+    )
+    sig3 = _clamp(contact_score * 0.08, -0.06, 0.06)
+
+    # ── Signal 4: Pitch arsenal block (weighted pitcher K% and HR rate) ───────
+    sig4 = 0.0
+    if pitcher_arsenal:
+        total_pct = 0.0
+        w_k = 0.0
+        w_hr = 0.0
+        for entry in pitcher_arsenal:
+            pct = entry.get("pitch_pct", 0.0)
+            if pct <= 0:
+                continue
+            pa  = entry.get("pa", 0)
+            reliability = min(1.0, pa / 30.0)
+            raw_k  = entry.get("k_pct")   or _LG_K_PA
+            raw_hr = entry.get("hr_rate") or _LG_HR_PA
+            eff_k  = raw_k  * reliability + _LG_K_PA  * (1.0 - reliability)
+            eff_hr = raw_hr * reliability + _LG_HR_PA * (1.0 - reliability)
+            w_k  += pct * eff_k
+            w_hr += pct * eff_hr
+            total_pct += pct
+        if total_pct > 0:
+            avg_k  = w_k  / total_pct
+            avg_hr = w_hr / total_pct
+            # Above-avg HR rate helps batter; above-avg K rate hurts batter
+            arsenal_score = ((avg_hr - _LG_HR_PA) / _LG_HR_PA) * 0.5 \
+                          - ((avg_k  - _LG_K_PA)  / _LG_K_PA)  * 0.5
+            sig4 = _clamp(arsenal_score * 0.12, -0.06, 0.06)
+
+    # ── Signal 5: Environment multiplier (park × weather) ────────────────────
+    park_f    = player.get("park_factor")    or 1.0
+    weather_f = player.get("weather_factor") or 1.0
+    env_mult  = _clamp(float(park_f) * float(weather_f), 0.92, 1.18)
+
+    # ── Signal 6: Career H2H OPS (reduced vs old formula, reliability-scaled) ─
+    sig6 = 0.0
+    h2h_pa = h2h.get("pa", 0)
+    if h2h_pa >= 3:
         try:
-            ops = float(str(h2h.get("ops", ".000")).replace(",", "") or 0)
+            ops = float(str(h2h.get("ops", "0")).replace(",", "") or 0)
         except (ValueError, TypeError):
             ops = 0.0
-        if ops > 0.900:
-            modifier *= 1.10
-        elif ops > 0.770:
-            modifier *= 1.04
-        elif ops < 0.550:
-            modifier *= 0.90
-        elif ops < 0.650:
-            modifier *= 0.95
+        if ops > 0:
+            reliability = min(1.0, h2h_pa / 20.0)
+            ops_dev = (ops - _LG_OPS) / _LG_OPS
+            sig6 = _clamp(ops_dev * reliability * 0.06, -0.06, 0.06)
 
-    return round(max(0.70, min(1.40, modifier)), 3)
+    # ── Combine: additive signals × environment multiplier ───────────────────
+    additive = 1.0 + sig1 + sig2 + sig3 + sig4 + sig6
+    modifier = _clamp(additive * env_mult, 0.70, 1.40)
+    return round(modifier, 3)
