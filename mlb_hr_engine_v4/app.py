@@ -70,7 +70,6 @@ st.markdown("""
 # Fix path for both local and Streamlit Cloud
 current_dir = Path(__file__).parent
 sys.path.insert(0, str(current_dir))
-from clients.pull_air import resolve_pull_air_pct
 
 # Debug module loading for Streamlit Cloud
 try:
@@ -625,6 +624,14 @@ def _stat_badge(col: str, val) -> str:
     if css == _RED:        return f"🔴 {val}"
     if css == _DARK_RED:   return f"⛔ {val}"
     return str(val)
+
+
+def _edge_col(edge: float) -> str:
+    """Inline HTML text color for an edge% value."""
+    if edge >= 10: return "#4ade80"
+    if edge >= 5:  return "#86efac"
+    if edge >= 2:  return "#f0f0f0"
+    return "#f87171"
 
 
 def _combo_html(parlay: dict, label: str) -> str:
@@ -1395,7 +1402,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
         _top_ev_col = "#4ade80" if _top_ev >= 0 else "#f87171"
         _top_url    = _fanduel_url(_top_name)
 
-        _hc1, _hc2, _hc3 = st.columns([6, 2, 2])
+        _hc1, _hc2, _hc3, _hc4 = st.columns([5, 2, 2, 2])
         with _hc1:
             if st.button(
                 f"🏆  {_top_name}",
@@ -1420,6 +1427,10 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                       delta=f"EV {_top_ev:+.1f}%",
                       delta_color="normal")
         with _hc3:
+            st.metric("Edge%",
+                      f"{_top_edge:+.1f}%",
+                      delta=None)
+        with _hc4:
             st.metric("Odds / Bet",
                       _fmt_american(_top_odds) if _top_odds else "--",
                       delta=f"${_top_bet:.0f} suggested" if _top_bet else None,
@@ -1451,6 +1462,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                 _sbook   = _sp.get("best_book", _sp.get("best_bookmaker", "")).title()
                 _smodel  = _sp.get("model_prob", 0) * 100
                 _sev     = _sp.get("ev_pct", 0)
+                _sedge   = _sp.get("edge_pct", 0)
                 _sbet    = _sp.get("bet_size") or _sp.get("bet_dollars")
                 _sconf   = "✅" if _sp.get("lineup_spot") is not None else "⏳"
                 _prefix  = "🏆 #1 BEST BET" if _si == 0 else f"{_si + 1}."
@@ -1459,7 +1471,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                 _book_str = f" @ {_sbook}" if _sbook else ""
                 _bet_str  = f" | Bet: ${float(_sbet):.0f}" if _sbet else ""
                 _share_lines.append(
-                    f"   {_odds_str}{_book_str} | {_smodel:.0f}% model | EV {_sev:+.1f}%{_bet_str}"
+                    f"   {_odds_str}{_book_str} | {_smodel:.0f}% model | EV {_sev:+.1f}% | Edge {_sedge:+.1f}%{_bet_str}"
                 )
                 _share_lines.append("")
             _share_lines += [
@@ -1616,6 +1628,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                 st.caption("Top picks — tap player name to view details & add to FD Slip.")
                 for _qi, _qp in enumerate(_quick_pool):
                     _qev      = _qp.get("ev_pct", 0)
+                    _qedge    = _qp.get("edge_pct", 0)
                     _qodds    = _qp.get("best_american")
                     _qmodel   = _qp.get("model_prob", 0) * 100
                     _qteam    = _qp.get("team", "")
@@ -1623,6 +1636,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                     _qspot    = _qp.get("lineup_spot")
                     _qbet     = _qp.get("bet_size") or _qp.get("bet_dollars")
                     _qev_col  = "#4ade80" if _qev >= 0 else "#f87171"
+                    _qedge_col = _edge_col(_qedge)
                     _qconf    = "✅" if _qspot is not None else "⏳"
                     _qtier    = _qp.get("confidence_tier", "C")
                     _qtier_col = {"S": "#FFD700", "A": "#4ade80", "B": "#facc15", "C": "#f87171"}.get(_qtier, "#888")
@@ -1689,17 +1703,21 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                         + (f"<span>{_qweather}</span>" if _qweather else "")
                         + f"</div>"
                         # row 3: stat boxes
-                        f"<div style='display:flex; gap:10px;'>"
+                        f"<div style='display:flex; gap:8px;'>"
                         f"<div style='text-align:center; flex:1; background:#0a0a18; border-radius:6px; padding:6px 4px;'>"
-                        f"<div style='font-size:18px; font-weight:700; color:#a78bfa;'>{_qmodel:.0f}%</div>"
+                        f"<div style='font-size:17px; font-weight:700; color:#a78bfa;'>{_qmodel:.0f}%</div>"
                         f"<div style='font-size:10px; color:#666;'>Model</div>"
                         f"</div>"
                         f"<div style='text-align:center; flex:1; background:#0a0a18; border-radius:6px; padding:6px 4px;'>"
-                        f"<div style='font-size:18px; font-weight:700; color:{_qev_col};'>{_qev:+.1f}%</div>"
+                        f"<div style='font-size:17px; font-weight:700; color:{_qev_col};'>{_qev:+.1f}%</div>"
                         f"<div style='font-size:10px; color:#666;'>EV</div>"
                         f"</div>"
                         f"<div style='text-align:center; flex:1; background:#0a0a18; border-radius:6px; padding:6px 4px;'>"
-                        f"<div style='font-size:18px; font-weight:700; color:{_qtier_col};'>{_qtier}</div>"
+                        f"<div style='font-size:17px; font-weight:700; color:{_qedge_col};'>{_qedge:+.1f}%</div>"
+                        f"<div style='font-size:10px; color:#666;'>Edge</div>"
+                        f"</div>"
+                        f"<div style='text-align:center; flex:1; background:#0a0a18; border-radius:6px; padding:6px 4px;'>"
+                        f"<div style='font-size:17px; font-weight:700; color:{_qtier_col};'>{_qtier}</div>"
                         f"<div style='font-size:10px; color:#666;'>Tier</div>"
                         f"</div>"
                         f"</div>"
@@ -1777,9 +1795,11 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                         _tl_vs    = _p.get("pitcher_name", "")
                         _tl_odds  = _p.get("best_american")
                         _tl_ev    = _p.get("ev_pct", 0)
+                        _tl_edge  = _p.get("edge_pct", 0)
                         _tl_model = _p.get("model_prob", 0) * 100
                         _tl_conf  = "✅" if _is_pick else "○"
-                        _tl_ev_col = "#4ade80" if _tl_ev >= 0 else "#f87171"
+                        _tl_ev_col   = "#4ade80" if _tl_ev >= 0 else "#f87171"
+                        _tl_edge_col = _edge_col(_tl_edge)
                         _tl_name_col = "#f0f0f0" if _is_pick else "#888"
                         _tc1, _tc2 = st.columns([7, 3])
                         with _tc1:
@@ -1805,7 +1825,8 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                                 f"<span style='color:#FF6666; font-weight:700;'>{_fmt_american(_tl_odds) if _tl_odds else '--'}</span>"
                                 f"<span style='color:#555; font-size:10px;'> odds</span><br>"
                                 f"<span style='color:#a78bfa; font-size:11px;'>{_tl_model:.0f}% mdl</span>"
-                                + (f"  <span style='color:{_tl_ev_col}; font-size:11px;'>{_tl_ev:+.1f}% EV</span>" if _is_pick else "")
+                                + (f"  <span style='color:{_tl_ev_col}; font-size:11px;'>{_tl_ev:+.1f}% EV</span>"
+                                   f"  <span style='color:{_tl_edge_col}; font-size:11px;'>{_tl_edge:+.1f}% Edge</span>" if _is_pick else "")
                                 + f"</div>",
                                 unsafe_allow_html=True,
                             )
@@ -1930,6 +1951,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                     row = {
                         "Player": p.get("player_name", ""),
                         "Team":   p.get("team", ""),
+                        "Edge%":  f"{p.get('edge_pct', 0):+.1f}%",
                         "EV%":    f"{p.get('ev_pct', 0):+.1f}%",
                         "Best":   _fmt_american(p.get("best_american")),
                         "@":      p.get("best_bookmaker", ""),
@@ -2784,7 +2806,10 @@ def tab_jig(data: dict):
         hh       = _pf(p.get("hard_hit"))
         brl      = _pf(p.get("barrel_pct"))
         ss       = _pf(p.get("sweet_spot_pct"))   # HR launch window proxy (8–32°)
-        pull_air = resolve_pull_air_pct(p)
+        pull     = _pf(p.get("pull_pct"))
+        fb       = _pf(p.get("fb_pct"))
+        ld       = _pf(p.get("ld_pct"))
+        pull_air = pull * (fb + ld) / 100.0        # pulled airborne contact only
         return slg, iso, hh, brl, ss, pull_air
 
     def _slg_label(p):
@@ -3135,10 +3160,20 @@ def tab_jig(data: dict):
 
                 # ── Batter vs pitch types ──────────────────────────────────────
                 st.markdown("**🎯 Batter vs These Pitches (2026)**")
-                if pitcher_arsenal and batter_vs:
+                if batter_vs:
+                    # When we have the pitcher's arsenal, order rows by pitcher
+                    # usage so the batter's numbers line up against what he'll
+                    # actually see. When no arsenal exists (new/IL pitcher), fall
+                    # back to showing the batter's top-PA pitch types instead.
+                    if pitcher_arsenal:
+                        _bvp_pitches = [px.get("pitch_type", "") for px in pitches[:5]]
+                    else:
+                        _bvp_pitches = [pt for pt, _ in
+                                        sorted(batter_vs.items(),
+                                               key=lambda x: x[1].get("pa", 0),
+                                               reverse=True)[:5]]
                     brows = ""
-                    for px in pitches[:5]:
-                        pt  = px.get("pitch_type", "")
+                    for pt in _bvp_pitches:
                         lbl = pitch_label(pt)
                         pc  = pitch_color(pt)
                         bpt = batter_vs.get(pt, {})
@@ -3157,14 +3192,17 @@ def tab_jig(data: dict):
                             f"<td>{bpt.get('k_pct',0)*100:.0f}%</td></tr>"
                         )
                     if brows:
+                        _bvp_note = "" if pitcher_arsenal else " (all pitch types — no pitcher arsenal)"
                         st.markdown(
                             "<table style='width:100%;font-size:11px;border-collapse:collapse;margin-top:4px;'>"
                             "<tr style='color:#888;border-bottom:1px solid #333;'>"
-                            "<th align='left'>Pitch</th><th>PA</th><th>HR</th>"
+                            f"<th align='left'>Pitch{_bvp_note}</th><th>PA</th><th>HR</th>"
                             "<th>BA</th><th>SLG</th><th>K%</th></tr>"
                             f"{brows}</table>",
                             unsafe_allow_html=True,
                         )
+                    else:
+                        st.caption("Batter has < 3 PA vs any pitch type this season.")
                 else:
                     st.caption("No batter split data available.")
 
@@ -3245,290 +3283,45 @@ def tab_jig(data: dict):
         with _fc:
             st.link_button("📲 Open on FanDuel", _fanduel_url(name), use_container_width=True)
 
-    def _hvy_way_card(entry, key_prefix="hvyw"):
-        """
-        JIG Way + HVY Pitch Mix card.
-        Batter metrics use the JIG Way formula (xSLG/ISO/HH/Barrel/Launch/Pull).
-        Pitcher factor = HVY modifier (arsenal matchup · hand splits · H2H · contact · environment).
-        Full Pitch Mix Analysis expander shows pitcher arsenal, batter-vs-pitch-type,
-        hand splits (HR/PA + SLG/ISO vs RHB/LHB), and career H2H.
-        """
-        p    = entry["player"]
-        score = entry["jig"]
-        ctx  = entry.get("ctx", {})
-        slg, iso, hh, brl, la, pull, _ = entry["metrics"]
-        name  = p.get("player_name", "Unknown")
-        team  = p.get("team", ""); opp = p.get("opponent", "")
-        pit_n = p.get("pitcher_name", "TBD")
-        odds  = p.get("best_american")
-        ev    = p.get("ev_pct", 0)
-        ev_c  = "#4ade80" if ev > 0 else "#f87171"
-        sc_c  = "#4ade80" if score >= 60 else "#f59e0b" if score >= 40 else "#f87171"
-        mod   = ctx.get("hvy_modifier", 1.0)
-        mod_c = "#4ade80" if mod > 1.05 else "#f87171" if mod < 0.95 else "#888"
-        mod_s = f"{'▲' if mod > 1.0 else '▼' if mod < 1.0 else '●'} {mod:.2f}×"
-        status_html, is_live = _game_status_badge(p)
-        border   = "#f87171" if is_live else "#1a3a2a"
-        status_row = (f"<div style='font-size:11px;margin:2px 0 8px;'>{status_html}</div>"
-                      if status_html else "")
-        odds_str = (f"+{odds}" if odds and odds > 0 else str(odds)) if odds else "—"
-        slg_c  = "#4ade80" if slg >= 0.450 else "#f87171" if slg < 0.350 else "#f0f0f0"
-        brl_c  = "#4ade80" if brl >= 8.0   else "#f87171" if brl < 5.0   else "#f0f0f0"
-        hh_c   = "#4ade80" if hh  >= 45.0  else "#f87171" if hh  < 35.0  else "#f0f0f0"
-        iso_c  = "#4ade80" if iso >= 0.200 else "#f87171" if iso < 0.150 else "#f0f0f0"
-        la_c   = "#4ade80" if la  >= 15.0  else "#f87171" if la  < 8.0   else "#f0f0f0"
-        pull_c = "#4ade80" if pull >= 45.0 else "#f87171" if pull < 35.0 else "#f0f0f0"
-        slg_lbl = _slg_label(p)
-        la_str  = f"{la:.1f}°" if la  else "—"
-        pull_str = f"{pull:.1f}%" if pull else "—"
-        st.markdown(
-            f"<div style='background:#0d1f15;border:1px solid {border};border-radius:10px;"
-            f"padding:14px 16px;margin-bottom:6px;'>"
-            f"<div style='display:flex;justify-content:space-between;align-items:baseline;'>"
-            f"<div style='font-size:15px;font-weight:800;color:#f0f0f0;'>{name}</div>"
-            f"<div style='font-size:18px;font-weight:900;color:{sc_c};'>JIG Way {score:.0f}"
-            f"<span style='font-size:10px;color:#666;margin-left:4px;'>HVY Mod {mod_s}</span></div>"
-            f"</div>"
-            f"<div style='font-size:12px;color:#888;margin:2px 0 4px;'>"
-            f"{team} vs {opp} &nbsp;·&nbsp; vs {pit_n}</div>"
-            f"{status_row}"
-            f"<div style='display:grid;grid-template-columns:repeat(4,1fr);gap:4px;"
-            f"font-size:11px;margin:6px 0;'>"
-            f"<div class='stat-box'><div style='color:#666;'>{slg_lbl}</div>"
-            f"<div style='color:{slg_c};font-weight:700;'>{slg:.3f}</div></div>"
-            f"<div class='stat-box'><div style='color:#666;'>ISO</div>"
-            f"<div style='color:{iso_c};font-weight:700;'>{iso:.3f}</div></div>"
-            f"<div class='stat-box'><div style='color:#666;'>Hard Hit</div>"
-            f"<div style='color:{hh_c};font-weight:700;'>{hh:.1f}%</div></div>"
-            f"<div class='stat-box'><div style='color:#666;'>Barrel</div>"
-            f"<div style='color:{brl_c};font-weight:700;'>{brl:.1f}%</div></div>"
-            f"<div class='stat-box'><div style='color:#666;'>Launch°</div>"
-            f"<div style='color:{la_c};font-weight:700;'>{la_str}</div></div>"
-            f"<div class='stat-box'><div style='color:#666;'>Pull%</div>"
-            f"<div style='color:{pull_c};font-weight:700;'>{pull_str}</div></div>"
-            f"<div class='stat-box'><div style='color:#666;'>HVY Mod</div>"
-            f"<div style='color:{mod_c};font-weight:700;'>{mod:.3f}</div></div>"
-            f"<div class='stat-box'><div style='color:#666;'>EV</div>"
-            f"<div style='color:{ev_c};font-weight:700;'>{ev:+.1f}%</div></div>"
-            f"</div>"
-            f"<div style='display:flex;gap:14px;font-size:12px;margin-bottom:4px;'>"
-            f"<span style='color:#f0f0f0;font-weight:700;'>{odds_str}</span>"
-            f"<span>EV: <b style='color:{ev_c};'>{ev:+.1f}%</b></span>"
-            f"<span>Edge: <b style='color:#60a5fa;'>{p.get('edge_pct',0):+.1f}%</b></span>"
-            f"<span style='font-size:10px;color:{mod_c};'>Pitcher modifier: {mod_s}</span>"
-            f"</div></div>",
-            unsafe_allow_html=True,
-        )
-
-        pitcher_arsenal = ctx.get("pitcher_arsenal", [])
-        hand_splits     = ctx.get("hand_splits", {})
-        h2h             = ctx.get("h2h", {})
-        batter_vs       = ctx.get("batter_vs", {})
-        _data_year      = ctx.get("data_year", config.CURRENT_SEASON)
-        _yr_label       = f" ({_data_year})" if _data_year != config.CURRENT_SEASON else f" ({config.CURRENT_SEASON})"
-        _prior_note     = (f" ⚠️ *{_data_year} data — pitcher has no {config.CURRENT_SEASON} starts yet*"
-                           if _data_year != config.CURRENT_SEASON else "")
-
-        from clients.pitch_mix import pitch_label, pitch_color
-
-        with st.expander("📊 Pitch Mix Analysis", expanded=True):
-            if _prior_note:
-                st.caption(_prior_note)
-            _c1, _c2 = st.columns([3, 2])
-
-            with _c1:
-                # ── Pitcher Arsenal ────────────────────────────────────────────
-                st.markdown(f"**🔥 Pitcher Arsenal{_yr_label}** — what he throws, how often, how hittable")
-                if pitcher_arsenal:
-                    pitches = sorted(pitcher_arsenal, key=lambda x: x.get("pitch_pct", 0), reverse=True)[:6]
-                    rows = ""
-                    for px in pitches:
-                        pt    = px.get("pitch_type", "")
-                        lbl   = pitch_label(pt)
-                        pc    = pitch_color(pt)
-                        use   = f"{px.get('pitch_pct', 0)*100:.0f}%"
-                        spd   = f"{px.get('avg_speed'):.1f}" if px.get("avg_speed") else "—"
-                        kp    = px.get("k_pct")
-                        kp_s  = f"{kp*100:.0f}%" if kp is not None else "—"
-                        hrr   = px.get("hr_rate")
-                        hrr_s = f"{hrr:.3f}" if hrr is not None else "—"
-                        hrr_c = "#f87171" if (hrr or 0) > 0.040 else "#4ade80" if (hrr or 0) < 0.020 else "#ccc"
-                        hr_n  = px.get("hr", 0) or (int((hrr or 0) * (px.get("pa") or 0)))
-                        rows += (
-                            f"<tr><td><b style='color:{pc};'>{lbl}</b></td>"
-                            f"<td>{use}</td><td>{spd}</td><td>{kp_s}</td>"
-                            f"<td style='color:{hrr_c};'>{hrr_s}</td>"
-                            f"<td style='color:{hrr_c};'>{hr_n}</td></tr>"
-                        )
-                    st.markdown(
-                        "<table style='width:100%;font-size:11px;border-collapse:collapse;'>"
-                        "<tr style='color:#888;border-bottom:1px solid #333;'>"
-                        "<th align='left'>Pitch</th><th>Use%</th><th>MPH</th>"
-                        "<th>K%</th><th>HR Rate</th><th>HR#</th></tr>"
-                        f"{rows}</table>",
-                        unsafe_allow_html=True,
-                    )
-                else:
-                    st.caption("No Savant arsenal data for this pitcher.")
-
-                # ── Batter vs pitcher's pitch types ────────────────────────────
-                st.markdown("**🎯 Batter vs Pitcher's Pitches (2026)**")
-                if pitcher_arsenal and batter_vs:
-                    brows = ""
-                    for px in pitches[:5]:
-                        pt  = px.get("pitch_type", "")
-                        lbl = pitch_label(pt)
-                        pc  = pitch_color(pt)
-                        bpt = batter_vs.get(pt, {})
-                        if bpt.get("pa", 0) < 3:
-                            brows += (f"<tr><td><b style='color:{pc};'>{lbl}</b></td>"
-                                      f"<td colspan='5' style='color:#555;'>< 3 PA</td></tr>")
-                            continue
-                        bslg = bpt.get("slg", 0.0)
-                        biso = max(0.0, bslg - bpt.get("ba", 0.0))
-                        slg_c2 = "#4ade80" if bslg > 0.500 else "#f87171" if bslg < 0.300 else "#f0f0f0"
-                        brows += (
-                            f"<tr><td><b style='color:{pc};'>{lbl}</b></td>"
-                            f"<td>{bpt['pa']}</td>"
-                            f"<td>{bpt['hr']}</td>"
-                            f"<td>{bpt.get('ba', 0):.3f}</td>"
-                            f"<td style='color:{slg_c2};'>{bslg:.3f}</td>"
-                            f"<td>{bpt.get('k_pct',0)*100:.0f}%</td></tr>"
-                        )
-                    if brows:
-                        st.markdown(
-                            "<table style='width:100%;font-size:11px;border-collapse:collapse;margin-top:4px;'>"
-                            "<tr style='color:#888;border-bottom:1px solid #333;'>"
-                            "<th align='left'>Pitch</th><th>PA</th><th>HR</th>"
-                            "<th>BA</th><th>SLG</th><th>K%</th></tr>"
-                            f"{brows}</table>",
-                            unsafe_allow_html=True,
-                        )
-                else:
-                    st.caption("No batter split data available.")
-
-            with _c2:
-                # ── Pitcher vs RHB / LHB ──────────────────────────────────────
-                st.markdown(f"**📈 Pitcher vs Handedness{_yr_label}**")
-                bside = p.get("batter_side", "R")
-                this_hand = "L" if bside == "L" else "R"
-                for hand, lbl in [("R", "vs RHB"), ("L", "vs LHB")]:
-                    sp    = hand_splits.get(hand, {})
-                    sp_pa = sp.get("pa", 0)
-                    if sp_pa == 0:
-                        st.markdown(
-                            f"<div style='background:#1a2332;border-radius:6px;"
-                            f"padding:6px 10px;margin-bottom:6px;'>"
-                            f"<span style='font-size:11px;color:#555;'>{lbl}: no data</span>"
-                            f"</div>", unsafe_allow_html=True)
-                        continue
-                    sp_hr  = sp.get("hr", 0)
-                    sp_hrr = sp_hr / sp_pa
-                    sp_slg = sp.get("slg", 0.0)
-                    sp_iso = sp.get("iso", 0.0)
-                    hdr_c  = "#4ade80" if hand == this_hand else "#888"
-                    hr_c   = "#f87171" if sp_hrr > 0.035 else "#4ade80" if sp_hrr < 0.020 else "#ccc"
-                    badge  = " ← this batter" if hand == this_hand else ""
-                    st.markdown(
-                        f"<div style='background:#1a2332;border-radius:6px;"
-                        f"padding:7px 10px;margin-bottom:6px;'>"
-                        f"<div style='font-size:11px;font-weight:700;color:{hdr_c};'>"
-                        f"{lbl}{badge}</div>"
-                        f"<div style='font-size:11px;color:#ccc;'>"
-                        f"PA: <b>{sp_pa}</b> &nbsp; HR: <b style='color:{hr_c};'>{sp_hr}</b>"
-                        f" &nbsp; HR/PA: <b style='color:{hr_c};'>{sp_hrr:.3f}</b><br>"
-                        f"SLG: <b>{sp_slg:.3f}</b> &nbsp; ISO: <b>{sp_iso:.3f}</b>"
-                        f"</div></div>",
-                        unsafe_allow_html=True,
-                    )
-
-                # ── Head-to-Head Career ────────────────────────────────────────
-                st.markdown("**⚔️ Head-to-Head (Career)**")
-                h2h_pa = h2h.get("pa", 0)
-                if h2h_pa >= 1:
-                    try:
-                        ops_f = float(str(h2h.get("ops", ".000")).replace(",", "") or 0)
-                    except (ValueError, TypeError):
-                        ops_f = 0.0
-                    ops_c = "#4ade80" if ops_f > 0.800 else "#f87171" if ops_f < 0.600 else "#ccc"
-                    st.markdown(
-                        f"<div style='background:#1a2332;border-radius:6px;padding:7px 10px;'>"
-                        f"<div style='font-size:11px;color:#ccc;'>"
-                        f"PA: <b>{h2h_pa}</b> &nbsp; HR: <b>{h2h.get('hr',0)}</b>"
-                        f" &nbsp; K: <b>{h2h.get('k',0)}</b> &nbsp; BB: <b>{h2h.get('bb',0)}</b><br>"
-                        f"AVG: <b>{h2h.get('avg','.000')}</b> &nbsp;"
-                        f"SLG: <b>{h2h.get('slg','.000')}</b> &nbsp;"
-                        f"OPS: <b style='color:{ops_c};'>{h2h.get('ops','.000')}</b>"
-                        f"</div></div>",
-                        unsafe_allow_html=True,
-                    )
-                    if h2h_pa < 5:
-                        st.caption(f"⚠️ Only {h2h_pa} PA — small sample")
-                else:
-                    st.markdown(
-                        "<div style='background:#1a2332;border-radius:6px;padding:7px 10px;'>"
-                        "<div style='font-size:11px;color:#555;'>"
-                        "No career matchup history recorded</div></div>",
-                        unsafe_allow_html=True,
-                    )
-
-        _fb, _fc = st.columns([1, 1])
-        with _fb:
-            if st.button("ℹ️ Player Info",
-                         key=f"{key_prefix}_modal_{p.get('player_id','')}{name[:6]}",
-                         use_container_width=True, type="primary"):
-                st.session_state["show_modal"] = p
-                st.session_state["modal_source_tab"] = "HVY Pitch Mix"
-                st.session_state["modal_source_section"] = "HVY Pitch Mix"
-                st.rerun()
-        with _fc:
-            st.link_button("📲 Open on FanDuel", _fanduel_url(name), use_container_width=True)
-
     def _render_hvy_views(hvy_contexts: dict):
-        """
-        HVY Pitch Mix tab — JIG Way formula with HVY pitch-mix modifier as the pitcher factor.
-        Formula: xSLG 25% · HVY Modifier (pitcher) 20% · Pull% 15% · ISO 15% · Barrel 10% · Hard Hit 10% · Launch 5%
-        HVY Modifier encodes: arsenal matchup · pitcher vs batter handedness · career H2H · contact shape · environment
-        """
-        # ── Sliders (JIG Way metric thresholds + HVY modifier gate) ──────────
+        """Render HVY Pitch Mix views — context-aware HR prediction engine."""
+        # ── HVY-specific sliders (independent of JIG Way sliders) ─────────────
         _tc1, _tc2, _tc3 = st.columns(3)
         with _tc1:
-            hvy_slg_min  = st.slider("Min xSLG",         0.00, 0.70, 0.40, 0.01, key="hvy_slg")
-            hvy_iso_min  = st.slider("Min ISO",           0.00, 0.45, 0.15, 0.01, key="hvy_iso")
+            hvy_slg_min = st.slider("Min xSLG",       0.00, 0.70, 0.40, 0.01, key="hvy_slg")
+            hvy_iso_min = st.slider("Min ISO",         0.00, 0.45, 0.15, 0.01, key="hvy_iso")
         with _tc2:
-            hvy_hh_min   = st.slider("Min Hard Hit%",     0.0, 60.0, 35.0, 0.5,  key="hvy_hh")
-            hvy_brl_min  = st.slider("Min Barrel%",       0.0, 25.0,  5.0, 0.5,  key="hvy_brl")
+            hvy_hh_min  = st.slider("Min Hard Hit%",   0.0, 60.0, 35.0, 0.5,  key="hvy_hh")
+            hvy_brl_min = st.slider("Min Barrel%",     0.0, 25.0,  5.0, 0.5,  key="hvy_brl")
         with _tc3:
-            hvy_la_min   = st.slider("Min Launch Angle°", 0.0, 25.0, 10.0, 0.5,  key="hvy_la")
-            hvy_pull_min = st.slider("Min Pull%",         0.0, 60.0, 38.0, 0.5,  key="hvy_pull")
-        hvy_pit_min   = st.slider("Min HVY Modifier (pitcher gate — 1.0 = neutral, >1 favors batter)",
-                                   0.70, 1.40, 0.95, 0.01, key="hvy_pit")
-        hvy_score_min = st.slider("Min JIG Way + HVY Score (Picks gate)", 0, 100, 40, 1, key="hvy_score")
+            hvy_ss_min  = st.slider("Min HR Window%",  0.0, 50.0, 28.0, 0.5,  key="hvy_ss")
+            hvy_pa_min  = st.slider("Min Pull AIR%",   0.0, 40.0, 12.0, 0.5,  key="hvy_pa")
+        hvy_score_min = st.slider("Min HVY Score (Picks gate)", 0, 100, 40, 1, key="hvy_score")
 
-        def _jig_way_hvy_score(metrics, ctx):
-            """JIG Way formula with HVY pitch-mix modifier as pitcher component."""
-            slg, iso, hh, brl, la, pull, _ = metrics
-            pit = ctx.get("hvy_modifier", 1.0)
+        def _hvy_base_score(metrics):
+            """xSLG 25% · Barrel 20% · ISO 15% · Pull AIR 15% · Hard Hit 15% · HR Window 10%"""
+            slg, iso, hh, brl, ss, pull_air = metrics
             return round((
-                _n(slg,  hvy_slg_min,  0.15) * 0.25 +
-                _n(pit,  hvy_pit_min,  0.15) * 0.20 +
-                _n(pull, hvy_pull_min, 8.0)  * 0.15 +
-                _n(iso,  hvy_iso_min,  0.12) * 0.15 +
-                _n(brl,  hvy_brl_min,  6.0)  * 0.10 +
-                _n(hh,   hvy_hh_min,   12.0) * 0.10 +
-                _n(la,   hvy_la_min,   10.0) * 0.05
+                _n(slg,      hvy_slg_min, 0.15) * 0.25 +
+                _n(brl,      hvy_brl_min, 6.0)  * 0.20 +
+                _n(iso,      hvy_iso_min, 0.12) * 0.15 +
+                _n(pull_air, hvy_pa_min,  8.0)  * 0.15 +
+                _n(hh,       hvy_hh_min,  12.0) * 0.15 +
+                _n(ss,       hvy_ss_min,  8.0)  * 0.10
             ) * 100, 1)
 
-        # ── Build scored entries ──────────────────────────────────────────────
+        # ── Build scored entries ───────────────────────────────────────────────
         _entries = []
         for p in all_players:
-            m   = _jig_metrics(p)          # 7-value JIG Way metrics
+            m   = _hvy_metrics(p)
             pid = p.get("player_id")
             ctx = hvy_contexts.get(pid, {})
-            score = _jig_way_hvy_score(m, ctx)
+            mod  = ctx.get("hvy_modifier", 1.0)
+            base = _hvy_base_score(m)
+            hvy  = round(min(100.0, base * mod), 1)
             _entries.append({
-                "player": p, "jig": score, "base_jig": score,
-                "metrics": m, "ctx": ctx, "passes": score >= hvy_score_min,
+                "player": p, "jig": hvy, "base_jig": base,
+                "metrics": m, "ctx": ctx, "passes": hvy >= hvy_score_min,
             })
 
         scored    = sorted(_entries, key=lambda x: x["jig"], reverse=True)
@@ -3539,26 +3332,36 @@ def tab_jig(data: dict):
         if _cutoff is not None and all_players_raw is not all_players:
             _raw = []
             for p in all_players_raw:
-                m   = _jig_metrics(p)
+                m   = _hvy_metrics(p)
                 pid = p.get("player_id")
                 ctx = hvy_contexts.get(pid, {})
-                sc  = _jig_way_hvy_score(m, ctx)
-                _raw.append({"player": p, "jig": sc, "metrics": m, "ctx": ctx,
-                             "passes": sc >= hvy_score_min})
+                hvy = round(min(100.0, _hvy_base_score(m) * ctx.get("hvy_modifier", 1.0)), 1)
+                _raw.append({"player": p, "jig": hvy, "metrics": m, "ctx": ctx,
+                             "passes": hvy >= hvy_score_min})
             prime = [x for x in _raw
                      if x["passes"] and x["player"].get("best_american")
                      and x["player"].get("ev_pct", 0) > 0]
 
-        with st.expander(f"🔍 Debug — {len(all_players)} players, {len(qualified)} qualified",
+        with st.expander(f"🔍 Debug — {len(all_players)} players, {len(qualified)} qualified HVY",
                          expanded=len(qualified) == 0):
-            st.write(f"**Gate:** Score ≥ {hvy_score_min} | "
+            st.write(f"**Gate:** HVY ≥ {hvy_score_min} | "
                      f"xSLG {hvy_slg_min} ISO {hvy_iso_min} HH {hvy_hh_min} "
-                     f"Brl {hvy_brl_min} Launch {hvy_la_min} Pull {hvy_pull_min} Mod ≥ {hvy_pit_min}")
-            _dbg_with_ar = sum(1 for e in _entries if e.get("ctx", {}).get("pitcher_arsenal"))
-            _dbg_with_sp = sum(1 for e in _entries if any(e.get("ctx", {}).get("hand_splits", {}).values()))
-            _dbg_empty   = sum(1 for e in _entries if not e.get("ctx"))
-            st.write(f"**Pitch data coverage:** arsenal {_dbg_with_ar}/{len(_entries)} · "
-                     f"hand splits {_dbg_with_sp}/{len(_entries)} · empty ctx {_dbg_empty}")
+                     f"Brl {hvy_brl_min} SS {hvy_ss_min} PullAIR {hvy_pa_min}")
+            _savant_ok = st.session_state.get("_hvy_savant_ok")
+            _cand_n    = st.session_state.get("_hvy_candidates_n", 0)
+            _ctx_with_data = sum(
+                1 for ctx in hvy_contexts.values()
+                if ctx.get("pitcher_arsenal") or ctx.get("batter_vs")
+            )
+            if _savant_ok is False:
+                st.error(
+                    f"⚠️ Savant unreachable — all {_cand_n} player fetches returned empty. "
+                    "This usually means the server IP is being rate-limited or blocked by "
+                    "Baseball Savant. Click **Refresh Pitch Data** to retry."
+                )
+            else:
+                st.write(f"**Savant data:** {_ctx_with_data} / {len(hvy_contexts)} contexts have pitch data "
+                         f"({_cand_n} candidates loaded)")
 
         _hq, _hp, _ha, _hpr = st.tabs([
             "📱 Quick Picks",
@@ -3569,40 +3372,41 @@ def tab_jig(data: dict):
 
         with _hq:
             if not qualified:
-                st.info("No players meet thresholds — lower sliders above.")
+                st.info("No players meet HVY thresholds — lower thresholds above.")
             else:
                 for entry in qualified[:3]:
-                    _hvy_way_card(entry, key_prefix="hvywq")
+                    _hvy_card(entry, key_prefix="hvyq")
                 if len(qualified) > 3:
                     st.caption(f"Top 3 of {len(qualified)} qualified. See Picks tab for all.")
 
         with _hp:
             if not qualified:
-                st.info("No players meet thresholds.")
+                st.info("No players meet HVY thresholds.")
             else:
-                st.caption(f"{len(qualified)} players pass all criteria — ranked by JIG Way + HVY score.")
+                st.caption(f"{len(qualified)} players pass all HVY criteria — ranked by HVY score.")
                 for entry in qualified:
-                    _hvy_way_card(entry, key_prefix="hvywp")
+                    _hvy_card(entry, key_prefix="hvyp")
 
         with _ha:
             import pandas as pd
             rows = []
             for entry in scored:
                 p   = entry["player"]
-                slg, iso, hh, brl, la, pull, pit = entry["metrics"]
+                slg, iso, hh, brl, ss, pull_air = entry["metrics"]
                 ctx = entry.get("ctx", {})
                 rows.append({
                     "Player":    p.get("player_name", ""),
                     "Team":      p.get("team", ""),
-                    "Score":     entry["jig"],
-                    "HVY Mod":   f"{ctx.get('hvy_modifier', 1.0):.3f}",
+                    "HVY":       entry["jig"],
+                    "HVY Base":  entry["base_jig"],
+                    "Modifier":  f"{ctx.get('hvy_modifier', 1.0):.2f}×",
                     "Pass":      "✅" if entry["passes"] else "",
                     "xSLG":      f"{slg:.3f}",
-                    "ISO":       f"{iso:.3f}" if iso else "--",
-                    "Hard Hit":  f"{hh:.1f}",
                     "Barrel%":   f"{brl:.1f}",
-                    "Launch°":   f"{la:.1f}" if la else "--",
-                    "Pull%":     f"{pull:.1f}" if pull else "--",
+                    "Hard Hit":  f"{hh:.1f}",
+                    "HR Win%":   f"{ss:.1f}",
+                    "Pull AIR":  f"{pull_air:.1f}",
+                    "ISO":       f"{iso:.3f}" if iso else "--",
                     "Pitcher":   p.get("pitcher_name", ""),
                 })
             if rows:
@@ -3612,7 +3416,7 @@ def tab_jig(data: dict):
                     on_select="rerun", selection_mode="single-row",
                     key=f"hvy_all_df_{_hvy_ver}",
                     column_config={
-                        "Score": st.column_config.ProgressColumn("Score", min_value=0, max_value=100, format="%.0f"),
+                        "HVY": st.column_config.ProgressColumn("HVY", min_value=0, max_value=100, format="%.0f"),
                     },
                 )
                 _sel_rows = getattr(getattr(_sel, "selection", None), "rows", [])
@@ -3625,11 +3429,11 @@ def tab_jig(data: dict):
 
         with _hpr:
             if not prime:
-                st.info("No prime plays — need qualified players with positive-EV odds.")
+                st.info("No prime HVY plays — need qualified players with positive-EV odds.")
             else:
-                st.caption(f"{len(prime)} prime picks with positive EV.")
+                st.caption(f"{len(prime)} prime HVY picks with positive EV.")
                 for entry in prime:
-                    _hvy_way_card(entry, key_prefix="hvywpr")
+                    _hvy_card(entry, key_prefix="hvypr")
 
     # ── Outer tabs ────────────────────────────────────────────────────────────
 
@@ -3644,48 +3448,47 @@ def tab_jig(data: dict):
         _render_jig_views(_jig_way_score, "way")
 
     with _outer_hvy:
-        st.caption("JIG Way formula · xSLG (25%) · HVY Pitcher Modifier (20%) · Pull% (15%) · ISO (15%) · Barrel (10%) · Hard Hit (10%) · Launch (5%) · Pitcher modifier = arsenal matchup · hand splits vs L/R · career H2H · contact shape · park/weather")
-
-        # Generation counter avoids module-cache key collisions entirely.
-        # Refresh increments the counter → new key → guaranteed fresh load.
-        _hvy_gen = st.session_state.get("_hvy_gen", 0)
-        _hvy_ck  = f"hvy_ctx_{data.get('date', '')}_{_hvy_gen}"
-
+        st.caption("xSLG (25%) · Barrel (20%) · ISO (15%) · Pull AIR (15%) · Hard Hit (15%) · HR Window (10%) · Context modifier: arsenal matchup · hand splits · contact shape · environment · H2H")
+        from clients.pitch_mix import HVY_CACHE_VERSION as _HVY_VER
+        _hvy_ck = f"hvy_ctx_{data.get('date', '')}_{_HVY_VER}"
         if _hvy_ck not in st.session_state:
-            _hvy_candidates = [p for p in all_players if p.get("best_american")]
-            _n_pitchers = len({p.get("pitcher_id") for p in _hvy_candidates if p.get("pitcher_id")})
-            with st.spinner(f"Loading pitch mix data for {len(_hvy_candidates)} players across {_n_pitchers} pitchers…"):
-                import importlib, clients.pitch_mix, clients.arsenal
-                importlib.reload(clients.pitch_mix)   # ensures fresh module with cleared caches
-                importlib.reload(clients.arsenal)
-                _pm_client = clients.pitch_mix
-                _ar_client = clients.arsenal
+            # Include ALL players with a player_id — not just those with odds.
+            # The previous best_american filter caused empty contexts for every
+            # player shown in the tab before odds were posted (or when odds keys
+            # weren't loaded), making all four pitch-mix sections blank.
+            _hvy_candidates = [p for p in all_players if p.get("player_id")]
+            _unique_pitchers = len({p.get("pitcher_id") for p in _hvy_candidates if p.get("pitcher_id")})
+            _spinner_msg = (
+                f"Loading pitch mix data for {len(_hvy_candidates)} players "
+                f"across {_unique_pitchers} pitchers…"
+            )
+            with st.spinner(_spinner_msg):
+                from clients import arsenal as _ar_client
+                from clients import pitch_mix as _pm_client
                 try:
                     _ar_data = _ar_client.get_pitcher_arsenal(config.CURRENT_SEASON)
                 except Exception:
                     _ar_data = {}
                 _hvy_ctxs = _pm_client.load_hvy_contexts_batch(_hvy_candidates, _ar_data)
-                for _p in all_players:
-                    _pid = _p.get("player_id")
-                    if _pid and _pid not in _hvy_ctxs:
-                        _hvy_ctxs[_pid] = {}
+                # Savant connectivity check — surfaces server-side blocks in the UI
+                _savant_ok = any(
+                    bool(ctx.get("pitcher_arsenal") or ctx.get("batter_vs"))
+                    for ctx in _hvy_ctxs.values()
+                )
+                st.session_state["_hvy_savant_ok"] = _savant_ok
+                st.session_state["_hvy_candidates_n"] = len(_hvy_candidates)
                 st.session_state[_hvy_ck] = _hvy_ctxs
 
-        _col_refresh, _col_status = st.columns([1, 4])
+        _col_refresh, _ = st.columns([1, 4])
         with _col_refresh:
             if st.button("🔄 Refresh Pitch Data", key="hvy_refresh"):
-                # Remove old key and bump generation → next render triggers fresh load
+                # Clear both the session-state cache AND the module-level
+                # in-process caches so stale empty-result entries are evicted.
+                from clients import pitch_mix as _pm_clear, arsenal as _ar_clear
+                _pm_clear.clear_caches()
+                _ar_clear.clear_caches()
                 st.session_state.pop(_hvy_ck, None)
-                st.session_state["_hvy_gen"] = _hvy_gen + 1
                 st.rerun()
-        with _col_status:
-            _cached_now = st.session_state.get(_hvy_ck, {})
-            _n_with_ar  = sum(1 for _c in _cached_now.values() if _c.get("pitcher_arsenal"))
-            _n_total    = len([p for p in all_players if p.get("best_american")])
-            if _n_with_ar > 0:
-                st.caption(f"✅ Pitch data loaded: {_n_with_ar}/{_n_total} pitchers with arsenal data")
-            else:
-                st.warning("⚠️ No pitch data — click **Refresh Pitch Data** to load from Savant (~30s)")
 
         _render_hvy_views(st.session_state.get(_hvy_ck, {}))
 
@@ -4695,7 +4498,9 @@ def main():
                     odds_val  = fd_odds if fd_odds else best_odds
                     odds_lbl  = "FD" if fd_odds else "Best"
                     ev        = p.get("ev_pct", 0)
+                    edge      = p.get("edge_pct", 0)
                     ev_color  = "#4ade80" if ev >= 0 else "#f87171"
+                    edge_color = _edge_col(edge)
                     url       = _fanduel_url(p["player_name"])
 
                     # Game time + urgency
@@ -4741,6 +4546,7 @@ def main():
                             f"<div style='color:#888; margin-top:2px;'>"
                             f"{odds_lbl}: <b style='color:#FF6666'>{_fmt_american(odds_val)}</b>"
                             f" &nbsp;|&nbsp; EV: <b style='color:{ev_color}'>{ev:+.1f}%</b>"
+                            f" &nbsp;|&nbsp; Edge: <b style='color:{edge_color}'>{edge:+.1f}%</b>"
                             f"</div></div>",
                             unsafe_allow_html=True,
                         )
