@@ -3337,7 +3337,8 @@ def tab_jig(data: dict):
 
     with _outer_hvy:
         st.caption("JIG Way base · Pitcher pitch mix · Batter vs pitch types · Head-to-head · Handedness splits")
-        _hvy_ck = f"hvy_ctx_{data.get('date', '')}"
+        from clients.pitch_mix import HVY_CACHE_VERSION as _HVY_VER
+        _hvy_ck = f"hvy_ctx_{data.get('date', '')}_{_HVY_VER}"
         if _hvy_ck not in st.session_state:
             with st.spinner("Loading pitch mix & matchup data for top picks..."):
                 from clients import arsenal as _ar_client

@@ -30,6 +30,9 @@ _SESSION.headers.update({
 MLB_API = "https://statsapi.mlb.com/api/v1"
 SAVANT  = "https://baseballsavant.mlb.com"
 
+# Bump this whenever the context schema changes — forces Streamlit session-state cache to refresh.
+HVY_CACHE_VERSION = "3"
+
 # {pitcher_id: {"hand_splits": {...}, "pitch_stats": {...}, "data_year": int}}
 _PITCHER_SAVANT_CACHE: dict[int, dict] = {}
 _H2H_CACHE:            dict[tuple, dict] = {}
