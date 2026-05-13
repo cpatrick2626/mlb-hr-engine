@@ -17,6 +17,7 @@ ODDS_API_KEY: str = _secret("ODDS_API_KEY")
 
 # ── Bankroll ──────────────────────────────────────────────────────────────────
 BANKROLL: float = float(_secret("BANKROLL", "100"))
+assert BANKROLL > 0, f"BANKROLL must be > 0 (got {BANKROLL}). Check your .env or Streamlit secrets."
 
 # ── Date Override ─────────────────────────────────────────────────────────────
 TARGET_DATE: Optional[str] = os.getenv("TARGET_DATE")   # None = use today

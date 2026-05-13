@@ -418,6 +418,12 @@ def load_game_data(
     batter_data  = results.get("batter_statcast", {})
     pitcher_data = results.get("pitcher_statcast", {})
 
+    if not batter_data:
+        print("[pipeline] WARNING: Statcast batter data is empty — all power multipliers default to 1.0")
+        _cb("⚠️ Statcast unavailable — running without power adjustment (MLB stats only)")
+    if not pitcher_data:
+        print("[pipeline] WARNING: Statcast pitcher data is empty — pitcher contact suppressor defaults to 1.0")
+
     # Collect tasks first so roster fallbacks run before the parallel phase.
     tasks: list[tuple] = []
     for game in games:
