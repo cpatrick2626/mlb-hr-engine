@@ -206,6 +206,7 @@ def tab_advanced_strategies(data: dict, parlays_callback=None):
             "Stars Aligned",
             "Multi-Edge Confirmation",
             "Player Edge Rankings",
+            "Confidence Rankings",
             "Power Profile Parlays",
             "Pitcher Target Parlays",
             "xStats Regression",
@@ -1559,6 +1560,96 @@ def tab_advanced_strategies(data: dict, parlays_callback=None):
                             )
                             if st.button("📲 Add to FD Slip", key=f"fd_er_{i}"):
                                 n = _add_to_fd_slip([_er_name], all_players)
+                                if not n:
+                                    st.info("Already in slip.")
+
+        elif strategy_type == "Confidence Rankings":
+            st.markdown("### 🎯 Confidence Rankings")
+            st.info(
+                "Today's qualified picks ranked from highest Confidence to lowest. "
+                "Confidence (0–100) reflects sample size, Statcast data quality, "
+                "model/market agreement, barrel rate, and pitcher HR/9. "
+                "High-confidence picks are ones the model is most certain about — "
+                "regardless of how big the edge or EV is."
+            )
+
+            conf_ranked = sorted(
+                ranked,
+                key=lambda p: float(p.get("confidence") or 0),
+                reverse=True,
+            )
+
+            if not conf_ranked:
+                st.warning("No qualified picks today. Load data from the Picks tab first.")
+                st.link_button("📲 Browse FanDuel HR Props", _fd_url())
+            else:
+                _cr_min = st.slider(
+                    "Min Confidence", 0, 100, 40, 5, key="cr_min_conf",
+                    help="Filter to picks with at least this confidence score"
+                )
+                _cr_filtered = [p for p in conf_ranked if float(p.get("confidence") or 0) >= _cr_min]
+
+                st.caption(
+                    f"{len(conf_ranked)} qualified picks · "
+                    f"{len(_cr_filtered)} shown · sorted highest Confidence → lowest"
+                )
+
+                if not _cr_filtered:
+                    st.warning(f"No qualified picks with Confidence ≥ {_cr_min}.")
+                else:
+                    for i, p in enumerate(_cr_filtered, 1):
+                        _cr_name  = p.get("player_name", "")
+                        _cr_team  = p.get("team", "")
+                        _cr_pit   = p.get("pitcher_name", "TBD")
+                        _cr_conf  = float(p.get("confidence") or 0)
+                        _cr_edge  = float(p.get("edge_pct") or 0)
+                        _cr_ev    = float(p.get("ev_pct") or 0)
+                        _cr_model = float(p.get("model_prob") or 0) * 100
+                        _cr_mkt   = float(p.get("market_no_vig_prob") or 0) * 100
+                        _cr_odds  = p.get("best_american")
+                        _cr_tier  = p.get("confidence_tier", "C")
+
+                        # Confidence color scale
+                        if _cr_conf >= 70:   _cr_cc = "#4ade80"
+                        elif _cr_conf >= 55: _cr_cc = "#86efac"
+                        elif _cr_conf >= 40: _cr_cc = "#facc15"
+                        else:                _cr_cc = "#f87171"
+
+                        _cr_tier_col = {"S": "#FFD700", "A": "#4ade80", "B": "#facc15", "C": "#f87171"}.get(_cr_tier, "#888")
+                        _cr_label = (
+                            f"#{i}  {_cr_name}  ({_cr_team})"
+                            f"  |  Conf {_cr_conf:.0f}"
+                            f"  |  Tier {_cr_tier}"
+                            f"  |  Edge {_cr_edge:+.1f}%"
+                            f"  |  EV {_cr_ev:+.1f}%"
+                        )
+
+                        with st.expander(_cr_label):
+                            _cc1, _cc2, _cc3, _cc4 = st.columns(4)
+                            with _cc1:
+                                st.metric("Confidence", f"{_cr_conf:.0f}")
+                            with _cc2:
+                                st.metric("Tier", _cr_tier)
+                            with _cc3:
+                                st.metric("Edge%", f"{_cr_edge:+.1f}%")
+                            with _cc4:
+                                st.metric("EV%", f"{_cr_ev:+.1f}%")
+
+                            _cc5, _cc6, _cc7 = st.columns(3)
+                            with _cc5:
+                                st.metric("Model%", f"{_cr_model:.1f}%")
+                            with _cc6:
+                                st.metric("Market%", f"{_cr_mkt:.1f}%" if _cr_mkt else "--")
+                            with _cc7:
+                                st.metric("Best Odds", _fmt_american(_cr_odds))
+
+                            _player_row(
+                                _cr_name, _cr_team,
+                                f"Conf {_cr_conf:.0f} · Tier {_cr_tier} · Edge {_cr_edge:+.1f}% · EV {_cr_ev:+.1f}% · {_cr_pit}",
+                                f"modal_cr_{i}",
+                            )
+                            if st.button("📲 Add to FD Slip", key=f"fd_cr_{i}"):
+                                n = _add_to_fd_slip([_cr_name], all_players)
                                 if not n:
                                     st.info("Already in slip.")
 
