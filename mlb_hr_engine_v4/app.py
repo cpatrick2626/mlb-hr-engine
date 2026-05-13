@@ -3645,17 +3645,21 @@ def tab_jig(data: dict):
 
     with _outer_hvy:
         st.caption("JIG Way formula · xSLG (25%) · HVY Pitcher Modifier (20%) · Pull% (15%) · ISO (15%) · Barrel (10%) · Hard Hit (10%) · Launch (5%) · Pitcher modifier = arsenal matchup · hand splits vs L/R · career H2H · contact shape · park/weather")
-        from clients.pitch_mix import HVY_CACHE_VERSION as _HVY_VER
-        _hvy_ck = f"hvy_ctx_{data.get('date', '')}_{_HVY_VER}"
+
+        # Generation counter avoids module-cache key collisions entirely.
+        # Refresh increments the counter → new key → guaranteed fresh load.
+        _hvy_gen = st.session_state.get("_hvy_gen", 0)
+        _hvy_ck  = f"hvy_ctx_{data.get('date', '')}_{_hvy_gen}"
+
         if _hvy_ck not in st.session_state:
             _hvy_candidates = [p for p in all_players if p.get("best_american")]
-            _spinner_msg = (
-                f"Loading pitch mix data for {len(_hvy_candidates)} players "
-                f"across {len({p.get('pitcher_id') for p in _hvy_candidates if p.get('pitcher_id')})} pitchers…"
-            )
-            with st.spinner(_spinner_msg):
-                from clients import arsenal as _ar_client
-                from clients import pitch_mix as _pm_client
+            _n_pitchers = len({p.get("pitcher_id") for p in _hvy_candidates if p.get("pitcher_id")})
+            with st.spinner(f"Loading pitch mix data for {len(_hvy_candidates)} players across {_n_pitchers} pitchers…"):
+                import importlib, clients.pitch_mix, clients.arsenal
+                importlib.reload(clients.pitch_mix)   # ensures fresh module with cleared caches
+                importlib.reload(clients.arsenal)
+                _pm_client = clients.pitch_mix
+                _ar_client = clients.arsenal
                 try:
                     _ar_data = _ar_client.get_pitcher_arsenal(config.CURRENT_SEASON)
                 except Exception:
@@ -3665,49 +3669,23 @@ def tab_jig(data: dict):
                     _pid = _p.get("player_id")
                     if _pid and _pid not in _hvy_ctxs:
                         _hvy_ctxs[_pid] = {}
-                # Only cache if data quality is acceptable (>=50% have pitcher arsenal)
-                _with_arsenal = sum(1 for _c in _hvy_ctxs.values() if _c.get("pitcher_arsenal"))
-                _total_cands  = max(len(_hvy_candidates), 1)
-                if _with_arsenal / _total_cands >= 0.50:
-                    st.session_state[_hvy_ck] = _hvy_ctxs
-                else:
-                    # Bad fetch — store anyway so we don't infinite-loop, but warn
-                    st.session_state[_hvy_ck] = _hvy_ctxs
-                    st.warning(
-                        f"⚠️ Pitch mix data quality low — only {_with_arsenal}/{_total_cands} pitchers loaded. "
-                        "Savant may be rate-limiting. Click **Refresh Pitch Data** to retry."
-                    )
-
-        # Auto-clear stale empty cache on each rerun
-        _cached_ctxs = st.session_state.get(_hvy_ck, {})
-        if _cached_ctxs:
-            _cand_count  = len([p for p in all_players if p.get("best_american")])
-            _has_arsenal = sum(1 for _c in _cached_ctxs.values() if _c.get("pitcher_arsenal"))
-            if _cand_count > 0 and _has_arsenal / max(_cand_count, 1) < 0.20:
-                st.session_state.pop(_hvy_ck, None)
-                st.rerun()
+                st.session_state[_hvy_ck] = _hvy_ctxs
 
         _col_refresh, _col_status = st.columns([1, 4])
         with _col_refresh:
             if st.button("🔄 Refresh Pitch Data", key="hvy_refresh"):
+                # Remove old key and bump generation → next render triggers fresh load
                 st.session_state.pop(_hvy_ck, None)
-                # Also clear module-level pitcher cache so Savant is re-queried
-                try:
-                    from clients.pitch_mix import _PITCHER_SAVANT_CACHE, _H2H_CACHE, _BATTER_PT_CACHE
-                    _PITCHER_SAVANT_CACHE.clear()
-                    _H2H_CACHE.clear()
-                    _BATTER_PT_CACHE.clear()
-                except Exception:
-                    pass
+                st.session_state["_hvy_gen"] = _hvy_gen + 1
                 st.rerun()
         with _col_status:
             _cached_now = st.session_state.get(_hvy_ck, {})
             _n_with_ar  = sum(1 for _c in _cached_now.values() if _c.get("pitcher_arsenal"))
             _n_total    = len([p for p in all_players if p.get("best_american")])
             if _n_with_ar > 0:
-                st.caption(f"Pitch data loaded: {_n_with_ar}/{_n_total} pitchers · v{_HVY_VER}")
+                st.caption(f"✅ Pitch data loaded: {_n_with_ar}/{_n_total} pitchers with arsenal data")
             else:
-                st.caption(f"No pitch data cached yet · click Refresh · v{_HVY_VER}")
+                st.warning("⚠️ No pitch data — click **Refresh Pitch Data** to load from Savant (~30s)")
 
         _render_hvy_views(st.session_state.get(_hvy_ck, {}))
 
