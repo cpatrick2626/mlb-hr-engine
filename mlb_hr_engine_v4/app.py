@@ -3162,7 +3162,7 @@ def tab_jig(data: dict):
                     )
 
                 # ── Head-to-head ───────────────────────────────────────────────
-                st.markdown("**⚔️ Head-to-Head (2026)**")
+                st.markdown("**⚔️ Head-to-Head (Career)**")
                 h2h_pa = h2h.get("pa", 0)
                 if h2h_pa >= 1:
                     try:
@@ -3187,7 +3187,7 @@ def tab_jig(data: dict):
                     st.markdown(
                         "<div style='background:#1a2332;border-radius:6px;padding:7px 10px;'>"
                         "<div style='font-size:11px;color:#555;'>"
-                        "No 2026 matchup history recorded</div></div>",
+                        "No career matchup history recorded</div></div>",
                         unsafe_allow_html=True,
                     )
 

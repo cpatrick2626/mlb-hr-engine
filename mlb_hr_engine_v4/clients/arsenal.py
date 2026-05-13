@@ -209,58 +209,58 @@ def _primary_fastball(pitches: list[dict]) -> Optional[dict]:
 
 
 def _parse_arsenal_csv(raw: str) -> dict[int, list[dict]]:
-    """Parse Savant pitch arsenal CSV. Handles both 0–100 and 0–1 percentage columns."""
+    """
+    Parse Savant pitch arsenal WIDE-format CSV.
+
+    Actual columns (2026): 'pitcher' (player_id), then per-pitch usage columns:
+      ff_pitcher, si_pitcher, fc_pitcher, sl_pitcher, ch_pitcher,
+      cu_pitcher, fs_pitcher, kn_pitcher, st_pitcher, sv_pitcher
+    Values are usage percentages (0–100 scale).
+    """
     result: dict[int, list] = {}
+
+    # Map CSV column suffix → pitch type code
+    _PT_COLS: dict[str, str] = {
+        "ff_pitcher": "FF", "si_pitcher": "SI", "fc_pitcher": "FC",
+        "sl_pitcher": "SL", "ch_pitcher": "CH", "cu_pitcher": "CU",
+        "fs_pitcher": "FS", "kn_pitcher": "KN", "st_pitcher": "ST",
+        "sv_pitcher": "SV", "kc_pitcher": "KC",
+    }
+
     reader = csv.DictReader(io.StringIO(raw.lstrip("﻿")))
-
-    def _f(row, *keys) -> Optional[float]:
-        for k in keys:
-            v = row.get(k)
-            if v not in (None, "", "null", "NA", "N/A", "--"):
-                try:
-                    return float(v)
-                except ValueError:
-                    pass
-        return None
-
     for row in reader:
         try:
-            pid = int(row.get("player_id") or 0)
+            pid = int(row.get("pitcher") or 0)
             if not pid:
                 continue
 
-            pitch_type = (row.get("pitch_type") or row.get("n_pitchtype") or "").strip().upper()
-            if not pitch_type:
-                continue
+            pitches = []
+            for col, pt in _PT_COLS.items():
+                raw_val = (row.get(col) or "").strip()
+                if not raw_val:
+                    continue
+                try:
+                    pct = float(raw_val)
+                except ValueError:
+                    continue
+                if pct <= 0:
+                    continue
+                if pct > 1.5:
+                    pct /= 100.0
+                pitches.append({
+                    "pitch_type":   pt,
+                    "pitch_pct":    round(pct, 4),
+                    "rv_per100":    None,
+                    "pa":           0,
+                    "avg_speed":    None,
+                    "whiff_pct":    None,
+                    "hard_hit_pct": None,
+                })
 
-            pitch_pct  = _f("pitch_percent", "usage_percent")
-            rv_per100  = _f("run_value_per100", "rv_100", "rv100")
-            pa         = _f("pa", "attempts")
-            avg_speed  = _f("avg_speed", "velocity_avg", "avg_velocity")
-            whiff_pct  = _f("whiff_percent", "whiff_pct")
-            hard_hit   = _f("hard_hit_percent", "hard_hit_pct")
-
-            if pitch_pct is None:
-                continue
-
-            # Normalise 0–100 → 0–1 for percentage columns
-            if pitch_pct > 1.5:
-                pitch_pct /= 100.0
-            if whiff_pct is not None and whiff_pct > 1.5:
-                whiff_pct /= 100.0
-            if hard_hit is not None and hard_hit > 1.5:
-                hard_hit /= 100.0
-
-            entry = {
-                "pitch_type":   pitch_type,
-                "pitch_pct":    pitch_pct,
-                "rv_per100":    rv_per100,
-                "pa":           int(pa) if pa is not None else 0,
-                "avg_speed":    avg_speed,
-                "whiff_pct":    whiff_pct,
-                "hard_hit_pct": hard_hit,
-            }
-            result.setdefault(pid, []).append(entry)
+            if pitches:
+                # Sort descending by usage so primary pitch is first
+                pitches.sort(key=lambda p: p["pitch_pct"], reverse=True)
+                result[pid] = pitches
         except (ValueError, KeyError):
             continue
 
