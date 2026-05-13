@@ -3206,45 +3206,76 @@ def tab_jig(data: dict):
             _c1, _c2 = st.columns([3, 2])
 
             with _c1:
+                # ── Pitch type color key ───────────────────────────────────────
+                st.markdown(
+                    "<div style='display:flex;gap:12px;font-size:10px;margin-bottom:6px;"
+                    "background:#0f172a;border-radius:4px;padding:5px 8px;'>"
+                    "<span><b style='color:#f87171;'>■</b> Red = Fastball (4-Seam, Sinker, Cutter)</span>"
+                    "<span><b style='color:#60a5fa;'>■</b> Blue = Breaking (Slider, Sweeper, Curve)</span>"
+                    "<span><b style='color:#4ade80;'>■</b> Green = Offspeed (Changeup, Splitter)</span>"
+                    "</div>",
+                    unsafe_allow_html=True,
+                )
+
                 # ── Arsenal table ──────────────────────────────────────────────
                 st.markdown(f"**🔥 {pit_n}{pit_hand_lbl} Arsenal{_yr_label}**")
                 if pitcher_arsenal:
                     pitches = sorted(pitcher_arsenal, key=lambda x: x.get("pitch_pct", 0), reverse=True)[:6]
+                    _th = ("background:#0f172a;color:#64748b;font-size:10px;"
+                           "padding:4px 6px;text-align:center;border-bottom:1px solid #1e293b;")
+                    _th_l = _th + "text-align:left;"
                     rows = ""
                     for px in pitches:
                         pt   = px.get("pitch_type", "")
                         lbl  = pitch_label(pt)
                         pc   = pitch_color(pt)
-                        use  = f"{px.get('pitch_pct', 0)*100:.0f}%"
+                        use_v = px.get('pitch_pct', 0) * 100
+                        use  = f"{use_v:.0f}%"
                         spd  = f"{px.get('avg_speed'):.1f}" if px.get("avg_speed") else "—"
-                        whf  = f"{px.get('whiff_pct')*100:.0f}%" if px.get("whiff_pct") is not None else "—"
-                        hh_p = f"{px.get('hard_hit_pct')*100:.0f}%" if px.get("hard_hit_pct") is not None else "—"
-                        rv   = px.get("rv_per100")
-                        rv_s = f"{rv:+.1f}" if rv is not None else "—"
-                        rv_c = "#f87171" if (rv or 0) > 0 else "#4ade80" if (rv or 0) < 0 else "#888"
+                        whf_v = px.get('whiff_pct')
+                        whf  = f"{whf_v*100:.0f}%" if whf_v is not None else "—"
+                        hh_v  = px.get('hard_hit_pct')
+                        hh_p  = f"{hh_v*100:.0f}%" if hh_v is not None else "—"
+                        rv    = px.get("rv_per100")
+                        rv_s  = f"{rv:+.1f}" if rv is not None else "—"
+                        # Cell colors: Use% — higher = darker bg; Whiff — green=high, red=low; HH% — red=high; RV/100 — negative=green (bad for batter)
+                        use_bg  = ("#14532d" if use_v >= 35 else "#166534" if use_v >= 20
+                                   else "#0f172a")
+                        whf_bg  = ("#14532d" if (whf_v or 0) >= 0.30 else "#166534" if (whf_v or 0) >= 0.22
+                                   else "#7f1d1d" if (whf_v or 0) < 0.15 else "#0f172a")
+                        hh_bg   = ("#7f1d1d" if (hh_v or 0) >= 0.50 else "#450a0a" if (hh_v or 0) >= 0.45
+                                   else "#166534" if (hh_v or 0) < 0.35 else "#0f172a")
+                        rv_bg   = ("#14532d" if (rv or 0) < -1.0 else "#166534" if (rv or 0) < 0
+                                   else "#7f1d1d" if (rv or 0) > 1.0 else "#450a0a" if (rv or 0) > 2.5 else "#0f172a")
+                        _td = "padding:4px 6px;text-align:center;font-size:11px;"
                         rows += (
-                            f"<tr><td><b style='color:{pc};'>{lbl}</b></td>"
-                            f"<td>{use}</td><td>{spd}</td><td>{whf}</td><td>{hh_p}</td>"
-                            f"<td style='color:{rv_c};font-size:10px;'>{rv_s}</td></tr>"
+                            f"<tr>"
+                            f"<td style='padding:4px 6px;'><b style='color:{pc};font-size:11px;'>{lbl}</b></td>"
+                            f"<td style='background:{use_bg};color:#e2e8f0;{_td}'>{use}</td>"
+                            f"<td style='background:#0f172a;color:#94a3b8;{_td}'>{spd}</td>"
+                            f"<td style='background:{whf_bg};color:#e2e8f0;{_td}'>{whf}</td>"
+                            f"<td style='background:{hh_bg};color:#e2e8f0;{_td}'>{hh_p}</td>"
+                            f"<td style='background:{rv_bg};color:#e2e8f0;{_td}'>{rv_s}</td>"
+                            f"</tr>"
                         )
                     st.markdown(
-                        "<table style='width:100%;font-size:11px;border-collapse:collapse;'>"
-                        "<tr style='color:#888;border-bottom:1px solid #333;'>"
-                        "<th align='left'>Pitch</th><th>Use%</th><th>MPH</th>"
-                        "<th>Whiff</th><th>HH%</th><th>RV/100</th></tr>"
-                        f"{rows}</table>",
+                        "<table style='width:100%;border-collapse:collapse;background:#0f172a;"
+                        "border-radius:6px;overflow:hidden;'>"
+                        f"<tr><th style='{_th_l}'>Pitch</th>"
+                        f"<th style='{_th}'>Use%</th><th style='{_th}'>MPH</th>"
+                        f"<th style='{_th}'>Whiff%</th><th style='{_th}'>HH%</th>"
+                        f"<th style='{_th}'>RV/100</th></tr>"
+                        f"{rows}</table>"
+                        "<div style='font-size:9px;color:#475569;margin-top:3px;'>"
+                        "Whiff%: 🟢 high=good for pitcher · HH%: 🔴 high=dangerous · RV/100: 🟢 negative=pitcher wins</div>",
                         unsafe_allow_html=True,
                     )
                 else:
                     st.caption("No Savant arsenal data for this pitcher.")
 
                 # ── Batter vs pitch types ──────────────────────────────────────
-                st.markdown("**🎯 Batter vs These Pitches (2026)**")
+                st.markdown(f"**🎯 {name} vs These Pitches ({config.CURRENT_SEASON})**")
                 if batter_vs:
-                    # When we have the pitcher's arsenal, order rows by pitcher
-                    # usage so the batter's numbers line up against what he'll
-                    # actually see. When no arsenal exists (new/IL pitcher), fall
-                    # back to showing the batter's top-PA pitch types instead.
                     if pitcher_arsenal:
                         _bvp_pitches = [px.get("pitch_type", "") for px in pitches[:5]]
                     else:
@@ -3252,33 +3283,56 @@ def tab_jig(data: dict):
                                         sorted(batter_vs.items(),
                                                key=lambda x: x[1].get("pa", 0),
                                                reverse=True)[:5]]
+                    _th2   = ("background:#0f172a;color:#64748b;font-size:10px;"
+                              "padding:4px 6px;text-align:center;border-bottom:1px solid #1e293b;")
+                    _th2_l = _th2 + "text-align:left;"
                     brows = ""
                     for pt in _bvp_pitches:
                         lbl = pitch_label(pt)
                         pc  = pitch_color(pt)
                         bpt = batter_vs.get(pt, {})
+                        _td2 = "padding:4px 6px;text-align:center;font-size:11px;"
                         if bpt.get("pa", 0) < 3:
-                            brows += (f"<tr><td><b style='color:{pc};'>{lbl}</b></td>"
-                                      f"<td colspan='5' style='color:#555;'>< 3 PA</td></tr>")
+                            brows += (
+                                f"<tr><td style='padding:4px 6px;'><b style='color:{pc};font-size:11px;'>{lbl}</b></td>"
+                                f"<td colspan='5' style='color:#374151;font-size:10px;{_td2}'>< 3 PA</td></tr>"
+                            )
                             continue
-                        bslg = bpt.get("slg", 0.0)
-                        slg_c = "#4ade80" if bslg > 0.450 else "#f87171" if bslg < 0.300 else "#f0f0f0"
+                        bslg  = bpt.get("slg", 0.0)
+                        bba   = bpt.get("ba", 0.0)
+                        bkpct = bpt.get("k_pct", 0.0)
+                        bhr   = bpt.get("hr", 0)
+                        bpa   = bpt.get("pa", 0)
+                        # Color cells: SLG green=high (batter wins), red=low; K% red=high (strikeouts)
+                        slg_bg = ("#14532d" if bslg >= 0.550 else "#166534" if bslg >= 0.450
+                                  else "#7f1d1d" if bslg < 0.280 else "#450a0a" if bslg < 0.200 else "#0f172a")
+                        ba_bg  = ("#14532d" if bba  >= 0.350 else "#166534" if bba  >= 0.280
+                                  else "#7f1d1d" if bba  < 0.200 else "#0f172a")
+                        k_bg   = ("#7f1d1d" if bkpct >= 0.35 else "#450a0a" if bkpct >= 0.45
+                                  else "#166534" if bkpct < 0.18 else "#0f172a")
+                        hr_bg  = "#14532d" if bhr >= 2 else "#166534" if bhr >= 1 else "#0f172a"
                         brows += (
-                            f"<tr><td><b style='color:{pc};'>{lbl}</b></td>"
-                            f"<td>{bpt['pa']}</td>"
-                            f"<td>{bpt['hr']}</td>"
-                            f"<td>{bpt.get('ba', 0):.3f}</td>"
-                            f"<td style='color:{slg_c};'>{bslg:.3f}</td>"
-                            f"<td>{bpt.get('k_pct',0)*100:.0f}%</td></tr>"
+                            f"<tr>"
+                            f"<td style='padding:4px 6px;'><b style='color:{pc};font-size:11px;'>{lbl}</b></td>"
+                            f"<td style='background:#0f172a;color:#94a3b8;{_td2}'>{bpa}</td>"
+                            f"<td style='background:{hr_bg};color:#e2e8f0;{_td2}'>{bhr}</td>"
+                            f"<td style='background:{ba_bg};color:#e2e8f0;{_td2}'>{bba:.3f}</td>"
+                            f"<td style='background:{slg_bg};color:#e2e8f0;{_td2}'>{bslg:.3f}</td>"
+                            f"<td style='background:{k_bg};color:#e2e8f0;{_td2}'>{bkpct*100:.0f}%</td>"
+                            f"</tr>"
                         )
                     if brows:
-                        _bvp_note = "" if pitcher_arsenal else " (all pitch types — no pitcher arsenal)"
+                        _bvp_note = "" if pitcher_arsenal else " (all types)"
                         st.markdown(
-                            "<table style='width:100%;font-size:11px;border-collapse:collapse;margin-top:4px;'>"
-                            "<tr style='color:#888;border-bottom:1px solid #333;'>"
-                            f"<th align='left'>Pitch{_bvp_note}</th><th>PA</th><th>HR</th>"
-                            "<th>BA</th><th>SLG</th><th>K%</th></tr>"
-                            f"{brows}</table>",
+                            "<table style='width:100%;border-collapse:collapse;background:#0f172a;"
+                            "border-radius:6px;overflow:hidden;margin-top:4px;'>"
+                            f"<tr><th style='{_th2_l}'>Pitch{_bvp_note}</th>"
+                            f"<th style='{_th2}'>PA</th><th style='{_th2}'>HR</th>"
+                            f"<th style='{_th2}'>BA</th><th style='{_th2}'>SLG</th>"
+                            f"<th style='{_th2}'>K%</th></tr>"
+                            f"{brows}</table>"
+                            "<div style='font-size:9px;color:#475569;margin-top:3px;'>"
+                            "SLG/BA: 🟢 green=batter-favorable · K%: 🔴 red=high strikeout risk</div>",
                             unsafe_allow_html=True,
                         )
                     else:
