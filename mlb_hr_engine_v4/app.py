@@ -626,8 +626,12 @@ def _stat_badge(col: str, val) -> str:
     return str(val)
 
 
-def _edge_col(edge: float) -> str:
+def _edge_col(edge) -> str:
     """Inline HTML text color for an edge% value."""
+    try:
+        edge = float(edge or 0)
+    except (TypeError, ValueError):
+        edge = 0.0
     if edge >= 10: return "#4ade80"
     if edge >= 5:  return "#86efac"
     if edge >= 2:  return "#f0f0f0"
