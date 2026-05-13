@@ -32,7 +32,7 @@ MLB_API = "https://statsapi.mlb.com/api/v1"
 SAVANT  = "https://baseballsavant.mlb.com"
 
 # Bump this whenever the context schema changes — forces Streamlit session-state cache to refresh.
-HVY_CACHE_VERSION = "6"
+HVY_CACHE_VERSION = "7"
 
 # {pitcher_id: {"hand_splits": {...}, "pitch_stats": {...}, "data_year": int}}
 _PITCHER_SAVANT_CACHE: dict[int, dict] = {}
@@ -110,6 +110,7 @@ def _fetch_pitcher_savant(pitcher_id: int) -> dict:
         return empty
 
     result = empty
+    _got_data = False  # True only when Savant returned usable rows
     for season in (config.CURRENT_SEASON, config.CURRENT_SEASON - 1):
         try:
             resp = _SESSION.get(
@@ -208,12 +209,15 @@ def _fetch_pitcher_savant(pitcher_id: int) -> dict:
                 }
 
             result = {"hand_splits": hand_splits, "pitch_stats": pitch_stats, "data_year": season}
+            _got_data = True
             break  # good season found — stop iterating
 
         except Exception as e:
             print(f"[pitch_mix] pitcher savant fetch failed (pid={pitcher_id}, season={season}): {e}")
 
-    _PITCHER_SAVANT_CACHE[pitcher_id] = result
+    # Only cache successful fetches — exceptions leave _got_data=False so we retry next call
+    if _got_data:
+        _PITCHER_SAVANT_CACHE[pitcher_id] = result
     return result
 
 
