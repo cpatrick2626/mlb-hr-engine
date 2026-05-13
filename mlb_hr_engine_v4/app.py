@@ -3454,7 +3454,16 @@ def tab_jig(data: dict):
                 st.session_state["_hvy_candidates_n"] = len(_hvy_candidates)
                 st.session_state[_hvy_ck] = _hvy_ctxs
 
-        _col_refresh, _ = st.columns([1, 4])
+        # Auto-clear stale empty cache on each rerun
+        _cached_ctxs = st.session_state.get(_hvy_ck, {})
+        if _cached_ctxs:
+            _cand_count  = len([p for p in all_players if p.get("best_american")])
+            _has_arsenal = sum(1 for _c in _cached_ctxs.values() if _c.get("pitcher_arsenal"))
+            if _cand_count > 0 and _has_arsenal / max(_cand_count, 1) < 0.20:
+                st.session_state.pop(_hvy_ck, None)
+                st.rerun()
+
+        _col_refresh, _col_status = st.columns([1, 4])
         with _col_refresh:
             if st.button("🔄 Refresh Pitch Data", key="hvy_refresh"):
                 # Clear both the session-state cache AND the module-level
@@ -3463,7 +3472,23 @@ def tab_jig(data: dict):
                 _pm_clear.clear_caches()
                 _ar_clear.clear_caches()
                 st.session_state.pop(_hvy_ck, None)
+                # Also clear module-level pitcher cache so Savant is re-queried
+                try:
+                    from clients.pitch_mix import _PITCHER_SAVANT_CACHE, _H2H_CACHE, _BATTER_PT_CACHE
+                    _PITCHER_SAVANT_CACHE.clear()
+                    _H2H_CACHE.clear()
+                    _BATTER_PT_CACHE.clear()
+                except Exception:
+                    pass
                 st.rerun()
+        with _col_status:
+            _cached_now = st.session_state.get(_hvy_ck, {})
+            _n_with_ar  = sum(1 for _c in _cached_now.values() if _c.get("pitcher_arsenal"))
+            _n_total    = len([p for p in all_players if p.get("best_american")])
+            if _n_with_ar > 0:
+                st.caption(f"Pitch data loaded: {_n_with_ar}/{_n_total} pitchers · v{_HVY_VER}")
+            else:
+                st.caption(f"No pitch data cached yet · click Refresh · v{_HVY_VER}")
 
         _render_hvy_views(st.session_state.get(_hvy_ck, {}))
 
