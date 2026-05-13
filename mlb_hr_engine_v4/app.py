@@ -3324,6 +3324,21 @@ def tab_jig(data: dict):
             st.write(f"**Gate:** HVY ≥ {hvy_score_min} | "
                      f"xSLG {hvy_slg_min} ISO {hvy_iso_min} HH {hvy_hh_min} "
                      f"Brl {hvy_brl_min} SS {hvy_ss_min} PullAIR {hvy_pa_min}")
+            _savant_ok = st.session_state.get("_hvy_savant_ok")
+            _cand_n    = st.session_state.get("_hvy_candidates_n", 0)
+            _ctx_with_data = sum(
+                1 for ctx in hvy_contexts.values()
+                if ctx.get("pitcher_arsenal") or ctx.get("batter_vs")
+            )
+            if _savant_ok is False:
+                st.error(
+                    f"⚠️ Savant unreachable — all {_cand_n} player fetches returned empty. "
+                    "This usually means the server IP is being rate-limited or blocked by "
+                    "Baseball Savant. Click **Refresh Pitch Data** to retry."
+                )
+            else:
+                st.write(f"**Savant data:** {_ctx_with_data} / {len(hvy_contexts)} contexts have pitch data "
+                         f"({_cand_n} candidates loaded)")
 
         _hq, _hp, _ha, _hpr = st.tabs([
             "📱 Quick Picks",
@@ -3414,10 +3429,15 @@ def tab_jig(data: dict):
         from clients.pitch_mix import HVY_CACHE_VERSION as _HVY_VER
         _hvy_ck = f"hvy_ctx_{data.get('date', '')}_{_HVY_VER}"
         if _hvy_ck not in st.session_state:
-            _hvy_candidates = [p for p in all_players if p.get("best_american")]
+            # Include ALL players with a player_id — not just those with odds.
+            # The previous best_american filter caused empty contexts for every
+            # player shown in the tab before odds were posted (or when odds keys
+            # weren't loaded), making all four pitch-mix sections blank.
+            _hvy_candidates = [p for p in all_players if p.get("player_id")]
+            _unique_pitchers = len({p.get("pitcher_id") for p in _hvy_candidates if p.get("pitcher_id")})
             _spinner_msg = (
                 f"Loading pitch mix data for {len(_hvy_candidates)} players "
-                f"across {len({p.get('pitcher_id') for p in _hvy_candidates if p.get('pitcher_id')})} pitchers…"
+                f"across {_unique_pitchers} pitchers…"
             )
             with st.spinner(_spinner_msg):
                 from clients import arsenal as _ar_client
@@ -3427,10 +3447,13 @@ def tab_jig(data: dict):
                 except Exception:
                     _ar_data = {}
                 _hvy_ctxs = _pm_client.load_hvy_contexts_batch(_hvy_candidates, _ar_data)
-                for _p in all_players:
-                    _pid = _p.get("player_id")
-                    if _pid and _pid not in _hvy_ctxs:
-                        _hvy_ctxs[_pid] = {}
+                # Savant connectivity check — surfaces server-side blocks in the UI
+                _savant_ok = any(
+                    bool(ctx.get("pitcher_arsenal") or ctx.get("batter_vs"))
+                    for ctx in _hvy_ctxs.values()
+                )
+                st.session_state["_hvy_savant_ok"] = _savant_ok
+                st.session_state["_hvy_candidates_n"] = len(_hvy_candidates)
                 st.session_state[_hvy_ck] = _hvy_ctxs
 
         _col_refresh, _ = st.columns([1, 4])
