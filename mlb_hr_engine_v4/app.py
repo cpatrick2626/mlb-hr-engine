@@ -70,6 +70,7 @@ st.markdown("""
 # Fix path for both local and Streamlit Cloud
 current_dir = Path(__file__).parent
 sys.path.insert(0, str(current_dir))
+from clients.pull_air import resolve_pull_air_pct
 
 # Debug module loading for Streamlit Cloud
 try:
@@ -2783,10 +2784,7 @@ def tab_jig(data: dict):
         hh       = _pf(p.get("hard_hit"))
         brl      = _pf(p.get("barrel_pct"))
         ss       = _pf(p.get("sweet_spot_pct"))   # HR launch window proxy (8–32°)
-        pull     = _pf(p.get("pull_pct"))
-        fb       = _pf(p.get("fb_pct"))
-        ld       = _pf(p.get("ld_pct"))
-        pull_air = pull * (fb + ld) / 100.0        # pulled airborne contact only
+        pull_air = resolve_pull_air_pct(p)
         return slg, iso, hh, brl, ss, pull_air
 
     def _slg_label(p):
