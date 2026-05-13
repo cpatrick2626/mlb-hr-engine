@@ -35,6 +35,8 @@ def tab_advanced_strategies(data: dict, parlays_callback=None):
 
     def _ato_d(american) -> float:
         american = int(american)
+        if not american:
+            return 1.01
         if american >= 100:
             return (american / 100.0) + 1
         return (100.0 / abs(american)) + 1
@@ -201,22 +203,22 @@ def tab_advanced_strategies(data: dict, parlays_callback=None):
     strategy_type = st.selectbox(
         "Select Strategy Type",
         [
-            "🎰 Parlays",
-            "Correlation Parlays",
-            "Team Stacks",
-            "Value Bomb Parlays",
-            "Power Profile Parlays",
-            "Lineup Heart Parlays",
-            "Park Monster Parlays",
-            "Pitcher Target Parlays",
-            "Platoon Advantage Parlays",
-            "Weather Boost Parlays",
-            "Hot Streak Parlays",
             "Stars Aligned",
+            "Multi-Edge Confirmation",
+            "Power Profile Parlays",
+            "Pitcher Target Parlays",
             "xStats Regression",
             "Short Rest Pitcher Target",
+            "Platoon Advantage Parlays",
+            "Hot Streak Parlays",
+            "Park Monster Parlays",
+            "Weather Boost Parlays",
+            "Correlation Parlays",
+            "Team Stacks",
+            "Lineup Heart Parlays",
+            "Value Bomb Parlays",
+            "🎰 Parlays",
             "Long Shot Value",
-            "Multi-Edge Confirmation",
             "Same-Game Builder",
             "Hedge Calculator",
             "Progressive Staking",
