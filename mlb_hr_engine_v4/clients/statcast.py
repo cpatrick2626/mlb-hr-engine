@@ -330,20 +330,6 @@ def statcast_summary(
     }
 
 
-def pulled_air_ball_metric(player_id: int, batter_data: dict[int, dict]) -> float:
-    """
-    Joint pull × fly-ball probability, normalized to league average = 1.0.
-    Captures the interaction between pull tendency and air-ball rate — a pulled
-    fly ball is far more likely to be a HR than an opposite-field fly ball.
-    Returns a raw multiplier [0.50, 1.80] used by probability.pulled_air_ball_factor().
-    """
-    stats = batter_data.get(player_id) or {}
-    pull_pct = _safe(stats, "pull_pct", LEAGUE_AVG_PULL_PCT, lo=0.0, hi=1.0)
-    fb_pct   = _safe(stats, "fb_pct",   LEAGUE_AVG_FB_PCT,   lo=0.0, hi=1.0)
-    league_joint = LEAGUE_AVG_PULL_PCT * LEAGUE_AVG_FB_PCT
-    result = (pull_pct * fb_pct) / league_joint if league_joint > 0 else 1.0
-    return _clamp(result, 0.50, 1.80)
-
 
 # ── Internal merge helpers ─────────────────────────────────────────────────────
 

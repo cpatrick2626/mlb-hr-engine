@@ -96,15 +96,3 @@ def temp_factor(temp_f: float) -> float:
     return max(0.82, min(1.08, 1.0 + adj))
 
 
-def humidity_factor(humidity_pct: float, is_dome: bool = False) -> float:
-    """
-    Adjusts HR carry based on relative humidity.
-    Denser humid air reduces ball flight; dry air increases carry.
-    Baseline 50% RH → 1.0. Effect: ±0.5% per 10 RH points from baseline.
-    Caps at [0.96, 1.04] — smaller than temp since humidity effect is secondary.
-    Domes have controlled humidity — always return 1.0.
-    """
-    if is_dome:
-        return 1.0
-    adj = -0.0005 * (humidity_pct - 50.0)
-    return round(max(0.96, min(1.04, 1.0 + adj)), 4)
