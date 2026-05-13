@@ -1053,6 +1053,7 @@ def _apply_ui_filters(
     min_ev: float,
     min_edge: float,
     cutoff_utc_hour: int | None = None,
+    min_confidence: float = 0,
 ) -> list:
     """Re-filter all_players using sidebar thresholds (post-cache, no reload needed)."""
     import math as _math
@@ -1071,6 +1072,8 @@ def _apply_ui_filters(
         if _safe_float(p.get("ev_pct"), -999) < min_ev:
             continue
         if _safe_float(p.get("edge_pct"), -999) < min_edge:
+            continue
+        if _safe_float(p.get("confidence"), 0) < min_confidence:
             continue
         if _safe_float(p.get("expected_pa"), 0) < config.MIN_PA_THRESHOLD:
             continue
@@ -1134,7 +1137,10 @@ def _render_qualified_table(
             f"⚠️ NOW: {pc['new']}" if pc
             else _pitcher_label(p.get("pitcher_name", "TBD"), pit_fac, plat_fac)
         )
+        _tier     = p.get("confidence_tier", "C")
+        _tier_lbl = {"S": "🌟 S", "A": "✅ A", "B": "🟡 B", "C": "🔴 C"}.get(_tier, _tier)
         rows.append({
+            "Tier":    _tier_lbl,
             "Rating":  ("📈 " if is_steam else "") + _pick_rating(ev, edge, model_p, conf),
             "#":       str(p.get("rank", "")),
             "Player":  name,
@@ -1219,6 +1225,14 @@ def _render_qualified_table(
         selection_mode="single-row",
         key=f"picks_df_{key_suffix}_{_tver}",
         column_config={
+            "Tier":    st.column_config.TextColumn("Tier",
+                help=(
+                    "Confidence tier — requires BOTH confidence AND edge to clear the bar.\n\n"
+                    "🌟 S — Conf ≥70 AND Edge ≥8%: Elite. Act with conviction.\n"
+                    "✅ A — Conf ≥55 AND Edge ≥5%: Strong. Core betting targets.\n"
+                    "🟡 B — Conf ≥40 AND Edge ≥3%: Solid. Worth standard size.\n"
+                    "🔴 C — Below B thresholds: Noisy or thin. Reduce size or skip."
+                )),
             "Rating":  st.column_config.TextColumn("Rating",
                 help=(
                     "Pick quality tier based on EV%, Edge%, and model Confidence.\n\n"
@@ -1235,7 +1249,7 @@ def _render_qualified_table(
                     "Skip unless odds improve or you have strong conviction."
                 )),
             "#":       st.column_config.TextColumn("#",
-                help="Composite rank: 40% EV% + 35% Edge% + 25% Confidence"),
+                help="Composite rank: tier first (S→A→B→C), then confidence-weighted score"),
             "Player":  st.column_config.TextColumn("Player"),
             "Team":    st.column_config.TextColumn("Team"),
             "Opp":     st.column_config.TextColumn("Opp"),
@@ -1302,9 +1316,9 @@ def _render_qualified_table(
 
 # TAB 1 — TODAY'S PICKS
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
-def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int | None = None):
+def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int | None = None, min_confidence: float = 0):
     all_players = data.get("all_players", [])
-    ranked    = _apply_ui_filters(all_players, min_ev, min_edge, cutoff_utc_hour)
+    ranked    = _apply_ui_filters(all_players, min_ev, min_edge, cutoff_utc_hour, min_confidence)
     stats     = data.get("stats", {})
     source    = data.get("odds_source", "none")
     quota     = data.get("odds_quota", {})
@@ -1353,7 +1367,9 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
         f"Games: <b style='color:#f0f0f0'>{stats.get('games',0)}</b> &nbsp;|&nbsp; "
         f"Players: <b style='color:#f0f0f0'>{stats.get('players',0)}</b> &nbsp;|&nbsp; "
         f"Qualified: <b style='color:#FF3333'>{len(ranked)}</b> "
-        f"<span style='color:#555'>(EV≥{min_ev:.0f}% Edge≥{min_edge:.1f}%)</span> &nbsp;|&nbsp; "
+        f"<span style='color:#555'>(EV≥{min_ev:.0f}% Edge≥{min_edge:.1f}%"
+        + (f" Conf≥{min_confidence:.0f}" if min_confidence > 0 else "")
+        + f")</span> &nbsp;|&nbsp; "
         f"Odds: {odds_label} &nbsp;|&nbsp; "
         f"Statcast: <b style='color:#f0f0f0'>{n_batters}</b> batters &nbsp;|&nbsp; "
         f"{lineup_label}{age_str}"
@@ -1607,6 +1623,8 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                     _qbet     = _qp.get("bet_size") or _qp.get("bet_dollars")
                     _qev_col  = "#4ade80" if _qev >= 0 else "#f87171"
                     _qconf    = "✅" if _qspot is not None else "⏳"
+                    _qtier    = _qp.get("confidence_tier", "C")
+                    _qtier_col = {"S": "#FFD700", "A": "#4ade80", "B": "#facc15", "C": "#f87171"}.get(_qtier, "#888")
                     _qurl     = _fanduel_url(_qp["player_name"])
                     _qis_steam = _qp.get("player_name") in _steam_names
 
@@ -1678,6 +1696,10 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                         f"<div style='text-align:center; flex:1; background:#0a0a18; border-radius:6px; padding:6px 4px;'>"
                         f"<div style='font-size:18px; font-weight:700; color:{_qev_col};'>{_qev:+.1f}%</div>"
                         f"<div style='font-size:10px; color:#666;'>EV</div>"
+                        f"</div>"
+                        f"<div style='text-align:center; flex:1; background:#0a0a18; border-radius:6px; padding:6px 4px;'>"
+                        f"<div style='font-size:18px; font-weight:700; color:{_qtier_col};'>{_qtier}</div>"
+                        f"<div style='font-size:10px; color:#666;'>Tier</div>"
                         f"</div>"
                         f"</div>"
                         + (f"<div style='margin-top:6px; text-align:right;'>{_bet_str}</div>" if _qbet else "")
@@ -3816,6 +3838,7 @@ def main():
     # Read filter thresholds from session state first (sidebar sets them on each rerun)
     _min_ev   = float(st.session_state.get("min_ev",   config.MIN_EV_PCT))
     _min_edge = float(st.session_state.get("min_edge", config.MIN_EDGE_PCT))
+    _min_conf = int(st.session_state.get("min_confidence", 0))
 
 
     # â"€â"€ Sidebar â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
@@ -3894,8 +3917,23 @@ def main():
             step=0.5,
             help="Slide to -5 to show all players with odds, regardless of edge.",
         )
-        st.session_state["min_ev"]    = _min_ev
-        st.session_state["min_edge"]  = _min_edge
+        _min_conf = st.slider(
+            "Min Confidence",
+            min_value=0, max_value=80,
+            value=int(st.session_state.get("min_confidence", 0)),
+            step=5,
+            help=(
+                "Filter picks by confidence score (0 = no filter).\n\n"
+                "🔴 C-Tier: 0–39  —  noisy, small sample, or weak market\n"
+                "🟡 B-Tier: 40–54  —  solid, worth standard size\n"
+                "✅ A-Tier: 55–69  —  strong, core targets\n"
+                "🌟 S-Tier: 70+   —  elite, act with full conviction\n\n"
+                "Set to 40 to hide C-Tier plays. Set to 55 for A/S only."
+            ),
+        )
+        st.session_state["min_ev"]         = _min_ev
+        st.session_state["min_edge"]       = _min_edge
+        st.session_state["min_confidence"] = _min_conf
 
         st.divider()
 
@@ -3935,9 +3973,11 @@ def main():
         if _slip_data:
             _fd_min_ev   = float(st.session_state.get("min_ev",   config.MIN_EV_PCT))
             _fd_min_edge = float(st.session_state.get("min_edge", config.MIN_EDGE_PCT))
+            _fd_min_conf = int(st.session_state.get("min_confidence", 0))
             _odds_players = _apply_ui_filters(
                 _slip_data.get("all_players", []), _fd_min_ev, _fd_min_edge,
                 cutoff_utc_hour=st.session_state.get("cutoff_utc_hour"),
+                min_confidence=_fd_min_conf,
             )
             if not _odds_players:
                 _odds_players = sorted(
@@ -4350,6 +4390,9 @@ The app will open full-screen like a native app.
             st.caption("No API key — get one free at the-odds-api.com")
         st.caption(f"Active EV filter: {_min_ev:.1f}%")
         st.caption(f"Active Edge filter: {_min_edge:.1f}%")
+        if _min_conf > 0:
+            _tier_hint = {0: "", 40: " (B+ only)", 55: " (A/S only)", 70: " (S only)"}.get(_min_conf, "")
+            st.caption(f"Active Confidence filter: {_min_conf}{_tier_hint}")
         backend = pnl_tracker.storage_backend()
         st.caption(f"Storage: {'☁️ Sheets' if backend == 'sheets' else '💾 Local CSV'}")
 
@@ -4371,7 +4414,8 @@ The app will open full-screen like a native app.
         try:
             data = get_data()
             tab_picks(data, _min_ev, _min_edge,
-                      cutoff_utc_hour=st.session_state.get("cutoff_utc_hour"))
+                      cutoff_utc_hour=st.session_state.get("cutoff_utc_hour"),
+                      min_confidence=_min_conf)
         except Exception as _e:
             st.error(f"Picks tab error: {_e}")
             if __import__("os").getenv("DEBUG") == "true":

@@ -236,7 +236,13 @@ def tab_advanced_strategies(data: dict, parlays_callback=None):
             oscar_grind_stake
         )
 
-        all_players = data.get("all_players", [])
+        all_players = sorted(
+            data.get("all_players", []),
+            key=lambda p: (
+                {"S": 0, "A": 1, "B": 2, "C": 3}.get(p.get("confidence_tier", "C"), 3),
+                -p.get("score", 0),
+            ),
+        )
         ranked = data.get("ranked", [])
 
         # Build lookup for modal triggers — set session_state["show_modal"]; fired by main()

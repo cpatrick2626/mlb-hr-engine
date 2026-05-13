@@ -508,6 +508,21 @@ def load_game_data(
     ranked      = ranker.rank_picks(qualified)
     all_by_model = ranker.rank_all_by_model(all_players)
 
+    # Stamp tier + score on every player so strategies_ui can sort by confidence
+    _ranked_map = {p.get("player_name"): p for p in ranked}
+    for p in all_players:
+        if p.get("player_name") in _ranked_map:
+            # Qualified picks already have tier/score from rank_picks
+            _rp = _ranked_map[p["player_name"]]
+            p["confidence_tier"] = _rp.get("confidence_tier", "C")
+            p["score"]           = _rp.get("score", 0)
+        else:
+            ev   = p.get("ev_pct", 0)
+            edge = p.get("edge_pct", 0)
+            conf = p.get("confidence", 0)
+            p["confidence_tier"] = ranker.confidence_tier(conf, edge)
+            p["score"]           = ranker.composite_score(ev, edge, conf)
+
     # Auto parlay combos (legacy leg-count view + new profile-based view)
     auto_parlays    = parlay_engine.build_auto_parlays(ranked)
     profile_parlays = build_profile_parlays(all_players)
