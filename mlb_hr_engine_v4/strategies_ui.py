@@ -1195,39 +1195,50 @@ def tab_advanced_strategies(data: dict, parlays_callback=None):
 
                 candidates = []
                 for p in all_players:
-                    xslg = _to_float(p.get("xslg") or p.get("x_slg"))
-                    slg  = _to_float(p.get("slg"))
-                    if xslg <= 0 or slg <= 0:
-                        continue
-                    regression_gap = (xslg - slg) / slg if slg > 0 else 0
-                    if regression_gap < 0.15:
-                        continue
                     if p.get("model_prob", 0) < 0.06:
                         continue
+                    xslg = _to_float(p.get("xslg"))
+                    slg  = _to_float(p.get("actual_slg"))  # was p.get("slg") — wrong field
+
+                    # Use precomputed xslg_diff when available as an absolute cross-check
+                    xslg_diff_pre = p.get("xslg_diff")  # xslg_float - actual_slg (pipeline)
+
+                    if xslg <= 0 or slg <= 0:
+                        continue
+
+                    abs_gap      = xslg - slg
+                    rel_gap      = abs_gap / slg if slg > 0 else 0
+
+                    # Qualify on either absolute gap ≥ 0.020 SLG points OR relative gap ≥ 10%
+                    if abs_gap < 0.020 and rel_gap < 0.10:
+                        continue
+
                     candidates.append({
                         **p,
-                        "_xslg": xslg,
-                        "_slg":  slg,
-                        "_gap":  regression_gap,
+                        "_xslg":     xslg,
+                        "_slg":      slg,
+                        "_abs_gap":  round(abs_gap, 3),
+                        "_gap":      rel_gap,
                     })
-                return sorted(candidates, key=lambda x: x["_gap"], reverse=True)[:15]
+                return sorted(candidates, key=lambda x: x["_abs_gap"], reverse=True)[:15]
 
             _xsr_key = tuple(p.get("player_name", "") for p in all_players)
             xsr_players = _cached_xstats_regression(_xsr_key)
 
             if xsr_players:
-                # Deduplicate: each player once
                 _used_xsr: set = set()
                 for i, p in enumerate(xsr_players, 1):
                     name = p.get("player_name", "")
                     if name in _used_xsr:
                         continue
                     _used_xsr.add(name)
-                    gap_pct = p["_gap"] * 100
+                    abs_gap = p["_abs_gap"]
+                    rel_pct = p["_gap"] * 100
                     label = (
                         f"#{i} {name}  |  "
                         f"xSLG {p['_xslg']:.3f} vs SLG {p['_slg']:.3f}  |  "
-                        f"Gap +{gap_pct:.1f}%  |  Model {p.get('model_prob',0)*100:.1f}%"
+                        f"Gap +{abs_gap:.3f} ({rel_pct:+.1f}%)  |  "
+                        f"Model {p.get('model_prob',0)*100:.1f}%"
                     )
                     with st.expander(label):
                         col1, col2, col3 = st.columns(3)
@@ -1235,12 +1246,16 @@ def tab_advanced_strategies(data: dict, parlays_callback=None):
                             st.metric("xSLG", f"{p['_xslg']:.3f}")
                             st.metric("Actual SLG", f"{p['_slg']:.3f}")
                         with col2:
-                            st.metric("Regression Gap", f"+{gap_pct:.1f}%")
-                            st.metric("Model Prob", f"{p.get('model_prob',0)*100:.1f}%")
+                            st.metric("Gap (pts)", f"+{abs_gap:.3f}")
+                            st.metric("Gap (rel)", f"+{rel_pct:.1f}%")
                         with col3:
-                            st.metric("Market Odds", _fmt_american(p.get("best_american")))
+                            st.metric("Model Prob", f"{p.get('model_prob',0)*100:.1f}%")
                             st.metric("EV%", f"{p.get('ev_pct',0):+.1f}%")
-                        _player_row(name, p.get("team",""), f"xSLG {p['_xslg']:.3f}  ·  SLG {p['_slg']:.3f}  ·  Gap +{gap_pct:.1f}%", f"modal_xsr_{i}")
+                        _player_row(
+                            name, p.get("team", ""),
+                            f"xSLG {p['_xslg']:.3f}  ·  SLG {p['_slg']:.3f}  ·  Gap +{abs_gap:.3f}  ·  {_fmt_american(p.get('best_american'))}",
+                            f"modal_xsr_{i}",
+                        )
                         fd_col, _ = st.columns([1, 2])
                         with fd_col:
                             if st.button("📲 Add to FD Slip", key=f"fd_xsr_{i}"):
@@ -1248,7 +1263,7 @@ def tab_advanced_strategies(data: dict, parlays_callback=None):
                                 if not n:
                                     st.info("Already in slip.")
             else:
-                st.warning("No xStats regression candidates found — xSLG data may not be loaded yet.")
+                st.warning("No xStats regression candidates found — xSLG or SLG data may not be available yet.")
                 st.link_button("📲 Browse FanDuel HR Props", _fd_url())
 
         elif strategy_type == "Short Rest Pitcher Target":
