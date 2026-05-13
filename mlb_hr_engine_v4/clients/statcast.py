@@ -11,12 +11,12 @@ missing players for early-season coverage. statcast leaderboard takes precedence
 on any overlapping fields.
 
 Batter power multiplier (7 signals, evidence-based weights):
-  Barrel%      38%  — ~57% of barrels become HRs; the most HR-specific metric
+  Barrel%      40%  — ~57% of barrels become HRs; the most HR-specific metric
   FB%          15%  — HRs require air balls; high FB% = more HR opportunities
-  xSLG         14%  — contact quality proxy; stabilizes in ~50 PA vs ~300 for HR/PA
-  Sweet Spot%  10%  — LA 8-32°: the exact angle band where HRs happen (replaces avg LA)
-  Hard Hit%    10%  — EV >95 mph; secondary contact quality signal
-  Pull%         8%  — ~43% of MLB HRs are pulled; pull side = short porch
+  Sweet Spot%  12%  — LA 8-32°: partially independent of barrel; broader contact quality
+  Pull%        10%  — ~43% of MLB HRs are pulled; fully independent signal
+  xSLG         10%  — contact quality proxy; reduced (redundant with barrel cluster)
+  Hard Hit%     8%  — EV >95 mph; reduced (correlated with barrel/EV cluster)
   Exit Velo     5%  — raw power ceiling
 
 Pitcher contact-quality factor (4 signals):
@@ -213,14 +213,21 @@ def batter_power_multiplier(
     fb_mult         = _clamp(fb_pct       / LEAGUE_AVG_FB_PCT,       0.55, 1.70)
     pull_mult       = _clamp(pull_pct     / LEAGUE_AVG_PULL_PCT,     0.65, 1.55)
 
-    # Barrel% raised to 38% (strongest HR-specific signal); xSLG and Pull trimmed to fund it.
+    # Weight rationale (post-redundancy audit):
+    # Barrel% → 40%: most HR-specific metric; independent of FB rate
+    # FB%     → 15%: independent dimension (air vs ground)
+    # Sweet%  → 12%: partially independent from barrel (measures LA 8-32° exactly)
+    # Pull%   → 10%: independent dimension (short porch HR conversion)
+    # xSLG    → 10%: reduced from 14%; correlated with barrel% (r~0.75)
+    # Hard Hit → 8%: reduced from 10%; correlated with barrel+EV (r~0.65)
+    # Exit Velo → 5%: mostly captured by barrel and hard-hit already
     composite = (
-        barrel_mult       * 0.38
+        barrel_mult       * 0.40
         + fb_mult         * 0.15
-        + xslg_mult       * 0.14
-        + pull_mult       * 0.08
-        + sweet_spot_mult * 0.10
-        + hard_hit_mult   * 0.10
+        + sweet_spot_mult * 0.12
+        + pull_mult       * 0.10
+        + xslg_mult       * 0.10
+        + hard_hit_mult   * 0.08
         + ev_mult         * 0.05
     )
     raw_composite = _clamp(composite, 0.45, 1.75)

@@ -172,6 +172,13 @@ def calibration_report(rows: list[dict], date_range: str) -> None:
     # ── Top performers vs misses ──────────────────────────────────────────────
     _print_top_performers(rows)
 
+    # ── Feature importance ────────────────────────────────────────────────────
+    try:
+        from backtest.feature_importance import report as _fi_report
+        _fi_report(rows)
+    except Exception as _e:
+        console.print(f"[dim]Feature importance skipped: {_e}[/dim]")
+
 
 def _est_odds(model_prob: float) -> int:
     """Estimate market odds (American) for a given model probability."""

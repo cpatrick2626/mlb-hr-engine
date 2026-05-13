@@ -306,6 +306,13 @@ def _enrich_with_ev(player):
     except (ValueError, TypeError):
         pitcher_hr9 = 0.0
 
+    # Parse sweet_spot_pct from formatted string ("30.5%") to float
+    _ss_str = str(player.get("sweet_spot_pct", "")).replace("%", "").strip()
+    try:
+        _sweet_spot_f = float(_ss_str) / 100.0 if _ss_str and _ss_str != "--" else None
+    except (ValueError, TypeError):
+        _sweet_spot_f = None
+
     player["confidence"] = prob.confidence_score(
         player.get("season_pa", 0), player.get("recent_pa", 0),
         model_p, market_p,
@@ -315,6 +322,13 @@ def _enrich_with_ev(player):
         xslg=_safe_float(player.get("xslg")),
         lineup_confirmed=bool(player.get("lineup_spot")),
         n_books=player.get("n_books", 1),
+        sweet_spot_pct=_sweet_spot_f,
+        park_factor=float(player.get("park_factor", 1.0) or 1.0),
+        weather_factor=float(player.get("weather_factor", 1.0) or 1.0),
+        platoon_factor=float(player.get("platoon_factor", 1.0) or 1.0),
+        arsenal_fac=float(player.get("arsenal_factor", 1.0) or 1.0),
+        streak_factor=float(player.get("streak_factor", 1.0) or 1.0),
+        pitcher_factor=float(player.get("pitcher_factor", 1.0) or 1.0),
     )
     player["bet_dollars"] = sizing.bet_dollars(model_p, player["best_american"])
     return player

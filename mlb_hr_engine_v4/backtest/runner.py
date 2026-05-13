@@ -103,16 +103,17 @@ def _score_player(r: dict, date_str: str, batter_data: dict, pitcher_data: dict)
     # Pitcher factor — full three-component model (HR/FB + Statcast contact + K/GB)
     pitcher_id   = r.get("pitcher_id")
     pitcher_hand = ""
+    hr_fb_fac = k_gb_fac = pit_factor = 1.0   # defaults when no pitcher data
+    hr9 = 0.0
     if pitcher_id:
         pit_key = (pitcher_id, date_str)
         if pit_key not in _pitcher_cache:
             _pitcher_cache[pit_key] = mlb_stats.get_pitcher_stats_as_of(pitcher_id, date_str)
         pit_stats      = _pitcher_cache[pit_key]
         sc_pit_fac     = statcast_client.pitcher_contact_suppressor(pitcher_id, pitcher_data)
+        hr_fb_fac      = prob.pitcher_hr_factor(pit_stats)
         k_gb_fac       = prob.pitcher_k_gb_suppressor(pit_stats)
-        pit_factor     = prob.pitcher_combined_factor(
-            prob.pitcher_hr_factor(pit_stats), sc_pit_fac, k_gb_fac
-        )
+        pit_factor     = prob.pitcher_combined_factor(hr_fb_fac, sc_pit_fac, k_gb_fac)
         # Recent form — starts before date_str only
         recent_pit_stats = mlb_stats.get_pitcher_recent_stats_as_of(pitcher_id, date_str)
         recent_pit_fac   = prob.pitcher_recent_factor(recent_pit_stats)
@@ -124,16 +125,15 @@ def _score_player(r: dict, date_str: str, batter_data: dict, pitcher_data: dict)
         # Pitcher handedness for platoon (lru_cached)
         pitcher_info = mlb_stats.get_player_info(pitcher_id)
         pitcher_hand = pitcher_info.get("pitchHand", {}).get("code", "")
-    else:
-        pit_factor = 1.0
+        # Pitcher HR/9 for feature importance
+        _pit_ip  = mlb_stats.parse_ip(pit_stats.get("inningsPitched", "0.0"))
+        _pit_hrs = int(pit_stats.get("homeRuns", 0))
+        hr9 = round((_pit_hrs / _pit_ip) * 9.0, 2) if _pit_ip >= 5 else 0.0
 
     # Platoon factor
     plat_factor = prob.platoon_factor(splits, pitcher_hand, batter_side, season_pa)
 
     # Batter-pitcher interaction: elite power hitter vs hittable pitcher synergy.
-    # Uses pit_factor (full combined signal) instead of sc_pit_fac alone — sc_pit_fac
-    # is already embedded in pit_factor at 40% weight, so using it directly double-counted
-    # the Statcast signal. Coefficient reduced 0.35→0.20 to match reduced amplitude.
     batter_excess  = max(0.0, power_mult - 1.0)
     pitcher_excess = max(0.0, pit_factor - 1.0)
     interaction    = batter_excess * pitcher_excess * 0.20
@@ -148,11 +148,29 @@ def _score_player(r: dict, date_str: str, batter_data: dict, pitcher_data: dict)
 
     return {
         **r,
-        "model_prob":   round(model_prob, 4),
-        "hr_rate":      round(hr_rate, 5),
-        "season_pa":    season_pa,
-        "sc_source":    sc_source,
-        "has_statcast": pid in batter_data,
+        "model_prob":        round(model_prob, 4),
+        "hr_rate":           round(hr_rate, 5),
+        "season_pa":         season_pa,
+        "sc_source":         sc_source,
+        "has_statcast":      pid in batter_data,
+        # Factor values captured for feature importance analysis
+        "power_mult":        round(power_mult, 4),
+        "pk_factor":         round(pk_factor, 4),
+        "pit_factor":        round(pit_factor, 4),
+        "plat_factor":       round(plat_factor, 4),
+        "k_fac":             round(k_fac, 4),
+        "streak_fac":        round(streak_fac, 4),
+        "hr_fb_fac":         round(hr_fb_fac, 4),
+        "k_gb_fac":          round(k_gb_fac, 4),
+        "hr9":               hr9,
+        # Raw Statcast signals (independent of composite multiplier)
+        "barrel_rate":       sc_stats.get("barrel_rate"),
+        "fb_pct":            sc_stats.get("fb_pct"),
+        "sweet_spot_pct":    sc_stats.get("sweet_spot_pct"),
+        "pull_pct":          sc_stats.get("pull_pct"),
+        "exit_velocity_avg": sc_stats.get("exit_velocity_avg"),
+        "hard_hit_pct":      sc_stats.get("hard_hit_pct"),
+        "xslg":              sc_stats.get("xslg"),
     }
 
 

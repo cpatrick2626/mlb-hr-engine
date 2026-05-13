@@ -429,64 +429,104 @@ def hot_streak_factor(short_form: dict, season_stats: dict) -> float:
 
 
 def confidence_score(
-    season_pa: int, recent_pa: int,
-    model_prob: float, market_prob: float,
+    season_pa: int,
+    recent_pa: int,
+    model_prob: float,
+    market_prob: float,
     statcast_source: str = "none",
-    has_statcast: bool = False,   # legacy; ignored when statcast_source is set
+    has_statcast: bool = False,      # legacy; ignored when statcast_source is set
     barrel_rate: float = 0.0,
     pitcher_hr9: float = 0.0,
     xslg: float = None,
     lineup_confirmed: bool = True,
     n_books: int = 1,
+    # Extended context signals — all optional for backward compatibility
+    sweet_spot_pct: float = None,
+    park_factor: float = 1.0,
+    weather_factor: float = 1.0,
+    platoon_factor: float = 1.0,
+    arsenal_fac: float = 1.0,
+    streak_factor: float = 1.0,
+    pitcher_factor: float = 1.0,
 ) -> float:
     """
     Confidence score 0–100. Higher = more reliable signal.
 
-    Component breakdown:
-      Sample size      0–35  (season PA / 400, capped at 1.0)
-      Recent form      0–20  (recent PA / 80, capped at 1.0)
-      Model/market SNR 0–28  (edge / standard error, signal-to-noise ratio)
-      Statcast source  0– 8  (current=+8, blended=+5, prior=+3, none=+0)
-      Barrel rate      0– 5  (>2× league avg: elite power-contact tier)
-      xSLG           -2– 3   (>0.500: +3, <0.350: -2, mirror of xslg_bonus in scoring)
-      Pitcher HR/9     0– 4  (>1.25× league avg: notably hittable starter)
-      Lineup confirmed 0, -8  (-8 if lineup not yet posted; mirrors 0.82 prob discount)
-      Market consensus 0–4   (+2 for 2 books, +4 for 3+ books: consensus is more reliable)
+    Five-component design:
+      Data Quality       0–30  season PA + Statcast source reliability
+      Contact Quality    0–25  barrel%, xSLG, sweet spot% vs league averages
+      Pitcher Matchup    0–20  HR/9 above avg + arsenal factor + platoon edge
+      Market Signal      0–25  edge SNR (signal-to-noise) + book consensus
+      Penalties        –22 max  lineup, cold streak, park suppressor, elite pitcher
+
+    Contact and pitcher components use continuous deviation scoring vs league
+    average so small differences still register — not just binary thresholds.
     """
-    sample_conf    = min(season_pa / 400.0, 1.0) * 35.0
-    recent_conf    = min(recent_pa / 80.0,  1.0) * 20.0
-    _SC_BONUS      = {"current": 8.0, "blended": 5.0, "prior": 3.0}
-    statcast_bonus = _SC_BONUS.get(statcast_source, 8.0 if has_statcast else 0.0)
+    # ── 1. Data Quality (0–30) ─────────────────────────────────────────────────
+    pa_conf   = min(season_pa / 350.0, 1.0) * 18.0
+    _SC_BONUS = {"current": 12.0, "blended": 8.0, "prior": 5.0}
+    sc_conf   = _SC_BONUS.get(statcast_source, 12.0 if has_statcast else 0.0)
+    data_quality = pa_conf + sc_conf                                   # 0–30
 
-    # Threshold bonuses — tied to league constants so they adapt when config is refreshed.
-    # Barrel: 2× league avg (~11% at 2026 avg of 5.5%) captures elite power-contact tier.
-    # xSLG: >0.500 (~1 SD above league avg 0.407) captures elite power ceiling independently.
-    # Pitcher: 1.25× league avg HR/9 (~1.36 at 2026 avg of 1.09) captures notably hittable tier.
-    barrel_bonus  = 5.0 if barrel_rate > config.LEAGUE_AVG_BARREL_RATE * 2.0 else 0.0
-    if xslg is None:
-        xslg_bonus = 0.0
-    elif xslg > 0.500:
-        xslg_bonus = 3.0
-    elif xslg < 0.350:
-        xslg_bonus = -2.0   # penalize well-below-avg contact quality symmetrically
+    # ── 2. Contact Quality (0–25) ─────────────────────────────────────────────
+    # Barrel% (0–12): 6 pts at league avg; scales with deviation from avg
+    barrel_dev  = (barrel_rate - config.LEAGUE_AVG_BARREL_RATE) / max(config.LEAGUE_AVG_BARREL_RATE, 0.001)
+    barrel_conf = max(0.0, min(12.0, 6.0 + 6.0 * barrel_dev))
+
+    # xSLG (0–8): 4 pts at league avg
+    if xslg is not None:
+        xslg_dev  = (xslg - config.LEAGUE_AVG_XSLG) / max(config.LEAGUE_AVG_XSLG, 0.001)
+        xslg_conf = max(0.0, min(8.0, 4.0 + 4.0 * xslg_dev))
     else:
-        xslg_bonus = 0.0
-    pitcher_bonus = 4.0 if pitcher_hr9 > config.LEAGUE_AVG_HR9 * 1.25 else 0.0
+        xslg_conf = 4.0   # neutral: assume league average when no data
 
-    # Lineup confirmation: -8 if lineup not yet posted — mirrors the 0.82 model_prob discount.
-    # When lineup is confirmed we know the player is starting; unconfirmed adds roster uncertainty.
-    lineup_bonus = 0.0 if lineup_confirmed else -8.0
+    # Sweet spot% (0–5): 2.5 pts at league avg
+    if sweet_spot_pct is not None:
+        ss_dev  = (sweet_spot_pct - config.LEAGUE_AVG_SWEET_SPOT) / max(config.LEAGUE_AVG_SWEET_SPOT, 0.001)
+        ss_conf = max(0.0, min(5.0, 2.5 + 2.5 * ss_dev))
+    else:
+        ss_conf = 2.5     # neutral when no Statcast sweet-spot data
 
-    # Market consensus: more books pricing the same player = more reliable no-vig baseline.
-    # Single-book pricing can be stale or an outlier; 3+ books form a genuine market.
-    books_bonus = 4.0 if n_books >= 3 else (2.0 if n_books == 2 else 0.0)
+    contact_quality = barrel_conf + xslg_conf + ss_conf               # 0–25
 
-    edge = abs(model_prob - market_prob)
-    se   = math.sqrt(model_prob * (1 - model_prob) / max(season_pa, 1))
-    snr  = min(edge / (se + 0.005), 3.0) / 3.0
-    edge_conf = snr * 28.0
+    # ── 3. Pitcher Matchup (0–20) ──────────────────────────────────────────────
+    # HR/9 (0–8): 4 pts at avg; higher HR/9 = more favorable matchup
+    if pitcher_hr9 > 0 and config.LEAGUE_AVG_HR9 > 0:
+        hr9_dev  = (pitcher_hr9 - config.LEAGUE_AVG_HR9) / config.LEAGUE_AVG_HR9
+        pit_conf = max(0.0, min(8.0, 4.0 + 4.0 * hr9_dev))
+    else:
+        pit_conf = 4.0    # neutral when pitcher data unavailable
 
-    total = (sample_conf + recent_conf + edge_conf
-             + statcast_bonus + barrel_bonus + xslg_bonus + pitcher_bonus
-             + lineup_bonus + books_bonus)
+    # Arsenal factor (0–7): 3.5 at neutral (1.0); > 1.0 = hittable pitcher arsenal
+    arsenal_conf = max(0.0, min(7.0, 3.5 + 7.0 * (arsenal_fac - 1.0)))
+
+    # Platoon edge (0–5): 2.5 at neutral (1.0)
+    plat_conf = max(0.0, min(5.0, 2.5 + 5.0 * (platoon_factor - 1.0)))
+
+    pitcher_matchup = pit_conf + arsenal_conf + plat_conf              # 0–20
+
+    # ── 4. Market Signal (0–25) ────────────────────────────────────────────────
+    edge     = abs(model_prob - market_prob)
+    se       = math.sqrt(model_prob * (1 - model_prob) / max(season_pa, 1))
+    snr      = min(edge / (se + 0.005), 3.0) / 3.0
+    snr_conf = snr * 16.0                                              # 0–16
+
+    books_conf = 9.0 if n_books >= 3 else (5.0 if n_books == 2 else 0.0)
+
+    market_signal = snr_conf + books_conf                              # 0–25
+
+    # ── 5. Penalties ───────────────────────────────────────────────────────────
+    penalties = 0.0
+    if not lineup_confirmed:
+        penalties -= 8.0   # player may not start; 0.82 prob discount already applied
+    if streak_factor < 0.93:
+        penalties -= 3.0   # cold recent form directly conflicts with positive prediction
+    if xslg is not None and xslg < 0.350:
+        penalties -= 3.0   # below-avg contact quality undermines high model_prob
+    if pitcher_factor < 0.80:
+        penalties -= 4.0   # elite suppressor — high uncertainty on HR prediction
+    if park_factor < 0.85:
+        penalties -= 4.0   # extreme park suppressor (SF/SD class); HR opps sharply limited
+
+    total = data_quality + contact_quality + pitcher_matchup + market_signal + penalties
     return round(min(max(total, 0.0), 100.0), 1)
