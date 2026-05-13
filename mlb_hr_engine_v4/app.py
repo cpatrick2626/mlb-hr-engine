@@ -3052,15 +3052,21 @@ def tab_jig(data: dict):
         hand_splits     = ctx.get("hand_splits", {})
         h2h             = ctx.get("h2h", {})
         batter_vs       = ctx.get("batter_vs", {})
+        _data_year      = ctx.get("data_year", config.CURRENT_SEASON)
+        _yr_label       = f" ({_data_year})" if _data_year != config.CURRENT_SEASON else f" ({config.CURRENT_SEASON})"
+        _prior_note     = (f" ⚠️ *{_data_year} data — pitcher has no {config.CURRENT_SEASON} starts yet*"
+                           if _data_year != config.CURRENT_SEASON else "")
 
         from clients.pitch_mix import pitch_label, pitch_color
 
         with st.expander("📊 Pitch Mix Analysis", expanded=True):
+            if _prior_note:
+                st.caption(_prior_note)
             _c1, _c2 = st.columns([3, 2])
 
             with _c1:
                 # ── Arsenal table ──────────────────────────────────────────────
-                st.markdown("**🔥 Pitcher Arsenal**")
+                st.markdown(f"**🔥 Pitcher Arsenal{_yr_label}**")
                 if pitcher_arsenal:
                     pitches = sorted(pitcher_arsenal, key=lambda x: x.get("pitch_pct", 0), reverse=True)[:6]
                     rows = ""
@@ -3128,7 +3134,7 @@ def tab_jig(data: dict):
 
             with _c2:
                 # ── Pitcher splits vs LHB / RHB ───────────────────────────────
-                st.markdown("**📈 Pitcher Splits (2026)**")
+                st.markdown(f"**📈 Pitcher Splits{_yr_label}**")
                 bside = p.get("batter_side", "R")
                 this_hand = "L" if bside == "L" else "R"
                 for hand, lbl in [("R", "vs RHB"), ("L", "vs LHB")]:
