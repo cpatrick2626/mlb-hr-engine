@@ -1573,10 +1573,14 @@ def tab_advanced_strategies(data: dict, parlays_callback=None):
                 "regardless of how big the edge or EV is."
             )
 
+            _TIER_ORDER = {"S": 0, "A": 1, "B": 2, "C": 3}
             conf_ranked = sorted(
                 ranked,
-                key=lambda p: float(p.get("confidence") or 0),
-                reverse=True,
+                key=lambda p: (
+                    -float(p.get("confidence") or 0),
+                    _TIER_ORDER.get(p.get("confidence_tier", "C"), 3),
+                    -float(p.get("edge_pct") or 0),
+                ),
             )
 
             if not conf_ranked:
@@ -1625,23 +1629,41 @@ def tab_advanced_strategies(data: dict, parlays_callback=None):
                         )
 
                         with st.expander(_cr_label):
+                            # Prominent confidence badge
+                            _cr_bar = min(100, max(0, int(_cr_conf)))
+                            st.markdown(
+                                f"<div style='background:#0f172a;border:1px solid #1e293b;"
+                                f"border-radius:8px;padding:10px 14px;margin-bottom:8px;'>"
+                                f"<div style='display:flex;justify-content:space-between;"
+                                f"align-items:center;margin-bottom:6px;'>"
+                                f"<span style='font-size:12px;color:#94a3b8;'>Confidence Score</span>"
+                                f"<span style='font-size:26px;font-weight:900;color:{_cr_cc};'>"
+                                f"{_cr_conf:.0f}</span>"
+                                f"<span style='font-size:13px;font-weight:700;color:{_cr_tier_col};'>"
+                                f"Tier {_cr_tier}</span></div>"
+                                f"<div style='background:#1e293b;border-radius:3px;height:6px;'>"
+                                f"<div style='background:{_cr_cc};width:{_cr_bar}%;height:6px;"
+                                f"border-radius:3px;'></div></div>"
+                                f"<div style='font-size:9px;color:#374151;margin-top:2px;'>"
+                                f"0 ──────────────── 50 ──────────────── 100</div>"
+                                f"</div>",
+                                unsafe_allow_html=True,
+                            )
                             _cc1, _cc2, _cc3, _cc4 = st.columns(4)
                             with _cc1:
-                                st.metric("Confidence", f"{_cr_conf:.0f}")
-                            with _cc2:
-                                st.metric("Tier", _cr_tier)
-                            with _cc3:
                                 st.metric("Edge%", f"{_cr_edge:+.1f}%")
-                            with _cc4:
+                            with _cc2:
                                 st.metric("EV%", f"{_cr_ev:+.1f}%")
-
-                            _cc5, _cc6, _cc7 = st.columns(3)
-                            with _cc5:
+                            with _cc3:
                                 st.metric("Model%", f"{_cr_model:.1f}%")
-                            with _cc6:
+                            with _cc4:
                                 st.metric("Market%", f"{_cr_mkt:.1f}%" if _cr_mkt else "--")
-                            with _cc7:
+
+                            _cc5, _cc6 = st.columns(2)
+                            with _cc5:
                                 st.metric("Best Odds", _fmt_american(_cr_odds))
+                            with _cc6:
+                                st.metric("vs Pitcher", _cr_pit)
 
                             _player_row(
                                 _cr_name, _cr_team,

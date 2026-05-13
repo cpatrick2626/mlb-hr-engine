@@ -3226,27 +3226,41 @@ def tab_jig(data: dict):
                     _th_l = _th + "text-align:left;"
                     rows = ""
                     for px in pitches:
-                        pt   = px.get("pitch_type", "")
-                        lbl  = pitch_label(pt)
-                        pc   = pitch_color(pt)
-                        use_v = px.get('pitch_pct', 0) * 100
-                        use  = f"{use_v:.0f}%"
-                        spd  = f"{px.get('avg_speed'):.1f}" if px.get("avg_speed") else "—"
-                        whf_v = px.get('whiff_pct')
-                        whf  = f"{whf_v*100:.0f}%" if whf_v is not None else "—"
-                        hh_v  = px.get('hard_hit_pct')
+                        pt    = px.get("pitch_type", "")
+                        lbl   = pitch_label(pt)
+                        use_v = px.get("pitch_pct", 0) * 100
+                        use   = f"{use_v:.0f}%"
+                        spd   = f"{px.get('avg_speed'):.1f}" if px.get("avg_speed") else "—"
+                        # Use display fields (not formula fields) for whiff/HH/RV
+                        whf_v = px.get("display_whiff")
+                        hh_v  = px.get("display_hh")
+                        rv    = px.get("display_rv100")
+                        whf   = f"{whf_v*100:.0f}%" if whf_v is not None else "—"
                         hh_p  = f"{hh_v*100:.0f}%" if hh_v is not None else "—"
-                        rv    = px.get("rv_per100")
                         rv_s  = f"{rv:+.1f}" if rv is not None else "—"
-                        # Cell colors: Use% — higher = darker bg; Whiff — green=high, red=low; HH% — red=high; RV/100 — negative=green (bad for batter)
-                        use_bg  = ("#14532d" if use_v >= 35 else "#166534" if use_v >= 20
-                                   else "#0f172a")
-                        whf_bg  = ("#14532d" if (whf_v or 0) >= 0.30 else "#166534" if (whf_v or 0) >= 0.22
-                                   else "#7f1d1d" if (whf_v or 0) < 0.15 else "#0f172a")
-                        hh_bg   = ("#7f1d1d" if (hh_v or 0) >= 0.50 else "#450a0a" if (hh_v or 0) >= 0.45
-                                   else "#166534" if (hh_v or 0) < 0.35 else "#0f172a")
-                        rv_bg   = ("#14532d" if (rv or 0) < -1.0 else "#166534" if (rv or 0) < 0
-                                   else "#7f1d1d" if (rv or 0) > 1.0 else "#450a0a" if (rv or 0) > 2.5 else "#0f172a")
+
+                        # Favorability score for pitch label color:
+                        # negative = pitcher-favoring, positive = batter-favoring
+                        _fav = 0.0
+                        _LG_WHIFF = 0.245
+                        if whf_v is not None: _fav -= (whf_v - _LG_WHIFF) * 3.0   # high whiff → pitcher edge
+                        if rv    is not None: _fav += rv / 4.0                      # pos RV → batter edge
+                        if hh_v  is not None: _fav += (hh_v - 0.38) * 2.0          # high HH → batter edge
+                        # Fallback when all display stats unavailable: use k_pct proxy
+                        if whf_v is None and rv is None and hh_v is None:
+                            kp = px.get("k_pct") or 0
+                            _fav = -((kp - 0.22) * 2.0)
+                        pc = ("#4ade80" if _fav <= -0.15 else
+                              "#f87171" if _fav >= 0.15 else "#facc15")
+
+                        # Cell background coloring
+                        use_bg = ("#14532d" if use_v >= 35 else "#166534" if use_v >= 20 else "#0f172a")
+                        whf_bg = ("#14532d" if (whf_v or 0) >= 0.30 else "#166534" if (whf_v or 0) >= 0.22
+                                  else "#7f1d1d" if (whf_v or 0) < 0.15 and whf_v is not None else "#0f172a")
+                        hh_bg  = ("#7f1d1d" if (hh_v or 0) >= 0.50 else "#450a0a" if (hh_v or 0) >= 0.45
+                                  else "#166534" if (hh_v or 0) < 0.34 and hh_v is not None else "#0f172a")
+                        rv_bg  = ("#14532d" if (rv or 0) < -1.0 else "#166534" if (rv or 0) < 0
+                                  else "#7f1d1d" if (rv or 0) > 1.0 else "#450a0a" if (rv or 0) > 2.5 else "#0f172a")
                         _td = "padding:4px 6px;text-align:center;font-size:11px;"
                         rows += (
                             f"<tr>"
@@ -3267,7 +3281,45 @@ def tab_jig(data: dict):
                         f"<th style='{_th}'>RV/100</th></tr>"
                         f"{rows}</table>"
                         "<div style='font-size:9px;color:#475569;margin-top:3px;'>"
-                        "Whiff%: 🟢 high=good for pitcher · HH%: 🔴 high=dangerous · RV/100: 🟢 negative=pitcher wins</div>",
+                        "Pitch color: 🟢 green=pitcher weapon · 🔴 red=hittable · 🟡 yellow=neutral"
+                        " &nbsp;|&nbsp; Whiff%: high=good pitcher · HH%: high=dangerous · RV/100: negative=pitcher wins</div>",
+                        unsafe_allow_html=True,
+                    )
+
+                    # ── Matchup indicator ──────────────────────────────────────
+                    _mod = ctx.get("hvy_modifier", 1.0)
+                    if _mod >= 1.20:
+                        _mi_lbl, _mi_c, _mi_icon = "Strong Batter Advantage", "#4ade80", "🟢"
+                    elif _mod >= 1.08:
+                        _mi_lbl, _mi_c, _mi_icon = "Batter Edge", "#86efac", "🟢"
+                    elif _mod >= 1.03:
+                        _mi_lbl, _mi_c, _mi_icon = "Slight Batter Edge", "#facc15", "🟡"
+                    elif _mod >= 0.97:
+                        _mi_lbl, _mi_c, _mi_icon = "Even Matchup", "#94a3b8", "⬜"
+                    elif _mod >= 0.92:
+                        _mi_lbl, _mi_c, _mi_icon = "Slight Pitcher Edge", "#fb923c", "🟠"
+                    elif _mod >= 0.85:
+                        _mi_lbl, _mi_c, _mi_icon = "Pitcher Edge", "#f87171", "🔴"
+                    else:
+                        _mi_lbl, _mi_c, _mi_icon = "Strong Pitcher Advantage", "#ef4444", "🔴"
+                    # Bar fill: 0% = full pitcher, 50% = even, 100% = full batter
+                    _bar_pct = min(100, max(0, int((_mod - 0.75) / 0.60 * 100)))
+                    st.markdown(
+                        f"<div style='background:#0f172a;border:1px solid #1e293b;border-radius:6px;"
+                        f"padding:8px 12px;margin-top:8px;'>"
+                        f"<div style='display:flex;justify-content:space-between;font-size:11px;"
+                        f"margin-bottom:5px;'>"
+                        f"<span style='color:#64748b;'>⚔️ Matchup Outlook</span>"
+                        f"<span style='color:{_mi_c};font-weight:700;'>{_mi_icon} {_mi_lbl}</span>"
+                        f"<span style='color:#64748b;font-size:10px;'>Modifier: {_mod:.2f}×</span>"
+                        f"</div>"
+                        f"<div style='background:#1e293b;border-radius:3px;height:8px;'>"
+                        f"<div style='background:{_mi_c};width:{_bar_pct}%;height:8px;border-radius:3px;"
+                        f"transition:width 0.3s;'></div></div>"
+                        f"<div style='display:flex;justify-content:space-between;font-size:9px;"
+                        f"color:#374151;margin-top:3px;'>"
+                        f"<span>◀ Pitcher</span><span>Even</span><span>Batter ▶</span></div>"
+                        f"</div>",
                         unsafe_allow_html=True,
                     )
                 else:

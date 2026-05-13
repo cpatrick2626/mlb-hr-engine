@@ -38,6 +38,8 @@ _SESSION.headers.update({
 
 # {year: {pitcher_id: [pitch_dict, ...]}}
 _ARSENAL_CACHE: dict[int, dict[int, list]] = {}
+# {year: {(pitcher_id, pitch_type): {whiff_pct, hard_hit_pct, rv_per100}}}
+_PITCH_STATS_CACHE: dict[int, dict] = {}
 
 # Pitch type codes Savant uses for fastball family
 _FASTBALL_TYPES = frozenset({"FF", "SI", "FC"})
@@ -46,6 +48,84 @@ _FASTBALL_TYPES = frozenset({"FF", "SI", "FC"})
 def clear_caches() -> None:
     """Evict stale cache entries so the next fetch hits the network."""
     _ARSENAL_CACHE.clear()
+    _PITCH_STATS_CACHE.clear()
+
+
+def get_pitch_display_stats(year: int = None) -> dict:
+    """
+    Fetch per-pitcher, per-pitch-type display stats from Savant pitch-arsenal-stats leaderboard.
+    Returns {(pitcher_id, pitch_type): {"whiff_pct": float, "hard_hit_pct": float, "rv_per100": float}}
+    Returns {} on any failure — callers fall back to '—' display.
+    These stats are DISPLAY ONLY and must not be used in formula calculations.
+    """
+    year = year or config.CURRENT_SEASON
+    if year in _PITCH_STATS_CACHE:
+        return _PITCH_STATS_CACHE[year]
+
+    url = (
+        "https://baseballsavant.mlb.com/leaderboard/pitch-arsenal-stats"
+        f"?year={year}&type=pitcher&min=1&csv=true"
+    )
+    try:
+        resp = _SESSION.get(url, timeout=20)
+        if resp.status_code != 200:
+            return {}
+        result = _parse_pitch_stats_csv(resp.text)
+        _PITCH_STATS_CACHE[year] = result
+        return result
+    except Exception as exc:
+        print(f"[arsenal] pitch-stats fetch failed (year={year}): {exc}")
+        return {}
+
+
+def _parse_pitch_stats_csv(raw: str) -> dict:
+    """Parse pitch-arsenal-stats CSV → {(pitcher_id, pitch_type): {whiff_pct, hard_hit_pct, rv_per100}}."""
+    result: dict = {}
+    # Savant uses several column naming conventions across years — try all variants
+    _WHIFF_COLS  = ("whiff_pct", "whiff_percent", "whiff")
+    _HH_COLS     = ("hard_hit_pct", "hard_hit_percent", "hard_hit_pct2")
+    _RV_COLS     = ("run_value_per100", "rv_per100", "run_value_per_100", "rv100")
+    _PIT_COLS    = ("pitcher", "player_id", "pitcher_id")
+    _PT_COLS     = ("pitch_type", "pitch_type_code")
+
+    def _try(row, keys):
+        for k in keys:
+            v = row.get(k, "")
+            if v not in ("", None):
+                try:
+                    return float(v)
+                except (ValueError, TypeError):
+                    pass
+        return None
+
+    reader = csv.DictReader(io.StringIO(raw.lstrip("﻿")))
+    for row in reader:
+        try:
+            pid = None
+            for col in _PIT_COLS:
+                try:
+                    pid = int(row.get(col) or 0)
+                    if pid:
+                        break
+                except (ValueError, TypeError):
+                    pass
+            if not pid:
+                continue
+            pt = (row.get("pitch_type") or row.get("pitch_type_code") or "").strip().upper()
+            if not pt:
+                continue
+            whiff = _try(row, _WHIFF_COLS)
+            hh    = _try(row, _HH_COLS)
+            rv    = _try(row, _RV_COLS)
+            # Savant sometimes uses 0-100 scale for pct fields — normalize to 0-1
+            if whiff is not None and whiff > 1.5:
+                whiff = whiff / 100.0
+            if hh is not None and hh > 1.5:
+                hh = hh / 100.0
+            result[(pid, pt)] = {"whiff_pct": whiff, "hard_hit_pct": hh, "rv_per100": rv}
+        except Exception:
+            continue
+    return result
 
 
 # ── Public API ─────────────────────────────────────────────────────────────────
