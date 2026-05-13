@@ -16,6 +16,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import requests
 import config
+from clients.pull_air import parse_pct_display, resolve_pull_air_pct
 
 _SESSION = requests.Session()
 _SESSION.headers.update({
@@ -507,13 +508,12 @@ def _compute_modifier(
             sig2 = _clamp((weighted_d / total_w) * 0.25, -0.10, 0.10)
 
     # ── Signal 3: Batter contact shape block ─────────────────────────────────
-    pull     = player.get("pull_pct")      or _LG_PULL
-    fb       = player.get("fb_pct")        or _LG_FB
-    ld       = player.get("ld_pct")        or _LG_LD
-    pull_air = pull * (fb + ld) / 100.0
-    brl      = player.get("barrel_pct")     or _LG_BARREL
-    ss       = player.get("sweet_spot_pct") or _LG_SS
-    ev       = player.get("exit_velo")      or _LG_EV
+    pull_air = resolve_pull_air_pct(player)
+    # Pipeline Statcast fields are display strings ("35.0%", "91.2"); parse before arithmetic.
+    fb  = parse_pct_display(player.get("fb_pct"), _LG_FB)
+    brl = parse_pct_display(player.get("barrel_pct"), _LG_BARREL)
+    ss  = parse_pct_display(player.get("sweet_spot_pct"), _LG_SS)
+    ev  = parse_pct_display(player.get("exit_velo"), _LG_EV)
 
     contact_score = (
         ((brl  - _LG_BARREL)                  / _LG_BARREL)          * 0.30 +
