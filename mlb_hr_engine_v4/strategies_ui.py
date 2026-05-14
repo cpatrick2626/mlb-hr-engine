@@ -257,6 +257,12 @@ def tab_advanced_strategies(data: dict, parlays_callback=None):
         # Build lookup for modal triggers — set session_state["show_modal"]; fired by main()
         _player_map = {p["player_name"]: p for p in all_players if p.get("player_name")}
 
+        _MLB_PHOTO_TPL = (
+            "https://img.mlbstatic.com/mlb-photos/image/upload"
+            "/d_people:generic:headshot:67:current.png"
+            "/w_96,q_auto:best/v1/people/{pid}/headshot/67/current"
+        )
+
         def _player_row(player_name: str, team: str, meta: str, modal_key: str):
             """Render a player as a clickable button (opens modal) + stats caption + FD link."""
             _pdata = _player_map.get(player_name, {})
@@ -271,6 +277,7 @@ def tab_advanced_strategies(data: dict, parlays_callback=None):
             _pit_hand_s = f" ({'RHP' if _pit_hand=='R' else 'LHP' if _pit_hand=='L' else ''})" if _pit_hand else ""
             _tier_col = {"S": "#FFD700", "A": "#4ade80", "B": "#facc15", "C": "#f87171"}.get(_tier, "#888")
             _ev_col   = "#4ade80" if _ev >= 0 else "#f87171"
+            _pid      = _pdata.get("player_id", "")
             _rc1, _rc2 = st.columns([5, 1])
             with _rc1:
                 if st.button(
@@ -285,6 +292,14 @@ def tab_advanced_strategies(data: dict, parlays_callback=None):
                     st.rerun()
                 _parts = ([f"({team})"] if team else []) + ([meta] if meta else [])
                 _stats_html = ""
+                if _pid:
+                    _photo_url = _MLB_PHOTO_TPL.format(pid=_pid)
+                    _stats_html += (
+                        f"<img src='{_photo_url}' style='width:32px;height:32px;"
+                        f"border-radius:50%;object-fit:cover;object-position:top center;"
+                        f"vertical-align:middle;margin-right:6px;' "
+                        f"onerror=\"this.style.display='none'\"/>"
+                    )
                 if _mdl > 0:
                     _stats_html += f"<span style='color:#a78bfa;'>MDL {_mdl:.0f}%</span>  ·  "
                 if _ev != 0 or _edge != 0:
@@ -303,7 +318,8 @@ def tab_advanced_strategies(data: dict, parlays_callback=None):
                 _base_meta = f"{'  ·  '.join(_parts)}" if _parts else ""
                 if _base_meta or _stats_html:
                     st.markdown(
-                        f"<div style='font-size:11px; color:#888888; margin:-6px 0 4px 8px;'>"
+                        f"<div style='font-size:11px; color:#888888; margin:-6px 0 4px 8px; "
+                        f"display:flex; align-items:center; flex-wrap:wrap; gap:4px;'>"
                         + (_base_meta + ("  ·  " if _base_meta and _stats_html else "") if _base_meta else "")
                         + _stats_html
                         + f"</div>",

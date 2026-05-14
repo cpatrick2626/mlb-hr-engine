@@ -708,6 +708,31 @@ def _edge_col(edge) -> str:
     return "#f87171"
 
 
+_MLB_PHOTO_BASE = (
+    "https://img.mlbstatic.com/mlb-photos/image/upload"
+    "/d_people:generic:headshot:67:current.png"
+    "/w_{w},q_auto:best/v1/people/{pid}/headshot/67/current"
+)
+
+
+def _player_photo_html(player_id, size: int = 48, style: str = "") -> str:
+    """Return an <img> tag for an MLB player headshot, or '' if no player_id."""
+    if not player_id:
+        return ""
+    url = _MLB_PHOTO_BASE.format(pid=player_id, w=max(size * 2, 64))
+    base = (
+        f"width:{size}px;height:{size}px;border-radius:50%;"
+        f"object-fit:cover;object-position:top center;"
+        f"flex-shrink:0;margin-right:10px;"
+    )
+    return (
+        f"<img src='{url}' style='{base}{style}' "
+        f"onerror=\"this.src='https://img.mlbstatic.com/mlb-photos/image/upload"
+        f"/d_people:generic:headshot:67:current.png/w_128,q_auto:best"
+        f"/v1/people/0/headshot/67/current'\"/>"
+    )
+
+
 def _combo_html(parlay: dict, label: str) -> str:
     legs_html = ""
     for leg in parlay["legs"]:
@@ -810,12 +835,19 @@ def _show_player_modal(player: dict):
     pit   = player.get("pitcher_name", "TBD")
     spot  = player.get("lineup_spot")
     sc_src = player.get("statcast_source", "none")
+    _pid  = player.get("player_id", "")
 
+    _modal_photo = _player_photo_html(_pid, size=80, style="border:2px solid #1e3a5f;")
     st.markdown(
+        f"<div style='display:flex;align-items:center;margin-bottom:6px;'>"
+        f"{_modal_photo}"
+        f"<div>"
         f"<div style='font-size:20px; font-weight:800; color:#f0f0f0;'>{name}</div>"
-        f"<div style='font-size:13px; color:#888; margin-bottom:6px;'>"
+        f"<div style='font-size:13px; color:#888;'>"
         f"{team} vs {opp} &nbsp;·&nbsp; vs {pit}"
         f"{f'  &nbsp;·&nbsp;  Bat #{spot}' if spot else ''}"
+        f"</div>"
+        f"</div>"
         f"</div>",
         unsafe_allow_html=True,
     )
@@ -1503,8 +1535,12 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
         _top_hand     = _top.get("pitcher_hand", "")
         _top_hand_s   = f" ({'RHP' if _top_hand == 'R' else 'LHP' if _top_hand == 'L' else ''})" if _top_hand else ""
         _top_status_html, _top_is_live = _game_status_badge(_top)
+        _top_photo    = _player_photo_html(_top.get("player_id"), size=56,
+                                           style="border:2px solid #FFD700;margin-bottom:4px;")
         _hc1, _hc2, _hc3, _hc4, _hc5 = st.columns([5, 2, 2, 2, 2])
         with _hc1:
+            if _top_photo:
+                st.markdown(_top_photo, unsafe_allow_html=True)
             if st.button(
                 f"🏆  {_top_name}",
                 key="hero_modal_btn",
@@ -1784,6 +1820,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                     _steam_bg     = "#1a0000" if _qis_live else ("#1a1a00" if _qis_steam else "#0d0d20")
                     _steam_badge  = "<span style='background:#444400;color:#FFD700;font-size:10px;padding:1px 6px;border-radius:4px;margin-left:6px;'>📈 STEAM</span>" if _qis_steam else ""
                     _qweather     = _weather_badge(_qp)
+                    _qphoto       = _player_photo_html(_qp.get("player_id"), size=40)
 
                     if st.button(
                         f"{_qconf} {_qp['player_name']}",
@@ -1801,9 +1838,10 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                     st.markdown(
                         f"<div style='background:{_steam_bg}; border:1px solid {_steam_border}; border-radius:10px; "
                         f"padding:10px 16px; margin-bottom:10px;'>"
-                        # row 1: matchup + steam badge + odds link
+                        # row 1: photo + matchup + steam badge + odds link
                         f"<div style='display:flex; justify-content:space-between; align-items:flex-start;'>"
-                        f"<div style='font-size:13px; color:#888;'>{_qteam}{_spot_str} vs {_qpit_lbl}{_qhand_lbl}{_steam_badge}</div>"
+                        f"<div style='display:flex;align-items:center;'>{_qphoto}"
+                        f"<div style='font-size:13px; color:#888;'>{_qteam}{_spot_str} vs {_qpit_lbl}{_qhand_lbl}{_steam_badge}</div></div>"
                         f"<a href='{_qurl}' target='_blank' style='text-decoration:none;'>"
                         f"<div style='text-align:right;'>"
                         f"<div style='font-size:20px; font-weight:700; color:#FF6666;'>{_fmt_american(_qodds)}</div>"
@@ -2526,11 +2564,13 @@ def tab_hits(data: dict):
         border = "#f87171" if is_live else "#1e3a5f"
         status_row = (f"<div style='font-size:11px; margin:2px 0 8px;'>{status_html}</div>"
                       if status_html else "")
+        _h_photo = _player_photo_html(p.get("player_id"), size=44)
         st.markdown(
             f"<div style='background:#0d0d1e; border:1px solid {border}; border-radius:10px; "
             f"padding:14px 16px; margin-bottom:10px;'>"
-            f"<div style='display:flex; justify-content:space-between; align-items:baseline;'>"
-            f"<div style='font-size:15px; font-weight:800; color:#f0f0f0;'>{name}</div>"
+            f"<div style='display:flex; justify-content:space-between; align-items:center;'>"
+            f"<div style='display:flex;align-items:center;'>{_h_photo}"
+            f"<div style='font-size:15px; font-weight:800; color:#f0f0f0;'>{name}</div></div>"
             f"<div style='font-size:18px; font-weight:900; color:{hc};'>HIT {hsco:.0f}"
             f"<span style='font-size:11px;color:{_h_tc};font-weight:700;margin-left:8px;'>{_h_tier}-Tier</span></div>"
             f"</div>"
@@ -3015,11 +3055,13 @@ def tab_jig(data: dict):
         border = "#f87171" if is_live else "#1e3a5f"
         status_row = (f"<div style='font-size:11px; margin:2px 0 8px;'>{status_html}</div>"
                       if status_html else "")
+        _j_photo = _player_photo_html(p.get("player_id"), size=44)
         st.markdown(
             f"<div style='background:#0d0d1e; border:1px solid {border}; border-radius:10px; "
             f"padding:14px 16px; margin-bottom:10px;'>"
-            f"<div style='display:flex; justify-content:space-between; align-items:baseline;'>"
-            f"<div style='font-size:15px; font-weight:800; color:#f0f0f0;'>{name}</div>"
+            f"<div style='display:flex; justify-content:space-between; align-items:center;'>"
+            f"<div style='display:flex;align-items:center;'>{_j_photo}"
+            f"<div style='font-size:15px; font-weight:800; color:#f0f0f0;'>{name}</div></div>"
             f"<div style='font-size:18px; font-weight:900; color:{jc};'>JIG {jig:.0f}"
             f"<span style='font-size:11px;color:{_j_tc};font-weight:700;margin-left:8px;'>{_j_tier}-Tier</span></div>"
             f"</div>"
@@ -3244,11 +3286,13 @@ def tab_jig(data: dict):
         iso_c = "#4ade80" if iso >= 0.200 else "#f87171" if iso < 0.150 else "#f0f0f0"
         slg_lbl = _slg_label(p)
         pa_str  = f"{pull_air:.1f}%" if pull_air > 0 else "—"
+        _hvy_photo = _player_photo_html(p.get("player_id"), size=44)
         st.markdown(
             f"<div style='background:#111827;border:1px solid {border};border-radius:10px;"
             f"padding:14px 16px;margin-bottom:6px;'>"
-            f"<div style='display:flex;justify-content:space-between;align-items:baseline;'>"
-            f"<div style='font-size:15px;font-weight:800;color:#f0f0f0;'>{name}</div>"
+            f"<div style='display:flex;justify-content:space-between;align-items:center;'>"
+            f"<div style='display:flex;align-items:center;'>{_hvy_photo}"
+            f"<div style='font-size:15px;font-weight:800;color:#f0f0f0;'>{name}</div></div>"
             f"<div style='font-size:18px;font-weight:900;color:{hc};'>HVY {hvy:.0f}"
             f"<span style='font-size:10px;color:#666;margin-left:4px;'>(Base {base:.0f})</span>"
             f"<span style='font-size:11px;color:{_hvy_tc};font-weight:700;margin-left:8px;'>{_hvy_tier}-Tier</span></div>"
