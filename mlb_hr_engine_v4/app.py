@@ -5247,7 +5247,7 @@ The app will open full-screen like a native app.
 
     with tab1:
         try:
-            data = _gate_data(get_data(), st.session_state.get("cutoff_utc_hour"))
+            data = get_data()
             tab_picks(data, _min_ev, _min_edge,
                       cutoff_utc_hour=st.session_state.get("cutoff_utc_hour"),
                       min_confidence=_min_conf)
