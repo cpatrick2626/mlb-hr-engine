@@ -2833,12 +2833,31 @@ def tab_hits(data: dict):
 # TAB — JIG
 # ═══════════════════════════════════════════════════════════════════════════════
 def tab_jig(data: dict):
+    import datetime as _dtmod
     _cutoff = st.session_state.get("cutoff_utc_hour")
     all_players_raw = data.get("all_players", [])
+
+    # Filter out tomorrow's games — keep only today's ET date (or TBD with no game_time_utc)
+    _today_et = (_dtmod.datetime.utcnow() - _dtmod.timedelta(hours=4)).date()
+    def _is_today_game(p):
+        gut = p.get("game_time_utc", "")
+        if not gut:
+            return True
+        try:
+            game_dt_et = (_dtmod.datetime.fromisoformat(
+                gut.replace("Z", "+00:00")
+            ).astimezone(_dtmod.timezone(_dtmod.timedelta(hours=-4)))).date()
+            return game_dt_et == _today_et
+        except Exception:
+            return True
+    all_players_raw = [p for p in all_players_raw if _is_today_game(p)]
+
     all_players = (
         _gate_data(data, _cutoff).get("all_players", [])
         if _cutoff is not None else all_players_raw
     )
+    if _cutoff is not None:
+        all_players = [p for p in all_players if _is_today_game(p)]
 
     st.markdown(
         "<div style='font-size:22px; font-weight:900; color:#FF6666; "
