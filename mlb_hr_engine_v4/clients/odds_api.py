@@ -121,8 +121,11 @@ def _try_api() -> tuple[list[dict], dict]:
 def _get_events() -> list[dict]:
     global _last_error
     now_utc = datetime.now(timezone.utc)
-    today_start = now_utc.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(hours=9)   # ~5 AM ET
-    today_end   = today_start + timedelta(hours=23)  # ~4 AM next-day ET — covers all late west-coast games
+    # Anchor window on ET midnight (UTC-4) so games are never missed after 8 PM ET
+    now_et = now_utc - timedelta(hours=4)
+    et_midnight_utc = now_et.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(hours=4)
+    today_start = et_midnight_utc + timedelta(hours=9)   # ~5 AM ET
+    today_end   = today_start + timedelta(hours=23)       # ~4 AM next-day ET — covers all late west-coast games
     try:
         resp = _SESSION.get(
             f"{BASE}/sports/baseball_mlb/events",
