@@ -1050,7 +1050,7 @@ def _game_time_et(game_time_utc: str) -> "_dt.time | None":
 
 
 def _gate_data(data: dict, cutoff: "int | None") -> dict:
-    """Return data with all_players and ranked filtered to games at or after cutoff ET hour."""
+    """Return data with all player lists filtered to games at or after cutoff ET hour."""
     if cutoff is None:
         return data
     cutoff_et_hour = (cutoff - 4) % 24
@@ -1060,6 +1060,11 @@ def _gate_data(data: dict, cutoff: "int | None") -> dict:
     gated = dict(data)
     gated["all_players"] = [p for p in data.get("all_players", []) if _keep(p)]
     gated["ranked"]      = [p for p in data.get("ranked", []) if _keep(p)]
+    gated["all_by_model"] = [p for p in data.get("all_by_model", []) if _keep(p)]
+    gated["team_players"] = {
+        team: [p for p in players if _keep(p)]
+        for team, players in data.get("team_players", {}).items()
+    }
     return gated
 
 
@@ -3304,6 +3309,8 @@ def tab_jig(data: dict):
                         _mi_lbl, _mi_c, _mi_icon = "Strong Pitcher Advantage", "#ef4444", "🔴"
                     # Bar fill: 0% = full pitcher, 50% = even, 100% = full batter
                     _bar_pct = min(100, max(0, int((_mod - 0.75) / 0.60 * 100)))
+                    # Position the % label so it stays inside the bar (min 8% from left)
+                    _lbl_pos = max(8, min(88, _bar_pct))
                     st.markdown(
                         f"<div style='background:#0f172a;border:1px solid #1e293b;border-radius:6px;"
                         f"padding:8px 12px;margin-top:8px;'>"
@@ -3313,12 +3320,15 @@ def tab_jig(data: dict):
                         f"<span style='color:{_mi_c};font-weight:700;'>{_mi_icon} {_mi_lbl}</span>"
                         f"<span style='color:#64748b;font-size:10px;'>Modifier: {_mod:.2f}×</span>"
                         f"</div>"
-                        f"<div style='background:#1e293b;border-radius:3px;height:8px;'>"
-                        f"<div style='background:{_mi_c};width:{_bar_pct}%;height:8px;border-radius:3px;"
-                        f"transition:width 0.3s;'></div></div>"
+                        f"<div style='position:relative;background:#1e293b;border-radius:4px;height:18px;'>"
+                        f"<div style='background:{_mi_c};width:{_bar_pct}%;height:18px;border-radius:4px;'></div>"
+                        f"<span style='position:absolute;top:0;left:{_lbl_pos}%;transform:translateX(-50%);"
+                        f"font-size:10px;font-weight:700;color:#0f172a;line-height:18px;white-space:nowrap;'>"
+                        f"{_bar_pct}%</span>"
+                        f"</div>"
                         f"<div style='display:flex;justify-content:space-between;font-size:9px;"
                         f"color:#374151;margin-top:3px;'>"
-                        f"<span>◀ Pitcher</span><span>Even</span><span>Batter ▶</span></div>"
+                        f"<span>◀ Pitcher</span><span>Even (50%)</span><span>Batter ▶</span></div>"
                         f"</div>",
                         unsafe_allow_html=True,
                     )
@@ -5238,7 +5248,7 @@ The app will open full-screen like a native app.
 
     with tab1:
         try:
-            data = get_data()
+            data = _gate_data(get_data(), st.session_state.get("cutoff_utc_hour"))
             tab_picks(data, _min_ev, _min_edge,
                       cutoff_utc_hour=st.session_state.get("cutoff_utc_hour"),
                       min_confidence=_min_conf)
