@@ -3799,11 +3799,10 @@ def tab_jig(data: dict):
         from clients.pitch_mix import HVY_CACHE_VERSION as _HVY_VER
         _hvy_ck = f"hvy_ctx_{data.get('date', '')}_{_HVY_VER}"
         if _hvy_ck not in st.session_state:
-            # Include ALL players with a player_id — not just those with odds.
-            # The previous best_american filter caused empty contexts for every
-            # player shown in the tab before odds were posted (or when odds keys
-            # weren't loaded), making all four pitch-mix sections blank.
-            _hvy_candidates = [p for p in all_players if p.get("player_id")]
+            # Use the UNFILTERED player list so that Prime Picks (which can include
+            # pre-cutoff games when a time gate is active) always has contexts loaded.
+            # Contexts are keyed by player_id and reused regardless of time-gate state.
+            _hvy_candidates = [p for p in all_players_raw if p.get("player_id")]
             _unique_pitchers = len({p.get("pitcher_id") for p in _hvy_candidates if p.get("pitcher_id")})
             _spinner_msg = (
                 f"Loading pitch mix data for {len(_hvy_candidates)} players "
