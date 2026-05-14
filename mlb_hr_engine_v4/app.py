@@ -2837,17 +2837,23 @@ def tab_jig(data: dict):
     _cutoff = st.session_state.get("cutoff_utc_hour")
     all_players_raw = data.get("all_players", [])
 
-    # Filter out tomorrow's games — keep only today's ET date (or TBD with no game_time_utc)
-    _today_et = (_dtmod.datetime.utcnow() - _dtmod.timedelta(hours=4)).date()
+    # Filter out tomorrow's games — keep only today's ET date (or TBD with no game_time_utc).
+    # Uses naive UTC range to avoid astimezone edge cases on Windows.
+    # ET midnight = UTC+4h; window is [today_ET_midnight_utc, tomorrow_ET_midnight_utc).
+    _now_naive_utc = _dtmod.datetime.utcnow()
+    _today_et_date = (_now_naive_utc - _dtmod.timedelta(hours=4)).date()
+    _window_start  = _dtmod.datetime(_today_et_date.year, _today_et_date.month, _today_et_date.day, 4, 0, 0)
+    _window_end    = _window_start + _dtmod.timedelta(hours=24)
+
     def _is_today_game(p):
         gut = p.get("game_time_utc", "")
         if not gut:
             return True
         try:
-            game_dt_et = (_dtmod.datetime.fromisoformat(
-                gut.replace("Z", "+00:00")
-            ).astimezone(_dtmod.timezone(_dtmod.timedelta(hours=-4)))).date()
-            return game_dt_et == _today_et
+            # Strip timezone suffix, treat value as UTC, compare against window
+            clean = gut.replace("Z", "").replace("+00:00", "").replace(" ", "T")[:19]
+            game_utc = _dtmod.datetime.fromisoformat(clean)
+            return _window_start <= game_utc < _window_end
         except Exception:
             return True
     all_players_raw = [p for p in all_players_raw if _is_today_game(p)]
