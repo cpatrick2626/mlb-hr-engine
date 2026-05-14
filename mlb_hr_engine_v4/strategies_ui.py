@@ -252,6 +252,18 @@ def tab_advanced_strategies(data: dict, parlays_callback=None):
 
         def _player_row(player_name: str, team: str, meta: str, modal_key: str):
             """Render a player as a clickable button (opens modal) + stats caption + FD link."""
+            _pdata = _player_map.get(player_name, {})
+            _mdl   = _pdata.get("model_prob", 0) * 100
+            _ev    = _pdata.get("ev_pct", 0)
+            _edge  = _pdata.get("edge_pct", 0)
+            _tier  = _pdata.get("confidence_tier", "")
+            _pit   = _pdata.get("pitcher_name", "")
+            _pit_f = _pdata.get("pitcher_factor", 1.0)
+            _plat  = _pdata.get("platoon_factor", 1.0)
+            _pit_hand = _pdata.get("pitcher_hand", "")
+            _pit_hand_s = f" ({'RHP' if _pit_hand=='R' else 'LHP' if _pit_hand=='L' else ''})" if _pit_hand else ""
+            _tier_col = {"S": "#FFD700", "A": "#4ade80", "B": "#facc15", "C": "#f87171"}.get(_tier, "#888")
+            _ev_col   = "#4ade80" if _ev >= 0 else "#f87171"
             _rc1, _rc2 = st.columns([5, 1])
             with _rc1:
                 if st.button(
@@ -265,10 +277,29 @@ def tab_advanced_strategies(data: dict, parlays_callback=None):
                     )
                     st.rerun()
                 _parts = ([f"({team})"] if team else []) + ([meta] if meta else [])
-                if _parts:
+                _stats_html = ""
+                if _mdl > 0:
+                    _stats_html += f"<span style='color:#a78bfa;'>MDL {_mdl:.0f}%</span>  ·  "
+                if _ev != 0 or _edge != 0:
+                    _stats_html += (
+                        f"<span style='color:{_ev_col};'>EV {_ev:+.1f}%</span>  ·  "
+                        f"<span style='color:#60a5fa;'>Edge {_edge:+.1f}%</span>  ·  "
+                    )
+                if _tier:
+                    _stats_html += f"<span style='color:{_tier_col};font-weight:700;'>{_tier}-Tier</span>"
+                if _pit:
+                    _stats_html += (
+                        f"  ·  <span style='color:#94a3b8;font-size:10px;'>vs "
+                        f"{'🟢' if _pit_f > 1.08 else '🟡' if _pit_f > 0.97 else '🔴'} "
+                        f"{_pit}{_pit_hand_s}</span>"
+                    )
+                _base_meta = f"{'  ·  '.join(_parts)}" if _parts else ""
+                if _base_meta or _stats_html:
                     st.markdown(
                         f"<div style='font-size:11px; color:#888888; margin:-6px 0 4px 8px;'>"
-                        f"{'  ·  '.join(_parts)}</div>",
+                        + (_base_meta + ("  ·  " if _base_meta and _stats_html else "") if _base_meta else "")
+                        + _stats_html
+                        + f"</div>",
                         unsafe_allow_html=True,
                     )
             with _rc2:
