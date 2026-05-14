@@ -161,7 +161,14 @@ def tab_advanced_strategies(data: dict, parlays_callback=None):
                     _pl_val = _pk.get("profit_loss", "")
                     _result_str = "✅ HR" if _hr == "1" else ("❌ No HR" if _hr == "0" else "⏳ Pending")
                     _pl_str = f"${float(_pl_val):+.2f}" if _pl_val else "—"
+                    try:
+                        _pk_conf = float(_pk.get("confidence", 0) or 0)
+                    except (TypeError, ValueError):
+                        _pk_conf = 0.0
+                    _pk_tier = ("🌟 S" if _pk_conf >= 70 else "✅ A" if _pk_conf >= 55
+                                else "🟡 B" if _pk_conf >= 40 else "🔴 C") if _pk_conf > 0 else ""
                     _pick_rows.append({
+                        "Tier":       _pk_tier,
                         "Date":       _pk.get("date", ""),
                         "Strategy":   _pk.get("strategy", ""),
                         "Player":     _pk.get("player_name", ""),
@@ -1878,16 +1885,20 @@ def tab_advanced_strategies(data: dict, parlays_callback=None):
                     # Quick-reference table
                     rows = []
                     for p in game_players:
+                        _sgb_tier   = p.get("confidence_tier", "")
+                        _sgb_tier_l = {"S": "🌟 S", "A": "✅ A", "B": "🟡 B", "C": "🔴 C"}.get(_sgb_tier, _sgb_tier)
                         rows.append({
+                            "Tier":     _sgb_tier_l,
                             "Player":   p["player_name"],
                             "Team":     p.get("team", ""),
                             "Spot":     f"#{p['lineup_spot']}" if p.get("lineup_spot") else "?",
                             "Odds":     _fmt_american(p.get("best_american")),
                             "Model%":   f"{p.get('model_prob',0)*100:.1f}%",
+                            "EV%":      f"{p.get('ev_pct',0):+.1f}%",
+                            "Edge%":    f"{p.get('edge_pct',0):+.1f}%",
                             "Pitcher":  p.get("pitcher_name", "TBD"),
                             "Pit Fac":  f"{p.get('pitcher_factor',1.0):.2f}x",
                             "Platoon":  f"{p.get('platoon_factor',1.0):.2f}x",
-                            "EV%":      f"{p.get('ev_pct',0):+.1f}%",
                         })
 
                     import pandas as pd

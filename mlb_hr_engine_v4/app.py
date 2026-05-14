@@ -2009,7 +2009,11 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                     move   = summ["move_pct"]
                     dirn   = summ["direction"]
                     move_color = "#4ade80" if move > 0.5 else ("#f87171" if move < -0.5 else "#888888")
+                    _mv_p_data = {p.get("player_name", ""): p for p in all_players}.get(name, {})
+                    _mv_tier   = _mv_p_data.get("confidence_tier", "")
+                    _mv_tier_l = {"S": "🌟 S", "A": "✅ A", "B": "🟡 B", "C": "🔴 C"}.get(_mv_tier, _mv_tier)
                     mv_rows.append({
+                        "Tier":     _mv_tier_l,
                         "Player":   name,
                         "Open":     _fmt_american(open_o),
                         "Now":      _fmt_american(curr_o),
@@ -2067,9 +2071,13 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                 cmp_rows = []
                 for p in odds_pool:
                     pbk = p.get("prices_by_book", {})
+                    _oc_tier   = p.get("confidence_tier", "")
+                    _oc_tier_l = {"S": "🌟 S", "A": "✅ A", "B": "🟡 B", "C": "🔴 C"}.get(_oc_tier, _oc_tier)
                     row = {
+                        "Tier":   _oc_tier_l,
                         "Player": p.get("player_name", ""),
                         "Team":   p.get("team", ""),
+                        "MDL%":   f"{p.get('model_prob', 0)*100:.1f}%",
                         "Edge%":  f"{p.get('edge_pct', 0):+.1f}%",
                         "EV%":    f"{p.get('ev_pct', 0):+.1f}%",
                         "Best":   _fmt_american(p.get("best_american")),
@@ -2097,7 +2105,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
         PRIME_FLOOR = 0.15
 
         # â"€â"€ All available columns (name -> extractor) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
-        _FIXED_COLS   = ["Player", "Team", "Spot", "Vs", "Model%"]
+        _FIXED_COLS   = ["Tier", "Player", "Team", "Spot", "Vs", "Model%"]
         _TOGGLE_COLS  = [
             "Brl%", "SwSp%", "FB%", "GB%", "LD%", "Pull%", "Oppo%",
             "Hard Hit%", "Exit Velo", "Launch Angle",
@@ -2122,6 +2130,9 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
 
         def _extract(col, p, pit_fac, plat_fac):
             m = p.get
+            if col == "Tier":
+                _t = m("confidence_tier", "C")
+                return {"S": "🌟 S", "A": "✅ A", "B": "🟡 B", "C": "🔴 C"}.get(_t, _t)
             if col == "Player":       return _safe(m("player_name"), "")
             if col == "Team":         return _safe(m("team"), "")
             if col == "Spot":         return _spot_label(m("lineup_spot"), plat_fac)
@@ -2783,8 +2794,11 @@ def tab_hits(data: dict):
             bts_rows = []
             for i, entry in enumerate(bts_pool):
                 pp = entry["player"]
+                _bts_tier   = pp.get("confidence_tier", "")
+                _bts_tier_l = {"S": "🌟 S", "A": "✅ A", "B": "🟡 B", "C": "🔴 C"}.get(_bts_tier, _bts_tier)
                 bts_rows.append({
                     "#":        i + 1,
+                    "Tier":     _bts_tier_l,
                     "Player":   pp.get("player_name", ""),
                     "Team":     pp.get("team", ""),
                     "Opp":      pp.get("opponent", ""),
@@ -4587,7 +4601,14 @@ def tab_performance():
                 except (TypeError, ValueError):
                     _mp_str = "--"
 
+                try:
+                    _lp_conf = float(_lp.get("confidence", 0) or 0)
+                except (TypeError, ValueError):
+                    _lp_conf = 0.0
+                _lp_tier = ("🌟 S" if _lp_conf >= 70 else "✅ A" if _lp_conf >= 55
+                            else "🟡 B" if _lp_conf >= 40 else "🔴 C") if _lp_conf > 0 else ""
                 _log_rows.append({
+                    "Tier":     _lp_tier,
                     "Date":     _lp_date,
                     "Player":   _lp_name,
                     "Team":     _lp.get("team", ""),
