@@ -167,6 +167,8 @@ def get_today_schedule(target_date: Optional[str] = None) -> list[dict]:
 
     games: list[dict] = []
     for date_entry in data.get("dates", []):
+        if date_entry.get("date", "") != game_date:
+            continue  # API sometimes returns adjacent-day entries; skip them
         for g in date_entry.get("games", []):
             status = g.get("status", {}).get("abstractGameState", "")
             if status == "Final":
