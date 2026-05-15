@@ -1753,13 +1753,14 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
     # ── TAB: Qualified Picks ─────────────────────────────────────────────────
     with sub1:
         roster_confirmed = [p for p in ranked if p.get("lineup_spot") is not None]
-        _quick_tab, _timeline_tab, _slate_tab, _confirmed_tab, _movement_tab, _odds_cmp_tab = st.tabs([
+        _quick_tab, _timeline_tab, _slate_tab, _confirmed_tab, _movement_tab, _odds_cmp_tab, _pitchmix_tab = st.tabs([
             "📱 Quick View",
             "⏰ By Game Time",
             f"📊 All Picks ({len(ranked)})",
             f"✅ Confirmed ({len(roster_confirmed)})",
             "📊 Line Movement",
             "📊 Odds",
+            f"🔥 Pitch Mix ({len(ranked)})",
         ])
 
         with _quick_tab:
@@ -2140,10 +2141,555 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                     st.session_state["modal_source_section"] = "Odds Comparison"
                     st.rerun()
 
+        # ── Pitch Mix tab ─────────────────────────────────────────────────────
+        with _pitchmix_tab:
+            if not ranked:
+                st.info(
+                    f"No qualified picks (EV ≥ {min_ev:.1f}%, Edge ≥ {min_edge:.1f}%). "
+                    "Try sliding filters in the sidebar."
+                )
+            else:
+                from clients.pitch_mix import (
+                    load_hvy_contexts_batch as _pm_load_batch,
+                    pitch_label as _pm_pitch_label,
+                    pitch_color as _pm_pitch_color,
+                    HVY_CACHE_VERSION as _PM_VER,
+                )
+                from clients import arsenal as _pm_ar_client
+
+                _pm_ck = f"picks_pm_ctx_{data.get('date', '')}_{_PM_VER}"
+                if _pm_ck not in st.session_state:
+                    with st.spinner(f"Loading pitch mix data for {len(ranked)} qualified picks…"):
+                        try:
+                            _pm_ar = _pm_ar_client.get_pitcher_arsenal(config.CURRENT_SEASON)
+                        except Exception:
+                            _pm_ar = {}
+                        st.session_state[_pm_ck] = _pm_load_batch(ranked, _pm_ar)
+
+                _pm_ctxs = st.session_state.get(_pm_ck, {})
+
+                _pm_col1, _pm_col2 = st.columns([3, 1])
+                with _pm_col1:
+                    st.caption(f"{len(ranked)} qualified picks with full pitch mix context from Baseball Savant.")
+                with _pm_col2:
+                    if st.button("🔄 Refresh Pitch Data", key="pm_picks_refresh"):
+                        st.session_state.pop(_pm_ck, None)
+                        st.rerun()
+
+                def _pm_metrics(p):
+                    xslg_v   = _pf(p.get("xslg"), 0.0)
+                    slg      = xslg_v if xslg_v > 0.0 else _pf(p.get("actual_slg"), 0.0)
+                    iso      = _pf(p.get("xiso") or p.get("iso"), 0.0)
+                    hh       = _pf(p.get("hard_hit"), 0.0)
+                    brl      = _pf(p.get("barrel_pct"), 0.0)
+                    ss       = _pf(p.get("sweet_spot_pct"), 0.0)
+                    pull     = _pf(p.get("pull_pct"), 0.0)
+                    fb       = _pf(p.get("fb_pct"), 0.0)
+                    ld       = _pf(p.get("ld_pct"), 0.0)
+                    pull_air = pull * (fb + ld) / 100.0
+                    return slg, iso, hh, brl, ss, pull_air
+
+                for _pm_p in ranked:
+                    _pm_pid  = _pm_p.get("player_id")
+                    _pm_ctx  = _pm_ctxs.get(_pm_pid, {})
+                    _pm_name = _pm_p.get("player_name", "Unknown")
+                    _pm_team = _pm_p.get("team", "")
+                    _pm_opp  = _pm_p.get("opponent", "")
+                    _pm_pit_n = _pm_p.get("pitcher_name", "TBD")
+                    _pm_pit_hand = _pm_p.get("pitcher_hand", "")
+                    _pm_pit_hand_lbl = (f" ({'RHP' if _pm_pit_hand == 'R' else 'LHP' if _pm_pit_hand == 'L' else ''})"
+                                        if _pm_pit_hand else "")
+                    _pm_bat_side = _pm_p.get("batter_side", "")
+                    _pm_bat_side_lbl = (f" {'RHB' if _pm_bat_side == 'R' else 'LHB' if _pm_bat_side == 'L' else ''}"
+                                        if _pm_bat_side else "")
+                    _pm_odds   = _pm_p.get("best_american")
+                    _pm_ev     = _pm_p.get("ev_pct", 0)
+                    _pm_ev_c   = "#4ade80" if _pm_ev > 0 else "#f87171"
+                    _pm_model  = _pm_p.get("model_prob", 0) * 100
+                    _pm_edge   = _pm_p.get("edge_pct", 0)
+                    _pm_mod    = _pm_ctx.get("hvy_modifier", 1.0)
+                    _pm_mod_c  = "#4ade80" if _pm_mod > 1.0 else "#f87171" if _pm_mod < 1.0 else "#888"
+                    _pm_mod_s  = f"{'▲' if _pm_mod > 1.0 else '▼' if _pm_mod < 1.0 else '●'} {_pm_mod:.2f}×"
+                    _pm_tier   = _pm_p.get("confidence_tier", "C")
+                    _pm_tier_c = {"S": "#FFD700", "A": "#4ade80", "B": "#facc15", "C": "#f87171"}.get(_pm_tier, "#888")
+                    _pm_odds_str = (f"+{_pm_odds}" if _pm_odds and _pm_odds > 0 else str(_pm_odds)) if _pm_odds else "—"
+                    _pm_slg, _pm_iso, _pm_hh, _pm_brl, _pm_ss, _pm_pull_air = _pm_metrics(_pm_p)
+                    _pm_slg_lbl = "xSLG" if _pf(_pm_p.get("xslg"), 0.0) > 0.0 else "SLG"
+                    _pm_slg_c = "#4ade80" if _pm_slg >= 0.450 else "#f87171" if _pm_slg < 0.350 else "#f0f0f0"
+                    _pm_brl_c = "#4ade80" if _pm_brl >= 8.0   else "#f87171" if _pm_brl < 5.0   else "#f0f0f0"
+                    _pm_hh_c  = "#4ade80" if _pm_hh  >= 45.0  else "#f87171" if _pm_hh  < 35.0  else "#f0f0f0"
+                    _pm_status_html, _pm_is_live = _game_status_badge(_pm_p)
+                    _pm_border = "#f87171" if _pm_is_live else "#1e3a5f"
+                    _pm_status_row = (f"<div style='font-size:11px;margin:2px 0 8px;'>{_pm_status_html}</div>"
+                                      if _pm_status_html else "")
+                    _pm_photo  = _player_photo_html(_pm_pid, size=44)
+                    _pm_pit_lbl = _pitcher_label(_pm_pit_n, _pm_p.get("pitcher_factor", 1.0),
+                                                 _pm_p.get("platoon_factor", 1.0))
+
+                    # Player header card
+                    st.markdown(
+                        f"<div style='background:#111827;border:1px solid {_pm_border};border-radius:10px;"
+                        f"padding:14px 16px;margin-bottom:4px;'>"
+                        f"<div style='display:flex;justify-content:space-between;align-items:center;'>"
+                        f"<div style='display:flex;align-items:center;gap:10px;'>{_pm_photo}"
+                        f"<div><div style='font-size:15px;font-weight:800;color:#f0f0f0;'>{_pm_name}</div>"
+                        f"<div style='font-size:12px;color:#888;margin-top:2px;'>"
+                        f"{_pm_team} vs {_pm_opp} · vs {_pm_pit_lbl}{_pm_pit_hand_lbl}</div></div></div>"
+                        f"<div style='text-align:right;'>"
+                        f"<div style='font-size:18px;font-weight:700;color:#FF6666;'>{_pm_odds_str}</div>"
+                        f"<div style='font-size:11px;color:#a78bfa;'>MDL {_pm_model:.0f}%</div>"
+                        f"</div></div>"
+                        f"{_pm_status_row}"
+                        f"<div style='display:flex;gap:14px;font-size:12px;margin-top:6px;flex-wrap:wrap;align-items:center;'>"
+                        f"<span>EV: <b style='color:{_pm_ev_c};'>{_pm_ev:+.1f}%</b></span>"
+                        f"<span>Edge: <b style='color:{_edge_col(_pm_edge)};'>{_pm_edge:+.1f}%</b></span>"
+                        f"<span style='color:{_pm_mod_c};font-weight:700;'>Modifier: {_pm_mod_s}</span>"
+                        f"<span style='color:{_pm_tier_c};font-weight:700;'>{_pm_tier}-Tier</span>"
+                        f"<span style='color:#666;'>{_pm_slg_lbl}: <b style='color:{_pm_slg_c};'>{_pm_slg:.3f}</b></span>"
+                        f"<span style='color:#666;'>Brl: <b style='color:{_pm_brl_c};'>{_pm_brl:.1f}%</b></span>"
+                        f"<span style='color:#666;'>HH: <b style='color:{_pm_hh_c};'>{_pm_hh:.1f}%</b></span>"
+                        f"</div></div>",
+                        unsafe_allow_html=True,
+                    )
+
+                    # Full pitch mix analysis
+                    _pm_arsenal  = _pm_ctx.get("pitcher_arsenal", [])
+                    _pm_splits   = _pm_ctx.get("hand_splits", {})
+                    _pm_h2h      = _pm_ctx.get("h2h", {})
+                    _pm_batter_v = _pm_ctx.get("batter_vs", {})
+                    _pm_yr       = _pm_ctx.get("data_year", config.CURRENT_SEASON)
+                    _pm_yr_lbl   = (f" ({_pm_yr})" if _pm_yr != config.CURRENT_SEASON
+                                    else f" ({config.CURRENT_SEASON})")
+                    _pm_prior    = (f" ⚠️ *{_pm_yr} data — pitcher has no {config.CURRENT_SEASON} starts yet*"
+                                    if _pm_yr != config.CURRENT_SEASON else "")
+
+                    with st.expander("📊 Pitch Mix Analysis", expanded=True):
+                        if _pm_prior:
+                            st.caption(_pm_prior)
+
+                        st.markdown(
+                            "<div style='display:flex;gap:12px;font-size:10px;margin-bottom:8px;"
+                            "background:#0f172a;border-radius:4px;padding:5px 8px;'>"
+                            "<span><b style='color:#4ade80;'>■</b> Green = Batter-Favoring</span>"
+                            "<span><b style='color:#f87171;'>■</b> Red = Pitcher-Favoring</span>"
+                            "<span><b style='color:#facc15;'>■</b> Yellow = Neutral</span>"
+                            "</div>",
+                            unsafe_allow_html=True,
+                        )
+
+                        # ── Pitcher Arsenal ────────────────────────────────────
+                        _ars_bat = _pm_bat_side
+                        if _pm_bat_side == "S":
+                            _ars_bat = "R" if _pm_pit_hand == "L" else "L"
+                        _ars_vs = (f" vs {'RHB' if _ars_bat == 'R' else 'LHB'}"
+                                   if _ars_bat in ("R", "L") else "")
+                        st.markdown(f"**🔥 {_pm_pit_n}{_pm_pit_hand_lbl} Arsenal{_ars_vs}{_pm_yr_lbl}**")
+
+                        if _pm_arsenal:
+                            _ptchs = sorted(_pm_arsenal, key=lambda x: x.get("pitch_pct", 0), reverse=True)[:6]
+                            _LG_WHIFF = 0.245
+                            _th  = ("background:#0f172a;color:#64748b;font-size:10px;"
+                                    "padding:4px 6px;text-align:center;border-bottom:1px solid #1e293b;")
+                            _thl = _th + "text-align:left;"
+                            _td  = "padding:4px 6px;text-align:center;font-size:11px;"
+                            _ar_rows = ""
+                            for _px in _ptchs:
+                                _pt   = _px.get("pitch_type", "")
+                                _lbl  = _pm_pitch_label(_pt)
+                                _uv   = _px.get("pitch_pct", 0) * 100
+                                _spd  = f"{_px.get('avg_speed'):.1f}" if _px.get("avg_speed") else "—"
+                                _kv   = _px.get("k_pct")
+                                _hrv  = _px.get("hr_rate")
+                                _kps  = f"{_kv*100:.0f}%" if _kv is not None else "—"
+                                _hrps = f"{_hrv*100:.1f}%" if _hrv is not None else "—"
+                                _wv   = _px.get("display_whiff")
+                                _hhv  = _px.get("display_hh")
+                                _rvv  = _px.get("display_rv100")
+                                _ws   = f"{_wv*100:.0f}%" if _wv is not None else "—"
+                                _hhs  = f"{_hhv*100:.0f}%" if _hhv is not None else "—"
+                                _rvs  = f"{_rvv:+.1f}" if _rvv is not None else "—"
+                                _fav  = 0.0
+                                if _wv  is not None: _fav -= (_wv  - _LG_WHIFF) * 3.0
+                                if _rvv is not None: _fav += _rvv / 4.0
+                                if _hhv is not None: _fav += (_hhv - 0.38) * 2.0
+                                if _wv is None and _rvv is None and _hhv is None:
+                                    _fav = -((_px.get("k_pct") or 0) - 0.22) * 2.0
+                                _pc  = ("#4ade80" if _fav >= 0.15 else "#f87171" if _fav <= -0.15 else "#facc15")
+                                _ubg = "#14532d" if _uv >= 35 else "#166534" if _uv >= 20 else "#0f172a"
+                                _kbg = ("#7f1d1d" if (_kv or 0) >= 0.28 else "#450a0a" if (_kv or 0) >= 0.22
+                                        else "#166534" if _kv is not None and _kv < 0.15 else "#0f172a")
+                                _hbg = ("#14532d" if (_hrv or 0) >= 0.04 else "#166534" if (_hrv or 0) >= 0.03
+                                        else "#7f1d1d" if _hrv is not None and (_hrv or 0) < 0.015 else "#0f172a")
+                                _wbg = ("#7f1d1d" if (_wv or 0) >= 0.30 else "#450a0a" if (_wv or 0) >= 0.22
+                                        else "#166534" if (_wv or 0) < 0.15 and _wv is not None else "#0f172a")
+                                _hbg2= ("#14532d" if (_hhv or 0) >= 0.50 else "#166534" if (_hhv or 0) >= 0.42
+                                        else "#7f1d1d" if (_hhv or 0) < 0.34 and _hhv is not None else "#0f172a")
+                                _rvbg= ("#7f1d1d" if (_rvv or 0) < -1.0 else "#450a0a" if (_rvv or 0) < 0
+                                        else "#14532d" if (_rvv or 0) > 2.5 else "#166534" if (_rvv or 0) > 1.0 else "#0f172a")
+                                _ar_rows += (
+                                    f"<tr>"
+                                    f"<td style='padding:4px 6px;'><b style='color:{_pc};font-size:11px;'>{_lbl}</b></td>"
+                                    f"<td style='background:{_ubg};color:#e2e8f0;{_td}'>{_uv:.0f}%</td>"
+                                    f"<td style='background:#0f172a;color:#94a3b8;{_td}'>{_spd}</td>"
+                                    f"<td style='background:{_kbg};color:#e2e8f0;{_td}'>{_kps}</td>"
+                                    f"<td style='background:{_hbg};color:#e2e8f0;{_td}'>{_hrps}</td>"
+                                    f"<td style='background:{_wbg};color:#e2e8f0;{_td}'>{_ws}</td>"
+                                    f"<td style='background:{_hbg2};color:#e2e8f0;{_td}'>{_hhs}</td>"
+                                    f"<td style='background:{_rvbg};color:#e2e8f0;{_td}'>{_rvs}</td>"
+                                    f"</tr>"
+                                )
+                            st.markdown(
+                                "<table style='width:100%;border-collapse:collapse;background:#0f172a;"
+                                "border-radius:6px;overflow:hidden;'>"
+                                "<thead><tr style='background:#0f172a;'>"
+                                f"<th colspan='3' style='background:#0f172a;padding:2px 6px;border-bottom:0;'></th>"
+                                f"<th colspan='5' style='background:#0a1628;color:#3b82f6;font-size:9px;"
+                                f"letter-spacing:1px;font-weight:700;padding:3px 6px;text-align:center;"
+                                f"border-top:2px solid #1e3a5f;border-bottom:0;'>── STATS ──</th>"
+                                f"</tr><tr>"
+                                f"<th style='{_thl}'>Pitch</th><th style='{_th}'>Use%</th>"
+                                f"<th style='{_th}'>MPH</th>"
+                                f"<th style='{_th}border-left:1px solid #1e3a5f;'>K%</th>"
+                                f"<th style='{_th}'>HR%</th><th style='{_th}'>Whiff%</th>"
+                                f"<th style='{_th}'>HH%</th><th style='{_th}'>RV/100</th>"
+                                f"</tr></thead><tbody>{_ar_rows}</tbody></table>"
+                                "<div style='font-size:9px;color:#475569;margin-top:3px;'>"
+                                "Pitch: 🟢 batter-favoring · 🔴 pitcher-favoring · 🟡 neutral"
+                                " &nbsp;|&nbsp; K%/Whiff%: 🔴=high · HH%: 🟢=high · RV/100: 🟢=positive</div>",
+                                unsafe_allow_html=True,
+                            )
+
+                            # Matchup outlook bar
+                            if _pm_mod >= 1.20:
+                                _mi_lbl, _mi_c, _mi_icon = "Strong Batter Advantage", "#4ade80", "🟢"
+                            elif _pm_mod >= 1.08:
+                                _mi_lbl, _mi_c, _mi_icon = "Batter Edge", "#86efac", "🟢"
+                            elif _pm_mod >= 1.03:
+                                _mi_lbl, _mi_c, _mi_icon = "Slight Batter Edge", "#facc15", "🟡"
+                            elif _pm_mod >= 0.97:
+                                _mi_lbl, _mi_c, _mi_icon = "Even Matchup", "#94a3b8", "⬜"
+                            elif _pm_mod >= 0.92:
+                                _mi_lbl, _mi_c, _mi_icon = "Slight Pitcher Edge", "#fb923c", "🟠"
+                            elif _pm_mod >= 0.85:
+                                _mi_lbl, _mi_c, _mi_icon = "Pitcher Edge", "#f87171", "🔴"
+                            else:
+                                _mi_lbl, _mi_c, _mi_icon = "Strong Pitcher Advantage", "#ef4444", "🔴"
+                            _bar_pct = min(100, max(0, int((_pm_mod - 0.75) / 0.60 * 100)))
+                            _lbl_pos = max(8, min(88, _bar_pct))
+                            st.markdown(
+                                f"<div style='background:#0f172a;border:1px solid #1e293b;border-radius:6px;"
+                                f"padding:8px 12px;margin-top:8px;margin-bottom:8px;'>"
+                                f"<div style='display:flex;justify-content:space-between;font-size:11px;margin-bottom:5px;'>"
+                                f"<span style='color:#64748b;'>⚔️ Matchup Outlook</span>"
+                                f"<span style='color:{_mi_c};font-weight:700;'>{_mi_icon} {_mi_lbl}</span>"
+                                f"<span style='color:#64748b;font-size:10px;'>Modifier: {_pm_mod:.2f}×</span>"
+                                f"</div>"
+                                f"<div style='position:relative;background:#1e293b;border-radius:4px;height:18px;'>"
+                                f"<div style='background:{_mi_c};width:{_bar_pct}%;height:18px;border-radius:4px;'></div>"
+                                f"<span style='position:absolute;top:0;left:{_lbl_pos}%;transform:translateX(-50%);"
+                                f"font-size:10px;font-weight:700;color:#0f172a;line-height:18px;white-space:nowrap;'>"
+                                f"{_bar_pct}%</span></div>"
+                                f"<div style='display:flex;justify-content:space-between;font-size:9px;"
+                                f"color:#374151;margin-top:3px;'>"
+                                f"<span>◀ Pitcher</span><span>Even (50%)</span><span>Batter ▶</span></div>"
+                                f"</div>",
+                                unsafe_allow_html=True,
+                            )
+                        else:
+                            st.caption("No Savant arsenal data for this pitcher.")
+
+                        # ── Batter vs Pitch Types ──────────────────────────────
+                        _bvp_hand = (f" vs {'LHP' if _pm_pit_hand == 'L' else 'RHP'}" if _pm_pit_hand else "")
+                        st.markdown(f"**🎯 {_pm_name}{_bvp_hand} ({config.CURRENT_SEASON})**")
+
+                        if _pm_batter_v:
+                            if _pm_arsenal:
+                                _ptchs_bvp = sorted(_pm_arsenal, key=lambda x: x.get("pitch_pct", 0), reverse=True)[:6]
+                                _bvp_pts = [_px.get("pitch_type", "") for _px in _ptchs_bvp[:5]]
+                            else:
+                                _bvp_pts = [pt for pt, _ in
+                                            sorted(_pm_batter_v.items(),
+                                                   key=lambda x: x[1].get("pa", 0), reverse=True)[:5]]
+                            _th2  = ("background:#0f172a;color:#64748b;font-size:10px;"
+                                     "padding:4px 6px;text-align:center;border-bottom:1px solid #1e293b;")
+                            _th2l = _th2 + "text-align:left;"
+                            _td2  = "padding:4px 6px;text-align:center;font-size:11px;"
+                            _sa_k = f"picks_pm_showall_{_pm_pid}"
+                            _sa   = st.session_state.get(_sa_k, False)
+                            _abvp = list(_bvp_pts)
+                            if _sa:
+                                _seen = set(_bvp_pts)
+                                _abvp += [pt for pt, _ in
+                                          sorted(_pm_batter_v.items(),
+                                                 key=lambda x: x[1].get("pa", 0), reverse=True)
+                                          if pt not in _seen]
+                            _brows = ""
+                            for _bpt_type in _abvp:
+                                _blbl = _pm_pitch_label(_bpt_type)
+                                _bpd  = _pm_batter_v.get(_bpt_type, {})
+                                if _bpd.get("pa", 0) < 3:
+                                    _bpc = _pm_pitch_color(_bpt_type)
+                                    _brows += (
+                                        f"<tr><td style='padding:4px 6px;'>"
+                                        f"<b style='color:{_bpc};font-size:11px;'>{_blbl}</b></td>"
+                                        f"<td colspan='7' style='color:#374151;font-size:10px;"
+                                        f"text-align:center;{_td2}'>< 3 PA</td></tr>"
+                                    )
+                                    continue
+                                _bslg  = _bpd.get("slg",    0.0)
+                                _bba   = _bpd.get("ba",      0.0)
+                                _biso  = round(max(0.0, _bslg - _bba), 3)
+                                _bkp   = _bpd.get("k_pct",  0.0)
+                                _bhr   = _bpd.get("hr",      0)
+                                _bpa   = _bpd.get("pa",      0)
+                                _bhrp  = _bpd.get("hr_rate", 0.0)
+                                _bfav  = (_bslg - 0.380) * 2.0 - (_bkp - 0.22) * 1.5 + (_bhr * 0.08)
+                                _bpc   = ("#4ade80" if _bfav >= 0.15 else "#f87171" if _bfav <= -0.15 else "#facc15")
+                                _sbg   = ("#14532d" if _bslg >= 0.550 else "#166534" if _bslg >= 0.450
+                                          else "#7f1d1d" if _bslg < 0.280 else "#450a0a" if _bslg < 0.200 else "#0f172a")
+                                _babg  = ("#14532d" if _bba  >= 0.350 else "#166534" if _bba  >= 0.280
+                                          else "#7f1d1d" if _bba  < 0.200 else "#0f172a")
+                                _ibg   = ("#14532d" if _biso >= 0.250 else "#166534" if _biso >= 0.175
+                                          else "#7f1d1d" if _biso < 0.080 else "#0f172a")
+                                _kbg2  = ("#7f1d1d" if _bkp >= 0.35 else "#450a0a" if _bkp >= 0.45
+                                          else "#166534" if _bkp < 0.18 else "#0f172a")
+                                _hrbg  = "#14532d" if _bhr >= 2 else "#166534" if _bhr >= 1 else "#0f172a"
+                                _hrpbg = ("#14532d" if _bhrp >= 0.05 else "#166534" if _bhrp >= 0.03
+                                          else "#7f1d1d" if _bhrp < 0.01 and _bpa >= 10 else "#0f172a")
+                                _brows += (
+                                    f"<tr>"
+                                    f"<td style='padding:4px 6px;'><b style='color:{_bpc};font-size:11px;'>{_blbl}</b></td>"
+                                    f"<td style='background:#0f172a;color:#94a3b8;{_td2}'>{_bpa}</td>"
+                                    f"<td style='background:{_hrbg};color:#e2e8f0;{_td2}'>{_bhr}</td>"
+                                    f"<td style='background:{_hrpbg};color:#e2e8f0;{_td2}'>{_bhrp*100:.1f}%</td>"
+                                    f"<td style='background:{_babg};color:#e2e8f0;{_td2}'>{_bba:.3f}</td>"
+                                    f"<td style='background:{_sbg};color:#e2e8f0;{_td2}'>{_bslg:.3f}</td>"
+                                    f"<td style='background:{_ibg};color:#e2e8f0;{_td2}'>{_biso:.3f}</td>"
+                                    f"<td style='background:{_kbg2};color:#e2e8f0;{_td2}'>{_bkp*100:.0f}%</td>"
+                                    f"</tr>"
+                                )
+                            if _brows:
+                                _bvp_note = "" if _pm_arsenal else " (all types)"
+                                st.markdown(
+                                    "<table style='width:100%;border-collapse:collapse;background:#0f172a;"
+                                    "border-radius:6px;overflow:hidden;margin-top:4px;'>"
+                                    "<thead><tr style='background:#0f172a;'>"
+                                    f"<th colspan='2' style='background:#0f172a;padding:2px 6px;border-bottom:0;'></th>"
+                                    f"<th colspan='6' style='background:#0a1f0a;color:#4ade80;font-size:9px;"
+                                    f"letter-spacing:1px;font-weight:700;padding:3px 6px;text-align:center;"
+                                    f"border-top:2px solid #14532d;border-bottom:0;'>── RESULTS ──</th>"
+                                    f"</tr><tr>"
+                                    f"<th style='{_th2l}'>Pitch{_bvp_note}</th>"
+                                    f"<th style='{_th2}'>PA</th>"
+                                    f"<th style='{_th2}border-left:1px solid #14532d;'>HR</th>"
+                                    f"<th style='{_th2}'>HR%</th><th style='{_th2}'>BA</th>"
+                                    f"<th style='{_th2}'>SLG</th><th style='{_th2}'>ISO</th>"
+                                    f"<th style='{_th2}'>K%</th>"
+                                    f"</tr></thead><tbody>{_brows}</tbody></table>"
+                                    "<div style='font-size:9px;color:#475569;margin-top:3px;'>"
+                                    "Pitch: 🟢=batter wins · 🔴=pitcher wins"
+                                    " &nbsp;|&nbsp; ISO=SLG−BA (power) · HR%=HR per PA</div>",
+                                    unsafe_allow_html=True,
+                                )
+                                if st.button("▲ Fewer" if _sa else "▼ All Pitches",
+                                             key=f"picks_pm_sa_{_pm_pid}",
+                                             use_container_width=False):
+                                    st.session_state[_sa_k] = not _sa
+                                    st.rerun()
+                            else:
+                                st.caption("Batter has < 3 PA vs any pitch type this season.")
+                        else:
+                            st.caption("No batter split data available.")
+
+                        # ── Pitcher Splits + H2H ───────────────────────────────
+                        st.divider()
+                        _pcs1, _pcs2 = st.columns(2)
+
+                        with _pcs1:
+                            st.markdown(f"**📈 {_pm_pit_n}{_pm_pit_hand_lbl} Splits{_pm_yr_lbl}**")
+                            if _pm_arsenal:
+                                _agg_tot = sum(_px.get("pitch_pct", 0) for _px in _pm_arsenal)
+                                if _agg_tot > 0:
+                                    _wt_w = sum(_px.get("pitch_pct", 0) for _px in _pm_arsenal if _px.get("display_whiff") is not None)
+                                    _wt_h = sum(_px.get("pitch_pct", 0) for _px in _pm_arsenal if _px.get("display_hh") is not None)
+                                    _wt_r = sum(_px.get("pitch_pct", 0) for _px in _pm_arsenal if _px.get("display_rv100") is not None)
+                                    _avg_w2 = (sum((_px.get("display_whiff") or 0) * _px.get("pitch_pct", 0)
+                                                   for _px in _pm_arsenal if _px.get("display_whiff") is not None)
+                                               / _wt_w) if _wt_w > 0 else None
+                                    _avg_h2 = (sum((_px.get("display_hh") or 0) * _px.get("pitch_pct", 0)
+                                                   for _px in _pm_arsenal if _px.get("display_hh") is not None)
+                                               / _wt_h) if _wt_h > 0 else None
+                                    _avg_r2 = (sum((_px.get("display_rv100") or 0) * _px.get("pitch_pct", 0)
+                                                   for _px in _pm_arsenal if _px.get("display_rv100") is not None)
+                                               / _wt_r) if _wt_r > 0 else None
+                                    _wc2 = ("#f87171" if (_avg_w2 or 0) >= 0.28 else "#4ade80" if (_avg_w2 or 0) < 0.20 else "#facc15") if _avg_w2 is not None else "#64748b"
+                                    _hc2 = ("#4ade80" if (_avg_h2 or 0) >= 0.42 else "#f87171" if (_avg_h2 or 0) < 0.34 else "#facc15") if _avg_h2 is not None else "#64748b"
+                                    _rc2 = ("#4ade80" if (_avg_r2 or 0) >= 1.0 else "#f87171" if (_avg_r2 or 0) <= -1.0 else "#facc15") if _avg_r2 is not None else "#64748b"
+                                    _pill2 = "background:#1e293b;border-radius:4px;padding:3px 8px;text-align:center;flex:1;"
+                                    st.markdown(
+                                        f"<div style='display:flex;gap:6px;margin-bottom:6px;font-size:11px;'>"
+                                        f"<div style='{_pill2}'><div style='color:#64748b;font-size:9px;'>Whiff%</div>"
+                                        f"<div style='color:{_wc2};font-weight:700;'>"
+                                        f"{'—' if _avg_w2 is None else f'{_avg_w2*100:.0f}%'}</div></div>"
+                                        f"<div style='{_pill2}'><div style='color:#64748b;font-size:9px;'>Hard Hit%</div>"
+                                        f"<div style='color:{_hc2};font-weight:700;'>"
+                                        f"{'—' if _avg_h2 is None else f'{_avg_h2*100:.0f}%'}</div></div>"
+                                        f"<div style='{_pill2}'><div style='color:#64748b;font-size:9px;'>RV/100</div>"
+                                        f"<div style='color:{_rc2};font-weight:700;'>"
+                                        f"{'—' if _avg_r2 is None else f'{_avg_r2:+.1f}'}</div></div>"
+                                        f"</div>",
+                                        unsafe_allow_html=True,
+                                    )
+                            _this_bat = "L" if _pm_bat_side == "L" else "R"
+                            _sp_rows2 = ""
+                            for _shand, _slbl2 in [("Season", "Season"), ("R", "vs RHB"), ("L", "vs LHB")]:
+                                if _shand == "Season":
+                                    _sr = _pm_splits.get("R", {}); _sl = _pm_splits.get("L", {})
+                                    _spa = _sr.get("pa", 0) + _sl.get("pa", 0)
+                                    _shr = _sr.get("hr", 0) + _sl.get("hr", 0)
+                                    if _spa == 0:
+                                        continue
+                                    _sslg = ((_sr.get("slg", 0) * _sr.get("pa", 0)) +
+                                             (_sl.get("slg", 0) * _sl.get("pa", 0))) / _spa
+                                    _siso = ((_sr.get("iso", 0) * _sr.get("pa", 0)) +
+                                             (_sl.get("iso", 0) * _sl.get("pa", 0))) / _spa
+                                    _rbg2, _lc2, _bdg = "#1e293b", "#94a3b8", ""
+                                else:
+                                    _sp2  = _pm_splits.get(_shand, {})
+                                    _spa  = _sp2.get("pa", 0)
+                                    if _spa == 0:
+                                        _sp_rows2 += (
+                                            f"<tr style='background:#111827;'>"
+                                            f"<td style='color:#555;padding:4px 6px;'>{_slbl2}</td>"
+                                            f"<td colspan='5' style='color:#444;font-size:10px;padding:4px 6px;'>no data</td></tr>"
+                                        )
+                                        continue
+                                    _shr  = _sp2.get("hr", 0)
+                                    _sslg = _sp2.get("slg", 0.0)
+                                    _siso = _sp2.get("iso", 0.0)
+                                    _rbg2 = "#1a3a2a" if _shand == _this_bat else "#111827"
+                                    _lc2  = "#fbbf24" if _shand == _this_bat else "#94a3b8"
+                                    _bdg  = " ◀" if _shand == _this_bat else ""
+                                _shrr = _shr / max(_spa, 1)
+                                _sc2  = "#4ade80" if _sslg >= 0.450 else "#f87171" if _sslg < 0.330 else "#f0f0f0"
+                                _ic2  = "#4ade80" if _siso >= 0.200 else "#f87171" if _siso < 0.130 else "#f0f0f0"
+                                _hrc2 = "#4ade80" if _shrr > 0.035 else "#f87171" if _shrr < 0.018 else "#f0f0f0"
+                                _sp_rows2 += (
+                                    f"<tr style='background:{_rbg2};'>"
+                                    f"<td style='color:{_lc2};font-weight:700;padding:4px 6px;white-space:nowrap;'>"
+                                    f"{_slbl2}{_bdg}</td>"
+                                    f"<td style='padding:4px 6px;text-align:center;'>{_spa}</td>"
+                                    f"<td style='padding:4px 6px;text-align:center;color:{_hrc2};font-weight:700;'>{_shr}</td>"
+                                    f"<td style='padding:4px 6px;text-align:center;color:{_hrc2};'>{_shrr:.3f}</td>"
+                                    f"<td style='padding:4px 6px;text-align:center;color:{_sc2};font-weight:700;'>{_sslg:.3f}</td>"
+                                    f"<td style='padding:4px 6px;text-align:center;color:{_ic2};'>{_siso:.3f}</td>"
+                                    f"</tr>"
+                                )
+                            if _sp_rows2:
+                                st.markdown(
+                                    "<table style='width:100%;font-size:11px;border-collapse:collapse;"
+                                    "border-radius:6px;overflow:hidden;margin-bottom:8px;'>"
+                                    "<tr style='background:#0f172a;color:#64748b;font-size:10px;'>"
+                                    "<th style='padding:4px 6px;text-align:left;'>Split</th>"
+                                    "<th style='padding:4px 6px;text-align:center;'>PA</th>"
+                                    "<th style='padding:4px 6px;text-align:center;'>HR</th>"
+                                    "<th style='padding:4px 6px;text-align:center;'>HR/PA</th>"
+                                    "<th style='padding:4px 6px;text-align:center;'>SLG</th>"
+                                    "<th style='padding:4px 6px;text-align:center;'>ISO</th>"
+                                    f"</tr>{_sp_rows2}</table>"
+                                    "<div style='font-size:9px;color:#555;margin-bottom:8px;'>"
+                                    "🟢 green = favorable for batter &nbsp;|&nbsp; 🔴 red = favorable for pitcher</div>",
+                                    unsafe_allow_html=True,
+                                )
+                            else:
+                                st.caption("No pitcher split data available.")
+
+                        with _pcs2:
+                            _h2h_pa2  = _pm_h2h.get("pa", 0)
+                            st.markdown(
+                                f"<div style='background:#0f172a;border:1px solid #1e3a5f;border-radius:8px;"
+                                f"padding:8px 12px;margin-bottom:6px;'>"
+                                f"<div style='font-size:12px;font-weight:800;color:#f0f0f0;margin-bottom:4px;'>"
+                                f"⚔️ <span style='color:#60a5fa;'>{_pm_name}{_pm_bat_side_lbl}</span>"
+                                f" vs <span style='color:#f87171;'>{_pm_pit_n}{_pm_pit_hand_lbl}</span>"
+                                f" <span style='color:#64748b;font-weight:400;font-size:10px;'>(Career)</span>"
+                                f"</div>",
+                                unsafe_allow_html=True,
+                            )
+                            if _h2h_pa2 >= 1:
+                                try:
+                                    _ha2 = float(str(_pm_h2h.get("avg", ".000")).replace(",", "") or 0)
+                                    _hs2 = float(str(_pm_h2h.get("slg", ".000")).replace(",", "") or 0)
+                                    _ho2 = float(str(_pm_h2h.get("ops", ".000")).replace(",", "") or 0)
+                                except (ValueError, TypeError):
+                                    _ha2 = _hs2 = _ho2 = 0.0
+                                _hi2  = round(max(0.0, _hs2 - _ha2), 3)
+                                _hhr2 = _pm_h2h.get("hr", 0)
+                                _hbb2 = _pm_h2h.get("bb", 0)
+                                _hk2  = _pm_h2h.get("k",  0)
+                                _avc2 = "#4ade80" if _ha2 >= 0.300 else "#f87171" if _ha2 < 0.200 else "#f0f0f0"
+                                _slc2 = "#4ade80" if _hs2 >= 0.500 else "#f87171" if _hs2 < 0.350 else "#f0f0f0"
+                                _isc2 = "#4ade80" if _hi2 >= 0.200 else "#f87171" if _hi2 < 0.100 else "#f0f0f0"
+                                _opc2 = "#4ade80" if _ho2 >= 0.800 else "#f87171" if _ho2 < 0.600 else "#f0f0f0"
+                                _hrc3 = "#4ade80" if _hhr2 >= 1 else "#888"
+                                _kc2  = "#f87171" if _hk2  >= int(_h2h_pa2 * 0.30) else "#f0f0f0"
+                                st.markdown(
+                                    f"<div style='background:#0f172a;border:1px solid #1e3a5f;border-radius:8px;"
+                                    f"padding:0 12px 10px;margin-bottom:4px;'>"
+                                    f"<div style='display:grid;grid-template-columns:repeat(7,1fr);"
+                                    f"font-size:9px;color:#64748b;text-align:center;"
+                                    f"border-bottom:1px solid #1e293b;padding:4px 0 2px;'>"
+                                    f"<div>PA</div><div>HR</div><div>BB</div><div>K</div>"
+                                    f"<div>AVG</div><div>SLG</div><div>OPS</div></div>"
+                                    f"<div style='display:grid;grid-template-columns:repeat(7,1fr);"
+                                    f"font-size:13px;font-weight:800;text-align:center;padding:6px 0 4px;'>"
+                                    f"<div style='color:#f0f0f0;'>{_h2h_pa2}</div>"
+                                    f"<div style='color:{_hrc3};'>{_hhr2}</div>"
+                                    f"<div style='color:#f0f0f0;'>{_hbb2}</div>"
+                                    f"<div style='color:{_kc2};'>{_hk2}</div>"
+                                    f"<div style='color:{_avc2};'>{_pm_h2h.get('avg','.000')}</div>"
+                                    f"<div style='color:{_slc2};'>{_pm_h2h.get('slg','.000')}</div>"
+                                    f"<div style='color:{_opc2};'>{_pm_h2h.get('ops','.000')}</div>"
+                                    f"</div>"
+                                    f"<div style='display:grid;grid-template-columns:repeat(7,1fr);"
+                                    f"font-size:9px;text-align:center;padding-bottom:2px;'>"
+                                    f"<div></div><div></div><div></div><div></div><div></div>"
+                                    f"<div style='color:{_isc2};font-size:9px;'>ISO {_hi2:.3f}</div>"
+                                    f"<div></div></div>"
+                                    f"<div style='font-size:9px;color:#555;margin-top:2px;'>"
+                                    f"🟢 green = batter-favorable &nbsp;|&nbsp; 🔴 red = pitcher-favorable</div>"
+                                    f"</div>",
+                                    unsafe_allow_html=True,
+                                )
+                                if _h2h_pa2 < 5:
+                                    st.caption(f"⚠️ {_h2h_pa2} PA career — small sample, context only")
+                            else:
+                                st.markdown(
+                                    "<div style='background:#0f172a;border:1px solid #1e3a5f;border-radius:8px;"
+                                    "padding:8px 12px;margin-bottom:4px;'>"
+                                    "<div style='font-size:11px;color:#475569;text-align:center;'>No career matchup history</div>"
+                                    "</div>",
+                                    unsafe_allow_html=True,
+                                )
+
+                        # Player info + FD buttons
+                        _pmb1, _pmb2 = st.columns(2)
+                        with _pmb1:
+                            if st.button("ℹ️ Player Info",
+                                         key=f"picks_pm_modal_{_pm_pid}",
+                                         use_container_width=True, type="primary"):
+                                st.session_state["show_modal"] = _pm_p
+                                st.session_state["modal_source_tab"] = "Today's Picks"
+                                st.session_state["modal_source_section"] = "Pitch Mix"
+                                st.rerun()
+                        with _pmb2:
+                            st.link_button("📲 Open on FanDuel", _fanduel_url(_pm_name),
+                                           use_container_width=True)
+
     if all_by_model:
         PRIME_FLOOR = 0.15
 
-        # â"€â"€ All available columns (name -> extractor) â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
+        # ── All available columns (name -> extractor) ─────────────────────────
         _FIXED_COLS   = ["Tier", "Player", "Team", "Spot", "Vs", "Model%"]
         _TOGGLE_COLS  = [
             "Brl%", "SwSp%", "FB%", "GB%", "LD%", "Pull%", "Oppo%",
