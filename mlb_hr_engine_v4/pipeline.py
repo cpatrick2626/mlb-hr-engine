@@ -277,11 +277,15 @@ def _enrich_with_ev(player):
     ev_model_p = min(model_p, market_p * 1.4) if market_p > 0 else model_p
     player["ev_pct"] = ev_engine.expected_value_pct(ev_model_p, dec_odds)
 
-    barrel_pct_str = str(player.get("barrel_pct", "0")).replace("%", "")
+    barrel_pct_str = str(player.get("barrel_pct", "")).replace("%", "").strip()
     try:
-        barrel_raw = float(barrel_pct_str) / 100.0 if barrel_pct_str and barrel_pct_str != '--' else 0.0
+        barrel_raw = (
+            float(barrel_pct_str) / 100.0
+            if barrel_pct_str and barrel_pct_str not in ("--", "0", "0.0")
+            else config.LEAGUE_AVG_BARREL_RATE
+        )
     except (ValueError, TypeError):
-        barrel_raw = 0.0
+        barrel_raw = config.LEAGUE_AVG_BARREL_RATE
 
     try:
         pitcher_hr9 = float(player.get("pitcher_hr9", 0) or 0)

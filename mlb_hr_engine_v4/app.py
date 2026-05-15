@@ -4144,7 +4144,7 @@ def tab_jig(data: dict):
                         unsafe_allow_html=True,
                     )
                     _sa_lbl = "▲ Fewer Pitches" if _show_all else "▼ Show All Pitches"
-                    if st.button(_sa_lbl, key=f"pm_sa_{p.get('player_id', '')}",
+                    if st.button(_sa_lbl, key=f"{key_prefix}_pm_sa_{p.get('player_id', '')}",
                                  use_container_width=False):
                         st.session_state[_show_all_k] = not _show_all
                         st.rerun()
