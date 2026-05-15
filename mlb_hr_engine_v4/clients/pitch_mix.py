@@ -50,6 +50,64 @@ def clear_caches() -> None:
     _H2H_CACHE.clear()
     _BATTER_PT_CACHE.clear()
 
+
+def _acc_pitch_row(totals: dict, pt: str, ev: str, row: dict) -> None:
+    """Accumulate one PA-ending Savant row into a pitch_totals dict in-place."""
+    p = totals.setdefault(pt, {
+        "pa": 0, "hr": 0, "k": 0, "h": 0, "tb": 0.0, "ab": 0,
+        "speed_sum": 0.0, "speed_n": 0, "hard_hit": 0, "contact": 0,
+    })
+    p["pa"] += 1
+    try:
+        spd = float(row.get("release_speed") or 0)
+        if spd > 0:
+            p["speed_sum"] += spd; p["speed_n"] += 1
+    except (ValueError, TypeError):
+        pass
+    if "strikeout" in ev:
+        p["k"] += 1; p["ab"] += 1
+    elif ev == "home_run":
+        p["hr"] += 1; p["h"] += 1; p["tb"] += 4; p["ab"] += 1
+        _acc_ls(p, row)
+    elif ev == "double":
+        p["h"] += 1; p["tb"] += 2; p["ab"] += 1; _acc_ls(p, row)
+    elif ev == "triple":
+        p["h"] += 1; p["tb"] += 3; p["ab"] += 1; _acc_ls(p, row)
+    elif ev == "single":
+        p["h"] += 1; p["tb"] += 1; p["ab"] += 1; _acc_ls(p, row)
+    elif ev not in ("walk", "hit_by_pitch", "catcher_interf"):
+        p["ab"] += 1; _acc_ls(p, row)
+
+
+def _acc_ls(p: dict, row: dict) -> None:
+    try:
+        ls = float(row.get("launch_speed") or 0)
+        if ls > 0:
+            p["contact"] += 1
+            if ls >= 95:
+                p["hard_hit"] += 1
+    except (ValueError, TypeError):
+        pass
+
+
+def _finalize_pitch_stats(totals: dict, total_pa_denom: int) -> dict:
+    """Convert raw pitch accumulator totals into a pitch_stats dict."""
+    out = {}
+    denom = total_pa_denom or 1
+    for pt, p in totals.items():
+        _disp_hh = round(p["hard_hit"] / p["contact"], 3) if p.get("contact", 0) >= 5 else None
+        out[pt] = {
+            "pa":        p["pa"],
+            "pitch_pct": round(p["pa"] / denom, 4),
+            "hr":        p["hr"],
+            "k":         p["k"],
+            "k_pct":     round(p["k"]  / p["pa"], 3) if p["pa"] else 0.0,
+            "hr_rate":   round(p["hr"] / p["pa"], 3) if p["pa"] else 0.0,
+            "avg_speed": round(p["speed_sum"] / p["speed_n"], 1) if p["speed_n"] else None,
+            "display_hh": _disp_hh,
+        }
+    return out
+
 # Human-readable pitch type labels
 PITCH_LABELS: dict[str, str] = {
     "FF": "4-Seam FB", "SI": "Sinker",    "FC": "Cutter",
@@ -135,8 +193,9 @@ def _fetch_pitcher_savant(pitcher_id: int) -> dict:
             )
             resp.raise_for_status()
 
-            hand_totals:  dict[str, dict] = {}
-            pitch_totals: dict[str, dict] = {}
+            hand_totals:          dict[str, dict] = {}
+            pitch_totals:         dict[str, dict] = {}           # overall (all batters)
+            pitch_totals_by_stand: dict[str, dict] = {"R": {}, "L": {}}  # vs RHB / vs LHB
             total_rows = 0
 
             for row in csv.DictReader(io.StringIO(resp.text.lstrip("﻿"))):
@@ -164,72 +223,11 @@ def _fetch_pitcher_savant(pitcher_id: int) -> dict:
                         h["h"] += 1; h["tb"] += 1; h["ab"] += 1
                     elif ev not in ("walk", "hit_by_pitch", "catcher_interf"):
                         h["ab"] += 1
+                    # Per-stand pitch stats
+                    _acc_pitch_row(pitch_totals_by_stand[stand], pt, ev, row)
 
-                p = pitch_totals.setdefault(pt, {
-                    "pa": 0, "hr": 0, "k": 0, "h": 0, "tb": 0.0, "ab": 0,
-                    "speed_sum": 0.0, "speed_n": 0,
-                    "hard_hit": 0, "contact": 0,
-                })
-                p["pa"] += 1
-                try:
-                    spd = float(row.get("release_speed") or 0)
-                    if spd > 0:
-                        p["speed_sum"] += spd
-                        p["speed_n"]   += 1
-                except (ValueError, TypeError):
-                    pass
-                if "strikeout" in ev:
-                    p["k"] += 1; p["ab"] += 1
-                elif ev == "home_run":
-                    p["hr"] += 1; p["h"] += 1; p["tb"] += 4; p["ab"] += 1
-                    try:
-                        ls = float(row.get("launch_speed") or 0)
-                        if ls > 0:
-                            p["contact"] += 1
-                            if ls >= 95:
-                                p["hard_hit"] += 1
-                    except (ValueError, TypeError):
-                        pass
-                elif ev == "double":
-                    p["h"] += 1; p["tb"] += 2; p["ab"] += 1
-                    try:
-                        ls = float(row.get("launch_speed") or 0)
-                        if ls > 0:
-                            p["contact"] += 1
-                            if ls >= 95:
-                                p["hard_hit"] += 1
-                    except (ValueError, TypeError):
-                        pass
-                elif ev == "triple":
-                    p["h"] += 1; p["tb"] += 3; p["ab"] += 1
-                    try:
-                        ls = float(row.get("launch_speed") or 0)
-                        if ls > 0:
-                            p["contact"] += 1
-                            if ls >= 95:
-                                p["hard_hit"] += 1
-                    except (ValueError, TypeError):
-                        pass
-                elif ev == "single":
-                    p["h"] += 1; p["tb"] += 1; p["ab"] += 1
-                    try:
-                        ls = float(row.get("launch_speed") or 0)
-                        if ls > 0:
-                            p["contact"] += 1
-                            if ls >= 95:
-                                p["hard_hit"] += 1
-                    except (ValueError, TypeError):
-                        pass
-                elif ev not in ("walk", "hit_by_pitch", "catcher_interf"):
-                    p["ab"] += 1
-                    try:
-                        ls = float(row.get("launch_speed") or 0)
-                        if ls > 0:
-                            p["contact"] += 1
-                            if ls >= 95:
-                                p["hard_hit"] += 1
-                    except (ValueError, TypeError):
-                        pass
+                # Overall pitch stats
+                _acc_pitch_row(pitch_totals, pt, ev, row)
 
             # Skip this season if too sparse; try prior year
             if total_rows < _MIN_PITCHER_PA:
@@ -244,23 +242,19 @@ def _fetch_pitcher_savant(pitcher_id: int) -> dict:
                 iso = round(max(0.0, slg - avg), 3)
                 hand_splits[hand] = {"pa": h["pa"], "hr": h["hr"], "slg": slg, "iso": iso}
 
-            pitch_stats: dict[str, dict] = {}
-            for pt, p in pitch_totals.items():
-                _disp_hh = (round(p["hard_hit"] / p["contact"], 3)
-                            if p.get("contact", 0) >= 5 else None)
-                pitch_stats[pt] = {
-                    "pa":        p["pa"],
-                    "pitch_pct": round(p["pa"] / total_pa, 4),
-                    "hr":        p["hr"],
-                    "k":         p["k"],
-                    "k_pct":     round(p["k"]  / p["pa"], 3) if p["pa"] else 0.0,
-                    "hr_rate":   round(p["hr"] / p["pa"], 3) if p["pa"] else 0.0,
-                    "avg_speed": round(p["speed_sum"] / p["speed_n"], 1)
-                                 if p["speed_n"] else None,
-                    "display_hh": _disp_hh,
-                }
+            pitch_stats     = _finalize_pitch_stats(pitch_totals, total_pa)
+            r_pa            = hand_totals.get("R", {}).get("pa", 0)
+            l_pa            = hand_totals.get("L", {}).get("pa", 0)
+            pitch_stats_vs_r = _finalize_pitch_stats(pitch_totals_by_stand["R"], r_pa)
+            pitch_stats_vs_l = _finalize_pitch_stats(pitch_totals_by_stand["L"], l_pa)
 
-            result = {"hand_splits": hand_splits, "pitch_stats": pitch_stats, "data_year": season}
+            result = {
+                "hand_splits":     hand_splits,
+                "pitch_stats":     pitch_stats,
+                "pitch_stats_vs_r": pitch_stats_vs_r,
+                "pitch_stats_vs_l": pitch_stats_vs_l,
+                "data_year":       season,
+            }
             _got_data = True
             break  # good season found — stop iterating
 
@@ -281,12 +275,18 @@ def get_pitcher_hand_splits(pitcher_id: int) -> dict:
     return _fetch_pitcher_savant(pitcher_id).get("hand_splits", {"R": {}, "L": {}})
 
 
-def get_pitcher_pitch_stats(pitcher_id: int) -> dict:
+def get_pitcher_pitch_stats(pitcher_id: int, batter_side: str = "") -> dict:
     """
-    Pitcher's per-pitch-type stats (current season, or prior if sparse).
-    → {"FF": {pa, pitch_pct, hr, k, k_pct, hr_rate, avg_speed}, ...}
+    Pitcher's per-pitch-type stats split by batter handedness when batter_side is given.
+    batter_side: "R" → stats vs RHB, "L" → stats vs LHB, "" → overall.
+    → {"FF": {pa, pitch_pct, hr, k, k_pct, hr_rate, avg_speed, display_hh}, ...}
     """
-    return _fetch_pitcher_savant(pitcher_id).get("pitch_stats", {})
+    savant = _fetch_pitcher_savant(pitcher_id)
+    if batter_side == "R":
+        return savant.get("pitch_stats_vs_r") or savant.get("pitch_stats", {})
+    if batter_side == "L":
+        return savant.get("pitch_stats_vs_l") or savant.get("pitch_stats", {})
+    return savant.get("pitch_stats", {})
 
 
 def get_pitcher_data_year(pitcher_id: int) -> int:
@@ -425,7 +425,12 @@ def load_hvy_context(player: dict, arsenal_data: dict | None = None,
 
     # Merge arsenal usage% with live per-pitch stats + display-only leaderboard stats
     pitcher_hand    = player.get("pitcher_hand", "")
-    pitcher_arsenal = _build_pitcher_arsenal(pitcher_id, arsenal_data, disp_stats)
+    # Switch hitters bat opposite the pitcher's hand — derive effective batting side
+    if batter_side == "S":
+        effective_batter_side = "R" if pitcher_hand == "L" else "L"
+    else:
+        effective_batter_side = batter_side
+    pitcher_arsenal = _build_pitcher_arsenal(pitcher_id, arsenal_data, disp_stats, effective_batter_side)
     hand_splits     = get_pitcher_hand_splits(pitcher_id) if pitcher_id else {"R": {}, "L": {}}
     h2h             = get_h2h(pitcher_id, batter_id) if pitcher_id and batter_id else {}
     batter_vs       = get_batter_vs_pitches(batter_id, pitcher_hand) if batter_id else {}
@@ -470,28 +475,32 @@ def load_hvy_contexts_batch(players: list[dict], arsenal_data: dict | None = Non
 
 
 def _build_pitcher_arsenal(pitcher_id: int | None, arsenal_data: dict | None,
-                           disp_stats: dict | None = None) -> list[dict]:
+                           disp_stats: dict | None = None,
+                           batter_side: str = "") -> list[dict]:
     """
     Build a unified pitcher arsenal list merging:
-      - Usage percentages from arsenal_data (Savant season leaderboard CSV)
+      - Usage% from arsenal_data leaderboard (overall), overridden by per-stand
+        pitch_pct from Savant raw data when batter_side is "R" or "L"
       - Per-pitch speed / K% / HR-rate / display_hh from get_pitcher_pitch_stats()
-      - Display-only whiff%/HH%/RV100 from disp_stats (pitch-arsenal-stats leaderboard)
+        filtered to vs-RHB or vs-LHB when batter_side is provided
+      - Display-only whiff%/HH%/RV100 from disp_stats (no hand-split available)
 
-    Formula fields (whiff_pct, hard_hit_pct, rv_per100) remain None so the
-    arsenal_matchup_factor formula is unaffected. Display values live in
-    display_whiff, display_hh, display_rv100.
+    Formula fields (whiff_pct, hard_hit_pct, rv_per100) remain None.
     """
     if not pitcher_id:
         return []
 
     from_leaderboard: list[dict] = (arsenal_data or {}).get(pitcher_id) or []
-    pitch_stats = get_pitcher_pitch_stats(pitcher_id)
+    # Per-stand stats (vs the specific batter handedness) — falls back to overall if sparse
+    pitch_stats = get_pitcher_pitch_stats(pitcher_id, batter_side)
     _disp = disp_stats or {}
 
     def _merge_display(entry: dict, pt: str, live: dict) -> dict:
         ds = _disp.get((pitcher_id, pt), {})
         return {
             **entry,
+            # Override leaderboard pitch_pct with per-stand value when available
+            "pitch_pct":     live.get("pitch_pct") or entry.get("pitch_pct", 0),
             "avg_speed":     live.get("avg_speed") or entry.get("avg_speed"),
             "k_pct":         live.get("k_pct"),
             "hr_rate":       live.get("hr_rate"),

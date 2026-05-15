@@ -3359,7 +3359,13 @@ def tab_jig(data: dict):
                 )
 
                 # ── Arsenal table ──────────────────────────────────────────────
-                st.markdown(f"**🔥 {pit_n}{pit_hand_lbl} Arsenal{_yr_label}**")
+                # Show which batter side the pitcher stats reflect (switch hitters flip)
+                _ars_bat_side = bat_side
+                if bat_side == "S":
+                    _ars_bat_side = "R" if pit_hand == "L" else "L"
+                _ars_vs_lbl = (f" vs {'RHB' if _ars_bat_side == 'R' else 'LHB'}"
+                               if _ars_bat_side in ("R", "L") else "")
+                st.markdown(f"**🔥 {pit_n}{pit_hand_lbl} Arsenal{_ars_vs_lbl}{_yr_label}**")
                 if pitcher_arsenal:
                     pitches = sorted(pitcher_arsenal, key=lambda x: x.get("pitch_pct", 0), reverse=True)[:6]
                     _th = ("background:#0f172a;color:#64748b;font-size:10px;"
