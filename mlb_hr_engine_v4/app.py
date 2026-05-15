@@ -445,9 +445,10 @@ def _auto_refresh_ticker():
 # ── Data loading ──────────────────────────────────────────────────────────────
 def get_data():
     import gc
-    from datetime import date as _date
     from pipeline import load_game_data
-    target_date = config.TARGET_DATE or _date.today().strftime("%Y-%m-%d")
+    # Always derive "today" in Eastern Time — MLB schedules run on ET and the
+    # system clock may be UTC, which rolls to the next day at 8 PM ET.
+    target_date = config.TARGET_DATE or _dt.datetime.now(_EDT).strftime("%Y-%m-%d")
 
     if "data" not in st.session_state or st.session_state.get("cache_key") != target_date:
         with st.status("⚾ Loading MLB data — first load takes 2-4 min…", expanded=True) as _status:

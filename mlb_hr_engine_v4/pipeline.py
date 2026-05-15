@@ -6,7 +6,7 @@ a single dict that both the CLI display and the Streamlit UI can consume.
 """
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import date, timedelta
+from datetime import date, timedelta, datetime, timezone
 from rapidfuzz import fuzz, process as fuzz_process
 import unicodedata
 
@@ -324,7 +324,8 @@ def load_game_data(
         if progress_cb:
             progress_cb(msg)
 
-    game_date = target_date or (config.TARGET_DATE or date.today().strftime("%Y-%m-%d"))
+    _ET = timezone(timedelta(hours=-4))  # EDT (Apr–Oct)
+    game_date = target_date or (config.TARGET_DATE or datetime.now(_ET).strftime("%Y-%m-%d"))
 
     # Run adaptive learning if new settled picks are available since last run
     try:
