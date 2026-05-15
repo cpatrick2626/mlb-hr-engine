@@ -32,7 +32,7 @@ MLB_API = "https://statsapi.mlb.com/api/v1"
 SAVANT  = "https://baseballsavant.mlb.com"
 
 # Bump this whenever the context schema changes — forces Streamlit session-state cache to refresh.
-HVY_CACHE_VERSION = "8"
+HVY_CACHE_VERSION = "9"
 
 # {pitcher_id: {"hand_splits": {...}, "pitch_stats": {...}, "data_year": int}}
 _PITCHER_SAVANT_CACHE: dict[int, dict] = {}
@@ -340,18 +340,46 @@ def get_h2h(pitcher_id: int, batter_id: int) -> dict:
 
 # ── Batter vs pitch types ─────────────────────────────────────────────────────
 
-def get_batter_vs_pitches(batter_id: int, pitcher_hand: str = "") -> dict:
+def _fetch_all_batter_pitch_splits(batter_id: int) -> None:
     """
-    Batter's season results aggregated by pitch type (PA-ending events only).
-    pitcher_hand: "L" or "R" — when provided, only counts PAs vs that hand.
-    → {"FF": {pa, hr, k, ba, slg, k_pct, hr_rate}, "SL": {...}, ...}
+    Fetch Savant data for a batter ONCE and populate _BATTER_PT_CACHE for
+    all three split keys: (batter_id, ""), (batter_id, "R"), (batter_id, "L").
+    This guarantees hand-split accuracy without multiple HTTP calls.
     """
-    _hand = pitcher_hand.upper() if pitcher_hand else ""
-    _key = (batter_id, _hand)
-    if _key in _BATTER_PT_CACHE:
-        return _BATTER_PT_CACHE[_key]
+    totals_all: dict[str, dict] = {}
+    totals_by_hand: dict[str, dict[str, dict]] = {"R": {}, "L": {}}
 
-    result: dict[str, dict] = {}
+    def _acc(totals: dict, pt: str, ev: str) -> None:
+        t = totals.setdefault(pt, {"pa": 0, "hr": 0, "h": 0, "k": 0, "tb": 0.0, "ab": 0})
+        t["pa"] += 1
+        if "strikeout" in ev:
+            t["k"] += 1;  t["ab"] += 1
+        elif ev == "home_run":
+            t["hr"] += 1; t["h"] += 1; t["tb"] += 4; t["ab"] += 1
+        elif ev == "double":
+            t["h"] += 1;  t["tb"] += 2; t["ab"] += 1
+        elif ev == "triple":
+            t["h"] += 1;  t["tb"] += 3; t["ab"] += 1
+        elif ev == "single":
+            t["h"] += 1;  t["tb"] += 1; t["ab"] += 1
+        elif ev not in ("walk", "hit_by_pitch", "catcher_interf"):
+            t["ab"] += 1
+
+    def _finalize(totals: dict) -> dict:
+        out = {}
+        for pt, t in totals.items():
+            ab = t["ab"] or 1
+            out[pt] = {
+                "pa":      t["pa"],
+                "hr":      t["hr"],
+                "k":       t["k"],
+                "ba":      round(t["h"] / ab, 3),
+                "slg":     round(t["tb"] / ab, 3),
+                "k_pct":   round(t["k"] / t["pa"], 3) if t["pa"] else 0.0,
+                "hr_rate": round(t["hr"] / t["pa"], 3) if t["pa"] else 0.0,
+            }
+        return out
+
     try:
         resp = _SESSION.get(
             f"{SAVANT}/statcast_search/csv",
@@ -367,46 +395,37 @@ def get_batter_vs_pitches(batter_id: int, pitcher_hand: str = "") -> dict:
         )
         resp.raise_for_status()
 
-        totals: dict[str, dict] = {}
         for row in csv.DictReader(io.StringIO(resp.text.lstrip("﻿"))):
             pt = (row.get("pitch_type") or "").strip().upper()
             ev = (row.get("events") or "").strip().lower()
             if not pt or not ev:
                 continue
-            # Filter by pitcher handedness when specified
-            if _hand and (row.get("p_throws") or "").strip().upper() != _hand:
-                continue
-            t = totals.setdefault(pt, {"pa": 0, "hr": 0, "h": 0, "k": 0, "tb": 0.0, "ab": 0})
-            t["pa"] += 1
-            if "strikeout" in ev:
-                t["k"] += 1;  t["ab"] += 1
-            elif ev == "home_run":
-                t["hr"] += 1; t["h"] += 1; t["tb"] += 4; t["ab"] += 1
-            elif ev == "double":
-                t["h"] += 1;  t["tb"] += 2; t["ab"] += 1
-            elif ev == "triple":
-                t["h"] += 1;  t["tb"] += 3; t["ab"] += 1
-            elif ev == "single":
-                t["h"] += 1;  t["tb"] += 1; t["ab"] += 1
-            elif ev not in ("walk", "hit_by_pitch", "catcher_interf"):
-                t["ab"] += 1
+            p_hand = (row.get("p_throws") or "").strip().upper()
 
-        for pt, t in totals.items():
-            ab = t["ab"] or 1
-            result[pt] = {
-                "pa":      t["pa"],
-                "hr":      t["hr"],
-                "k":       t["k"],
-                "ba":      round(t["h"] / ab, 3),
-                "slg":     round(t["tb"] / ab, 3),
-                "k_pct":   round(t["k"] / t["pa"], 3) if t["pa"] else 0.0,
-                "hr_rate": round(t["hr"] / t["pa"], 3) if t["pa"] else 0.0,
-            }
+            _acc(totals_all, pt, ev)
+            if p_hand in ("R", "L"):
+                _acc(totals_by_hand[p_hand], pt, ev)
+
     except Exception as e:
-        print(f"[pitch_mix] batter_vs_pitches failed (bid={batter_id}, hand={_hand}): {e}")
+        print(f"[pitch_mix] batter_vs_pitches fetch failed (bid={batter_id}): {e}")
 
-    _BATTER_PT_CACHE[_key] = result
-    return result
+    _BATTER_PT_CACHE[(batter_id, "")]  = _finalize(totals_all)
+    _BATTER_PT_CACHE[(batter_id, "R")] = _finalize(totals_by_hand["R"])
+    _BATTER_PT_CACHE[(batter_id, "L")] = _finalize(totals_by_hand["L"])
+
+
+def get_batter_vs_pitches(batter_id: int, pitcher_hand: str = "") -> dict:
+    """
+    Batter's season results aggregated by pitch type (PA-ending events only).
+    pitcher_hand: "R" → vs RHP only, "L" → vs LHP only, "" → overall.
+    One Savant fetch populates all three splits so calls are always O(1) after first.
+    → {"FF": {pa, hr, k, ba, slg, k_pct, hr_rate}, "SL": {...}, ...}
+    """
+    _hand = pitcher_hand.upper() if pitcher_hand else ""
+    _key  = (batter_id, _hand)
+    if _key not in _BATTER_PT_CACHE:
+        _fetch_all_batter_pitch_splits(batter_id)
+    return _BATTER_PT_CACHE.get(_key, {})
 
 
 # ── Context assembly ───────────────────────────────────────────────────────────
