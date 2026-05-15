@@ -3471,7 +3471,8 @@ def tab_jig(data: dict):
                     st.caption("No Savant arsenal data for this pitcher.")
 
                 # ── Batter vs pitch types ──────────────────────────────────────
-                st.markdown(f"**🎯 {name} vs These Pitches ({config.CURRENT_SEASON})**")
+                _bvp_hand_lbl = (f" vs {'LHP' if pit_hand == 'L' else 'RHP'}" if pit_hand else "")
+                st.markdown(f"**🎯 {name}{_bvp_hand_lbl} ({config.CURRENT_SEASON})**")
                 if batter_vs:
                     if pitcher_arsenal:
                         _bvp_pitches = [px.get("pitch_type", "") for px in pitches[:5]]

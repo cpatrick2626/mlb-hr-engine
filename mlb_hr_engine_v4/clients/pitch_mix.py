@@ -32,12 +32,12 @@ MLB_API = "https://statsapi.mlb.com/api/v1"
 SAVANT  = "https://baseballsavant.mlb.com"
 
 # Bump this whenever the context schema changes — forces Streamlit session-state cache to refresh.
-HVY_CACHE_VERSION = "7"
+HVY_CACHE_VERSION = "8"
 
 # {pitcher_id: {"hand_splits": {...}, "pitch_stats": {...}, "data_year": int}}
 _PITCHER_SAVANT_CACHE: dict[int, dict] = {}
 _H2H_CACHE:            dict[tuple, dict] = {}
-_BATTER_PT_CACHE:      dict[int, dict] = {}
+_BATTER_PT_CACHE:      dict[tuple, dict] = {}  # keyed (batter_id, pitcher_hand)
 
 # Minimum PA-ending events to consider a season's data usable
 _MIN_PITCHER_PA = 20
@@ -340,13 +340,16 @@ def get_h2h(pitcher_id: int, batter_id: int) -> dict:
 
 # ── Batter vs pitch types ─────────────────────────────────────────────────────
 
-def get_batter_vs_pitches(batter_id: int) -> dict:
+def get_batter_vs_pitches(batter_id: int, pitcher_hand: str = "") -> dict:
     """
     Batter's season results aggregated by pitch type (PA-ending events only).
+    pitcher_hand: "L" or "R" — when provided, only counts PAs vs that hand.
     → {"FF": {pa, hr, k, ba, slg, k_pct, hr_rate}, "SL": {...}, ...}
     """
-    if batter_id in _BATTER_PT_CACHE:
-        return _BATTER_PT_CACHE[batter_id]
+    _hand = pitcher_hand.upper() if pitcher_hand else ""
+    _key = (batter_id, _hand)
+    if _key in _BATTER_PT_CACHE:
+        return _BATTER_PT_CACHE[_key]
 
     result: dict[str, dict] = {}
     try:
@@ -369,6 +372,9 @@ def get_batter_vs_pitches(batter_id: int) -> dict:
             pt = (row.get("pitch_type") or "").strip().upper()
             ev = (row.get("events") or "").strip().lower()
             if not pt or not ev:
+                continue
+            # Filter by pitcher handedness when specified
+            if _hand and (row.get("p_throws") or "").strip().upper() != _hand:
                 continue
             t = totals.setdefault(pt, {"pa": 0, "hr": 0, "h": 0, "k": 0, "tb": 0.0, "ab": 0})
             t["pa"] += 1
@@ -397,9 +403,9 @@ def get_batter_vs_pitches(batter_id: int) -> dict:
                 "hr_rate": round(t["hr"] / t["pa"], 3) if t["pa"] else 0.0,
             }
     except Exception as e:
-        print(f"[pitch_mix] batter_vs_pitches failed (bid={batter_id}): {e}")
+        print(f"[pitch_mix] batter_vs_pitches failed (bid={batter_id}, hand={_hand}): {e}")
 
-    _BATTER_PT_CACHE[batter_id] = result
+    _BATTER_PT_CACHE[_key] = result
     return result
 
 
@@ -418,10 +424,11 @@ def load_hvy_context(player: dict, arsenal_data: dict | None = None,
     batter_side = player.get("batter_side", "")
 
     # Merge arsenal usage% with live per-pitch stats + display-only leaderboard stats
+    pitcher_hand    = player.get("pitcher_hand", "")
     pitcher_arsenal = _build_pitcher_arsenal(pitcher_id, arsenal_data, disp_stats)
     hand_splits     = get_pitcher_hand_splits(pitcher_id) if pitcher_id else {"R": {}, "L": {}}
     h2h             = get_h2h(pitcher_id, batter_id) if pitcher_id and batter_id else {}
-    batter_vs       = get_batter_vs_pitches(batter_id) if batter_id else {}
+    batter_vs       = get_batter_vs_pitches(batter_id, pitcher_hand) if batter_id else {}
     data_year       = get_pitcher_data_year(pitcher_id) if pitcher_id else config.CURRENT_SEASON
 
     modifier = _compute_modifier(player, pitcher_arsenal, hand_splits, h2h, batter_vs)
@@ -547,9 +554,14 @@ def _compute_modifier(
       6. Career H2H OPS                        ±0.06  reliability=PA/20, min 3 PA
     """
     batter_side = player.get("batter_side", "R")
+    pit_hand    = player.get("pitcher_hand", "")
 
     # ── Signal 1: Pitcher HR rate vs batter handedness ────────────────────────
-    hand_key = "L" if batter_side == "L" else "R"
+    # Switch hitters bat opposite the pitcher's hand, so derive effective side accordingly.
+    if batter_side == "S":
+        hand_key = "R" if pit_hand == "L" else "L"
+    else:
+        hand_key = "L" if batter_side == "L" else "R"
     split    = hand_splits.get(hand_key, {})
     sig1 = 0.0
     hand_pa = split.get("pa", 0)
