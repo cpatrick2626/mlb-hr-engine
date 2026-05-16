@@ -124,6 +124,7 @@ def _build_player_profile(
     w_factor   = max(0.80, min(1.20,
         weather_client.temp_factor(weather["temp_f"])
         * weather_client.wind_factor(weather["wind_mph"], weather["wind_deg"], is_dome, cf_bearing)
+        * weather_client.humidity_factor(weather["humidity_pct"])
     ))
 
     plat_factor = prob.platoon_factor(splits, pitcher_hand, batter_side, season_pa)

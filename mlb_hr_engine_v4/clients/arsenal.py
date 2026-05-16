@@ -136,11 +136,21 @@ def get_pitcher_arsenal(year: int = None) -> dict[int, list[dict]]:
     {pitcher_id: [{"pitch_type", "pitch_pct", "rv_per100", "pa",
                    "avg_speed", "whiff_pct", "hard_hit_pct"}, ...]}
     Returns {} on network or parse failure — all callers fall back to 1.0 factor.
+
+    Primary source: pitch-arsenal-stats endpoint (per-pitch RV/100, usage, whiff).
+    Fallback: pitch-arsenals wide-format CSV (usage-only; note: empty as of 2026).
     """
     year = year or config.CURRENT_SEASON
     if year in _ARSENAL_CACHE:
         return _ARSENAL_CACHE[year]
 
+    # Primary: pitch-arsenal-stats has rv_per100, pitch_usage, whiff%, pa, hard_hit%
+    result = _fetch_arsenal_from_stats(year)
+    if result:
+        _ARSENAL_CACHE[year] = result
+        return result
+
+    # Fallback: wide-format CSV (pitch percentages only; no RV/100 or whiff)
     url = (
         "https://baseballsavant.mlb.com/leaderboard/pitch-arsenals"
         f"?year={year}&min=1&type=pitcher&hand=&csv=true"
@@ -155,6 +165,90 @@ def get_pitcher_arsenal(year: int = None) -> dict[int, list[dict]]:
         return result
     except Exception as exc:
         print(f"[arsenal] fetch failed (year={year}): {exc}")
+        return {}
+
+
+def _fetch_arsenal_from_stats(year: int) -> dict[int, list[dict]]:
+    """
+    Fetch pitcher arsenal from pitch-arsenal-stats endpoint (per-pitch-type rows).
+    Returns {pitcher_id: [pitch_dict, ...]} or {} on failure.
+    Column mapping:
+      player_id -> pitcher_id
+      pitch_usage -> pitch_pct (0-100 scale, converted to 0-1)
+      run_value_per_100 -> rv_per100
+      pa -> pa (int)
+      whiff_percent -> whiff_pct (0-100 scale, converted to 0-1)
+      hard_hit_percent -> hard_hit_pct (0-100 scale, converted to 0-1)
+      avg_speed: not available on this endpoint — set to None
+    """
+    url = (
+        "https://baseballsavant.mlb.com/leaderboard/pitch-arsenal-stats"
+        f"?year={year}&type=pitcher&min=1&csv=true"
+    )
+    try:
+        resp = _SESSION.get(url, timeout=25)
+        if resp.status_code != 200:
+            print(f"[arsenal] stats HTTP {resp.status_code} for year={year}")
+            return {}
+        raw = resp.content.decode("utf-8-sig")
+        reader = csv.DictReader(io.StringIO(raw))
+        result: dict[int, list] = {}
+        for row in reader:
+            try:
+                pid_raw = row.get("player_id") or row.get("pitcher") or ""
+                pid = int(pid_raw) if pid_raw.strip() else 0
+                if not pid:
+                    continue
+                pt = (row.get("pitch_type") or "").strip().upper()
+                if not pt:
+                    continue
+
+                def _f(key):
+                    v = (row.get(key) or "").strip()
+                    try:
+                        return float(v) if v else None
+                    except ValueError:
+                        return None
+
+                usage    = _f("pitch_usage")
+                rv       = _f("run_value_per_100")
+                pa_raw   = _f("pa")
+                whiff    = _f("whiff_percent")
+                hard_hit = _f("hard_hit_percent")
+
+                if usage is None or usage <= 0:
+                    continue
+                # Savant returns 0-100 scale for percentages
+                pct = usage / 100.0 if usage > 1.5 else usage
+                if whiff is not None and whiff > 1.5:
+                    whiff = whiff / 100.0
+                if hard_hit is not None and hard_hit > 1.5:
+                    hard_hit = hard_hit / 100.0
+
+                pitch = {
+                    "pitch_type":   pt,
+                    "pitch_pct":    round(pct, 4),
+                    "rv_per100":    rv,
+                    "pa":           int(pa_raw) if pa_raw is not None else 0,
+                    "avg_speed":    None,  # not provided by this endpoint
+                    "whiff_pct":    whiff,
+                    "hard_hit_pct": hard_hit,
+                }
+                if pid not in result:
+                    result[pid] = []
+                result[pid].append(pitch)
+            except Exception:
+                continue
+
+        # Sort each pitcher's pitches by usage descending
+        for pid in result:
+            result[pid].sort(key=lambda p: p["pitch_pct"], reverse=True)
+
+        if result:
+            print(f"[arsenal] stats endpoint: {len(result)} pitchers loaded for year={year}")
+        return result
+    except Exception as exc:
+        print(f"[arsenal] stats fetch failed (year={year}): {exc}")
         return {}
 
 

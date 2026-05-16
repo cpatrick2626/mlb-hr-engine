@@ -1,11 +1,12 @@
 """
 Open-Meteo weather client — free, no API key.
-Fetches temperature and wind at game time for stadium location.
+Fetches temperature, wind, and humidity at game time for stadium location.
 """
 
 import math
 import requests
 from datetime import datetime
+import config
 
 _SESSION = requests.Session()
 _CACHE: dict[str, dict] = {}
@@ -85,6 +86,20 @@ def wind_factor(wind_mph: float, wind_deg: float, is_dome: bool = False, cf_bear
 
 
 DOME_TEAMS = {"TB", "MIA", "TOR", "MIL", "HOU", "ARI", "TEX", "SEA"}
+
+
+def humidity_factor(humidity_pct: float) -> float:
+    """
+    Stage 5 (expert pipeline): continuous humidity adjustment.
+    Physics: humid air contains lighter water vapor molecules (MW=18) displacing
+    heavier N2 (MW=28) and O2 (MW=32), making humid air LESS dense. Less dense
+    air reduces aerodynamic drag, so balls carry slightly farther — a small HR boost.
+    Effect: ~1.5% per 10pp RH from 55% baseline. Range: ±4%.
+    Dome teams already set wind=1.0; humidity still applies for air density effect
+    (dome air is typically climate-controlled near the baseline ~55% RH).
+    """
+    adj = 0.0015 * (humidity_pct - config.LEAGUE_AVG_HUMIDITY)
+    return max(0.96, min(1.04, 1.0 + adj))
 
 
 def temp_factor(temp_f: float) -> float:

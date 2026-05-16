@@ -31,7 +31,10 @@ def base_hr_rate(
     # proportionally. This prevents the league-mean anchor from inflating predictions for
     # true contact hitters who are never going to hit HRs. Only adjusts downward (mult >= 1
     # keeps the unbiased league-avg prior so power hitters aren't double-boosted here).
-    reg_target_adj = max(0.40, min(1.0, statcast_mult))
+    # Floor lowered 0.40→0.30: a player with statcast_mult=0.25 was anchored to 40% of
+    # league avg (over-prediction); 0.30 floor is more faithful to the signal. The zero-HR
+    # suppressor (lines ~75-89) provides additional discounting on top of this anchor.
+    reg_target_adj = max(0.30, min(1.0, statcast_mult))
     regression_target = config.LEAGUE_AVG_HR_PA * reg_target_adj
 
     # Adaptive regression: reduce prior weight as sample grows, floored at 50% of
@@ -195,6 +198,9 @@ def pitcher_fatigue_factor(days_rest: int) -> float:
     """
     Adjusts pitcher HR allowance based on days since last start.
     Short rest → more HRs; standard 5-day rest → baseline.
+    Extra rest (6+ days): no adjustment. Research on extra-rest HR rates is
+    ambiguous; prior 0.99→0.97 linear decay assumed pitcher advantage with no
+    empirical backtest support and could mis-price batters facing rested pitchers.
     """
     if days_rest <= 2:
         return 1.08
@@ -202,9 +208,7 @@ def pitcher_fatigue_factor(days_rest: int) -> float:
         return 1.04
     if days_rest == 4:
         return 1.01
-    if days_rest == 5:
-        return 1.00
-    return max(0.97, 1.0 - 0.01 * (days_rest - 5))
+    return 1.00  # standard 5-day rotation and all extra rest: no adjustment
 
 
 def pitcher_hr_factor(pitcher_stats: dict) -> float:

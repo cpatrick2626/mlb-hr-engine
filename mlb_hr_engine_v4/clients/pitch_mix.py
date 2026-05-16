@@ -119,18 +119,19 @@ PITCH_LABELS: dict[str, str] = {
 _FASTBALL_TYPES = frozenset({"FF", "SI", "FC"})
 _BREAKING_TYPES = frozenset({"SL", "CU", "KC", "SV", "ST"})
 
-# League-average baselines for modifier signals (%-scale where noted)
-_LG_HR_PA    = 0.028    # HR per PA
-_LG_SLG      = 0.410    # slugging pct
-_LG_OPS      = 0.720    # OPS
-_LG_K_PA     = 0.230    # strikeout rate
-_LG_BARREL   = 8.0      # barrel% (0-100 scale)
-_LG_SS       = 33.0     # sweet-spot% 8-32° (0-100 scale)
-_LG_PULL     = 43.0     # pull% (0-100 scale)
-_LG_FB       = 36.0     # fly-ball% (0-100 scale)
-_LG_LD       = 20.0     # line-drive% (0-100 scale)
-_LG_EV       = 88.5     # exit velocity mph
-_LG_PULL_AIR = _LG_PULL * (_LG_FB + _LG_LD) / 100.0   # ~24.1%
+# League-average baselines for modifier signals — canonical values from config.py.
+# Update config.py (not here) at each mid-season refresh.
+_LG_HR_PA    = config.LEAGUE_AVG_HR_PA                         # HR per PA
+_LG_SLG      = 0.410                                           # slugging pct (MLB 2026)
+_LG_OPS      = 0.720                                           # OPS (MLB 2026)
+_LG_K_PA     = 0.230                                           # strikeout rate
+_LG_BARREL   = config.LEAGUE_AVG_BARREL_RATE * 100.0           # barrel% (0-100 scale)
+_LG_SS       = config.LEAGUE_AVG_SWEET_SPOT  * 100.0           # sweet-spot% (0-100 scale)
+_LG_PULL     = config.LEAGUE_AVG_PULL_PCT    * 100.0           # pull% (0-100 scale)
+_LG_FB       = config.LEAGUE_AVG_FB_PCT      * 100.0           # fly-ball% (0-100 scale)
+_LG_LD       = config.LEAGUE_AVG_LD_PCT      * 100.0           # line-drive% (0-100 scale)
+_LG_EV       = config.LEAGUE_AVG_EXIT_VELO                     # exit velocity mph
+_LG_PULL_AIR = _LG_PULL * (_LG_FB + _LG_LD) / 100.0           # pull-air% composite
 
 _PA_EVENTS = frozenset({
     "home_run", "strikeout", "strikeout_double_play",
@@ -571,15 +572,18 @@ def _compute_modifier(
     batter_vs: dict,
 ) -> float:
     """
-    Context-aware HVY modifier [0.70, 1.40] — six reliability-scaled signals.
+    Pure matchup-quality HVY modifier [0.70, 1.40] — five reliability-scaled signals.
 
-    Signal weights (additive, then multiplied by environment):
+    Signal weights (additive):
       1. Pitcher HR rate vs batter handedness  ±0.10  reliability=PA/50
       2. Weighted arsenal matchup              ±0.10  reliability=batter-PA/15 per pitch
       3. Batter contact shape block            ±0.06  barrel/sweet-spot/pull-air/fb/EV
       4. Pitch arsenal block                   ±0.06  weighted pitcher K% and HR rate
-      5. Environment multiplier               ×[0.92,1.18]  park × weather
-      6. Career H2H OPS                        ±0.06  reliability=PA/20, min 3 PA
+      5. Career H2H OPS                        ±0.06  reliability=PA/20, min 3 PA
+
+    Note: environment multiplier (park × weather) was removed. The core model
+    already applies park_factor and weather_factor to model_prob, so including
+    them here would double-count their effect in the HVY display signal.
     """
     batter_side = player.get("batter_side", "R")
     pit_hand    = player.get("pitcher_hand", "")
@@ -665,13 +669,8 @@ def _compute_modifier(
                           - ((avg_k  - _LG_K_PA)  / _LG_K_PA)  * 0.5
             sig4 = _clamp(arsenal_score * 0.12, -0.06, 0.06)
 
-    # ── Signal 5: Environment multiplier (park × weather) ────────────────────
-    park_f    = player.get("park_factor")    or 1.0
-    weather_f = player.get("weather_factor") or 1.0
-    env_mult  = _clamp(float(park_f) * float(weather_f), 0.92, 1.18)
-
-    # ── Signal 6: Career H2H OPS (reduced vs old formula, reliability-scaled) ─
-    sig6 = 0.0
+    # ── Signal 5: Career H2H OPS (reduced vs old formula, reliability-scaled) ─
+    sig5 = 0.0
     h2h_pa = h2h.get("pa", 0)
     if h2h_pa >= 3:
         try:
@@ -681,9 +680,11 @@ def _compute_modifier(
         if ops > 0:
             reliability = min(1.0, h2h_pa / 20.0)
             ops_dev = (ops - _LG_OPS) / _LG_OPS
-            sig6 = _clamp(ops_dev * reliability * 0.06, -0.06, 0.06)
+            sig5 = _clamp(ops_dev * reliability * 0.06, -0.06, 0.06)
 
-    # ── Combine: additive signals × environment multiplier ───────────────────
-    additive = 1.0 + sig1 + sig2 + sig3 + sig4 + sig6
-    modifier = _clamp(additive * env_mult, 0.70, 1.40)
+    # ── Combine: pure matchup additive signals ───────────────────────────────
+    # Park and weather are intentionally excluded — the core model (model_prob)
+    # already incorporates park_factor and weather_factor. Adding them here
+    # would double-count their effect when the HVY modifier informs pick decisions.
+    modifier = _clamp(1.0 + sig1 + sig2 + sig3 + sig4 + sig5, 0.70, 1.40)
     return round(modifier, 3)

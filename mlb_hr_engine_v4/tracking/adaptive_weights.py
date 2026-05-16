@@ -64,7 +64,7 @@ def apply_prob_scale(model_prob: float) -> float:
 
 def active_overrides() -> dict:
     """Return active non-meta adjustments for UI display."""
-    skip = {"jig_weights", "last_auto_ts", "auto_apply_count"}
+    skip = {"last_auto_ts", "auto_apply_count"}
     return {k: v for k, v in load().items() if k not in skip}
 
 

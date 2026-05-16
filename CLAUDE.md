@@ -93,16 +93,43 @@ Every version follows the same flow:
 
 ### Key Model Constants (`config.py`)
 
+All constants below are from `config.py` as of 2026-05-16. Update `config.py` at mid-season refresh (late June); `pitch_mix.py` derives its league baselines from `config.py` automatically.
+
 - `KELLY_FRACTION = 0.25` — quarter-Kelly risk scaling
-- `LEAGUE_AVG_HR_PA = 0.028` — regression target (2026 YTD; revisit mid-May)
+- `LEAGUE_AVG_HR_PA = 0.030` — regression target (2026 MLB May-6; broader Apr=0.028, qualified May=0.032, 0.030 splits the difference)
 - `REGRESSION_PA = 200` — Bayesian shrinkage weight
 - `RECENT_WEIGHT = 0.30 / SEASON_WEIGHT = 0.70` — blending recent vs season stats
-- `LEAGUE_AVG_HR9 = 1.09`, `LEAGUE_HR_FB = 0.106` — pitcher league baselines (2026 YTD)
-- `MAX_GAME_HR_PROB = 0.31` — hard ceiling on per-game HR probability (calibration-backed)
+- `LEAGUE_AVG_HR9 = 1.05`, `LEAGUE_HR_FB = 0.097` — pitcher league baselines (2026 May-6; updated from earlier-season values)
+- `MAX_GAME_HR_PROB = 0.29` — hard ceiling on per-game HR probability (from 2025 full-season backtest actual 28.9%)
 - `PRIOR_YEAR_TRUST = 0.85`, `MIN_CURRENT_YEAR_PA = 50` — Statcast prior-year blending
-- All Statcast leaderboard league averages (barrel%, exit velo, hard hit%, etc.) live in `config.py`; update all together at mid-season refresh
+- `LEAGUE_AVG_BARREL_RATE = 0.055`, `LEAGUE_AVG_EXIT_VELO = 89.1`, `LEAGUE_AVG_HARD_HIT = 0.399` — batter power baselines (2026 May-6)
+- `LEAGUE_AVG_XSLG = 0.418`, `LEAGUE_AVG_SWEET_SPOT = 0.334`, `LEAGUE_AVG_PULL_PCT = 0.392` — batter contact baselines (2026 May-6)
+- `LEAGUE_AVG_FB_PCT = 0.264` — Savant pure fly-ball rate (excludes popups; do NOT use FanGraphs FB%≈0.34 which includes popups)
+- `LEAGUE_AVG_ISO = 0.157` — ISO = SLG − AVG (2026 May-6)
+- `LEAGUE_AVG_HUMIDITY = 55.0` — % RH baseline for neutral humidity factor
+- All Statcast leaderboard league averages live in `config.py`; update all together at mid-season refresh
 - `MIN_EV_PCT = 3.0`, `MIN_EDGE_PCT = 2.0` — filter floor thresholds
 - `MIN_PA_THRESHOLD = 3.3` — blocks 9-hole batters (3.2 PA); `MAX_PARK_PENALTY = 0.87` — blocks SF + SD
+
+### Weather Model
+
+Three multiplicative factors (all clamped before the 0.80–1.20 outer bound):
+- **Temperature:** ~2% per 10°F from 72°F baseline (range 0.82–1.08)
+- **Wind:** ~3% per mph toward CF (meteorological FROM convention; OpenMeteo `winddirection_10m` is FROM direction); dome teams get 1.0
+- **Humidity:** ~1.5% per 10pp RH from 55% baseline, humid air = less dense = more carry (range 0.96–1.04); added 2026-05-16
+
+### HVY Pitch Mix Modifier
+
+`clients/pitch_mix.py` — display-only matchup signal [0.70, 1.40]; NOT fed into model_prob.
+Five additive signals: (1) pitcher HR rate vs batter hand ±0.10, (2) arsenal matchup SLG ±0.10, (3) batter contact shape ±0.06, (4) pitch arsenal K%/HR rate ±0.06, (5) career H2H OPS ±0.06. Park and weather removed from HVY modifier (2026-05-16) to avoid double-counting with core model.
+
+### Regression Floor (probability.py)
+
+`reg_target_adj = max(0.30, min(1.0, statcast_mult))` — floor lowered from 0.40 to 0.30 (2026-05-16). Players with extreme contact-hitter Statcast profiles (mult<0.40) were over-predicted; 0.30 floor is more faithful to actual signal. Zero-HR and low-HR suppressors provide additional discounting on top.
+
+### Pitcher Fatigue Factor
+
+Short rest (≤4 days): 1.01–1.08 HR boost. Standard (5 days) and extra rest (6+ days): 1.00 neutral. Prior extra-rest linear decay (0.97–0.99) removed (2026-05-16) — no backtest evidence that pitchers are harder to hit on extra rest.
 
 ### compare.py (root)
 

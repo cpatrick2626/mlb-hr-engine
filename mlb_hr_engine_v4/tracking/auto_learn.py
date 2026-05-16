@@ -15,8 +15,10 @@ Learning targets:
   - Feature correlations   → which model inputs actually predict HRs
   - Model calibration      → is model_prob accurate vs actual hit rate
   - Per-source performance → which tab/strategy/formula generates the best picks
-  - JIG weight suggestions → barrel vs xSLG vs pitch vs pull etc.
   - Threshold suggestions  → ev_pct, edge_pct, model_prob floor
+
+NOTE: JIG weight suggestions are intentionally excluded. The JIG model uses
+fixed weights and must remain isolated from main-engine adaptive logic.
 """
 
 import json
@@ -51,17 +53,6 @@ FEATURES = [
     ("pitcher_hr9",     "Pitcher HR/9",     "Higher = worse pitcher"),
     ("pitcher_k_pct",   "Pitcher K%",       "Higher = better pitcher (negative)"),
     ("launch_angle",    "Launch Angle",     "Optimal 20-35°"),
-]
-
-# JIG weight fields — must match the sliders in app.py
-JIG_FIELDS = [
-    ("barrel_pct",   "Barrel%"),
-    ("xslg",         "xSLG"),
-    ("pitcher_factor","Pitcher"),
-    ("hard_hit_pct", "Hard Hit"),
-    ("iso",          "ISO"),
-    ("pull_pct",     "Pull%"),
-    ("launch_angle", "Launch"),
 ]
 
 MIN_PICKS_FOR_ANALYSIS = 15
@@ -125,9 +116,7 @@ def apply_suggestion(suggestion_id: str, value=None) -> bool:
     corrs    = _feature_correlations(rows, outcomes)
     calib    = _calibration(rows, outcomes)
 
-    if suggestion_id == "jig_weights":
-        adj["jig_weights"] = _compute_jig_weight_suggestion(corrs)
-    elif suggestion_id == "min_ev":
+    if suggestion_id == "min_ev":
         adj["min_ev_pct"] = _compute_ev_threshold(rows)
     elif suggestion_id == "min_model_prob":
         adj["min_model_prob"] = _compute_prob_threshold(rows)
@@ -347,26 +336,7 @@ def _generate_suggestions(
     suggestions = []
     sid = 0
 
-    # ── 1. JIG weight rebalancing ──────────────────────────────────────────
-    jig_corrs = {c["field"]: c for c in correlations if c["field"] in dict(JIG_FIELDS)}
-    if len(jig_corrs) >= 3:
-        sid += 1
-        new_weights = _compute_jig_weight_suggestion(correlations)
-        weight_lines = [f"{lbl}: {new_weights.get(field, '—'):.0%}" for field, lbl in JIG_FIELDS if field in new_weights]
-        suggestions.append({
-            "id":     "jig_weights",
-            "sid":    sid,
-            "title":  "Rebalance JIG Formula Weights",
-            "detail": (
-                "Based on feature-outcome correlations from your settled picks, "
-                "the highest-predicting metrics should carry more weight. "
-                "Suggested new weights: " + ", ".join(weight_lines) + "."
-            ),
-            "value":  new_weights,
-            "impact": "medium",
-        })
-
-    # ── 2. Model probability calibration ──────────────────────────────────
+    # ── 1. Model probability calibration ──────────────────────────────────
     if calibration:
         total_bias = sum(b["bias_pct"] for b in calibration) / len(calibration)
         if abs(total_bias) >= 2.0:
@@ -386,7 +356,7 @@ def _generate_suggestions(
                 "impact": "high" if abs(total_bias) >= 5 else "medium",
             })
 
-    # ── 3. EV threshold adjustment ─────────────────────────────────────────
+    # ── 2. EV threshold adjustment ─────────────────────────────────────────
     low_ev  = [r for r in settled if 0 < float(r.get("ev_pct", 0) or 0) < 3.0]
     high_ev = [r for r in settled if float(r.get("ev_pct", 0) or 0) >= 5.0]
     if len(low_ev) >= 10 and len(high_ev) >= 10:
@@ -407,7 +377,7 @@ def _generate_suggestions(
                 "impact": "medium",
             })
 
-    # ── 4. JIG AI vs JIG Way recommendation ───────────────────────────────
+    # ── 3. JIG AI vs JIG Way recommendation ───────────────────────────────
     ai  = jig_comp.get("ai")
     way = jig_comp.get("way")
     if ai and way and ai["_decided"] >= 5 and way["_decided"] >= 5:
@@ -429,7 +399,7 @@ def _generate_suggestions(
                 "impact": "high" if delta >= 10 else "medium",
             })
 
-    # ── 5. Underperforming factors ─────────────────────────────────────────
+    # ── 4. Underperforming factors ─────────────────────────────────────────
     low_corr = [c for c in correlations if 0 < c["corr"] < 0.05 and c["n"] >= 15]
     if low_corr:
         for lc in low_corr[:2]:
@@ -440,14 +410,13 @@ def _generate_suggestions(
                 "title":  f"Reduce influence of {lc['label']} (corr={lc['corr']:.3f})",
                 "detail": (
                     f"{lc['label']} shows near-zero correlation ({lc['corr']:.3f}) with actual HR outcomes "
-                    f"across {lc['n']} picks. Consider reducing its weight in the JIG formula or "
-                    "its threshold in strategy filters."
+                    f"across {lc['n']} picks. Consider reducing its threshold in strategy filters."
                 ),
                 "value":  {f"reduce_{lc['field']}": True},
                 "impact": "low",
             })
 
-    # ── 6. Ranker EV/Edge weight rebalancing ──────────────────────────────
+    # ── 5. Ranker EV/Edge weight rebalancing ──────────────────────────────
     new_ev_w = _compute_ranker_ev_weight(settled)
     if new_ev_w is not None:
         current_ev_w = load_adjustments().get("ranker_ev_weight", 0.55)
@@ -468,7 +437,7 @@ def _generate_suggestions(
                 "impact": "medium",
             })
 
-    # ── 7. Recent/season weight ────────────────────────────────────────────
+    # ── 6. Recent/season weight ────────────────────────────────────────────
     new_rw = _compute_recent_weight(settled)
     if new_rw is not None:
         current_rw = load_adjustments().get("recent_weight", config.RECENT_WEIGHT)
@@ -493,30 +462,6 @@ def _generate_suggestions(
 
 
 # ── Computation helpers ───────────────────────────────────────────────────────
-
-def _compute_jig_weight_suggestion(correlations: list[dict]) -> dict:
-    """
-    Convert feature correlations to JIG weights using softmax-like normalization.
-    Only includes fields that appear in JIG_FIELDS.
-    """
-    jig_field_set = {f for f, _ in JIG_FIELDS}
-    relevant = {c["field"]: max(0.0, c["corr"]) for c in correlations if c["field"] in jig_field_set}
-
-    if not relevant:
-        return {}
-
-    total = sum(relevant.values())
-    if total <= 0:
-        n = len(relevant)
-        return {f: round(1 / n, 2) for f in relevant}
-
-    raw = {f: v / total for f, v in relevant.items()}
-
-    # Clamp: no single weight < 3% or > 40%
-    clamped = {f: max(0.03, min(0.40, v)) for f, v in raw.items()}
-    ctotal  = sum(clamped.values())
-    return {f: round(v / ctotal, 2) for f, v in clamped.items()}
-
 
 def _compute_ev_threshold(rows: list[dict]) -> float:
     """Find EV threshold that maximizes win rate on settled picks."""
