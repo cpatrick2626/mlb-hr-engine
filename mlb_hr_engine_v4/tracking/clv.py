@@ -16,6 +16,7 @@ CLV < 0 consistently means: the market moved against you (bad sign for model).
 """
 
 import csv
+import os
 import unicodedata
 from datetime import date, datetime, timezone, timedelta
 from pathlib import Path
@@ -93,10 +94,11 @@ def fetch_and_compute_clv(target_date: Optional[str] = None) -> list[dict]:
         except (ValueError, TypeError):
             open_implied = 0.0
         close_implied = _implied(close_odds)
-        # Apply no-vig correction: divide by (1 + vig) so CLV reflects fair-value shift,
-        # not the bookmaker margin embedded in raw implied probabilities.
-        vig = config.VIG_FACTOR
-        clv = (close_implied - open_implied) / (1.0 + vig) * 100  # positive = we got better price
+        # CLV = how much the market moved vs the price we locked in.
+        # Positive = close implied > open implied = we got better odds than the close.
+        # Raw implied-prob difference is correct here — vig is symmetric across both
+        # endpoints so dividing it out would compress CLV without adding accuracy.
+        clv = (close_implied - open_implied) * 100  # positive = we got better price
         clv = max(-100.0, min(100.0, clv))  # sanity bounds: ±100% is physically impossible
 
         updated.append({
@@ -153,12 +155,11 @@ def _normalize(name: str) -> str:
 
 
 def _append(rows: list[dict]) -> None:
-    write_header = not CLV_LOG.exists()
-    with open(CLV_LOG, "a", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=CLV_FIELDS, extrasaction="ignore")
-        if write_header:
-            writer.writeheader()
-        writer.writerows(rows)
+    existing: list[dict] = []
+    if CLV_LOG.exists():
+        with open(CLV_LOG, newline="", encoding="utf-8") as f:
+            existing = list(csv.DictReader(f))
+    _atomic_write(existing + rows)
 
 
 def _load_picks_for_date(date_str: str) -> list[dict]:
@@ -174,16 +175,26 @@ def _load_picks_for_date(date_str: str) -> list[dict]:
 
 
 def _rewrite(date_str: str, updated: list[dict]) -> None:
-    all_rows = []
+    all_rows: list[dict] = []
     if CLV_LOG.exists():
         with open(CLV_LOG, newline="", encoding="utf-8") as f:
-            reader = csv.DictReader(f)
-            all_rows = [r for r in reader if r.get("date") != date_str]
+            all_rows = [r for r in csv.DictReader(f) if r.get("date") != date_str]
     all_rows.extend(updated)
-    with open(CLV_LOG, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=CLV_FIELDS, extrasaction="ignore")
-        writer.writeheader()
-        writer.writerows(all_rows)
+    _atomic_write(all_rows)
+
+
+def _atomic_write(rows: list[dict]) -> None:
+    tmp = CLV_LOG.with_suffix(".tmp")
+    try:
+        with open(tmp, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=CLV_FIELDS, extrasaction="ignore")
+            writer.writeheader()
+            writer.writerows(rows)
+        os.replace(tmp, CLV_LOG)
+    except Exception:
+        if tmp.exists():
+            tmp.unlink()
+        raise
 
 
 def _existing_dates() -> set[str]:
@@ -199,11 +210,13 @@ def _fetch_current_hr_odds() -> dict[str, int]:
     if not config.ODDS_API_KEY:
         return {}
     try:
-        # Filter to today's window to avoid fetching all historical events and
-        # burning API quota — mirrors the filter in odds_api._get_events().
-        now_utc     = datetime.now(timezone.utc)
-        today_start = now_utc.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(hours=9)
-        today_end   = today_start + timedelta(hours=20)
+        # Filter to today's ET window — mirrors the identical logic in odds_api._get_events()
+        # so CLV pulls the same games the main pipeline priced.
+        now_utc = datetime.now(timezone.utc)
+        now_et  = now_utc - timedelta(hours=4)   # EDT (Apr–Oct)
+        et_midnight_utc = now_et.replace(hour=0, minute=0, second=0, microsecond=0) + timedelta(hours=4)
+        today_start = et_midnight_utc + timedelta(hours=9)   # ~5 AM ET
+        today_end   = today_start + timedelta(hours=23)      # ~4 AM next-day ET
         resp = _SESSION.get(
             "https://api.the-odds-api.com/v4/sports/baseball_mlb/events",
             params={

@@ -466,7 +466,7 @@ def confidence_score(
     se        = math.sqrt(model_prob * (1 - model_prob) / max(season_pa, 1))
     snr       = min(edge / (se + 0.005), 3.0) / 3.0
     snr_conf  = snr * 21.0                                             # 0–21
-    books_conf = 9.0 if n_books >= 3 else (5.0 if n_books == 2 else 0.0)
+    books_conf = 9.0 if n_books >= 3 else (6.0 if n_books == 2 else 4.0)
     market_signal = snr_conf + books_conf                              # 0–30
 
     # ── 5. Penalty ─────────────────────────────────────────────────────────────

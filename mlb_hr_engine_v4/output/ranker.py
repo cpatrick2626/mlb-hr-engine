@@ -19,7 +19,7 @@ suppressed, so it can't crowd out a well-substantiated lower-EV pick.
 Confidence Tiers (assigned to every pick):
   S — conf ≥ 70 AND edge ≥ 8%   → elite, act with conviction
   A — conf ≥ 55 AND edge ≥ 5%   → strong, core betting targets
-  B — conf ≥ 40 AND edge ≥ 2.5% → solid, worth playing at standard size
+  B — conf ≥ 35 AND edge ≥ 2.5% → solid, worth playing at standard size
   C — below B thresholds          → weak/noisy, reduce size or skip
 """
 
@@ -32,7 +32,7 @@ _DEFAULT_EDGE_WEIGHT = 0.45
 _TIERS = [
     ("S", "🌟 S-Tier", "#FFD700", 70, 8.0),
     ("A", "✅ A-Tier", "#4ade80", 55, 5.0),
-    ("B", "🟡 B-Tier", "#facc15", 40, 2.5),
+    ("B", "🟡 B-Tier", "#facc15", 35, 2.5),
     ("C", "🔴 C-Tier", "#f87171",  0, 0.0),
 ]
 
