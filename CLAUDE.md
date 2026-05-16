@@ -185,6 +185,27 @@ Added 2026-05-16. Post-model monotone transform: maps raw `model_prob` → calib
 
 **Re-calibrate after**: any signal weight change, new signal addition, Poisson model change. Parameters drift with model changes.
 
+### Context Moderation Guard (engine/probability.py)
+
+Added 2026-05-16. Narrow safety guard: caps the combined context multiplier for sub-average power batters (`power_mult < 1.0`) to prevent contact/suppressed-power hitters from reaching ≥15% probability solely via multiplicative context stacking (favorable park + hittable pitcher + platoon advantage).
+
+**Mechanism**: `_moderate_context(combined, power_mult)` — applied inside `game_hr_probability()` BEFORE the [0.42, 1.50] clamp. Only fires when `combined > 1.0` AND `power_mult < 1.0`. Elite hitters (`power_mult ≥ 1.0`) are completely unaffected.
+
+**Analysis results** (from `analyze_elite_separation.py`, 8,633 batter-games, 2026-05-16):
+- Target cases: 523 rows with power_mult<0.90 + combined>1.30; actual HR%=7.07%, model=8.07% (+1.00pp bias)
+- At ≥15% threshold: 51 of these inflate to false-positive bet picks; V5_Cap removes them (1,977→1,926 picks)
+- Brier improvement: −0.00005 (marginal but directionally correct)
+- Elite hitter bias: unchanged (−3.97pp, zero delta) — confirmed safe for elite hitters
+- Spearman rank stability: 0.9957 vs 0.9992 baseline (negligible practical shift)
+
+**Key finding from Session 22 analysis**: Elite hitter under-prediction (barrel≥12%: actual=28.75%, model=20.19%, bias=−8.56pp) is caused by the **base rate calculation** (Bayesian regression toward league mean), NOT by insufficient context. Platt calibration worsens this further by compressing probs above 10.9%. Context moderation cannot fix elite under-prediction — it requires base-rate changes (out of scope). The context guard is solely a protection against false-positive contact-batter inflation.
+
+**Configurable parameters** (all in `config.py`):
+- `CONTEXT_MODERATION_ENABLED = True` — master switch (set False to rollback instantly)
+- `CONTEXT_MODERATION_LOW_POWER_CAP = 1.25` — combined cap when power_mult < 1.0
+
+**Validation**: Run `py -3.12 analyze_elite_separation.py` from repo root. Outputs `elite_separation_output.txt`. Rollback: `CONTEXT_MODERATION_ENABLED = False`.
+
 ### compare.py (root)
 
 Runs both v1 and v2 engines for the same date, diffs their outputs, and displays probability shifts, EV changes, and pick-set divergence in rich tables. Reads/writes `compare_v1.json` / `compare_v2.json` when `--dump-json` is passed to the individual engines.

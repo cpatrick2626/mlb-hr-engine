@@ -143,7 +143,7 @@ def _score_player(r: dict, date_str: str, batter_data: dict, pitcher_data: dict)
     exp_pa     = prob.expected_pa(r.get("lineup_spot"))
     model_prob = prob.game_hr_probability(
         hr_rate, exp_pa, pk_factor=pk_factor, pitcher_fac=pit_factor,
-        plat_factor=plat_factor,
+        plat_factor=plat_factor, power_mult=power_mult,
     )
 
     return {

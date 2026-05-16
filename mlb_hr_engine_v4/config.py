@@ -169,3 +169,16 @@ CALIBRATION_PLATT_A: float = 0.7805       # slope — Platt CV-fitted
 CALIBRATION_PLATT_B: float = -0.4611      # intercept — Platt CV-fitted
 CALIBRATION_ISOTONIC_BREAKPOINTS: list = []  # raw prob breakpoints (fitted)
 CALIBRATION_ISOTONIC_VALUES:      list = []  # calibrated prob at each breakpoint
+
+# ── Context Moderation ────────────────────────────────────────────────────────
+# Guards against contact/suppressed-power batters reaching ≥15% probability
+# solely via multiplicative context stacking (park + hittable pitcher + platoon).
+# Analysis (analyze_elite_separation.py, 2026-05-16, 8,633 batter-games):
+#   - Sub-avg power_mult (<1.0) + high context (≥1.30): 523 cases, bias=+1.00pp
+#   - V5_Cap eliminates ~51 false-positive ≥15% picks; Brier −0.00005
+#   - Elite hitters (barrel>9%) are completely unaffected (power_mult≥1.0 unchanged)
+#   - Spearman rank stability: 0.9957 vs 0.9992 baseline (negligible rank shift)
+# Only fires when: CONTEXT_MODERATION_ENABLED=True AND power_mult<1.0 AND combined>1.0
+# Rollback: set CONTEXT_MODERATION_ENABLED=False
+CONTEXT_MODERATION_ENABLED:       bool  = True   # activated — validated 2026-05-16
+CONTEXT_MODERATION_LOW_POWER_CAP: float = 1.25   # combined cap for power_mult < 1.0

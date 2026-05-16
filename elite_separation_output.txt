@@ -1,0 +1,209 @@
+════════════════════════════════════════════════════════════════════════════════════════
+  SECTION 1 — DATASET OVERVIEW
+════════════════════════════════════════════════════════════════════════════════════════
+  Total batter-games : 8,633
+  Total HR outcomes  : 981
+  Actual HR rate     : 0.1136 (11.36%)
+  Mean model_prob    : 0.1108 (11.08%)
+  Overall model bias : -0.29pp
+  Brier score        : 0.09864
+  MAE                : 0.19364
+
+  Statcast source distribution:
+  Source             N   Actual%    Model%      Bias
+  ----------------------------------------------------
+  current        8,633    11.36%    11.08%    -0.29pp
+
+════════════════════════════════════════════════════════════════════════════════════════
+  SECTION 2 — ELITE HITTER ARCHETYPE ANALYSIS (by barrel_rate tier)
+════════════════════════════════════════════════════════════════════════════════════════
+  Tier                        N   HR%Act   HR%Mod      Bias     Brier       MAE
+  ------------------------------------------------------------------------
+  Elite (≥12%)              313   28.75%   20.19%    -8.56pp   0.20838   0.36573
+  Power (9–12%)           1,189   19.09%   16.45%    -2.64pp   0.15507   0.28891
+  Average (5.5–9%)        2,849   12.67%   12.35%    -0.32pp   0.11149   0.21731
+  Contact (<5.5%)         4,282    7.08%    8.07%    +1.00pp   0.06640   0.13885
+
+  By power_mult tier:
+  Tier                            N   HR%Act   HR%Mod      Bias     Brier
+  ------------------------------------------------------------------------
+  Elite (≥1.20)               1,379   21.97%   17.83%    -4.14pp   0.17174
+  Above avg (1.0–1.20)        3,003   12.59%   12.53%    -0.06pp   0.11116
+  Below avg (0.80–1.0)        3,266    8.08%    8.79%    +0.71pp   0.07529
+  Suppressed (<0.80)            985    3.65%    4.78%    +1.13pp   0.03558
+
+════════════════════════════════════════════════════════════════════════════════════════
+  SECTION 3 — CONTEXT STACK AUDIT
+════════════════════════════════════════════════════════════════════════════════════════
+  combined_implied stats (back-calculated from model_prob):
+    Mean     : 1.0764
+    p25/p50/p75/p90 : 0.8796 / 1.0557 / 1.2583 / 1.4506
+    p95/p99         : 1.5252 / 1.6866
+
+  model_prob ≥ 15%:  N=1,991  mean_combined=1.1929  actual_HR%=17.58%  model_HR%=19.78%  bias=+2.20pp
+  model_prob <  15%: N=6,642  mean_combined=1.0415  actual_HR%=9.50%  model_HR%=8.47%  bias=-1.03pp
+
+  Cross-tab: power_mult tier × context_tier (combined_implied)
+  Format: Bias (Actual% → Model%)
+
+  Power\Context               High (≥1.35)      Moderate (1.20–1.35)Mild (1.05–1.20)  Neutral (<1.05)   
+  ----------------------------------------------------------------------------------------------------
+  Elite (≥1.20)               -7.3pp (n=191)    -5.8pp (n=173)    -2.2pp (n=316)    -3.8pp (n=699)    
+  Above avg (1.0–1.20)        +1.5pp (n=516)    -0.9pp (n=443)    -0.2pp (n=606)    -0.3pp (n=1438)   
+  Below avg (0.80–1.0)        +0.6pp (n=639)    -1.4pp (n=428)    +1.9pp (n=596)    +0.9pp (n=1603)   
+  Suppressed (<0.80)          +1.9pp (n=161)    -1.1pp (n=136)    +2.7pp (n=189)    +0.9pp (n=499)    
+
+  Where are the ≥15% picks concentrated?
+  Power tier                      All    ≥15%   %share   Mean_comb  Actual%      Bias
+  ---------------------------------------------------------------------------
+  Elite (≥1.20)                 1,379     893    64.8%      1.1343   23.52%    -2.19pp
+  Above avg (1.0–1.20)          3,003     877    29.2%      1.2283   14.03%    +4.68pp
+  Below avg (0.80–1.0)          3,266     220     6.7%      1.2888    7.73%   +10.09pp
+  Suppressed (<0.80)              985       1     0.1%      1.4445    0.00%   +17.49pp
+
+════════════════════════════════════════════════════════════════════════════════════════
+  SECTION 4 — MODERATION VARIANT ANALYSIS
+════════════════════════════════════════════════════════════════════════════════════════
+  For each variant, combined_implied is moderated by power_mult then
+  re-clamped to [0.42, 1.50] before recomputing model_prob via Poisson.
+  Cal = post-Platt-calibration (A=0.7805, B=-0.4611).
+  Note: cal params were fitted on baseline — treat cal columns as approximate.
+
+  Variant             Tag     Brier   Brier+Cal       MAE      Bias   Bias+Cal   Spearman
+  ------------------------------------------------------------------------------------------
+  V0_Baseline        BASE   0.09866     0.09854   0.19331    -0.33pp     -0.59pp   0.999180
+  V1_Linear_f60       L60   0.09866     0.09854   0.19324    -0.34pp     -0.59pp   0.998660
+  V2_Linear_f70       L70   0.09866     0.09854   0.19325    -0.34pp     -0.59pp   0.998668
+  V3_Linear_f75       L75   0.09866     0.09854   0.19325    -0.34pp     -0.59pp   0.998685
+  V4_Sqrt            SQRT   0.09866     0.09854   0.19328    -0.34pp     -0.59pp   0.999051
+  V5_Cap_by_tier      CAP   0.09862     0.09852   0.19229    -0.46pp     -0.69pp   0.995684
+
+════════════════════════════════════════════════════════════════════════════════════════
+  SECTION 5 — BUCKET-LEVEL BIAS BY VARIANT (pre-calibration)
+════════════════════════════════════════════════════════════════════════════════════════
+  Bucket     Actual%     BASE      L60      L70      L75     SQRT      CAP
+  --------------------------------------------------------------------------------------
+  <8%          6.63%    -1.3pp    -1.2pp    -1.2pp    -1.2pp    -1.3pp    -1.3pp  
+  8–12%       10.91%    -1.1pp    -1.1pp    -1.1pp    -1.1pp    -1.1pp    -1.2pp  
+  12–15%      14.08%    -0.7pp    -0.7pp    -0.7pp    -0.7pp    -0.7pp    -0.9pp  
+  15–18%      14.04%    +2.4pp    +2.3pp    +2.3pp    +2.3pp    +2.4pp    +2.2pp  
+  18–22%      17.87%    +1.8pp    +1.8pp    +1.8pp    +1.8pp    +1.8pp    +1.7pp  
+  22%+        23.05%    +2.3pp    +2.3pp    +2.3pp    +2.3pp    +2.3pp    +2.2pp  
+
+════════════════════════════════════════════════════════════════════════════════════════
+  SECTION 6 — BIAS BY ARCHETYPE TIER PER VARIANT (pre-calibration)
+════════════════════════════════════════════════════════════════════════════════════════
+  Segmented by barrel_rate tier:
+  Tier                       Actual%      N     BASE      L60      L70      L75     SQRT      CAP
+  ----------------------------------------------------------------------------------------------------------
+  Elite (≥12%)                28.75%    313    -8.6pp    -8.6pp    -8.6pp    -8.6pp    -8.6pp    -8.6pp  
+  Power (9–12%)               19.09%   1189    -2.7pp    -2.7pp    -2.7pp    -2.7pp    -2.7pp    -2.7pp  
+  Average (5.5–9%)            12.67%   2849    -0.4pp    -0.4pp    -0.4pp    -0.4pp    -0.4pp    -0.4pp  
+  Contact (<5.5%)              7.08%   4282    +0.9pp    +0.9pp    +0.9pp    +0.9pp    +0.9pp    +0.7pp  
+
+  Segmented by power_mult tier:
+  Tier                       Actual%      N     BASE      L60      L70      L75     SQRT      CAP
+  ----------------------------------------------------------------------------------------------------------
+  Elite (≥1.20)               21.97%   1379    -4.2pp    -4.2pp    -4.2pp    -4.2pp    -4.2pp    -4.2pp  
+  Above avg (1.0–1.20)        12.59%   3003    -0.1pp    -0.1pp    -0.1pp    -0.1pp    -0.1pp    -0.2pp  
+  Below avg (0.80–1.0)         8.08%   3266    +0.7pp    +0.6pp    +0.6pp    +0.6pp    +0.6pp    +0.4pp  
+  Suppressed (<0.80)           3.65%    985    +1.1pp    +1.1pp    +1.1pp    +1.1pp    +1.1pp    +0.9pp  
+
+════════════════════════════════════════════════════════════════════════════════════════
+  SECTION 7 — HIGH-CONTEXT CONTACT BATTER INFLATION AUDIT
+════════════════════════════════════════════════════════════════════════════════════════
+  These are the rows driving over-prediction: low power_mult + high context.
+
+  Low power_mult (<0.90) + High context (≥1.30):
+    N=523  actual=7.07%  model=8.07%  bias=+1.00pp  mean_comb=1.4755  mean_pm=0.8120  Brier=0.06739
+  All other rows:
+    N=8,110  actual=11.64%  model=11.27%  bias=-0.37pp  mean_comb=1.0507  mean_pm=1.0283  Brier=0.10066
+
+  Effect of each moderation method on inflation cases (Δ model_prob):
+  Variant             Mean Δ prob   Mean new prob    New bias
+  ------------------------------------------------------------
+  V0_Baseline              -0.18pp           7.89%      +0.82pp
+  V1_Linear_f60            -0.49pp           7.58%      +0.50pp
+  V2_Linear_f70            -0.49pp           7.58%      +0.51pp
+  V3_Linear_f75            -0.48pp           7.59%      +0.52pp
+  V4_Sqrt                  -0.34pp           7.73%      +0.66pp
+  V5_Cap_by_tier           -0.95pp           7.13%      +0.05pp
+
+════════════════════════════════════════════════════════════════════════════════════════
+  SECTION 8 — TOP-PICK ANALYSIS (model_prob ≥ 15%)
+════════════════════════════════════════════════════════════════════════════════════════
+  Variant             N picks   Actual%    Model%      Bias     Brier
+  ----------------------------------------------------------------------
+  V0_Baseline           1,977    17.55%    19.75%    +2.20pp   0.14348
+  V1_Linear_f60         1,963    17.58%    19.77%    +2.19pp   0.14360
+  V2_Linear_f70         1,963    17.58%    19.77%    +2.19pp   0.14360
+  V3_Linear_f75         1,963    17.58%    19.77%    +2.19pp   0.14360
+  V4_Sqrt               1,968    17.53%    19.76%    +2.23pp   0.14331
+  V5_Cap_by_tier        1,926    17.71%    19.72%    +2.01pp   0.14423
+
+════════════════════════════════════════════════════════════════════════════════════════
+  SECTION 9 — ELITE HITTER ISOLATION (barrel_rate > 9%)
+════════════════════════════════════════════════════════════════════════════════════════
+  Focus: are elite hitters' probabilities increasing or decreasing?
+
+  Elite hitters (barrel>9%): N=1,429
+  Variant             Mean prob   Actual%      Bias   vs Baseline Δ
+  -----------------------------------------------------------------
+  V0_Baseline            17.37%    21.34%    -3.97pp          +0.00pp
+  V1_Linear_f60          17.37%    21.34%    -3.97pp          +0.00pp
+  V2_Linear_f70          17.37%    21.34%    -3.97pp          +0.00pp
+  V3_Linear_f75          17.37%    21.34%    -3.97pp          +0.00pp
+  V4_Sqrt                17.37%    21.34%    -3.97pp          +0.00pp
+  V5_Cap_by_tier         17.35%    21.34%    -4.00pp          -0.02pp
+
+  Non-elite hitters (barrel≤9%): N=7,204
+  Variant             Mean prob   Actual%      Bias   vs Baseline Δ
+  -----------------------------------------------------------------
+  V0_Baseline             9.77%     9.38%    +0.39pp          +0.00pp
+  V1_Linear_f60           9.76%     9.38%    +0.38pp          -0.01pp
+  V2_Linear_f70           9.76%     9.38%    +0.38pp          -0.01pp
+  V3_Linear_f75           9.76%     9.38%    +0.38pp          -0.01pp
+  V4_Sqrt                 9.77%     9.38%    +0.38pp          -0.01pp
+  V5_Cap_by_tier          9.62%     9.38%    +0.24pp          -0.15pp
+
+════════════════════════════════════════════════════════════════════════════════════════
+  SECTION 10 — CONTEXT CAP THRESHOLD SCAN (Variant V5_Cap by power_mult)
+════════════════════════════════════════════════════════════════════════════════════════
+  Tests different cap ceilings for sub-avg batters (power_mult < 1.0).
+  Ceiling applied only when combined_implied > cap (no inflation).
+
+  Sub-avg batter rows: N=4,251
+  Cap          Brier(all)   Bias(all)   Bias(sub-avg)   Bias(elite)    N≥15%
+  ---------------------------------------------------------------------------
+  1.15            0.09861      -0.57pp          +0.27pp        -3.97pp    1,884
+  1.20            0.09861      -0.52pp          +0.39pp        -3.97pp    1,908
+  1.25            0.09861      -0.47pp          +0.48pp        -3.97pp    1,928
+  1.30            0.09862      -0.43pp          +0.57pp        -3.97pp    1,945
+  1.35            0.09863      -0.40pp          +0.63pp        -3.97pp    1,957
+  1.40            0.09864      -0.37pp          +0.69pp        -3.97pp    1,964
+  1.50            0.09866      -0.33pp          +0.76pp        -3.97pp    1,977
+
+════════════════════════════════════════════════════════════════════════════════════════
+  SECTION 11 — RECOMMENDATION & IMPLEMENTATION NOTES
+════════════════════════════════════════════════════════════════════════════════════════
+  Best variant by Brier score:
+    V5_Cap_by_tier  (tag=CAP, method=cap, floor=0.0)
+    Brier: 0.09862  vs Baseline: 0.09866  Δ=-0.00005
+
+  Elite hitter bias: -3.97pp → -4.00pp (Δ=-0.02pp)
+  Inflation case bias: +0.82pp → +0.05pp (Δ=-0.76pp)
+
+  Implementation notes:
+    1. Add `power_mult: float = 1.0` kwarg to game_hr_probability() in probability.py
+       Apply moderation to combined BEFORE the [0.42,1.50] clamp.
+    2. Add config flags: CONTEXT_MODERATION_ENABLED (bool), CONTEXT_MODERATION_FLOOR (float)
+    3. Pass power_mult from pipeline.py and backtest/runner.py
+    4. Re-run analyze_calibration.py after implementation to re-fit Platt params
+    5. Rollback: set CONTEXT_MODERATION_ENABLED=False
+
+  Critical constraint check:
+    Moderation should reduce over-prediction of contact batters in high context
+    WITHOUT suppressing elite hitters. Check Section 9 to confirm elite bias
+    does not move further negative (i.e., variant must not make elite bias worse).
+
+════════════════════════════════════════════════════════════════════════════════════════

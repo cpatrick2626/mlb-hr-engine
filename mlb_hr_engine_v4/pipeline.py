@@ -145,6 +145,7 @@ def _build_player_profile(
         adjusted_rate, exp_pa,
         pk_factor=pk_factor, pitcher_fac=pit_factor,
         w_factor=w_factor, plat_factor=plat_factor,
+        power_mult=power_mult,
     )
     # When lineup hasn't been posted (spot is None), the player may not start.
     # 0.82 discount ≈ 82% probability of actually being in the lineup.

@@ -390,14 +390,32 @@ def park_factor(home_team: str, batter_side: str = "") -> float:
 
 _MAX_GAME_HR_PROB = config.MAX_GAME_HR_PROB  # canonical source: config.py
 
+
+def _moderate_context(combined: float, power_mult: float) -> float:
+    """Cap context multiplier for sub-average power batters.
+    Guards against contact batters reaching ≥15% probability solely via context
+    stacking (e.g. park + hittable pitcher + platoon). Elite batters (power_mult≥1.0)
+    are unaffected. Negative context (combined<1.0) is never modified.
+    Controlled by CONTEXT_MODERATION_ENABLED and CONTEXT_MODERATION_LOW_POWER_CAP.
+    """
+    if not getattr(config, "CONTEXT_MODERATION_ENABLED", False):
+        return combined
+    if combined <= 1.0 or power_mult >= 1.0:
+        return combined
+    cap = getattr(config, "CONTEXT_MODERATION_LOW_POWER_CAP", 1.25)
+    return min(combined, cap)
+
+
 def game_hr_probability(
     hr_rate: float, exp_pa: float,
     pk_factor: float = 1.0, pitcher_fac: float = 1.0,
     w_factor: float = 1.0, plat_factor: float = 1.0,
+    power_mult: float = 1.0,
 ) -> float:
     # Cap combined multiplier — prevents extreme stacking across all factors.
     # 1.50 ceiling: Coors (1.28) + hittable pitcher + strong platoon edge still fits.
     combined = pk_factor * pitcher_fac * w_factor * plat_factor
+    combined = _moderate_context(combined, power_mult)
     combined = max(0.42, min(1.50, combined))
     lam = hr_rate * combined * exp_pa
     prob = max(0.001, 1.0 - math.exp(-lam))
