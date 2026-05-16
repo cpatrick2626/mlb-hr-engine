@@ -249,14 +249,27 @@ def _match_odds(player, odds_lookup, unique_names):
         bk = prop.get("bookmaker", "")
         if bk and (bk not in book_best or prop["price"] > book_best[bk]):
             book_best[bk] = prop["price"]
+
+    # Dynamic per-book vig: more accurate than global VIG_FACTOR when book identity is known
+    fixed_nvp = round(summary.get("no_vig_prob_consensus", 0), 4)
+    vig_by_book: dict[str, float] = {}
+    if config.DYNAMIC_VIG_ENABLED and book_best:
+        dyn_summary = mkt.market_summary_dynamic(book_best)
+        market_nvp  = round(dyn_summary.get("no_vig_prob_dynamic", fixed_nvp), 4)
+        vig_by_book = dyn_summary.get("vig_by_book", {})
+    else:
+        market_nvp  = fixed_nvp
+
     player.update({
-        "best_american":      best["price"], "best_bookmaker": best.get("bookmaker", ""),
-        "all_prices":         prices, "n_books": summary.get("n_books", 1),
-        "prices_by_book":     book_best,   # {bookmaker: american_odds} for comparison table
-        # consensus no-vig for edge (conservative market baseline); best no-vig for EV display
-        "market_no_vig_prob": round(summary.get("no_vig_prob_consensus", 0), 4),
-        "market_implied_avg": round(summary.get("implied_prob_avg", 0), 4),
-        "fanduel_american":   fd_odds,
+        "best_american":           best["price"], "best_bookmaker": best.get("bookmaker", ""),
+        "all_prices":              prices, "n_books": summary.get("n_books", 1),
+        "prices_by_book":          book_best,   # {bookmaker: american_odds} for comparison table
+        # market_no_vig_prob is the primary EV/edge baseline (dynamic when DYNAMIC_VIG_ENABLED)
+        "market_no_vig_prob":      market_nvp,
+        "market_no_vig_prob_fixed": fixed_nvp,  # always fixed-vig value for comparison display
+        "vig_by_book":             vig_by_book,  # {book: vig_fraction} used
+        "market_implied_avg":      round(summary.get("implied_prob_avg", 0), 4),
+        "fanduel_american":        fd_odds,
     })
     return player
 

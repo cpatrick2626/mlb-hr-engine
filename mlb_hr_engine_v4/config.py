@@ -81,7 +81,9 @@ PRIOR_YEAR_TRUST:    float = 0.85  # shrink prior-year-only signal deviation fro
 MIN_CURRENT_YEAR_PA: int   = 50    # below this, blend current + prior Statcast (50 BF to stabilize)
 
 # ── Market / EV ───────────────────────────────────────────────────────────────
-VIG_FACTOR: float = 0.075  # Empirically measured on FanDuel/DraftKings HR props
+VIG_FACTOR: float = 0.075          # Fallback vig for unknown books; global default
+DYNAMIC_VIG_ENABLED: bool = True   # Use per-book vig model (engine/vig.py)
+DYNAMIC_VIG_ODDS_RANGE: bool = True  # Scale vig by implied probability (longer shots → higher vig)
 
 _today = __import__("datetime").date.today()
 # Jan–Feb: season hasn't started, use prior year; Mar–Dec: use current year

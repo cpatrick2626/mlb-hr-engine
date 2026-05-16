@@ -176,7 +176,12 @@ def _get_event_props(event_id: str) -> list[dict]:
             return []
         data = resp.json()
         props: list[dict] = []
+        # Track Under prices per (bookmaker, player) so we can compute overround
+        # when both sides are available — used by engine/vig.py for empirical measurement.
+        under_prices: dict[tuple[str, str], int] = {}
+
         for bookmaker in data.get("bookmakers", []):
+            bk_key = bookmaker.get("key", "")
             for market in bookmaker.get("markets", []):
                 if market.get("key") != "batter_home_runs":
                     continue
@@ -196,13 +201,29 @@ def _get_event_props(event_id: str) -> list[dict]:
                     # Reject impossible American odds (must be ≥+100 or ≤-100)
                     if -100 < price < 100:
                         continue
-                    props.append({
-                        "player_name": player_name,
-                        "description": f"Over {outcome.get('point', 0.5)} HR",
-                        "price": price,
-                        "bookmaker": bookmaker.get("key", ""),
-                        "game_id": event_id,
-                    })
+                    side = outcome.get("name", "Over")   # "Over" or "Under"
+                    if side == "Under":
+                        # Store Under price keyed by (bookmaker, player) for overround calc
+                        under_prices[(bk_key, player_name)] = price
+                    else:
+                        props.append({
+                            "player_name": player_name,
+                            "description": f"Over {outcome.get('point', 0.5)} HR",
+                            "price": price,
+                            "bookmaker": bk_key,
+                            "game_id": event_id,
+                        })
+
+        # Annotate Over props with measured overround when Under price is available.
+        # overround = implied(over) + implied(under) - 1; true vig = overround / 2 ≈ one-sided margin.
+        for prop in props:
+            key = (prop["bookmaker"], prop["player_name"])
+            under_p = under_prices.get(key)
+            if under_p is not None:
+                over_imp   = 100.0 / (prop["price"] + 100.0) if prop["price"] > 0 else abs(prop["price"]) / (abs(prop["price"]) + 100.0)
+                under_imp  = 100.0 / (under_p + 100.0) if under_p > 0 else abs(under_p) / (abs(under_p) + 100.0)
+                overround  = round(over_imp + under_imp - 1.0, 4)
+                prop["measured_overround"] = overround  # empirical two-sided vig for this book/player
         return props
     except Exception as e:
         print(f"[odds_api] props fetch failed for event {event_id}: {e}")

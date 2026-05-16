@@ -95,3 +95,38 @@ def market_summary(prices: Sequence[int]) -> dict:
         "no_vig_prob_best": no_vig_prob_one_sided(prices),
         "n_books": len(prices),
     }
+
+
+def market_summary_dynamic(prices_by_book: dict[str, int]) -> dict:
+    """
+    Enhanced market summary using per-book vig from engine.vig.
+
+    Args:
+        prices_by_book: {bookmaker_key: best_american_odds} from pipeline
+
+    Returns all fixed-vig keys plus:
+        no_vig_prob_dynamic: consensus probability using per-book vig
+        no_vig_prob_fixed:   consensus probability using global VIG_FACTOR (for comparison)
+        vig_by_book:         {book: vig_fraction} actually applied
+        sharpest_book:       book with lowest estimated vig
+        vig_delta:           dynamic minus fixed (positive = dynamic is more conservative)
+    """
+    if not prices_by_book:
+        return {}
+
+    from engine import vig as vig_model  # local import avoids circular dependency
+
+    prices = list(prices_by_book.values())
+    base = market_summary(prices)   # backward-compatible fixed-vig values
+
+    dyn_prob, sharpest, vig_by_book = vig_model.consensus_no_vig_dynamic(prices_by_book)
+    fixed_prob = base.get("no_vig_prob_consensus", 0.0)
+
+    base.update({
+        "no_vig_prob_dynamic": dyn_prob,
+        "no_vig_prob_fixed":   fixed_prob,
+        "vig_by_book":         vig_by_book,
+        "sharpest_book":       sharpest,
+        "vig_delta":           round(dyn_prob - fixed_prob, 5),
+    })
+    return base
