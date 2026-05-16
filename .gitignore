@@ -16,6 +16,12 @@ build/
 # Tracking data (generated at runtime — not source code)
 codex_hr_engine_v1/tracking/*.csv
 codex_hr_engine_v2/tracking/*.csv
+mlb_hr_engine_v4/tracking/*.csv
+mlb_hr_engine_v4/tracking/*.bak
+
+# Runtime caches and generated data files
+mlb_hr_engine_v4/data/odds_cache.json
+fb_pct_raw_data.csv
 
 # Compare script temp outputs
 compare_v1.json

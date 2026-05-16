@@ -1,0 +1,200 @@
+════════════════════════════════════════════════════════════════════════════════════════════════════
+FLY BALL % SIGNAL PROMOTION — ANALYSIS REPORT
+Date range: 2026-04-01 to 2026-05-15  |  Batter-games: 10777  |  Actual HR rate: 10.49%  |  HRs: 1131
+════════════════════════════════════════════════════════════════════════════════════════════════════
+
+1. OVERVIEW — Key Metrics Per Variant
+────────────────────────────────────────────────────────────────────────────────────────────────────
+Variant                      FB%  Gate    Brier  vs Base      MAE  vs Base   ROI@10%   ROI@15%
+----------------------------------------------------------------------------------------------------
+Baseline                     15%    no  0.09207 +0.00000  0.18357 +0.00000    -29.0%    -26.7%  
+FB15_gated                   15%   yes  0.09204 -0.00003  0.18339 -0.00017    -28.5%    -27.2%  
+FB18_gated                   18%   yes  0.09204 -0.00003  0.18341 -0.00015    -28.4%    -27.6%  
+FB20_flat                    20%    no  0.09204 -0.00003  0.18344 -0.00013    -28.6%    -27.4%  
+FB20_gated [PROPOSED]        20%   yes  0.09204 -0.00003  0.18343 -0.00014    -28.5%    -27.4% ◄
+FB22_gated                   22%   yes  0.09205 -0.00002  0.18346 -0.00011    -28.5%    -27.2%  
+FB20_park+                   20%   yes  0.09204 -0.00003  0.18343 -0.00014    -28.6%    -27.3%  
+----------------------------------------------------------------------------------------------------
+Trivial baseline Brier (predict league avg for all): 0.09393
+Lower Brier = better  |  Negative Brier delta = improvement over baseline
+
+
+2. CALIBRATION BY PROBABILITY BUCKET
+────────────────────────────────────────────────────────────────────────────────────────────────────
+
+  Baseline  (Current production (FB=15%, no quality gate))
+  Bucket          N   HRs     Pred   Actual     Diff
+  ----------------------------------------------------
+  0-5%         1514    61    3.63%    4.03%   +0.4pp  
+  5-10%        4287   378    7.49%    8.82%   +1.3pp  
+  10-15%       2854   330   12.20%   11.56%   -0.6pp  
+  15-20%       1348   198   17.17%   14.69%   -2.5pp  
+  20-25%        513    95   22.22%   18.52%   -3.7pp !
+  25-30%        261    69   27.43%   26.44%   -1.0pp  
+  30%+            —
+
+  FB15_gated  (Original weight + quality gate only (isolates gate effect))
+  Bucket          N   HRs     Pred   Actual     Diff
+  ----------------------------------------------------
+  0-5%         1507    64    3.62%    4.25%   +0.6pp  
+  5-10%        4303   373    7.47%    8.67%   +1.2pp  
+  10-15%       2860   336   12.21%   11.75%   -0.5pp  
+  15-20%       1337   193   17.16%   14.44%   -2.7pp  
+  20-25%        511    93   22.23%   18.20%   -4.0pp !
+  25-30%        259    72   27.47%   27.80%   +0.3pp  
+  30%+            —
+
+  FB18_gated  (Conservative FB increase (18%) with quality gate)
+  Bucket          N   HRs     Pred   Actual     Diff
+  ----------------------------------------------------
+  0-5%         1505    64    3.62%    4.25%   +0.6pp  
+  5-10%        4312   373    7.47%    8.65%   +1.2pp  
+  10-15%       2851   337   12.22%   11.82%   -0.4pp  
+  15-20%       1338   191   17.16%   14.28%   -2.9pp  
+  20-25%        511    93   22.23%   18.20%   -4.0pp !
+  25-30%        260    73   27.46%   28.08%   +0.6pp  
+  30%+            —
+
+  FB20_flat  (FB=20% flat weight, no quality gate)
+  Bucket          N   HRs     Pred   Actual     Diff
+  ----------------------------------------------------
+  0-5%         1503    65    3.62%    4.32%   +0.7pp  
+  5-10%        4304   372    7.47%    8.64%   +1.2pp  
+  10-15%       2864   337   12.22%   11.77%   -0.4pp  
+  15-20%       1334   191   17.16%   14.32%   -2.8pp  
+  20-25%        517    95   22.24%   18.38%   -3.9pp !
+  25-30%        255    71   27.51%   27.84%   +0.3pp  
+  30%+            —
+
+  FB20_gated [PROPOSED]  (FB=20% with quality gate — proposed production config)
+  Bucket          N   HRs     Pred   Actual     Diff
+  ----------------------------------------------------
+  0-5%         1503    65    3.62%    4.32%   +0.7pp  
+  5-10%        4306   372    7.47%    8.64%   +1.2pp  
+  10-15%       2862   337   12.22%   11.77%   -0.4pp  
+  15-20%       1334   191   17.16%   14.32%   -2.8pp  
+  20-25%        517    95   22.24%   18.38%   -3.9pp !
+  25-30%        255    71   27.51%   27.84%   +0.3pp  
+  30%+            —
+
+  FB22_gated  (Aggressive FB increase (22%) with quality gate)
+  Bucket          N   HRs     Pred   Actual     Diff
+  ----------------------------------------------------
+  0-5%         1499    65    3.62%    4.34%   +0.7pp  
+  5-10%        4306   371    7.47%    8.62%   +1.1pp  
+  10-15%       2864   337   12.21%   11.77%   -0.4pp  
+  15-20%       1331   192   17.14%   14.43%   -2.7pp  
+  20-25%        523    96   22.21%   18.36%   -3.9pp !
+  25-30%        254    70   27.50%   27.56%   +0.1pp  
+  30%+            —
+
+  FB20_park+  (FB=20% gated + stronger park interaction (scale=0.40))
+  Bucket          N   HRs     Pred   Actual     Diff
+  ----------------------------------------------------
+  0-5%         1502    64    3.62%    4.26%   +0.6pp  
+  5-10%        4303   373    7.47%    8.67%   +1.2pp  
+  10-15%       2865   336   12.21%   11.73%   -0.5pp  
+  15-20%       1335   192   17.16%   14.38%   -2.8pp  
+  20-25%        514    93   22.24%   18.09%   -4.1pp !
+  25-30%        258    73   27.50%   28.29%   +0.8pp  
+  30%+            —
+
+
+3. FALSE-POSITIVE & MISSED-HR ANALYSIS
+────────────────────────────────────────────────────────────────────────────────────────────────────
+Variant                      FP@10%   FP@15%   Miss@10%   Miss@15%   Top10/day
+----------------------------------------------------------------------------------------------------
+Baseline                      86.1%    82.9%      38.8%      68.0%       23.8%  
+FB15_gated                    86.0%    83.0%      38.6%      68.3%       24.0%  
+FB18_gated                    86.0%    83.1%      38.6%      68.4%       23.8%  
+FB20_flat                     86.0%    83.0%      38.6%      68.4%       24.0%  
+FB20_gated [PROPOSED]         86.0%    83.0%      38.6%      68.4%       24.0% ◄
+FB22_gated                    86.0%    83.0%      38.5%      68.3%       24.0%  
+FB20_park+                    86.0%    83.0%      38.6%      68.3%       24.0%  
+
+  FP@X%  = fraction of picks above X% threshold that did NOT hit HR
+  Miss%  = fraction of actual HRs with model_prob below threshold
+  Top10  = HR rate among top 10 highest-probability picks per game day
+
+
+4. SIMULATED P&L DETAIL (flat $10 per pick, estimated market odds)
+────────────────────────────────────────────────────────────────────────────────────────────────────
+
+  Threshold: >= 10% model prob
+  Variant                     # Picks   # Wins  Total Bet    Net P&L      ROI
+  ------------------------------------------------------------------------
+  Baseline                       4976      692 $    49760 $-14409.00   -29.0%  
+  FB15_gated                     4967      694 $    49670 $-14174.50   -28.5%  
+  FB18_gated                     4960      694 $    49600 $-14105.50   -28.4%  
+  FB20_flat                      4970      694 $    49700 $-14193.50   -28.6%  
+  FB20_gated [PROPOSED]          4968      694 $    49680 $-14173.50   -28.5% ◄
+  FB22_gated                     4972      695 $    49720 $-14160.00   -28.5%  
+  FB20_park+                     4972      694 $    49720 $-14238.00   -28.6%  
+
+  Threshold: >= 15% model prob
+  Variant                     # Picks   # Wins  Total Bet    Net P&L      ROI
+  ------------------------------------------------------------------------
+  Baseline                       2122      362 $    21220 $ -5669.00   -26.7%  
+  FB15_gated                     2107      358 $    21070 $ -5734.50   -27.2%  
+  FB18_gated                     2109      357 $    21090 $ -5815.50   -27.6%  
+  FB20_flat                      2106      357 $    21060 $ -5773.50   -27.4%  
+  FB20_gated [PROPOSED]          2106      357 $    21060 $ -5773.50   -27.4% ◄
+  FB22_gated                     2108      358 $    21080 $ -5740.00   -27.2%  
+  FB20_park+                     2107      358 $    21070 $ -5748.00   -27.3%  
+
+  Threshold: >= 20% model prob
+  Variant                     # Picks   # Wins  Total Bet    Net P&L      ROI
+  ------------------------------------------------------------------------
+  Baseline                        774      164 $     7740 $ -1594.00   -20.6%  
+  FB15_gated                      770      165 $     7700 $ -1532.00   -19.9%  
+  FB18_gated                      771      166 $     7710 $ -1508.00   -19.6%  
+  FB20_flat                       772      166 $     7720 $ -1506.00   -19.5%  
+  FB20_gated [PROPOSED]           772      166 $     7720 $ -1506.00   -19.5% ◄
+  FB22_gated                      777      166 $     7770 $ -1550.00   -19.9%  
+  FB20_park+                      772      166 $     7720 $ -1518.00   -19.7%  
+
+
+5. PLAYER GROUP ANALYSIS — Who Is Affected By FB% Promotion
+────────────────────────────────────────────────────────────────────────────────────────────────────
+  Groups by current-season Statcast data (baseline power_mult):
+
+  High Fb Low Barrel            :   1338 batter-games  |  actual HR rate = 9.57%
+  High Fb High Barrel           :   2791 batter-games  |  actual HR rate = 17.70%
+  Low Fb                        :   4504 batter-games  |  actual HR rate = 7.97%
+
+  Interpretation:
+  - high_fb_low_barrel : Target group for quality gate (should NOT be inflated)
+  - high_fb_high_barrel: Power hitters who benefit most from FB% promotion
+  - low_fb             : Ground-ball hitters; FB% acts as suppressor (correct)
+
+
+6. SIGNAL INTERACTION — FB% vs Other Metrics
+────────────────────────────────────────────────────────────────────────────────────────────────────
+
+  Pearson correlations (n=8451 batter-games with full Statcast):
+  FB%    vs barrel%:    r = +0.5357  (moderate overlap)
+  FB%    vs hard_hit%:  r = +0.3041  (moderate overlap)
+  FB%    vs HR outcome: r = +0.1308  (point-biserial, raw predictor)
+  barrel% vs HR outcome:r = +0.1752  (point-biserial, for reference)
+
+  VIF approximation (FB% ~ barrel%): R²=0.287, VIF≈1.4
+  VIF < 5: low multicollinearity — FB% is sufficiently independent of barrel%
+  VIF > 5: significant overlap — weight increase risks double-counting
+
+
+7. RECOMMENDATION
+────────────────────────────────────────────────────────────────────────────────────────────────────
+
+  Best Brier score:  FB15_gated  (0.09204)
+  Best ROI@15%:      Baseline  (-26.7%)
+
+  Proposed config (FB20_gated):
+    Brier:    0.09204 (improvement vs baseline)
+    ROI@15%:  -27.4%
+    FP@15%:   83.0%
+    Miss@15%: 68.4%
+
+  See section 2 calibration diffs for bucket-level impact.
+  If proposed Brier is worse or calibration diff exceeds ±3pp in any bucket,
+  revert config.FB_PCT_WEIGHT to 0.15 and config.FB_QUALITY_GATE_ENABLED to False.
+════════════════════════════════════════════════════════════════════════════════════════════════════

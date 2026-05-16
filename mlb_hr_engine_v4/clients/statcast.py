@@ -213,22 +213,37 @@ def batter_power_multiplier(
     fb_mult         = _clamp(fb_pct       / LEAGUE_AVG_FB_PCT,       0.55, 1.70)
     pull_mult       = _clamp(pull_pct     / LEAGUE_AVG_PULL_PCT,     0.65, 1.55)
 
-    # Weight rationale (post-redundancy audit):
-    # Barrel% → 40%: most HR-specific metric; independent of FB rate
-    # FB%     → 15%: independent dimension (air vs ground)
-    # Sweet%  → 12%: partially independent from barrel (measures LA 8-32° exactly)
-    # Pull%   → 10%: independent dimension (short porch HR conversion)
-    # xSLG    → 10%: reduced from 14%; correlated with barrel% (r~0.75)
-    # Hard Hit → 8%: reduced from 10%; correlated with barrel+EV (r~0.65)
-    # Exit Velo → 5%: mostly captured by barrel and hard-hit already
+    # Quality-conditioned FB%: gates the positive deviation by barrel quality.
+    # Guards against weak fly-ball hitters (high FB%, low barrel%) getting
+    # undeserved power boosts. Savant fb_pct already excludes popups, so the
+    # remaining risk is low-exit-velocity outfield flies → gating on barrel is correct.
+    # Negative deviations (ground-ball hitters) are NOT gated — their suppression is kept.
+    if config.FB_QUALITY_GATE_ENABLED:
+        barrel_quality = min(1.0, barrel_mult)          # normalize to [0.30, 1.0]
+        gate = (config.FB_QUALITY_GATE_FLOOR
+                + (1.0 - config.FB_QUALITY_GATE_FLOOR) * barrel_quality)
+        fb_deviation = fb_mult - 1.0
+        fb_effective = (1.0 + fb_deviation * gate) if fb_deviation > 0 else fb_mult
+    else:
+        fb_effective = fb_mult
+
+    # Weight rationale (post-FB% promotion, 2026-05-16):
+    # Barrel%   → 40%: most HR-specific; independent of FB rate
+    # FB%       → 20% (+5pp): #2 raw predictor per 2026 signal ranking; quality-gated
+    # Sweet%    → 10% (-2pp): weakest batter signal per 2026 signal ranking
+    # Pull%     → 10%: independent direction signal (short porch HR conversion)
+    # xSLG      →  8% (-2pp): correlated with barrel (r~0.75); weight reduced
+    # Hard Hit  →  8%: EV>95mph; partially independent from barrel
+    # Exit Velo →  4% (-1pp): mostly captured by barrel and hard-hit
+    # Fixed weight sum (barrel+sweet+pull+xslg+hh+ev) = 0.80; FB fills 0.20 → total=1.00
     composite = (
         barrel_mult       * 0.40
-        + fb_mult         * 0.15
-        + sweet_spot_mult * 0.12
+        + fb_effective    * config.FB_PCT_WEIGHT
+        + sweet_spot_mult * 0.10
         + pull_mult       * 0.10
-        + xslg_mult       * 0.10
+        + xslg_mult       * 0.08
         + hard_hit_mult   * 0.08
-        + ev_mult         * 0.05
+        + ev_mult         * 0.04
     )
     raw_composite = _clamp(composite, 0.45, 1.75)
 

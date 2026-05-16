@@ -366,17 +366,19 @@ def expected_pa(lineup_spot: Optional[int]) -> float:
 
 
 _LEAGUE_AVG_FB_PCT = config.LEAGUE_AVG_FB_PCT  # canonical source: config.py
+_FB_PARK_SCALE     = config.FB_PARK_SCALE      # FB% deviation scaling; tunable via config
 
 def fly_ball_adjusted_park_factor(park_factor: float, statcast_fb_pct: float = None) -> float:
     """
     Scale park HR impact by batter's Statcast fly-ball rate (fb_pct from batted-ball CSV).
     A high-FB% batter benefits more from a HR-friendly park (and suffers more in a suppressor).
     Falls back to raw park factor when Statcast fb_pct is unavailable.
+    Scaling magnitude controlled by config.FB_PARK_SCALE (default 0.30).
     """
     if statcast_fb_pct is None:
         return park_factor
     fb_dev   = (statcast_fb_pct - _LEAGUE_AVG_FB_PCT) / _LEAGUE_AVG_FB_PCT
-    adjusted = 1.0 + (park_factor - 1.0) * (1.0 + 0.30 * fb_dev)
+    adjusted = 1.0 + (park_factor - 1.0) * (1.0 + _FB_PARK_SCALE * fb_dev)
     return max(0.70, min(1.45, adjusted))
 
 

@@ -1,0 +1,299 @@
+﻿
+╔═════════════════════════════════════════════════════════════════════════════════════════════════════════════════╗
+║ 2026 EARLY-SEASON FULL ANALYSIS                                                                                 ║
+║ Date range: 2026-04-01 to 2026-05-15  |  45 calendar days                                                       ║
+║ Session 17 changes: regression floor 0.30 · humidity factor · HVY env_mult removed · fatigue extra-rest neutral ║
+╚═════════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
+
+Loading 2025 Statcast leaderboard (prior-year; eliminates look-ahead bias)...
+  Statcast 2025: 799 batters, 1132 pitchers  (1.2s)
+Loading pitch arsenal data (2025 + 2026 for YoY velo decline)...
+[arsenal] stats endpoint: 828 pitchers loaded for year=2025
+[arsenal] stats endpoint: 595 pitchers loaded for year=2026
+  Arsenal: 828 pitchers (2025), 595 pitchers (2026)  (0.8s)
+
+Scoring 45 dates...
+  2026-04-01: 270 batters scored  (running total: 270)
+  2026-04-02: 71 batters scored  (running total: 341)
+  2026-04-03: 269 batters scored  (running total: 610)
+  2026-04-05: 286 batters scored  (running total: 1184)
+  2026-04-10: 270 batters scored  (running total: 2333)
+  2026-04-15: 269 batters scored  (running total: 3590)
+  2026-04-20: 180 batters scored  (running total: 4757)
+  2026-04-25: 270 batters scored  (running total: 5981)
+  2026-04-30: 198 batters scored  (running total: 7149)
+  2026-05-05: 251 batters scored  (running total: 8424)
+  2026-05-10: 270 batters scored  (running total: 9663)
+  2026-05-15: 270 batters scored  (running total: 10777)
+
+Collected 10777 batter-game records across 45 game dates.
+
+Computing arsenal matchup factors for each pitcher...
+  Arsenal matchup factor active (!=1.0): 9547/10777 rows
+  Velo decline factor active (>1.0):    0/10777 rows
+
+╭──────────────────────────────────────╮
+│ ANALYSIS B — FULL CALIBRATION REPORT │
+╰──────────────────────────────────────╯
+╔═══════════════════════════════════════════════════════════════════════════════════════════════╗
+║ BACKTEST CALIBRATION REPORT                                                                   ║
+║ Date range: 2026-04-01 to 2026-05-15  |  Total batter-games: 10777  |  Actual HR rate: 10.49% ║
+╚═══════════════════════════════════════════════════════════════════════════════════════════════╝
+
+╭─────────────────────────────────────────╮
+│ MODEL CALIBRATION — Predicted vs Actual │
+╰─────────────────────────────────────────╯
+                                                                                                                 
+  Prob Bucket     # Batters      # HRs     Avg Model%     Actual HR%         Diff    Brier contrib     %Curr SC  
+ ─────────────────────────────────────────────────────────────────────────────────────────────────────────────── 
+  0-5%                 1450         70           3.7%           4.8%       +1.1pp            66.62          96%  
+  5-10%                4202        358           7.5%           8.5%       +1.0pp           327.46          90%  
+  10-15%               2973        339          12.2%          11.4%       -0.8pp           300.76          94%  
+  15-20%               1338        197          17.1%          14.7%       -2.4pp           168.82          95%  
+  20-25%                574        109          22.1%          19.0%       -3.1pp            88.69          96%  
+  25-30%                240         58          27.6%          24.2%       -3.4pp            44.18          99%  
+  30%+                    0         --             --             --           --               --           --  
+                                                                                                                 
+Brier Score: 0.0925  (trivial base-rate model: 0.0939; skilled target: <0.0889)
+
+╭─────────────────────────────────────────────────────╮
+│ SIMULATED P&L — Flat $10 per pick at estimated odds │
+╰─────────────────────────────────────────────────────╯
+Uses conservative market-odds estimate per bucket. Actual results may differ based on real line shopping.
+
+                                                                                                    
+  Min Model%       # Bets     # Won     Win Rate     Avg Odds    Total Bet      Net P&L        ROI  
+ ────────────────────────────────────────────────────────────────────────────────────────────────── 
+  >= 5%              9327      1061        11.4%         +598       $93270   $-25020.50     -26.8%  
+  >= 10%             5125       703        13.7%         +432       $51250   $-15220.50     -29.7%  
+  >= 15%             2152       364        16.9%         +339       $21520    $-5830.50     -27.1%  
+  >= 20%              814       167        20.5%         +282        $8140    $-1808.00     -22.2%  
+  >= 25%              240        58        24.2%         +240        $2400     $-428.00     -17.8%  
+                                                                                                    
+
+╭───────────────────────────────────────╮
+│ HIGH-PROBABILITY PICKS (>= 15% model) │
+╰───────────────────────────────────────╯
+                                                                                               
+  Date           Player                   Team    Vs Pitcher                Model%    Result   
+ ───────────────────────────────────────────────────────────────────────────────────────────── 
+  2026-04-03     Aaron Judge              NYY     Eury Pérez                 29.0%      HR     
+  2026-04-03     Kyle Schwarber           PHI     Michael Lorenzen           29.0%      HR     
+  2026-04-15     Yordan Alvarez           HOU     Jose Quintana              29.0%      HR     
+  2026-04-19     Ben Rice                 NYY     Cole Ragans                29.0%      HR     
+  2026-04-19     Aaron Judge              NYY     Cole Ragans                29.0%      HR     
+  2026-04-19     Yordan Alvarez           HOU     Matthew Liberatore         29.0%      HR     
+  2026-04-19     Mickey Moniak            COL     Roki Sasaki                29.0%      HR     
+  2026-04-23     Mickey Moniak            COL     Matt Waldron               29.0%      HR     
+  2026-04-28     Aaron Judge              NYY     Jacob deGrom               29.0%      HR     
+  2026-05-01     Ben Rice                 NYY     Cade Povich                29.0%      HR     
+  2026-04-01     Kyle Schwarber           PHI     Cade Cavalli               29.0%    No HR    
+  2026-04-05     Kyle Schwarber           PHI     Tomoyuki Sugano            29.0%    No HR    
+  2026-04-07     Yordan Alvarez           HOU     Kyle Freeland              29.0%    No HR    
+  2026-04-08     Shea Langeliers          ATH     Will Warren                29.0%    No HR    
+  2026-04-11     Zach Neto                LAA     Brandon Williamson         29.0%    No HR    
+  2026-04-15     Jordan Walker            STL     Slade Cecconi              29.0%    No HR    
+  2026-04-15     Brandon Lowe             PIT     Jake Irvin                 29.0%    No HR    
+  2026-04-16     Mickey Moniak            COL     Ryan Weiss                 29.0%    No HR    
+  2026-04-17     Shohei Ohtani            LAD     Tomoyuki Sugano            29.0%    No HR    
+  2026-04-18     Aaron Judge              NYY     Noah Cameron               29.0%    No HR    
+                                                                                               
+
+╔═════════════════════════════════════════════════════════════════════════════════════╗
+║ FEATURE IMPORTANCE — Point-Biserial Correlations with HR Outcome                    ║
+║ Batter-games: 10777  |  Overall HR rate: 10.49%  |  Min observations per factor: 30 ║
+╚═════════════════════════════════════════════════════════════════════════════════════╝
+                                                                                                          
+    Rank   Factor                              Corr   Strength       Direction            HR%          N  
+ ──────────────────────────────────────────────────────────────────────────────────────────────────────── 
+       1   Model Probability                +0.1342   Moderate       ↑ more HRs         10.5%      10777  
+       2   Fly Ball %                       +0.1341   Moderate       ↑ more HRs         11.4%       8633  
+       3   Statcast Power Multiplier        +0.1234   Moderate       ↑ more HRs         10.5%      10777  
+       4   Raw HR Rate                      +0.1153   Weak           ↑ more HRs         10.5%      10777  
+       5   Barrel Rate                      +0.1144   Weak           ↑ more HRs         10.5%      10247  
+       6   xSLG                             +0.1117   Weak           ↑ more HRs         10.5%      10246  
+       7   Hard Hit %                       +0.1033   Weak           ↑ more HRs         10.5%      10247  
+       8   Exit Velocity                    +0.1016   Weak           ↑ more HRs         10.5%      10246  
+       9   Pull %                           +0.0657   Weak           ↑ more HRs         11.4%       8633  
+      10   Batter K-Rate Factor             -0.0565   Weak           ↓ fewer HRs        10.5%      10777  
+      11   Platoon Factor                   +0.0562   Weak           ↑ more HRs         10.5%      10777  
+      12   Sweet Spot %                     +0.0376   Negligible     ↑ more HRs         10.5%      10247  
+      13   Park Factor                      +0.0296   Negligible     ↑ more HRs         10.5%      10777  
+      14   Pitcher K+GB Suppressor          +0.0281   Negligible     ↓ fewer HRs        10.5%      10777  
+      15   Streak Factor                    +0.0221   Negligible     ↑ more HRs         10.5%      10777  
+      16   Pitcher Factor                   +0.0156   Negligible     ↑ more HRs         10.5%      10777  
+      17   Pitcher HR/9                     +0.0110   Negligible     ↑ more HRs         10.5%      10777  
+      18   Pitcher HR/FB Factor             +0.0065   Negligible     ↑ more HRs         10.5%      10777  
+      19   Season PA                        -0.0002   Negligible     ↑ more HRs         10.5%      10777  
+                                                                                                          
+
+Redundancy note: Barrel Rate, xSLG, Hard Hit %, Exit Velocity belong to the same 'hard contact' cluster (pairwise r~0.65–0.80). Their combined weight represents one independent 
+dimension. Barrel% is the canonical representative; the others add marginal signal.
+
+╭──────────────────────────────────────────────────────────╮
+│ FALSE POSITIVE / MISSED HR ANALYSIS                      │
+│ High-confidence misses vs surprising low-probability HRs │
+╰──────────────────────────────────────────────────────────╯
+
+  TOP FALSE POSITIVES (model≥15%, no HR) — top 15 of 1788
+                                                                                                                                   
+  Date           Player                     Team    Pitcher                     Model%     PwrMult     PkFac    PitFac    Result   
+ ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── 
+  2026-04-01     Kyle Schwarber             PHI     Cade Cavalli                 29.0%       1.557     1.127     0.940    No HR    
+  2026-04-05     Kyle Schwarber             PHI     Tomoyuki Sugano              29.0%       1.557     1.323     1.112    No HR    
+  2026-04-07     Yordan Alvarez             HOU     Kyle Freeland                29.0%       1.302     1.314     1.002    No HR    
+  2026-04-08     Shea Langeliers            ATH     Will Warren                  29.0%       1.205     1.105     1.146    No HR    
+  2026-04-11     Zach Neto                  LAA     Brandon Williamson           29.0%       1.318     1.200     1.192    No HR    
+  2026-04-15     Jordan Walker              STL     Slade Cecconi                29.0%       1.076     1.032     1.237    No HR    
+  2026-04-15     Brandon Lowe               PIT     Jake Irvin                   29.0%       1.251     1.042     1.269    No HR    
+  2026-04-16     Mickey Moniak              COL     Ryan Weiss                   29.0%       1.370     1.113     1.178    No HR    
+  2026-04-17     Shohei Ohtani              LAD     Tomoyuki Sugano              29.0%       1.687     1.309     1.343    No HR    
+  2026-04-18     Aaron Judge                NYY     Noah Cameron                 29.0%       1.681     1.105     0.985    No HR    
+  2026-04-18     Mickey Moniak              COL     Emmet Sheehan                29.0%       1.370     1.316     1.258    No HR    
+  2026-04-18     Mike Trout                 LAA     Germán Márquez               29.0%       1.252     0.967     1.540    No HR    
+  2026-04-19     Jordan Walker              STL     Mike Burrows                 29.0%       1.076     1.107     1.289    No HR    
+  2026-04-19     Max Muncy                  LAD     Michael Lorenzen             29.0%       1.256     1.310     1.229    No HR    
+  2026-04-20     Shohei Ohtani              LAD     Jose Quintana                29.0%       1.687     1.309     1.113    No HR    
+                                                                                                                                   
+
+  BIGGEST MISSES (model<8%, hit HR) — top 15 of 269
+                                                                                                                                   
+  Date           Player                     Team    Pitcher                     Model%     PwrMult     PkFac    PitFac    Result   
+ ───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── 
+  2026-04-24     Liam Hicks                 MIA     Adrian Houser                 8.0%       0.816     0.826     0.916      HR     
+  2026-05-01     Ronny Mauricio             NYM     Walbert Ureña                 8.0%       0.982     0.970     0.977      HR     
+  2026-04-14     José Ramírez               CLE     Michael McGreevy              8.0%       1.061     1.033     0.953      HR     
+  2026-05-06     Evan Carter                TEX     Will Warren                   8.0%       0.938     1.112     0.962      HR     
+  2026-04-24     Coby Mayo                  BAL     Brayan Bello                  8.0%       1.046     1.063     1.079      HR     
+  2026-04-10     Luis Campusano             SD      Tomoyuki Sugano               7.9%       0.965     0.890     1.200      HR     
+  2026-04-14     Andrés Giménez             TOR     Jacob Misiorowski             7.9%       0.759     1.067     0.939      HR     
+  2026-05-15     Jakob Marsee               MIA     Ian Seymour                   7.9%       1.031     1.000     1.003      HR     
+  2026-04-03     Gabriel Arias              CLE     Cade Horton                   7.9%       1.065     0.970     1.059      HR     
+  2026-05-03     Zack Gelof                 ATH     Parker Messick                7.9%       1.007     1.050     0.732      HR     
+  2026-05-13     Tyler Stephenson           CIN     Jake Irvin                    7.9%       1.198     1.214     1.071      HR     
+  2026-04-24     Spencer Torkelson          DET     Andrew Abbott                 7.9%       1.267     1.198     0.923      HR     
+  2026-04-20     Miguel Rojas               LAD     Jose Quintana                 7.9%       0.842     1.280     1.113      HR     
+  2026-05-08     Xavier Edwards             MIA     Foster Griffin                7.9%       0.647     1.019     0.989      HR     
+  2026-04-12     Jackson Merrill            SD      Kyle Freeland                 7.8%       1.257     0.893     0.971      HR     
+                                                                                                                                   
+
+  False positive averages — pk_factor: 1.053 | pit_factor: 1.067 | power_mult: 1.191
+
+╭─────────────────────────────────────────────────────╮
+│ CONFIDENCE SCORE ACCURACY BY PROB TIER              │
+│ Actual HR rate within each model probability bucket │
+╰─────────────────────────────────────────────────────╯
+                                                                                                             
+  Prob Bucket     # Batters      # HRs     Avg Model%     Actual HR%        Diff    Hit Rate    ROI@flat$10  
+ ─────────────────────────────────────────────────────────────────────────────────────────────────────────── 
+  0-5%                 1450         70           3.7%           4.8%      +1.1pp        4.8%         -27.6%  
+  5-10%                4202        358           7.5%           8.5%      +1.0pp        8.5%         -23.3%  
+  10-15%               2973        339          12.2%          11.4%      -0.8pp       11.4%         -31.6%  
+  15-20%               1338        197          17.1%          14.7%      -2.4pp       14.7%         -30.1%  
+  20-25%                574        109          22.1%          19.0%      -3.1pp       19.0%         -24.0%  
+  25-30%                240         58          27.6%          24.2%      -3.4pp       24.2%         -17.8%  
+  30%+                    0         --             --             --          --          --             --  
+                                                                                                             
+
+╔════════════════════════════════════════════════════════════════════════════════════════════════════════════╗
+║ ANALYSIS C — ARSENAL SIGNAL INTEGRATION STUDY                                                              ║
+║ Measuring predictive value of arsenal_matchup_factor and pitcher_velo_decline_factor vs actual HR outcomes ║
+╚════════════════════════════════════════════════════════════════════════════════════════════════════════════╝
+                                                                                                                                                 
+  Signal                             Corr (all N)    Corr (active)   Strength         N total    N active      Mean|HR     Mean|noHR        HR%  
+ ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────── 
+  Arsenal Matchup Factor                  -0.0696          -0.0740   Weak               10777        9547       0.9999        1.0017      10.5%  
+  Pitcher Velo Decline Factor             +0.0000        -- (n<10)   Negligible         10777           0       1.0000        1.0000      10.5%  
+                                                                                                                                                 
+
+INTEGRATION RECOMMENDATION:
+  Arsenal Matchup Factor            MONITOR  Weak correlation (-0.0696) — marginal; risk of adding noise. Do not integrate yet.
+  Pitcher Velo Decline Factor       DO NOT INTEGRATE  Negligible correlation (+0.0000) — no predictive value found in this dataset
+
+Independence check — comparing arsenal_matchup_factor vs existing pit_factor:
+  Pearson(pit_factor, arsenal_matchup_factor) = -0.4199
+    Moderate correlation — partial redundancy with pit_factor; integration adds some signal
+
+╔═══════════════════════════════════════════════════════════════════════════════╗
+║ ANALYSIS D — FULL SIGNAL RANKING                                              ║
+║ All model factors ranked by point-biserial correlation with actual HR outcome ║
+╚═══════════════════════════════════════════════════════════════════════════════╝
+                                                                                                               
+    Rank   Factor                                  Corr   Strength       Direction             HR%          N  
+ ───────────────────────────────────────────────────────────────────────────────────────────────────────────── 
+       1   Model Probability                    +0.1342   Moderate       ↑ more HRs          10.5%      10777  
+       2   Fly Ball %                           +0.1341   Moderate       ↑ more HRs          11.4%       8633  
+       3   Statcast Power Multiplier            +0.1234   Moderate       ↑ more HRs          10.5%      10777  
+       4   Raw HR Rate                          +0.1153   Weak           ↑ more HRs          10.5%      10777  
+       5   Barrel Rate                          +0.1144   Weak           ↑ more HRs          10.5%      10247  
+       6   xSLG                                 +0.1117   Weak           ↑ more HRs          10.5%      10246  
+       7   Hard Hit %                           +0.1033   Weak           ↑ more HRs          10.5%      10247  
+       8   Exit Velocity                        +0.1016   Weak           ↑ more HRs          10.5%      10246  
+       9   Arsenal Matchup Factor *             -0.0696   Weak           ↑ more HRs          10.5%      10777  
+      10   Pull %                               +0.0657   Weak           ↑ more HRs          11.4%       8633  
+      11   Batter K-Rate Factor                 -0.0565   Weak           ↓ fewer HRs         10.5%      10777  
+      12   Platoon Factor                       +0.0562   Weak           ↑ more HRs          10.5%      10777  
+      13   Sweet Spot %                         +0.0376   Negligible     ↑ more HRs          10.5%      10247  
+      14   Park Factor                          +0.0296   Negligible     ↑ more HRs          10.5%      10777  
+      15   Pitcher K+GB Suppressor              +0.0281   Negligible     ↓ fewer HRs         10.5%      10777  
+      16   Streak Factor                        +0.0221   Negligible     ↑ more HRs          10.5%      10777  
+      17   Pitcher Factor (composite)           +0.0156   Negligible     ↑ more HRs          10.5%      10777  
+      18   Pitcher HR/9                         +0.0110   Negligible     ↑ more HRs          10.5%      10777  
+      19   Pitcher HR/FB Factor                 +0.0065   Negligible     ↑ more HRs          10.5%      10777  
+      20   Season PA                            -0.0002   Negligible     ↑ more HRs          10.5%      10777  
+      21   Velo Decline Factor *                +0.0000   Negligible     ↑ more HRs          10.5%      10777  
+                                                                                                               
+  * Arsenal signals are currently display-only (not in pipeline.py)
+
+Redundancy: Barrel Rate, xSLG, Hard Hit %, Exit Velocity all belong to the hard-contact cluster (pairwise r~0.65–0.80). Barrel% is the canonical representative.
+
+Weakest signals (|corr|<0.04): Sweet Spot %, Park Factor, Pitcher K+GB Suppressor, Streak Factor, Pitcher Factor (composite), Pitcher HR/9, Pitcher HR/FB Factor, Season PA
+  These add complexity without measurable predictive value in this dataset.
+
+HIGH ROI SIGNAL TIERS (≥10% model_prob):
+  5125 batter-games at model≥10%: 703 HRs (13.7% hit rate), est ROI -17.7%
+
+╔════════════════════════════════════════════════════════╗
+║ ANALYSIS E — SESSION 17 IMPACT ASSESSMENT              ║
+║ Quantifying the effect of 4 changes made on 2026-05-16 ║
+╚════════════════════════════════════════════════════════╝
+
+  Overall backtest stats (2026-04-01 to 2026-05-15):
+    Batter-games:     10777
+    Actual HR rate:   10.49%
+    Avg model prob:   10.71%
+    Model bias:       +0.22pp  (over-predicting)
+    Brier score:      0.09247  (trivial: 0.09393, skill: +0.00146)
+
+  Change 2 — Humidity factor added to pipeline.py:
+    The backtest runner mirrors pipeline.py for batter/pitcher factors but
+    does NOT apply weather factors (no live weather fetched per-date in backtest).
+    Humidity impact is production-only; estimate: ±1.5% model_prob for ±10pp RH deviation.
+
+  Change 3 — HVY env_mult removed (double-count fix):
+    HVY modifier is display-only and not wired into model_prob.
+    No measurable backtest impact — fix improves display accuracy only.
+
+  Change 4 — Pitcher fatigue extra-rest decay removed:
+    Prior: 6+ rest days → fatigue_fac 0.97-0.99 (HR suppressor, unvalidated)
+    Now:   6+ rest days → fatigue_fac 1.00 (neutral)
+    Backtest effect: small positive correction on dates with many pitchers on extra rest.
+
+  OVERALL SESSION 17 VERDICT:
+    MARGINAL IMPROVEMENT: Positive skill (1.46mp) but within noise range for this sample
+
+  NEXT HIGHEST-VALUE OPTIMIZATION CANDIDATES:
+
+    [1] Dynamic vig factor
+        Fixed 7.5% vig is the largest known pricing error. Empirically measure per-book vig and apply per-bookmaker vig reduction. Est. improvement: ~0.5-1.0pp EV accuracy.
+
+    [2] Arsenal signal integration (if C shows corr≥0.04)
+        If arsenal_matchup_factor shows even weak correlation, integrating it adds an independent Savant-derived pitcher signal not captured by HR/FB or K/GB metrics.
+
+    [3] 2026 backtest with same-year Statcast
+        The current backtest uses 2025 Statcast to eliminate look-ahead bias. Running a smaller 2026 sample with current Statcast reveals the production model's actual calibration 
+state.
+
+    [4] Platoon split minimum PA refinement
+        Current floor is 30 PA per split. Lowering to 20 + stronger shrinkage may improve coverage early-season without adding noise.
+

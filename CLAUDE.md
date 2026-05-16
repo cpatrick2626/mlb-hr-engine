@@ -131,6 +131,29 @@ Five additive signals: (1) pitcher HR rate vs batter hand ±0.10, (2) arsenal ma
 
 Short rest (≤4 days): 1.01–1.08 HR boost. Standard (5 days) and extra rest (6+ days): 1.00 neutral. Prior extra-rest linear decay (0.97–0.99) removed (2026-05-16) — no backtest evidence that pitchers are harder to hit on extra rest.
 
+### FB% Signal Promotion (statcast.py, probability.py)
+
+Added 2026-05-16. FB% was #2 raw predictor in 2026 signal ranking (+0.1341 point-biserial) but was weighted at only 15% in `batter_power_multiplier`. Promoted to 20%, with weight redistributed from weaker signals.
+
+**Weight change** (barrel=40% unchanged):
+- FB%: 15% → 20% (+5pp) — #2 predictor, underweighted relative to raw correlation
+- Sweet Spot%: 12% → 10% (-2pp) — weakest batter signal per 2026 ranking
+- xSLG: 10% → 8% (-2pp) — correlated with barrel% (r~0.75)
+- Exit Velo: 5% → 4% (-1pp) — mostly captured by barrel/hard-hit
+- Pull%, Hard Hit% unchanged
+
+**Quality gate** (`FB_QUALITY_GATE_ENABLED=True`, `FB_QUALITY_GATE_FLOOR=0.50`): Gates positive FB% deviations (above-league-avg FB%) by barrel quality. Batters with high FB% but low barrel quality (weak fly balls) get the FB% upside discounted by up to 50%. Ground-ball hitters (negative deviation) are not affected. Gate formula: `gate = 0.50 + 0.50 * min(1.0, barrel_mult)`. Savant `fb_pct` already excludes popups, so the gate specifically catches low-exit-velocity outfield flies.
+
+**Park interaction** (`FB_PARK_SCALE=0.30`, now configurable): FB% deviation scales park factor effect. Value unchanged from prior (0.30), but now lives in config.py for easy tuning. `fly_ball_adjusted_park_factor` uses `_FB_PARK_SCALE = config.FB_PARK_SCALE`.
+
+**Configurable parameters** (all in `config.py`):
+- `FB_PCT_WEIGHT = 0.20` — power multiplier weight
+- `FB_QUALITY_GATE_ENABLED = True` — enable/disable gate
+- `FB_QUALITY_GATE_FLOOR = 0.50` — minimum gate factor (0=full conditional, 1=no gate)
+- `FB_PARK_SCALE = 0.30` — park factor FB% interaction strength
+
+**Validation**: Run `python analyze_fb_pct.py` from repo root (tests 7 configs, outputs `fb_pct_analysis_output.txt`). Revert by setting `FB_PCT_WEIGHT=0.15`, `FB_QUALITY_GATE_ENABLED=False` in config.
+
 ### compare.py (root)
 
 Runs both v1 and v2 engines for the same date, diffs their outputs, and displays probability shifts, EV changes, and pick-set divergence in rich tables. Reads/writes `compare_v1.json` / `compare_v2.json` when `--dump-json` is passed to the individual engines.

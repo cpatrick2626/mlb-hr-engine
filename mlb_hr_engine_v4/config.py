@@ -129,3 +129,13 @@ VELO_DECLINE_RATE:          float = 0.012 # HR factor boost per mph beyond thres
 
 # ── Humidity ──────────────────────────────────────────────────────────────────
 LEAGUE_AVG_HUMIDITY: float = 55.0  # % RH baseline for neutral factor
+
+# ── FB% Signal Configuration ─────────────────────────────────────────────────
+# Controls FB% behavior in batter_power_multiplier (statcast.py).
+# Companion fixed weights sum to 0.80 (barrel+sweet+pull+xslg+hh+ev),
+# so FB_PCT_WEIGHT should equal 0.20 for a normalized composite.
+# Re-run analyze_fb_pct.py after changes to validate calibration impact.
+FB_PCT_WEIGHT:            float = 0.20  # batter_power_multiplier weight (was 0.15)
+FB_QUALITY_GATE_ENABLED:  bool  = True  # guard FB% upside against low barrel quality
+FB_QUALITY_GATE_FLOOR:    float = 0.50  # gate min (0=fully conditional, 1=disabled)
+FB_PARK_SCALE:            float = 0.30  # FB% deviation scaling in fly_ball_adjusted_park_factor
