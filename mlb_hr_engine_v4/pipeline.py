@@ -16,6 +16,7 @@ from clients import weather as weather_client
 from clients import statcast as statcast_client
 from data.park_factors import get_park
 from engine import market as mkt, probability as prob, ev as ev_engine, sizing, filters
+from engine import calibration as _cal
 from output import ranker, parlay as parlay_engine
 from output.parlay import build_profile_parlays
 from tracking import adaptive_weights as _aw
@@ -152,6 +153,8 @@ def _build_player_profile(
 
     # Apply adaptive calibration scale (moves model_prob toward observed hit rate)
     model_prob = round(_aw.apply_prob_scale(model_prob), 4)
+    # Apply post-model probability calibration (monotone → ranking preserved)
+    model_prob = round(_cal.apply_calibration(model_prob), 4)
 
     return {
         "player_id": player_id, "player_name": player_name,

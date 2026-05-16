@@ -139,3 +139,33 @@ FB_PCT_WEIGHT:            float = 0.20  # batter_power_multiplier weight (was 0.
 FB_QUALITY_GATE_ENABLED:  bool  = True  # guard FB% upside against low barrel quality
 FB_QUALITY_GATE_FLOOR:    float = 0.50  # gate min (0=fully conditional, 1=disabled)
 FB_PARK_SCALE:            float = 0.30  # FB% deviation scaling in fly_ball_adjusted_park_factor
+
+# ── Probability Calibration ───────────────────────────────────────────────────
+# Post-model monotone transform: maps raw model_prob → calibrated_prob.
+# All methods preserve rank order. Parameters are fitted by analyze_calibration.py.
+# Set CALIBRATION_ENABLED=True only after validating parameters via that script.
+#
+# Method "platt": sigmoid(CALIBRATION_PLATT_A × logit(p) + CALIBRATION_PLATT_B)
+#   A=1.0, B=0.0 → identity. A<1.0 compresses, B<0 shifts down.
+#   Crossover (where calibrated==raw): p* = sigmoid(B / (1−A)).
+#   Below p*: predictions increase. Above p*: predictions decrease.
+#
+# Method "isotonic": piecewise monotone linear from fitted breakpoints.
+#   More flexible than Platt but requires more data to fit without overfitting.
+#
+# Re-run analyze_calibration.py whenever the signal stack changes significantly.
+# Fitted 2026-05-16 via analyze_calibration.py on 10,777 batter-games (Apr 1–May 15):
+#   CV test Brier=0.09104 (baseline=0.09207), crossover=10.9%.
+#   Below 10.9% model_prob: predictions increase (fixes 5-10% under-prediction).
+#   Above 10.9% model_prob: predictions decrease (fixes 15-25% over-prediction).
+#   Spearman ρ=0.999999 vs baseline — ranking unchanged.
+#   Known trade-off: 20-25% bucket shows +2.4pp (extreme-top batters compressed into this
+#   bucket genuinely HR at ~24%, so the method slightly under-corrects the very top end).
+#   Rollback: set CALIBRATION_ENABLED=False.
+#   Re-calibrate: run analyze_calibration.py after any signal stack change.
+CALIBRATION_ENABLED: bool  = True         # activated — validated 2026-05-16
+CALIBRATION_METHOD:  str   = "platt"      # "platt" | "isotonic" | "none"
+CALIBRATION_PLATT_A: float = 0.7805       # slope — Platt CV-fitted
+CALIBRATION_PLATT_B: float = -0.4611      # intercept — Platt CV-fitted
+CALIBRATION_ISOTONIC_BREAKPOINTS: list = []  # raw prob breakpoints (fitted)
+CALIBRATION_ISOTONIC_VALUES:      list = []  # calibrated prob at each breakpoint

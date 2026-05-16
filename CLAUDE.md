@@ -154,6 +154,37 @@ Added 2026-05-16. FB% was #2 raw predictor in 2026 signal ranking (+0.1341 point
 
 **Validation**: Run `python analyze_fb_pct.py` from repo root (tests 7 configs, outputs `fb_pct_analysis_output.txt`). Revert by setting `FB_PCT_WEIGHT=0.15`, `FB_QUALITY_GATE_ENABLED=False` in config.
 
+### Probability Calibration Layer (engine/calibration.py)
+
+Added 2026-05-16. Post-model monotone transform: maps raw `model_prob` → calibrated probability while preserving rank order. Applied in `pipeline.py` after `apply_prob_scale()` and before storing `model_prob`.
+
+**Method: Platt scaling** — `sigmoid(A × logit(p) + B)`. Two fitted parameters, monotone by construction (Spearman ρ = 0.999999 vs baseline, zero daily top-10 pick changes in 45-date test). Crossover probability p* = sigmoid(B / (1−A)): below p* predictions increase, above p* they decrease.
+
+**Fitted parameters** (from `analyze_calibration.py`, 10,777 batter-games Apr 1–May 15 2026):
+- `CALIBRATION_PLATT_A = 0.7805` — slope (compression factor; 1.0 = identity)
+- `CALIBRATION_PLATT_B = -0.4611` — intercept (shift)
+- Crossover: **10.9%** — below 10.9% predictions increase (+0.4–1.0pp); above 10.9% they decrease (−1.0 to −5.1pp at 29%)
+- CV test Brier: 0.09104 (baseline: 0.09207, improvement: −0.00103)
+
+**Root cause of 15-25% over-prediction (confirmed by audit):**
+1. Statcast look-ahead in backtest (full-season Statcast used for April games — structural, not fixable)
+2. Multiplicative stacking: average batters in favorable contexts (good park + hittable pitcher + platoon) get pushed into 15%+ range, but actual HR rates for that cluster are lower
+3. Blended-source players show +1.75pp bias (prior-year Statcast elevates their signals artificially)
+
+**Known trade-off**: 20-25% bucket shows +2.4pp after calibration (extreme-top batters compressed into this bucket genuinely HR at ~24.4%, so calibration slightly under-corrects the very top end). CV test data confirms this is acceptable — overall Brier still improves.
+
+**Impact on filters/EV**: 464 picks that the model placed at 15%+ probability get calibrated below 15%. These were false-confidence picks (blended-source or stacking artifacts). ROI @15% threshold improves from −26.7% to −15.2% (simulated).
+
+**Configurable parameters** (all in `config.py`):
+- `CALIBRATION_ENABLED = True` — master switch (set False to rollback instantly)
+- `CALIBRATION_METHOD = "platt"` — "platt" | "isotonic" | "none"
+- `CALIBRATION_PLATT_A = 0.7805` — slope
+- `CALIBRATION_PLATT_B = -0.4611` — intercept
+
+**Validation**: Run `python analyze_calibration.py --analyze-only` from repo root. Reuses existing `fb_pct_raw_data.csv`. Outputs `calibration_analysis_output.txt`. Rollback: `CALIBRATION_ENABLED = False`.
+
+**Re-calibrate after**: any signal weight change, new signal addition, Poisson model change. Parameters drift with model changes.
+
 ### compare.py (root)
 
 Runs both v1 and v2 engines for the same date, diffs their outputs, and displays probability shifts, EV changes, and pick-set divergence in rich tables. Reads/writes `compare_v1.json` / `compare_v2.json` when `--dump-json` is passed to the individual engines.
