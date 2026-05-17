@@ -1567,14 +1567,22 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
     st.markdown('<div class="section-header">&#9889; MAIN</div>',
                 unsafe_allow_html=True)
 
-    # Lineup readiness
+    # Lineup readiness + slate status
     n_confirmed  = sum(1 for p in all_players if p.get("lineup_spot"))
     n_estimated  = len(all_players) - n_confirmed
     lineup_pct   = int(100 * n_confirmed / len(all_players)) if all_players else 0
     lineup_color = "#4ade80" if lineup_pct >= 80 else "#FFD700" if lineup_pct >= 40 else "#FF6666"
+    # Slate status pill — communicates whether lineups are set or projected
+    if lineup_pct >= 80:
+        _slate_pill = "<span style='background:#0a2a0a;color:#4ade80;font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px;border:1px solid #1a4a1a;'>🟢 CONFIRMED</span>"
+    elif lineup_pct >= 40:
+        _slate_pill = "<span style='background:#1a1a00;color:#FFD700;font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px;border:1px solid #444400;'>🟡 MIXED</span>"
+    else:
+        _slate_pill = "<span style='background:#0a0a2a;color:#60a5fa;font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px;border:1px solid #1a1a4a;'>🔵 PROJECTED</span>"
     lineup_label = (
         f"Lineups: <b style='color:{lineup_color}'>{n_confirmed}/{len(all_players)} confirmed</b>"
         + (f" <span style='color:#888'>({n_estimated} estimated)</span>" if n_estimated else "")
+        + f"  {_slate_pill}"
     )
 
     loaded_at    = st.session_state.get("data_loaded_at")
@@ -1837,7 +1845,6 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
         "tac_min_barrel", "tac_min_hh", "tac_min_xslg", "tac_min_iso",
         "tac_min_pull_air", "tac_min_hr_window",
         "tac_min_ev", "tac_min_edge", "tac_min_conf", "tac_min_model_prob",
-        "tac_min_pit_hr_total", "tac_min_pit_hr_lhb", "tac_min_pit_hr_rhb",
     ]
     # Neutral defaults: reset returns to a true no-filter state so widget state,
     # active counts, and the eligible universe stay synchronized.
@@ -1854,9 +1861,6 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
         "tac_min_edge":       0.0,
         "tac_min_conf":       0.0,
         "tac_min_model_prob": 0.0,
-        "tac_min_pit_hr_total": 0,
-        "tac_min_pit_hr_lhb":   0,
-        "tac_min_pit_hr_rhb":   0,
         "tac_exclude_started": False,
         "tac_include_live":   False,
     }
@@ -1884,12 +1888,18 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                 st.rerun()
         with _tr1:
             st.caption(
-                f"Market thresholds (sidebar): EV ≥ {min_ev:.0f}%  ·  "
-                f"Edge ≥ {min_edge:.0f}%  ·  Conf ≥ {min_confidence}  ·  "
-                "Filters below narrow the Main player universe; matchup/HVY controls apply within Matchup Edge."
+                f"Sidebar: EV ≥ {min_ev:.0f}%  ·  Edge ≥ {min_edge:.0f}%  ·  Conf ≥ {min_confidence}  —  "
+                "POWER / CONTACT / MARKET filters narrow the full Main universe.  "
+                "MATCHUP EDGE controls (bottom) affect only the Matchup Edge tab."
             )
 
-        _tf1, _tf2, _tf3, _tf4 = st.columns(4)
+        # ── MAIN UNIVERSE FILTERS (affect Full Slate / Elite / Portfolio / Quick View) ──
+        st.markdown(
+            "<div style='font-size:9px;color:#4ade80;font-weight:700;letter-spacing:2px;"
+            "margin:4px 0 6px;'>▼ MAIN UNIVERSE FILTERS — narrow all tabs</div>",
+            unsafe_allow_html=True,
+        )
+        _tf1, _tf2, _tf3 = st.columns(3)
         with _tf1:
             st.markdown(
                 "<div style='font-size:10px;color:#a78bfa;font-weight:700;"
@@ -1914,48 +1924,6 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
             )
             st.slider("Min Pull Air%",  0.0, 40.0, 0.0, 0.5, key="tac_min_pull_air")
             st.slider("Min HR Window%", 0.0, 50.0, 0.0, 0.5, key="tac_min_hr_window")
-        with _tf4:
-            st.markdown(
-                "<div style='font-size:10px;color:#a78bfa;font-weight:700;"
-                "letter-spacing:1px;margin-bottom:4px;'>MATCHUP · HVY</div>",
-                unsafe_allow_html=True,
-            )
-            st.slider(
-                "Min Matchup Modifier", 75, 140, 75, 1,
-                key="tac_min_matchup_pct",
-                format="%d%%",
-                help="HVY modifier filter (100%=neutral, 110%=favorable) — active in JIG Matchup Edge once pitch data is loaded",
-            )
-            st.slider(
-                "Min HVY Score", 0, 100, 0, 1,
-                key="tac_min_hvy_score",
-                help="HVY composite matchup score gate (0–100) — active in JIG once pitch data is loaded",
-            )
-
-        st.markdown(
-            "<div style='font-size:10px;color:#f97316;font-weight:700;"
-            "letter-spacing:1px;margin:8px 0 4px;'>PITCHER VULNERABILITY</div>",
-            unsafe_allow_html=True,
-        )
-        _tv1, _tv2, _tv3 = st.columns(3)
-        with _tv1:
-            st.slider(
-                "Min Total HR Allowed", 0, 30, 0, 1,
-                key="tac_min_pit_hr_total",
-                help="Pitcher must have allowed ≥ N HRs total (season) — 0 = no filter",
-            )
-        with _tv2:
-            st.slider(
-                "Min HR vs LHB", 0, 20, 0, 1,
-                key="tac_min_pit_hr_lhb",
-                help="Pitcher must have allowed ≥ N HRs vs left-handed batters — applied only to LHBs",
-            )
-        with _tv3:
-            st.slider(
-                "Min HR vs RHB", 0, 20, 0, 1,
-                key="tac_min_pit_hr_rhb",
-                help="Pitcher must have allowed ≥ N HRs vs right-handed batters — applied only to RHBs",
-            )
 
         st.markdown(
             "<div style='font-size:10px;color:#60a5fa;font-weight:700;"
@@ -1991,6 +1959,35 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
             else:
                 st.caption("⏰ No time gate  ←  sidebar")
 
+        # ── MATCHUP EDGE FILTERS (affect only the Matchup Edge tab) ──────────────
+        st.markdown(
+            "<div style='border-top:1px solid #2a1a00;margin:10px 0 6px;"
+            "padding-top:8px;font-size:9px;color:#f97316;font-weight:700;"
+            "letter-spacing:2px;'>▼ MATCHUP EDGE TAB ONLY — does not narrow Main/Elite/Full Slate</div>",
+            unsafe_allow_html=True,
+        )
+        _tme1, _tme2 = st.columns(2)
+        with _tme1:
+            st.slider(
+                "Min Matchup Modifier", 75, 140, 75, 1,
+                key="tac_min_matchup_pct",
+                format="%d%%",
+                help=(
+                    "HVY matchup modifier gate for the Matchup Edge tab. "
+                    "100% = neutral, 105%+ = favorable, 120%+ = elite mismatch. "
+                    "Does NOT remove picks from Quick View, Elite, or Full Slate."
+                ),
+            )
+        with _tme2:
+            st.slider(
+                "Min HVY Score", 0, 100, 0, 1,
+                key="tac_min_hvy_score",
+                help=(
+                    "HVY composite matchup score gate (0–100) for the Matchup Edge tab. "
+                    "Does NOT remove picks from Quick View, Elite, or Full Slate."
+                ),
+            )
+
     # Apply tactical batter-profile filters to narrow eligible universe
     _tac_params = {
         "min_barrel":      st.session_state.get("tac_min_barrel",    0.0),
@@ -2022,6 +2019,29 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
         [p for p in _tac_ranked if p.get("player_name") in _optimizer_selected_names]
         if _optimizer_on and _optimizer_selected_names else _tac_ranked
     )
+
+    # ── Pre-compute status + urgency once for all players (avoids O(N) re-calls per render pass)
+    _status_cache: dict = {}   # player_id → (html, is_live)
+    _urgency_cache: dict = {}  # player_id → (gt_str, urgency_col, urgency_lbl)
+    for _pc_p in _tac_ranked:
+        _pc_pid = _pc_p.get("player_id") or _pc_p.get("player_name", "")
+        _status_cache[_pc_pid] = _game_status_badge(_pc_p)
+        _pc_gt = _game_time_et(_pc_p.get("game_time_utc", ""))
+        if _pc_gt:
+            _pc_gt_str = _pc_gt.strftime('%I:%M %p ET').lstrip('0')
+            _pc_gt_dt  = _dt.datetime.combine(_now_et.date(), _pc_gt, tzinfo=_EDT)
+            _pc_mins   = int((_pc_gt_dt - _now_et).total_seconds() / 60)
+            if _pc_mins < 0:
+                _pc_uc = "#555"; _pc_ul = ""
+            elif _pc_mins < 60:
+                _pc_uc = "#f87171"; _pc_ul = f"BET NOW · {_pc_mins}m"
+            elif _pc_mins < 120:
+                _pc_uc = "#FFD700"; _pc_ul = f"{_pc_mins}m"
+            else:
+                _pc_uc = "#4ade80"; _pc_ul = f"{_pc_mins // 60}h {_pc_mins % 60}m"
+        else:
+            _pc_gt_str = "TBD"; _pc_uc = "#555"; _pc_ul = ""
+        _urgency_cache[_pc_pid] = (_pc_gt_str, _pc_uc, _pc_ul)
 
     tab_qv, tab_elite, tab_edge, tab_port, tab_fs = st.tabs([
         f"⚡  QUICK VIEW  ({len(_display_pool)})",
@@ -2073,7 +2093,10 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                         st.dataframe(_pd.DataFrame(_diag_rows), use_container_width=True, hide_index=True)
         else:
             _qv_steam_n = len(_steam_names & {p.get("player_name") for p in _display_pool})
-            _qv_live_n  = sum(1 for p in _display_pool if _game_status_badge(p)[1])
+            _qv_live_n  = sum(
+                1 for p in _display_pool
+                if _status_cache.get(p.get("player_id") or p.get("player_name", ""), ("", False))[1]
+            )
             _qv_conf_n  = sum(1 for p in _display_pool if p.get("lineup_spot") is not None)
             st.markdown(
                 f"<div style='display:flex;gap:16px;align-items:center;padding:8px 0 12px;"
@@ -2109,23 +2132,10 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                 _qtier     = _qp.get("confidence_tier", "C")
                 _qtier_col = {"S": "#FFD700", "A": "#4ade80", "B": "#facc15", "C": "#f87171"}.get(_qtier, "#888")
                 _qurl      = _fanduel_url(_qp["player_name"])
+                _qpid      = _qp.get("player_id") or _qp.get("player_name", "")
                 _qis_steam = _qp.get("player_name") in _steam_names
-                _qstatus_html, _qis_live = _game_status_badge(_qp)
-                _qgt = _game_time_et(_qp.get("game_time_utc", ""))
-                if _qgt:
-                    _qgt_str = _qgt.strftime('%I:%M %p ET').lstrip('0')
-                    _qgt_dt  = _dt.datetime.combine(_now_et.date(), _qgt, tzinfo=_EDT)
-                    _mins_to = int((_qgt_dt - _now_et).total_seconds() / 60)
-                    if _mins_to < 0:
-                        _urgency_col = "#555"; _urgency_lbl = ""
-                    elif _mins_to < 60:
-                        _urgency_col = "#f87171"; _urgency_lbl = f"BET NOW · {_mins_to}m"
-                    elif _mins_to < 120:
-                        _urgency_col = "#FFD700"; _urgency_lbl = f"{_mins_to}m"
-                    else:
-                        _urgency_col = "#4ade80"; _urgency_lbl = f"{_mins_to // 60}h {_mins_to % 60}m"
-                else:
-                    _qgt_str = "TBD"; _urgency_col = "#555"; _urgency_lbl = ""
+                _qstatus_html, _qis_live = _status_cache.get(_qpid, ("", False))
+                _qgt_str, _urgency_col, _urgency_lbl = _urgency_cache.get(_qpid, ("TBD", "#555", ""))
                 _steam_border = "#f87171" if _qis_live else ("#666600" if _qis_steam else "#2a2a50")
                 _steam_bg     = "#1a0000" if _qis_live else ("#1a1a00" if _qis_steam else "#0e0e24")
                 _qopt_badge = (
@@ -2247,23 +2257,10 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                         _qtier     = _qp.get("confidence_tier", "C")
                         _qtier_col = {"S": "#FFD700", "A": "#4ade80", "B": "#facc15", "C": "#f87171"}.get(_qtier, "#888")
                         _qurl      = _fanduel_url(_qp["player_name"])
+                        _qpid2     = _qp.get("player_id") or _qp.get("player_name", "")
                         _qis_steam = _qp.get("player_name") in _steam_names
-                        _qstatus_html, _qis_live = _game_status_badge(_qp)
-                        _qgt = _game_time_et(_qp.get("game_time_utc", ""))
-                        if _qgt:
-                            _qgt_str = _qgt.strftime('%I:%M %p ET').lstrip('0')
-                            _qgt_dt  = _dt.datetime.combine(_now_et.date(), _qgt, tzinfo=_EDT)
-                            _mins_to = int((_qgt_dt - _now_et).total_seconds() / 60)
-                            if _mins_to < 0:
-                                _urgency_col = "#555"; _urgency_lbl = ""
-                            elif _mins_to < 60:
-                                _urgency_col = "#f87171"; _urgency_lbl = f"BET NOW · {_mins_to}m"
-                            elif _mins_to < 120:
-                                _urgency_col = "#FFD700"; _urgency_lbl = f"{_mins_to}m"
-                            else:
-                                _urgency_col = "#4ade80"; _urgency_lbl = f"{_mins_to // 60}h {_mins_to % 60}m"
-                        else:
-                            _qgt_str = "TBD"; _urgency_col = "#555"; _urgency_lbl = ""
+                        _qstatus_html, _qis_live = _status_cache.get(_qpid2, ("", False))
+                        _qgt_str, _urgency_col, _urgency_lbl = _urgency_cache.get(_qpid2, ("TBD", "#555", ""))
                         _steam_border = "#f87171" if _qis_live else ("#666600" if _qis_steam else "#252540")
                         _steam_bg     = "#1a0000" if _qis_live else ("#1a1a00" if _qis_steam else "#0d0d20")
                         _qopt_badge = (
@@ -2392,7 +2389,8 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                 _ep_fb    = _pf(_ep.get("fb_pct"), 0.0)
                 _ep_url   = _fanduel_url(_ep["player_name"])
                 _ep_photo = _player_photo_html(_ep.get("player_id"), size=44)
-                _ep_status_html, _ep_is_live = _game_status_badge(_ep)
+                _ep_pid   = _ep.get("player_id") or _ep.get("player_name", "")
+                _ep_status_html, _ep_is_live = _status_cache.get(_ep_pid, ("", False))
                 _ep_opt   = _optimizer_on and _ep.get("player_name") in _optimizer_selected_names
 
                 if _ep_brl >= 15:
@@ -2501,13 +2499,28 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
 
             _me_ctxs = st.session_state.get(_me_ck, {})
 
+            _me_mod_active = st.session_state.get("tac_min_matchup_pct", 75) > 75
+            _me_hvy_active = st.session_state.get("tac_min_hvy_score", 0) > 0
+            _me_filter_note = ""
+            if _me_mod_active or _me_hvy_active:
+                _me_filter_parts = []
+                if _me_mod_active:
+                    _me_filter_parts.append(f"Modifier ≥ {st.session_state.get('tac_min_matchup_pct', 75)}%")
+                if _me_hvy_active:
+                    _me_filter_parts.append(f"HVY ≥ {st.session_state.get('tac_min_hvy_score', 0)}")
+                _me_filter_note = (
+                    f" <span style='background:#1a0d00;color:#f97316;font-size:10px;"
+                    f"padding:1px 6px;border-radius:3px;border:1px solid #3a1a00;'>"
+                    f"🎯 {' · '.join(_me_filter_parts)} active</span>"
+                )
             _me_hdr_col, _me_ref_col = st.columns([4, 1])
             with _me_hdr_col:
                 st.markdown(
                     "<span style='color:#a78bfa;font-size:13px;font-weight:700;letter-spacing:1px;'>"
                     "PITCH MATCHUP INTELLIGENCE</span>"
                     "<span style='color:#555;font-size:11px;margin-left:12px;'>"
-                    "sorted by HVY modifier · display-only signal</span>",
+                    "sorted by HVY modifier · tactical exploration · ranked picks only</span>"
+                    + _me_filter_note,
                     unsafe_allow_html=True,
                 )
             with _me_ref_col:
@@ -2560,7 +2573,8 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                 _mp_brl   = _pf(_mp.get("barrel_pct"), 0.0)
                 _mp_url   = _fanduel_url(_mp_name)
                 _mp_photo = _player_photo_html(_mp_pid, size=40)
-                _mp_status_html, _mp_is_live = _game_status_badge(_mp)
+                _mp_status_html, _mp_is_live = _status_cache.get(
+                    _mp_pid or _mp.get("player_name", ""), ("", False))
                 _mp_hand  = _mp.get("pitcher_hand", "")
                 _mp_hand_lbl = f" ({'RHP' if _mp_hand == 'R' else 'LHP'})" if _mp_hand else ""
                 _mp_pitch_rows = _mp_ctx.get("pitch_rows", [])
@@ -2586,8 +2600,10 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                     f"<div style='background:{_mp_lbl_col};width:{_mp_mod_bar_pct}%;"
                     f"height:3px;border-radius:3px;'></div></div>"
                 )
-                _mp_ev_col  = "#4ade80" if _mp_ev >= 0 else "#f87171"
-                _mp_brl_col = "#4ade80" if _mp_brl >= 8 else "#f0f0f0"
+                _mp_ev_col   = "#4ade80" if _mp_ev >= 0 else "#f87171"
+                _mp_brl_col  = "#4ade80" if _mp_brl >= 8 else "#f0f0f0"
+                _mp_tier     = _mp.get("confidence_tier", "C")
+                _mp_tier_col = {"S": "#FFD700", "A": "#4ade80", "B": "#facc15", "C": "#f87171"}.get(_mp_tier, "#888")
 
                 if st.button(
                     f"{_mp_name} — {_mp_lbl}",
@@ -2610,7 +2626,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                     + f"</div></div>"
                     f"<div style='text-align:right;'>"
                     f"<div style='font-size:20px;font-weight:900;color:{_mp_lbl_col};'>{_mp_mod:.2f}×</div>"
-                    f"<div style='font-size:10px;color:{_mp_lbl_col};font-weight:700;'>{_mp_lbl}</div>"
+                    f"<div style='font-size:10px;color:{_mp_lbl_col};font-weight:700;'>MATCHUP: {_mp_lbl}</div>"
                     f"</div></div>"
                     + _mp_mod_bar
                     + f"<div style='display:flex;gap:4px;margin-top:6px;'>"
@@ -2626,6 +2642,9 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                     f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:5px;padding:4px 2px;'>"
                     f"<div style='font-size:13px;font-weight:700;color:{_mp_brl_col};'>{_mp_brl:.1f}%</div>"
                     f"<div style='font-size:9px;color:#555;'>BARREL</div></div>"
+                    f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:5px;padding:4px 2px;'>"
+                    f"<div style='font-size:13px;font-weight:700;color:{_mp_tier_col};'>{_mp_tier}</div>"
+                    f"<div style='font-size:9px;color:#555;'>QUANT</div></div>"
                     f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:5px;padding:4px 2px;'>"
                     f"<a href='{_mp_url}' target='_blank' style='text-decoration:none;'>"
                     f"<div style='font-size:13px;font-weight:700;color:#FF6666;'>{_fmt_american(_mp_odds)}</div>"
