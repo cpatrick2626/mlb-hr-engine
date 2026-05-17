@@ -425,12 +425,33 @@ def game_hr_probability(
     w_factor: float = 1.0, plat_factor: float = 1.0,
     power_mult: float = 1.0,
 ) -> float:
+    try:
+        hr_rate = float(hr_rate)
+        exp_pa = float(exp_pa)
+        pk_factor = float(pk_factor)
+        pitcher_fac = float(pitcher_fac)
+        w_factor = float(w_factor)
+        plat_factor = float(plat_factor)
+        power_mult = float(power_mult)
+    except (TypeError, ValueError):
+        return 0.001
+
+    if not all(math.isfinite(v) for v in (
+        hr_rate, exp_pa, pk_factor, pitcher_fac, w_factor, plat_factor, power_mult
+    )):
+        return 0.001
+
+    hr_rate = max(0.0, hr_rate)
+    exp_pa = max(0.0, exp_pa)
+
     # Cap combined multiplier — prevents extreme stacking across all factors.
     # 1.50 ceiling: Coors (1.28) + hittable pitcher + strong platoon edge still fits.
     combined = pk_factor * pitcher_fac * w_factor * plat_factor
     combined = _moderate_context(combined, power_mult)
     combined = max(0.42, min(1.50, combined))
     lam = hr_rate * combined * exp_pa
+    if not math.isfinite(lam):
+        return 0.001
     prob = max(0.001, 1.0 - math.exp(-lam))
     return min(prob, _MAX_GAME_HR_PROB)
 
