@@ -1,10 +1,10 @@
 """
-Unified Pick Tracker  (Session 25 schema: v2)
+Unified Pick Tracker  (Session 26 schema: v3)
 
 Logs every pick from every tab/section with full model context.
 Settlement fills in hr_result / profit_loss via pnl._settle_date().
 
-Session 25 additions (backward-compatible — migrate_schema appends to existing CSV):
+Session 25 additions (backward-compatible):
   pick_id        — deterministic ID: sha1(date+player+source_tab)[:12]
   opponent       — opposing team
   pitcher        — opposing pitcher name
@@ -13,6 +13,14 @@ Session 25 additions (backward-compatible — migrate_schema appends to existing
   market_prob_pct— no-vig implied probability from market
   engine_version — e.g. "v4"
   logged_at      — ISO-8601 UTC timestamp of log write
+
+Session 26 CLV additions (backward-compatible):
+  open_implied_pct  — vigged implied prob from best_odds at log time (× 100)
+  open_no_vig_pct   — no-vig opening probability (× 100, book-specific)
+  close_odds        — closing American odds (populated by capture_closing_lines.py)
+  close_no_vig_pct  — no-vig closing probability (× 100)
+  clv_pp            — CLV in pp: (close_no_vig - open_no_vig) × 100 (+ = sharp)
+  clv_pct_rel       — CLV relative to opening: clv_pp / open_no_vig × 100
 
 Performance notes:
 - _load_all() reads the CSV once; callers receive the rows list.
@@ -49,19 +57,33 @@ FIELDS = [
     "pitcher_hr9", "pitcher_k_pct",
     # ── Lineup ────────────────────────────────────────────────────────────────
     "lineup_spot",
-    # ── Session 25 additions (migrate_schema appends to existing CSVs) ────────
+    # ── Session 25 additions ──────────────────────────────────────────────────
     "pick_id", "opponent", "pitcher",
     "sportsbook", "best_odds", "market_prob_pct",
     "engine_version", "logged_at",
+    # ── Session 26 CLV additions ──────────────────────────────────────────────
+    "open_implied_pct",    # vigged implied prob at open × 100
+    "open_no_vig_pct",     # no-vig opening prob × 100
+    "close_odds",          # closing American odds (from capture_closing_lines.py)
+    "close_no_vig_pct",    # no-vig closing prob × 100
+    "clv_pp",              # (close_no_vig - open_no_vig) × 100; + = sharp
+    "clv_pct_rel",         # clv_pp / open_no_vig × 100 (relative CLV)
     # ── Settlement (filled by settle_date / pnl._settle_date) ─────────────────
     "hr_result", "profit_loss",
 ]
 
-# Fields added in Session 25 — used by _migrate_schema() to extend existing CSVs
+# Fields added in Session 25
 _SESSION25_FIELDS = [
     "pick_id", "opponent", "pitcher",
     "sportsbook", "best_odds", "market_prob_pct",
     "engine_version", "logged_at",
+]
+
+# Fields added in Session 26
+_SESSION26_FIELDS = [
+    "open_implied_pct", "open_no_vig_pct",
+    "close_odds", "close_no_vig_pct",
+    "clv_pp", "clv_pct_rel",
 ]
 
 
@@ -286,18 +308,52 @@ def _gen_pick_id(date_str: str, player_name: str, source_tab: str) -> str:
 
 
 def _migrate_schema() -> None:
-    """Add Session 25 columns to an existing CSV without disrupting existing data."""
+    """
+    Migrate existing CSV to current schema (Sessions 25 + 26).
+    Adds missing columns and backfills open_implied_pct / open_no_vig_pct from
+    existing american_odds / best_odds data when present.
+    Safe to call multiple times — no-op if schema already current.
+    """
     if not LOG_PATH.exists():
         return
     with open(LOG_PATH, newline="", encoding="utf-8") as f:
         reader = csv.DictReader(f)
         existing_fields = list(reader.fieldnames or [])
         rows = list(reader)
-    missing = [f for f in _SESSION25_FIELDS if f not in existing_fields]
+
+    all_new = _SESSION25_FIELDS + _SESSION26_FIELDS
+    missing = [f for f in all_new if f not in existing_fields]
     if not missing:
         return
-    # Append missing columns (preserves existing column order, adds new at end before outcomes)
-    new_fields = existing_fields + missing
+
+    # Reorder so settlement fields remain last
+    non_settlement = [f for f in existing_fields if f not in ("hr_result", "profit_loss")]
+    settlement     = [f for f in existing_fields if f in ("hr_result", "profit_loss")]
+    added          = [f for f in missing if f not in settlement]
+    new_fields     = non_settlement + added + settlement
+
+    # Backfill open_implied_pct and open_no_vig_pct from existing odds where possible
+    needs_open_imp = "open_implied_pct" in missing
+    needs_open_nv  = "open_no_vig_pct" in missing
+    if needs_open_imp or needs_open_nv:
+        for row in rows:
+            odds_str = row.get("best_odds") or row.get("american_odds") or ""
+            if not odds_str:
+                continue
+            try:
+                american = int(float(odds_str))
+            except (ValueError, TypeError):
+                continue
+            if -100 < american < 100:
+                continue
+            if needs_open_imp and not row.get("open_implied_pct"):
+                imp = _american_to_implied(american)
+                row["open_implied_pct"] = f"{imp * 100:.3f}"
+            if needs_open_nv and not row.get("open_no_vig_pct"):
+                book = row.get("sportsbook", "")
+                nv   = _american_to_no_vig(american, book)
+                row["open_no_vig_pct"] = f"{nv * 100:.3f}"
+
     tmp = LOG_PATH.with_suffix(".tmp")
     try:
         with open(tmp, "w", newline="", encoding="utf-8") as f:
@@ -413,6 +469,8 @@ def _build_row(player: dict, today: str, source_tab: str, source_section: str) -
         "market_prob_pct": market_prob_str,
         "engine_version":  ENGINE_VERSION,
         "logged_at":       datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        # Session 26: CLV opening fields — computed at log time from best_odds
+        **_build_clv_open_fields(odds, sportsbook),
         # Settlement
         "hr_result":       "",
         "profit_loss":     "",
@@ -423,3 +481,109 @@ def _pl(bet: float, odds: int, hit_hr: bool) -> float:
     if hit_hr:
         return bet * odds / 100 if odds > 0 else (bet * 100 / abs(odds) if odds != 0 else 0.0)
     return -bet
+
+
+def _build_clv_open_fields(odds_raw, sportsbook: str) -> dict:
+    """Compute Session 26 opening CLV fields from odds at log time."""
+    try:
+        american = int(float(str(odds_raw).strip()))
+        if -100 < american < 100:
+            raise ValueError
+    except (ValueError, TypeError):
+        return {f: "" for f in _SESSION26_FIELDS}
+
+    imp = _american_to_implied(american)
+    nv  = _american_to_no_vig(american, sportsbook)
+    return {
+        "open_implied_pct": f"{imp * 100:.3f}",
+        "open_no_vig_pct":  f"{nv * 100:.3f}",
+        "close_odds":        "",
+        "close_no_vig_pct":  "",
+        "clv_pp":            "",
+        "clv_pct_rel":       "",
+    }
+
+
+def _american_to_implied(american: int) -> float:
+    if american > 0:
+        return 100.0 / (american + 100.0)
+    return abs(american) / (abs(american) + 100.0)
+
+
+def _american_to_no_vig(american: int, book: str = "") -> float:
+    try:
+        import sys, os
+        from pathlib import Path
+        _v4 = Path(__file__).parent.parent
+        if str(_v4) not in sys.path:
+            sys.path.insert(0, str(_v4))
+        from engine.vig import no_vig_prob_for_book
+        return no_vig_prob_for_book(american, book)
+    except Exception:
+        imp = _american_to_implied(american)
+        return imp / 1.075  # fallback global vig
+
+
+# ── Session 26: CLV field update ─────────────────────────────────────────────
+
+def update_clv_fields(
+    date_str: str,
+    player_name: str,
+    close_odds: int,
+    close_no_vig_pct: float,
+    sportsbook: str = "",
+) -> bool:
+    """
+    Write CLV fields for a settled (or unsettled) pick in pick_tracker.csv.
+    Called by capture_closing_lines.py after fetching closing odds.
+
+    Returns True if a matching row was found and updated.
+    """
+    _migrate_schema()
+    rows   = _load_all()
+    norm   = _norm(player_name)
+    found  = False
+
+    for row in rows:
+        if row.get("date") != date_str:
+            continue
+        if _norm(row.get("player_name", "")) != norm:
+            continue
+        if row.get("close_odds"):   # already populated — don't overwrite
+            continue
+
+        # Recompute open_no_vig from best_odds if not already filled
+        if not row.get("open_no_vig_pct"):
+            odds_str = row.get("best_odds") or row.get("american_odds") or ""
+            try:
+                open_am = int(float(odds_str))
+                bk = row.get("sportsbook", "") or sportsbook
+                nv = _american_to_no_vig(open_am, bk)
+                row["open_no_vig_pct"] = f"{nv * 100:.3f}"
+                if not row.get("open_implied_pct"):
+                    imp = _american_to_implied(open_am)
+                    row["open_implied_pct"] = f"{imp * 100:.3f}"
+            except (ValueError, TypeError):
+                pass
+
+        open_nv_str = row.get("open_no_vig_pct", "")
+        try:
+            open_nv = float(open_nv_str) / 100.0
+        except (ValueError, TypeError):
+            open_nv = 0.0
+
+        row["close_odds"]       = close_odds
+        row["close_no_vig_pct"] = f"{close_no_vig_pct:.3f}"
+
+        if open_nv > 0:
+            clv_pp  = (close_no_vig_pct / 100.0 - open_nv) * 100
+            clv_pp  = max(-100.0, min(100.0, clv_pp))
+            clv_rel = (clv_pp / (open_nv * 100)) * 100
+            row["clv_pp"]       = f"{clv_pp:.3f}"
+            row["clv_pct_rel"]  = f"{clv_rel:.2f}"
+
+        found = True
+
+    if found:
+        _rewrite(rows)
+    return found

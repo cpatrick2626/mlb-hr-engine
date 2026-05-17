@@ -34,6 +34,13 @@ MIN_PA_THRESHOLD: float = 3.3      # Blocks 9-hole batters (3.2 PA); 3.1 was dea
 MAX_PARK_PENALTY: float = 0.87     # Skip if park_factor < this; catches SF (0.83) + SD (0.89)
 MAX_WEATHER_PENALTY: float = 0.88  # Skip if weather_factor < this
 MAX_PITCHER_SUPPRESSOR: float = 0.75  # Skip elite HR suppressors
+# PITCHER_FACTOR_SCALE — attenuates the pitcher combined factor toward 1.0.
+# 2026 signal analysis: pit_factor ranks #17/21 (r=+0.0156) — directional but low-amplitude.
+# Scale=0.60 reduces effective range [0.55,1.60] → [0.73,1.36], cutting noise by 40%.
+# Also dampens the batter×pitcher interaction term (pitcher_excess scales proportionally).
+# Rollback: set to 1.0 (identity — no change).
+# Re-validate: run analyze_calibration.py after applying if Brier changes unexpectedly.
+PITCHER_FACTOR_SCALE: float = 0.60
 
 # ── Probability Model ─────────────────────────────────────────────────────────
 # Game-count windows are more consistent than calendar days — unaffected by

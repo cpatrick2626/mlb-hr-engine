@@ -114,6 +114,13 @@ def _build_player_profile(
     fatigue_fac    = prob.pitcher_fatigue_factor(pitcher_days_rest)
     pit_factor     = max(0.55, min(1.60, pit_factor * fatigue_fac))
 
+    # Attenuate pitcher factor toward 1.0 — signal is directional but low-amplitude in aggregate.
+    # PITCHER_FACTOR_SCALE=0.60 compresses effective range to [0.73, 1.36].
+    # Also reduces batter×pitcher interaction proportionally (pitcher_excess computed below).
+    _pfs = getattr(config, "PITCHER_FACTOR_SCALE", 1.0)
+    if _pfs < 1.0:
+        pit_factor = max(0.55, min(1.60, 1.0 + (pit_factor - 1.0) * _pfs))
+
     # Pitcher HR/9 for confidence threshold flag
     pit_ip = mlb_stats.parse_ip(pitcher_stats.get("inningsPitched", "0.0"))
     pit_hrs  = int(pitcher_stats.get("homeRuns", 0))

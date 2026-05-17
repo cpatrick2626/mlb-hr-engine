@@ -21,6 +21,7 @@ from typing import Optional
 # Allow imports from parent directory (v4 root)
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+import config
 from clients import mlb_stats, statcast as statcast_client
 from data.park_factors import get_park
 from engine import probability as prob
@@ -124,6 +125,10 @@ def _score_player(r: dict, date_str: str, batter_data: dict, pitcher_data: dict)
         days_rest  = mlb_stats.get_pitcher_days_rest_as_of(pitcher_id, date_str)
         fatigue_fac = prob.pitcher_fatigue_factor(days_rest)
         pit_factor  = max(0.55, min(1.60, pit_factor * fatigue_fac))
+        # Attenuate toward 1.0 — mirrors pipeline.py exactly.
+        _pfs = getattr(config, "PITCHER_FACTOR_SCALE", 1.0)
+        if _pfs < 1.0:
+            pit_factor = max(0.55, min(1.60, 1.0 + (pit_factor - 1.0) * _pfs))
         # Pitcher handedness for platoon (lru_cached)
         pitcher_info = mlb_stats.get_player_info(pitcher_id)
         pitcher_hand = pitcher_info.get("pitchHand", {}).get("code", "")

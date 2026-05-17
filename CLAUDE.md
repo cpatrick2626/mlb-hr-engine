@@ -394,6 +394,95 @@ Added 2026-05-16. Three scripts built for live tracking and validation. **CRITIC
 5. Re-run `analyze_calibration.py` — Session 23 Step 3 (after regression ceiling stabilizes at n≥100 settled)
 6. Do NOT adjust thresholds until n≥200
 
+### Operational Infrastructure & CLV Tracking (Session 26)
+
+Added 2026-05-16. Full operational maturity layer — NO model changes in this session. All changes are monitoring, tracking, and automation.
+
+**Session 26 rules (ENFORCED — do NOT violate in future sessions):**
+- Do NOT redesign the core HR model
+- Do NOT add new baseball features
+- Do NOT modify the JIG model
+- Do NOT weaken calibration discipline
+- Do NOT optimize for short-term ROI spikes
+- Prioritize: operational stability, reproducibility, CLV consistency, long-term validation
+
+**Pitcher Factor Attenuation:**
+`PITCHER_FACTOR_SCALE = 0.60` in `config.py`. Compresses pit_factor range [0.55,1.60] → effective [0.73,1.36].
+Applied in both `pipeline.py` and `backtest/runner.py` after fatigue_fac:
+```python
+_pfs = getattr(config, "PITCHER_FACTOR_SCALE", 1.0)
+if _pfs < 1.0:
+    pit_factor = max(0.55, min(1.60, 1.0 + (pit_factor - 1.0) * _pfs))
+```
+Reason: pit_factor ranks #17/21 in 2026 signal analysis (r=+0.0156). Rollback: set `PITCHER_FACTOR_SCALE = 1.0`.
+
+**New tracking modules (`mlb_hr_engine_v4/tracking/`):**
+
+`line_snapshots.py` — stores odds at specific timestamps (opening, pre_game, closing, manual).
+- Fields: date, player_name, team, snapshot_type, snapshot_ts, sportsbook, american_odds, implied_pct, no_vig_pct, game_id
+- Storage: `tracking/line_snapshots.csv` (append-only)
+- Key API: `save_snapshots(props, snapshot_type, date_str)`, `get_best_close(player_name, date_str)`, `snapshot_count()`
+
+`drift_monitor.py` — multi-dimensional calibration drift detection.
+- `DriftMonitor` class; `.run()` returns alerts, dimensions, summary, status
+- Dimensions: prob_bucket, barrel_tier, archetype, odds_range, sportsbook, handedness, park_tier, weather_tier, rolling_30d
+- Thresholds: INFO |bias|>2pp at n≥50; WARNING |bias|>3pp at n≥30; CRITICAL |bias|>5pp at n≥20
+- Convenience: `run_drift_check(rows, verbose)`
+
+`data_integrity.py` — data validation.
+- `run_integrity_check(verbose)` → checks: duplicates, missing fields, stale picks, P&L accuracy, CLV completeness, probability range validity, settlement completeness
+
+`clv.py` (REWRITTEN Session 26) — full CLV infrastructure.
+- 19-field CLV log schema; no-vig CLV formula using `no_vig_prob_for_book()` from `engine/vig.py`
+- Key API: `log_opening_lines(picks)`, `fetch_and_compute_clv(date)`, `clv_summary()`, `clv_by_barrel()`, `clv_by_book()`, `clv_by_ev_range()`, `clv_by_odds_range()`, `print_clv_report()`, `load_all()`
+
+`pick_tracker.py` (UPDATED Session 26) — 6 new CLV fields:
+`open_implied_pct`, `open_no_vig_pct`, `close_odds`, `close_no_vig_pct`, `clv_pp`, `clv_pct_rel`
+- `_migrate_schema()` backfills `open_implied_pct`/`open_no_vig_pct` from existing `american_odds` on first run
+- New `_build_clv_open_fields()` called in `_build_row()` so new picks get opening CLV immediately
+- New `update_clv_fields(date, player, close_odds, close_no_vig_pct, book)` for post-game CLV update
+
+**New root scripts:**
+
+`capture_closing_lines.py` — fetch current odds and compute CLV for today's picks.
+- Usage: `py -3.12 capture_closing_lines.py` (run ~30min before first pitch)
+- Saves snapshots → `line_snapshots.csv`; updates `pick_tracker.csv` + `clv_log.csv`
+
+`ops_daily.py` — full daily orchestration (run every morning).
+- 6 phases: settle → integrity check → drift → CLV capture → CLV summary → ROI snapshot
+- Saves report to `reports/daily_YYYY-MM-DD.txt`; cleans up reports >90 days old
+- Usage: `py -3.12 ops_daily.py` | `--skip-settle` | `--skip-clv` | `--report-only`
+
+`monitoring_dashboard.py` — 6-phase comprehensive health check dashboard.
+- Phase 1: data quality; Phase 2: CLV; Phase 3: ROI + drawdown; Phase 4: calibration drift;
+  Phase 5: statistical validity; Phase 6: production readiness checklist + operational roadmap
+- Usage: `py -3.12 monitoring_dashboard.py [--phase N] [--rolling 30]`
+- Saves to `monitoring_dashboard_output.txt`
+
+`analyze_clv.py` — dedicated CLV analysis (9 phases).
+- Loads from both `clv_log.csv` and `pick_tracker.csv` (deduped)
+- Phases: overall summary, by barrel tier, by book, by EV%, by odds range, by model prob, time trend, CLV persistence, statistical validity
+- Usage: `py -3.12 analyze_clv.py` | `--summary` | `--phase N` | `--tracker`
+- Saves to `analyze_clv_output.txt`
+
+**CLV formula (sharp betting metric):**
+```
+clv_pp = (close_no_vig − open_no_vig) × 100   # positive = model got better price = sharp
+clv_pct_rel = clv_pp / (open_no_vig × 100) × 100  # relative, independent of odds level
+```
+Verdicts: SHARP (avg>1.0pp) | SLIGHTLY SHARP (>0) | NEUTRAL (>-1pp) | SOFT (<-1pp)
+
+**Daily operational workflow:**
+1. Morning (settled games): `py -3.12 ops_daily.py`
+2. ~30min before first pitch: `py -3.12 capture_closing_lines.py`
+3. Weekly: `py -3.12 monitoring_dashboard.py`
+4. Ongoing: `py -3.12 analyze_clv.py`
+
+**Pending actions (Session 26 deferred):**
+- App.py: wire CLV capture button + ensure sportsbook field populated on log
+- Windows Task Scheduler: schedule `ops_daily.py` at 8AM daily
+- Session 23 Step 3: re-calibrate Platt after n≥100 with PITCHER_FACTOR_SCALE=0.60
+
 ### compare.py (root)
 
 Runs both v1 and v2 engines for the same date, diffs their outputs, and displays probability shifts, EV changes, and pick-set divergence in rich tables. Reads/writes `compare_v1.json` / `compare_v2.json` when `--dump-json` is passed to the individual engines.
