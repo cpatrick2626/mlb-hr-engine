@@ -32,7 +32,7 @@ MLB_API = "https://statsapi.mlb.com/api/v1"
 SAVANT  = "https://baseballsavant.mlb.com"
 
 # Bump this whenever the context schema changes — forces Streamlit session-state cache to refresh.
-HVY_CACHE_VERSION = "9"
+HVY_CACHE_VERSION = "10"
 
 # {pitcher_id: {"hand_splits": {...}, "pitch_stats": {...}, "data_year": int}}
 _PITCHER_SAVANT_CACHE: dict[int, dict] = {}
@@ -110,14 +110,32 @@ def _finalize_pitch_stats(totals: dict, total_pa_denom: int) -> dict:
 
 # Human-readable pitch type labels
 PITCH_LABELS: dict[str, str] = {
-    "FF": "4-Seam FB", "SI": "Sinker",    "FC": "Cutter",
+    "FF": "4-Seam FB", "FA": "4-Seam FB", "SI": "Sinker",    "FC": "Cutter",
     "SL": "Slider",    "SV": "Sweeper",   "KC": "K-Curve",
     "CU": "Curveball", "CH": "Changeup",  "FS": "Splitter",
-    "ST": "Sweeper",   "KN": "Knuckleball",
+    "ST": "Sweeper",   "KN": "Knuckleball", "EP": "Eephus",
+    "SC": "Screwball", "FO": "Forkball",  "CS": "Slow Curve",
 }
 
-_FASTBALL_TYPES = frozenset({"FF", "SI", "FC"})
-_BREAKING_TYPES = frozenset({"SL", "CU", "KC", "SV", "ST"})
+_FASTBALL_TYPES = frozenset({"FF", "FA", "SI", "FC"})
+_BREAKING_TYPES = frozenset({"SL", "CU", "KC", "SV", "ST", "CS"})
+
+# Pitch type alias → canonical code used for batter-vs-pitcher joins.
+# Savant has changed codes over seasons (e.g. SV→ST for Sweeper in 2023);
+# without canonicalization the join silently misses historical batter data.
+_PITCH_CANONICAL: dict[str, str] = {
+    "FA": "FF",  # older 4-seam code → current FF
+    "SV": "ST",  # pre-2023 Sweeper → post-2023 ST (same pitch, Savant renamed)
+}
+# Reverse map for fallback lookup (canonical → all aliases that map to it)
+_PITCH_ALIASES: dict[str, list[str]] = {}
+for _alias, _canon in _PITCH_CANONICAL.items():
+    _PITCH_ALIASES.setdefault(_canon, []).append(_alias)
+
+
+def _canonical_pt(pt: str) -> str:
+    """Return canonical pitch type code, resolving known Savant naming changes."""
+    return _PITCH_CANONICAL.get(pt, pt)
 
 # League-average baselines for modifier signals — canonical values from config.py.
 # Update config.py (not here) at each mid-season refresh.
@@ -157,6 +175,39 @@ def pitch_color(pt: str) -> str:
     if pt in _BREAKING_TYPES:
         return "#60a5fa"
     return "#4ade80"
+
+
+def _build_pitch_rows(pitcher_arsenal: list[dict]) -> list[dict]:
+    """
+    Build display-ready pitch rows from pitcher arsenal for UI rendering.
+
+    Converts 0-1 fraction fields to 0-100 percent scale so app.py can
+    format them directly with :.0f without additional scaling.
+
+    Fields per row:
+      pitch_type    str   — Savant code (e.g. "FF")
+      pitch_usage   float — usage share 0-100 (e.g. 42.0 for 42%)
+      whiff_pct     float|None — whiff rate 0-100 (e.g. 24.5 for 24.5%)
+      hard_hit_pct  float|None — hard-hit rate 0-100
+      rv_per100     float|None — run value per 100 pitches (raw, can be negative)
+      avg_speed     float|None — average velocity mph
+    """
+    rows = []
+    for entry in pitcher_arsenal:
+        pct = entry.get("pitch_pct") or 0.0
+        if pct <= 0:
+            continue
+        whiff = entry.get("display_whiff")
+        hh    = entry.get("display_hh")
+        rows.append({
+            "pitch_type":   entry.get("pitch_type", ""),
+            "pitch_usage":  round(pct * 100.0, 1),
+            "whiff_pct":    round(whiff * 100.0, 1) if whiff is not None else None,
+            "hard_hit_pct": round(hh   * 100.0, 1) if hh    is not None else None,
+            "rv_per100":    entry.get("display_rv100"),
+            "avg_speed":    entry.get("avg_speed"),
+        })
+    return rows
 
 
 # ── Pitcher data (single Savant query) ────────────────────────────────────────
@@ -377,9 +428,19 @@ def _fetch_all_batter_pitch_splits(batter_id: int) -> None:
     Fetch Savant data for a batter ONCE and populate _BATTER_PT_CACHE for
     all three split keys: (batter_id, ""), (batter_id, "R"), (batter_id, "L").
     This guarantees hand-split accuracy without multiple HTTP calls.
+
+    Data integrity (mirrors pitcher fetch):
+      - hfGT=R| restricts to regular-season games only (prevents Spring Training /
+        postseason contamination).
+      - (game_pk, at_bat_number) deduplication guards against suspended/replayed
+        games that can produce duplicate rows.
+      - game_year validation skips rows from the wrong season.
+      - Pitch types are normalized to canonical codes before accumulation so that
+        the batter-vs-pitch lookup joins correctly with pitcher arsenal codes.
     """
     totals_all: dict[str, dict] = {}
     totals_by_hand: dict[str, dict[str, dict]] = {"R": {}, "L": {}}
+    season = config.CURRENT_SEASON
 
     def _acc(totals: dict, pt: str, ev: str) -> None:
         t = totals.setdefault(pt, {"pa": 0, "hr": 0, "h": 0, "k": 0, "tb": 0.0, "ab": 0})
@@ -412,6 +473,9 @@ def _fetch_all_batter_pitch_splits(batter_id: int) -> None:
             }
         return out
 
+    total_rows = 0
+    seen_pa: set = set()
+
     try:
         resp = _SESSION.get(
             f"{SAVANT}/statcast_search/csv",
@@ -419,19 +483,42 @@ def _fetch_all_batter_pitch_splits(batter_id: int) -> None:
                 "all":              "true",
                 "player_type":      "batter",
                 "batters_lookup[]": batter_id,
-                "season":           config.CURRENT_SEASON,
+                "season":           season,
                 "type":             "details",
                 "hfAB":             _HF_AB,
+                # Restrict to regular season — identical to pitcher fetch guard
+                "hfGT":             "R|",
             },
             timeout=15,
         )
         resp.raise_for_status()
 
         for row in csv.DictReader(io.StringIO(resp.text.lstrip("﻿"))):
-            pt = (row.get("pitch_type") or "").strip().upper()
-            ev = (row.get("events") or "").strip().lower()
-            if not pt or not ev:
+            raw_pt = (row.get("pitch_type") or "").strip().upper()
+            ev     = (row.get("events") or "").strip().lower()
+            if not raw_pt or not ev:
                 continue
+
+            # year validation — skip stale rows
+            raw_year = row.get("game_year") or (row.get("game_date") or "")[:4]
+            try:
+                row_season = int(raw_year) if raw_year else season
+            except (ValueError, TypeError):
+                row_season = season
+            if row_season != season:
+                continue
+
+            # Deduplication: each plate appearance counted once
+            pa_key = (row.get("game_pk", ""), row.get("at_bat_number", ""))
+            if pa_key[0] and pa_key[1]:
+                if pa_key in seen_pa:
+                    continue
+                seen_pa.add(pa_key)
+
+            total_rows += 1
+            # Normalize pitch type to canonical code before accumulating
+            # so batter-vs-pitch lookup joins against pitcher arsenal correctly.
+            pt = _canonical_pt(raw_pt)
             p_hand = (row.get("p_throws") or "").strip().upper()
 
             _acc(totals_all, pt, ev)
@@ -440,6 +527,9 @@ def _fetch_all_batter_pitch_splits(batter_id: int) -> None:
 
     except Exception as e:
         print(f"[pitch_mix] batter_vs_pitches fetch failed (bid={batter_id}): {e}")
+
+    if total_rows == 0:
+        print(f"[pitch_mix] WARNING: batter Savant returned 0 PA-ending rows (bid={batter_id}, season={season})")
 
     _BATTER_PT_CACHE[(batter_id, "")]  = _finalize(totals_all)
     _BATTER_PT_CACHE[(batter_id, "R")] = _finalize(totals_by_hand["R"])
@@ -489,6 +579,18 @@ def load_hvy_context(player: dict, arsenal_data: dict | None = None,
 
     modifier = _compute_modifier(player, pitcher_arsenal, hand_splits, h2h, batter_vs)
 
+    # Data quality diagnostics
+    if not pitcher_arsenal:
+        print(f"[pitch_mix] INFO: no pitcher arsenal for pid={pitcher_id} "
+              f"(player={player.get('player_name', '?')}) — pitch rows empty")
+    elif data_year != config.CURRENT_SEASON:
+        print(f"[pitch_mix] INFO: pitcher {pitcher_id} using prior-year ({data_year}) data "
+              f"(player={player.get('player_name', '?')})")
+
+    if not batter_vs and batter_id:
+        print(f"[pitch_mix] INFO: no batter-vs-pitch data for bid={batter_id} "
+              f"(player={player.get('player_name', '?')}) — Signal 2 neutral")
+
     return {
         "pitcher_arsenal": pitcher_arsenal,
         "hand_splits":     hand_splits,
@@ -496,6 +598,9 @@ def load_hvy_context(player: dict, arsenal_data: dict | None = None,
         "batter_vs":       batter_vs,
         "hvy_modifier":    modifier,
         "data_year":       data_year,
+        # pitch_rows: display-ready list with fields scaled to 0-100 percent.
+        # pitch_usage and whiff_pct are floats in percent form (e.g. 42.0 for 42%).
+        "pitch_rows":      _build_pitch_rows(pitcher_arsenal),
     }
 
 
@@ -563,11 +668,14 @@ def _build_pitcher_arsenal(pitcher_id: int | None, arsenal_data: dict | None,
         }
 
     if from_leaderboard:
-        return [_merge_display(e, e.get("pitch_type", ""), pitch_stats.get(e.get("pitch_type", ""), {}))
-                for e in from_leaderboard]
+        merged = [_merge_display(e, e.get("pitch_type", ""), pitch_stats.get(e.get("pitch_type", ""), {}))
+                  for e in from_leaderboard]
+        merged = _normalize_pitch_pct(merged, pitcher_id)
+        return merged
 
     # No leaderboard entry — build from live Savant data
     if not pitch_stats:
+        print(f"[pitch_mix] WARNING: no arsenal data for pitcher {pitcher_id} — HVY modifier uses reduced signal")
         return []
     arsenal = []
     for pt, ps in sorted(pitch_stats.items(), key=lambda x: x[1]["pitch_pct"], reverse=True):
@@ -586,6 +694,27 @@ def _build_pitcher_arsenal(pitcher_id: int | None, arsenal_data: dict | None,
             "display_hh":    ps.get("display_hh") or ds.get("hard_hit_pct"),
             "display_rv100": ds.get("rv_per100"),
         })
+    arsenal = _normalize_pitch_pct(arsenal, pitcher_id)
+    return arsenal
+
+
+def _normalize_pitch_pct(arsenal: list[dict], pitcher_id: int) -> list[dict]:
+    """Validate and normalize pitch_pct so entries sum to ~1.0.
+
+    Flags incomplete arsenals (sum < 0.80 suggests missing pitch types).
+    Normalizes if sum deviates > 5% from 1.0 to keep percentages accurate.
+    Removes entries with zero or negative usage.
+    """
+    arsenal = [e for e in arsenal if (e.get("pitch_pct") or 0.0) > 0]
+    if not arsenal:
+        return arsenal
+    total = sum(e.get("pitch_pct", 0.0) for e in arsenal)
+    if total < 0.80:
+        print(f"[pitch_mix] WARNING: arsenal for pitcher {pitcher_id} sums to {total:.2f} "
+              f"(< 0.80) — incomplete leaderboard data, some pitch types may be missing")
+    if total > 0 and abs(total - 1.0) > 0.05:
+        for e in arsenal:
+            e["pitch_pct"] = round(e["pitch_pct"] / total, 4)
     return arsenal
 
 
@@ -643,8 +772,17 @@ def _compute_modifier(
             pct = entry.get("pitch_pct", 0.0)
             if pct <= 0:
                 continue
-            pt  = entry.get("pitch_type", "")
-            bpt = batter_vs.get(pt, {})
+            raw_pt = entry.get("pitch_type", "")
+            # Canonical lookup: resolve pitch type aliases (e.g. SV→ST, FA→FF)
+            # so batter-vs-pitch data joins correctly regardless of Savant era
+            canon_pt = _canonical_pt(raw_pt)
+            bpt = batter_vs.get(canon_pt) or batter_vs.get(raw_pt) or {}
+            # Fallback: check reverse aliases (pitcher throws ST, batter data has SV)
+            if not bpt:
+                for alias in _PITCH_ALIASES.get(canon_pt, []):
+                    bpt = batter_vs.get(alias, {})
+                    if bpt:
+                        break
             b_pa = bpt.get("pa", 0)
             if b_pa < 3:
                 continue

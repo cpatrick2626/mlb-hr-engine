@@ -2245,6 +2245,23 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
             def _me_hvy_key(p):
                 return _me_ctxs.get(p.get("player_id"), {}).get("hvy_modifier", 1.0)
 
+            def _me_pitch_badge(pr, label_fn, color_fn):
+                """Render one pitch pill with usage%, optional whiff%, optional velo."""
+                pt    = pr.get("pitch_type", "")
+                usage = pr.get("pitch_usage") or 0.0
+                whiff = pr.get("whiff_pct")
+                speed = pr.get("avg_speed")
+                stats = f"{usage:.0f}%"
+                if whiff is not None:
+                    stats += f" · whiff {whiff:.0f}%"
+                if speed is not None:
+                    stats += f" · {speed:.1f}mph"
+                return (
+                    "<span style='background:#1a1a2e;border:1px solid #333;border-radius:4px;"
+                    f"padding:2px 6px;font-size:10px;color:{color_fn(pt)};'>"
+                    f"{label_fn(pt)} {stats}</span>"
+                )
+
             _me_sorted = sorted(ranked, key=_me_hvy_key, reverse=True)
 
             for _mi, _mp in enumerate(_me_sorted):
@@ -2266,6 +2283,9 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                 _mp_hand  = _mp.get("pitcher_hand", "")
                 _mp_hand_lbl = f" ({'RHP' if _mp_hand == 'R' else 'LHP'})" if _mp_hand else ""
                 _mp_pitch_rows = _mp_ctx.get("pitch_rows", [])
+                _mp_data_year  = _mp_ctx.get("data_year", config.CURRENT_SEASON)
+                _mp_prior_note = (f" <span style='color:#888;font-size:9px;'>({_mp_data_year} data)</span>"
+                                  if _mp_data_year != config.CURRENT_SEASON else "")
                 _mp_pit_lbl = _pitcher_label(_mp_pit, _mp.get("pitcher_factor", 1.0), _mp.get("platoon_factor", 1.0))
 
                 if _mp_mod >= 1.20:
@@ -2303,7 +2323,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                     f"<div style='display:flex;justify-content:space-between;align-items:center;'>"
                     f"<div style='display:flex;align-items:center;gap:8px;'>{_mp_photo}"
                     f"<div><div style='font-size:12px;color:#888;'>"
-                    f"{_mp_team} vs {_mp_opp} · {_mp_pit_lbl}{_mp_hand_lbl}</div>"
+                    f"{_mp_team} vs {_mp_opp} · {_mp_pit_lbl}{_mp_hand_lbl}{_mp_prior_note}</div>"
                     + (f"<div style='font-size:11px;margin-top:2px;'>{_mp_status_html}</div>"
                        if _mp_status_html else "")
                     + f"</div></div>"
@@ -2333,19 +2353,13 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                     + (
                         "<div style='display:flex;flex-wrap:wrap;gap:4px;margin-top:8px;'>"
                         + "".join(
-                            "<span style='background:#1a1a2e;border:1px solid #333;border-radius:4px;"
-                            "padding:2px 6px;font-size:10px;"
-                            f"color:{_me_pitch_color(pr.get('pitch_type', ''))};'>"
-                            f"{_me_pitch_label(pr.get('pitch_type', ''))} "
-                            f"{_pf(pr.get('pitch_usage'), 0.0):.0f}% · "
-                            f"whiff {_pf(pr.get('whiff_pct'), 0.0):.0f}%"
-                            "</span>"
+                            _me_pitch_badge(pr, _me_pitch_label, _me_pitch_color)
                             for pr in _mp_pitch_rows[:6]
                         )
                         + "</div>"
                         if _mp_pitch_rows else
-                        "<div style='font-size:10px;color:#444;margin-top:6px;'>"
-                        "No pitch data available.</div>"
+                        "<div style='font-size:10px;color:#555;margin-top:6px;'>"
+                        "Pitch data loading…</div>"
                     )
                     + f"</div>",
                     unsafe_allow_html=True,
