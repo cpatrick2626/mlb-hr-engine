@@ -483,6 +483,80 @@ Verdicts: SHARP (avg>1.0pp) | SLIGHTLY SHARP (>0) | NEUTRAL (>-1pp) | SOFT (<-1p
 - Windows Task Scheduler: schedule `ops_daily.py` at 8AM daily
 - Session 23 Step 3: re-calibrate Platt after n≥100 with PITCHER_FACTOR_SCALE=0.60
 
+### Portfolio Management Framework (Session 27)
+
+Added 2026-05-17. Transforms pick generation into full portfolio management. NO model changes — pure portfolio layer on top of existing picks.
+
+**Session 27 rules (ENFORCED):**
+- Do NOT redesign the core HR prediction engine
+- Do NOT add new baseball features
+- Do NOT optimize for short-term ROI spikes
+- Do NOT overfit historical outcomes
+- Prioritize: long-term bankroll stability, sustainable edge, variance control, explainability
+
+**New modules (`mlb_hr_engine_v4/portfolio/`):**
+
+`metrics.py` — pure math, no external imports.
+- `equity_curve(bets)`, `max_drawdown(curve)`, `sharpe_like(pnl)`, `win_rate_wilson_ci(n, k)`
+- `effective_n(n_picks, avg_pairwise_corr)` — N_eff = N / (1 + (N-1)×ρ)
+- `kelly_optimal_fraction(win_prob, profit_mult)`, `variance_decomposition(bets, group_key)`
+
+`correlation.py` — factor correlation model.
+- Constants: `LINEUP_CORR=0.40`, `PARK_CORR=0.12`, `DAY_CORR=0.04`
+- `pick_correlation(a, b)`, `portfolio_corr_stats(rows)` → avg ρ, N_eff, cluster summary
+- `same_lineup_win_corr(rows)` — realized correlation from settled outcomes
+- Session 27 finding: realized ρ=−0.0196 (near zero); model uses ρ=0.40 as conservative bound
+
+`exposure.py` — HHI-based multi-dimension exposure profiling.
+- Alert thresholds: `TEAM_SHARE_ALERT=0.20`, `SAME_GAME_CAP=0.35`, `HHI_HIGH=0.25`
+- `build_exposure_profile(rows)` → 7-dimension concentration analysis
+- `fragility_score(profile)` → 0-100 composite (game 40% + barrel 35% + EV 25%)
+- `exposure_alerts(profile)` → list of INFO/WARNING/CRITICAL alerts
+
+`sizing.py` — 9 bet sizing strategies with backtest framework.
+- Strategies: flat, quarter_kelly, half_kelly, full_kelly, capped_kelly, confidence_flat, edge_weighted, ev_weighted, barrel_kelly
+- `backtest_strategy(rows, strategy_name)`, `backtest_all_strategies(rows)` (sorted by ROI)
+- `sizing_sensitivity(rows)` — Kelly fractions 0.10–1.00, identifies best Sharpe fraction
+
+`optimizer.py` — greedy constrained optimizer.
+- `PortfolioConstraints` dataclass: max_picks_total=20, max_picks_per_team=4, max_picks_per_pitcher=4
+- IMPORTANT: `min_ev_pct=0.0` and `min_edge_pct=0.0` — hard floors disabled because:
+  - ev_pct stored as decimal in pre-S25 rows vs percentage in newer rows (schema inconsistency)
+  - avg_edge_pct=1.47% across historical rows — most picks fail a 2% floor
+  - Quality filtering handled by composite score ranking, not hard floors
+- 4 presets: conservative (15 picks, 3/team, barrel≥6%), moderate (20, 4/team), relaxed (30, 6/team), barrel_focused (15, 4/team, barrel≥8%)
+- Composite score: ev×0.35 + edge×0.30 + (confidence/50)×0.20 + barrel_bonus×0.15
+- `PortfolioOptimizer.optimize(rows)` → selected/rejected/stats dict
+- `evaluate_constraint_presets(rows)` → compare all 4 presets side-by-side
+
+**New root scripts:**
+
+`analyze_portfolio.py` — 5-phase portfolio analysis.
+- Phase 1: correlation analysis + N_eff; Phase 2: exposure profiling; Phase 3: sizing backtest
+- Phase 4: optimization preset comparison; Phase 5: raw vs optimized live validation
+- Usage: `py -3.12 analyze_portfolio.py [--phase N]`
+- Saves to `portfolio_analysis_output.txt`
+
+`optimize_daily.py` — daily portfolio optimizer (run after pick generation).
+- Usage: `py -3.12 optimize_daily.py [--date YYYY-MM-DD] [--preset conservative|moderate|relaxed|barrel_focused]`
+- Args: `--max-picks N`, `--team-cap N`, `--min-barrel F`, `--min-ev F`, `--show-rejected`, `--compare`
+- Saves filtered slate to `reports/portfolio_daily_YYYY-MM-DD.txt`
+
+**Session 27 key findings (766 picks, 2 settled dates):**
+- N_eff = 37.3 — 766 picks act like only 37 independent bets (20.5× variance inflation)
+- Moderate preset: 381→19 picks (May 13), raises barrel≥8% from 21% to 72%
+- Barrel-focused preset: best directional ROI signal (+19% vs −11% raw, n<50 — not yet statistically valid)
+- Conservative preset: highest quality floor (barrel≥6%), good for early bankroll protection
+- All optimized ROI results are [n<50] — require ≥200 settled optimized picks before acting
+
+**Daily workflow addition:**
+After `py -3.12 main.py`: run `py -3.12 optimize_daily.py` to filter to the optimized slate.
+
+**Pending (Session 27 deferred):**
+- App.py: wire optimizer into Streamlit pick display flow
+- Sizing: re-run backtest when n≥500 CLV picks confirm barrel-Kelly advantage
+- Re-evaluate edge filter thresholds once settled data crosses n≥200 with consistent edge_pct schema
+
 ### compare.py (root)
 
 Runs both v1 and v2 engines for the same date, diffs their outputs, and displays probability shifts, EV changes, and pick-set divergence in rich tables. Reads/writes `compare_v1.json` / `compare_v2.json` when `--dump-json` is passed to the individual engines.
