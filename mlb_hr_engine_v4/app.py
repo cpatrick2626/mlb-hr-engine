@@ -1230,6 +1230,66 @@ def _apply_ui_filters(
     return _rank_picks(result)
 
 
+def _apply_tactical_filters(players: list, tac: dict) -> list:
+    """Post-sidebar filter: narrow player pool by batter-profile and contact shape thresholds.
+
+    These filters control visibility only — they do not rerank or rescore players.
+    """
+    import math as _m
+    import datetime as _dti
+
+    def _sf(v, d=0.0):
+        try:
+            f = float(v)
+            return d if _m.isnan(f) or _m.isinf(f) else f
+        except (TypeError, ValueError):
+            return d
+
+    min_barrel    = tac.get("min_barrel",    0.0)
+    min_hh        = tac.get("min_hh",        0.0)
+    min_xslg      = tac.get("min_xslg",      0.0)
+    min_iso       = tac.get("min_iso",        0.0)
+    min_pull_air  = tac.get("min_pull_air",   0.0)
+    min_hr_win    = tac.get("min_hr_window",  0.0)
+    min_ev        = tac.get("min_ev",         0.0)
+    min_edge      = tac.get("min_edge",       0.0)
+    min_conf      = tac.get("min_conf",       0.0)
+    min_model_prob= tac.get("min_model_prob", 0.0)
+    excl_started  = tac.get("exclude_started", False)
+    incl_live     = tac.get("include_live",    False)
+
+    _now_utc = _dti.datetime.now(_dti.timezone.utc) if excl_started else None
+
+    result = []
+    for p in players:
+        if _sf(p.get("barrel_pct"))        < min_barrel:    continue
+        if _sf(p.get("hard_hit"))          < min_hh:        continue
+        _xslg = _sf(p.get("xslg")) or _sf(p.get("actual_slg"))
+        if _xslg                           < min_xslg:      continue
+        if _sf(p.get("xiso"))              < min_iso:       continue
+        _pull    = _sf(p.get("pull_pct"))
+        _fb      = _sf(p.get("fb_pct"))
+        _ld      = _sf(p.get("ld_pct"))
+        _pull_air = _pull * (_fb + _ld) / 100.0
+        if _pull_air                       < min_pull_air:  continue
+        if _sf(p.get("sweet_spot_pct"))    < min_hr_win:    continue
+        if _sf(p.get("ev_pct"),   -999)   < min_ev:        continue
+        if _sf(p.get("edge_pct"), -999)   < min_edge:      continue
+        if _sf(p.get("confidence"), 0)    < min_conf:      continue
+        if _sf(p.get("model_prob"), 0) * 100 < min_model_prob: continue
+        if excl_started and _now_utc is not None:
+            _gt = p.get("game_time_utc", "")
+            if _gt:
+                try:
+                    _gdt = _dti.datetime.fromisoformat(_gt.replace("Z", "+00:00"))
+                    if _gdt <= _now_utc and not incl_live:
+                        continue
+                except (ValueError, TypeError):
+                    pass
+        result.append(p)
+    return result
+
+
 def _render_qualified_table(
     ranked: list, scale: float, min_ev: float, min_edge: float,
     steam_names: set = None, key_suffix: str = "",
@@ -1510,7 +1570,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
     else:
         odds_label = f"<b style='color:#f0f0f0'>{source}</b>"
 
-    st.markdown('<div class="section-header">&#9889; TODAY\'S PICKS</div>',
+    st.markdown('<div class="section-header">&#9889; MAIN</div>',
                 unsafe_allow_html=True)
 
     # Lineup readiness
@@ -1778,12 +1838,142 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
             unsafe_allow_html=True,
         )
 
+    # ── TACTICAL COMMAND CENTER ───────────────────────────────────────────────
+    _tac_stat_keys = [
+        "tac_min_barrel", "tac_min_hh", "tac_min_xslg", "tac_min_iso",
+        "tac_min_pull_air", "tac_min_hr_window",
+        "tac_min_ev", "tac_min_edge", "tac_min_conf", "tac_min_model_prob",
+    ]
+    _tac_n_active = sum(1 for _k in _tac_stat_keys if st.session_state.get(_k, 0.0) > 0.0)
+    if st.session_state.get("tac_exclude_started", False):
+        _tac_n_active += 1
+    _tac_panel_lbl = "⚙️  Tactical Command Center" + (
+        f"  ·  {_tac_n_active} active" if _tac_n_active else "")
+
+    with st.expander(_tac_panel_lbl, expanded=False):
+        _tr0, _tr1 = st.columns([1, 5])
+        with _tr0:
+            if st.button("↺ Reset", key="tac_reset_all"):
+                for _k in _tac_stat_keys + [
+                    "tac_min_matchup_pct", "tac_min_hvy_score",
+                    "tac_exclude_started", "tac_include_live",
+                ]:
+                    st.session_state.pop(_k, None)
+                st.rerun()
+        with _tr1:
+            st.caption(
+                f"Market thresholds (sidebar): EV ≥ {min_ev:.0f}%  ·  "
+                f"Edge ≥ {min_edge:.0f}%  ·  Conf ≥ {min_confidence}  ·  "
+                f"Filters below narrow the eligible universe for all 4 tabs."
+            )
+
+        _tf1, _tf2, _tf3, _tf4 = st.columns(4)
+        with _tf1:
+            st.markdown(
+                "<div style='font-size:10px;color:#a78bfa;font-weight:700;"
+                "letter-spacing:1px;margin-bottom:4px;'>POWER PROFILE</div>",
+                unsafe_allow_html=True,
+            )
+            st.slider("Min Barrel%",   0.0, 20.0, 0.0, 0.5, key="tac_min_barrel")
+            st.slider("Min Hard Hit%", 0.0, 60.0, 0.0, 0.5, key="tac_min_hh")
+        with _tf2:
+            st.markdown(
+                "<div style='font-size:10px;color:#a78bfa;font-weight:700;"
+                "letter-spacing:1px;margin-bottom:4px;'>CONTACT QUALITY</div>",
+                unsafe_allow_html=True,
+            )
+            st.slider("Min xSLG", 0.00, 0.70, 0.00, 0.01, key="tac_min_xslg")
+            st.slider("Min ISO",  0.00, 0.45, 0.00, 0.01, key="tac_min_iso")
+        with _tf3:
+            st.markdown(
+                "<div style='font-size:10px;color:#a78bfa;font-weight:700;"
+                "letter-spacing:1px;margin-bottom:4px;'>CONTACT SHAPE</div>",
+                unsafe_allow_html=True,
+            )
+            st.slider("Min Pull Air%",  0.0, 40.0, 0.0, 0.5, key="tac_min_pull_air")
+            st.slider("Min HR Window%", 0.0, 50.0, 0.0, 0.5, key="tac_min_hr_window")
+        with _tf4:
+            st.markdown(
+                "<div style='font-size:10px;color:#a78bfa;font-weight:700;"
+                "letter-spacing:1px;margin-bottom:4px;'>MATCHUP · HVY</div>",
+                unsafe_allow_html=True,
+            )
+            st.slider(
+                "Min Matchup Modifier", 75, 140, 75, 1,
+                key="tac_min_matchup_pct",
+                format="%d%%",
+                help="HVY modifier filter (100%=neutral, 110%=favorable) — active in Matchup Edge once pitch data is loaded",
+            )
+            st.slider(
+                "Min HVY Score", 0, 100, 0, 1,
+                key="tac_min_hvy_score",
+                help="HVY score gate (0–100) — active in JIG once pitch data is loaded",
+            )
+
+        st.markdown(
+            "<div style='font-size:10px;color:#60a5fa;font-weight:700;"
+            "letter-spacing:1px;margin:8px 0 4px;'>MARKET / MODEL FILTERS</div>",
+            unsafe_allow_html=True,
+        )
+        _tm1, _tm2, _tm3, _tm4 = st.columns(4)
+        with _tm1:
+            st.slider("Min EV%",          0.0, 20.0, 0.0, 0.5, key="tac_min_ev",
+                      help="Minimum expected value percentage")
+        with _tm2:
+            st.slider("Min Edge%",        0.0, 20.0, 0.0, 0.5, key="tac_min_edge",
+                      help="Minimum edge over market no-vig probability")
+        with _tm3:
+            st.slider("Min Confidence",   0.0, 100.0, 0.0, 5.0, key="tac_min_conf",
+                      help="Minimum model confidence score (0–100)")
+        with _tm4:
+            st.slider("Min Model Prob%",  0.0, 30.0, 0.0, 0.5, key="tac_min_model_prob",
+                      help="Minimum model probability percentage")
+
+        _te1, _te2, _te3 = st.columns(3)
+        with _te1:
+            st.toggle("Exclude Started Games", value=False, key="tac_exclude_started")
+        with _te2:
+            st.toggle("Include Live Games",    value=False, key="tac_include_live")
+        with _te3:
+            _tc_cutoff = st.session_state.get("cutoff_utc_hour")
+            if _tc_cutoff is not None:
+                _tc_et = (_tc_cutoff - 4) % 24
+                _tc_h12 = _tc_et % 12 or 12
+                _tc_ampm = "AM" if _tc_et < 12 else "PM"
+                st.caption(f"⏰ Time gate: {_tc_h12}:00 {_tc_ampm} ET  ←  sidebar")
+            else:
+                st.caption("⏰ No time gate  ←  sidebar")
+
+    # Apply tactical batter-profile filters to narrow eligible universe
+    _tac_params = {
+        "min_barrel":      st.session_state.get("tac_min_barrel",    0.0),
+        "min_hh":          st.session_state.get("tac_min_hh",        0.0),
+        "min_xslg":        st.session_state.get("tac_min_xslg",      0.0),
+        "min_iso":         st.session_state.get("tac_min_iso",        0.0),
+        "min_pull_air":    st.session_state.get("tac_min_pull_air",  0.0),
+        "min_hr_window":   st.session_state.get("tac_min_hr_window", 0.0),
+        "min_ev":          st.session_state.get("tac_min_ev",        0.0),
+        "min_edge":        st.session_state.get("tac_min_edge",      0.0),
+        "min_conf":        st.session_state.get("tac_min_conf",      0.0),
+        "min_model_prob":  st.session_state.get("tac_min_model_prob",0.0),
+        "exclude_started": st.session_state.get("tac_exclude_started", False),
+        "include_live":    st.session_state.get("tac_include_live",    False),
+    }
+    _any_tac_active = (
+        any(_tac_params[k] > 0 for k in (
+            "min_barrel", "min_hh", "min_xslg", "min_iso", "min_pull_air", "min_hr_window",
+            "min_ev", "min_edge", "min_conf", "min_model_prob",
+        ))
+        or _tac_params["exclude_started"]
+    )
+    _tac_ranked = _apply_tactical_filters(ranked, _tac_params) if _any_tac_active else ranked
+
     # ── OPERATIONAL INTELLIGENCE LAYER ──────────────────────────────────────────
     _now_et = _dt.datetime.now(_EDT)
-    _n_elite = len([p for p in ranked if _pf(p.get("barrel_pct"), 0) >= 8.0])
+    _n_elite = len([p for p in _tac_ranked if _pf(p.get("barrel_pct"), 0) >= 8.0])
     _display_pool = (
-        [p for p in ranked if p.get("player_name") in _optimizer_selected_names]
-        if _optimizer_on and _optimizer_selected_names else ranked
+        [p for p in _tac_ranked if p.get("player_name") in _optimizer_selected_names]
+        if _optimizer_on and _optimizer_selected_names else _tac_ranked
     )
 
     tab_qv, tab_elite, tab_edge, tab_port = st.tabs([
@@ -2280,6 +2470,9 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
             def _me_hvy_key(p):
                 return _me_ctxs.get(p.get("player_id"), {}).get("hvy_modifier", 1.0)
 
+            # Apply HVY modifier filter from Tactical Command Center
+            _me_mod_min = st.session_state.get("tac_min_matchup_pct", 75) / 100.0
+
             def _me_pitch_badge(pr, label_fn, color_fn):
                 """Render one pitch pill with usage%, optional whiff%, optional velo."""
                 pt    = pr.get("pitch_type", "")
@@ -2297,7 +2490,12 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                     f"{label_fn(pt)} {stats}</span>"
                 )
 
-            _me_sorted = sorted(ranked, key=_me_hvy_key, reverse=True)
+            _me_sorted = sorted(_tac_ranked, key=_me_hvy_key, reverse=True)
+            if _me_mod_min > 0.75:
+                _me_sorted = [
+                    _mp for _mp in _me_sorted
+                    if _me_ctxs.get(_mp.get("player_id"), {}).get("hvy_modifier", 1.0) >= _me_mod_min
+                ]
 
             for _mi, _mp in enumerate(_me_sorted):
                 _mp_pid   = _mp.get("player_id")
@@ -2699,10 +2897,9 @@ def tab_hits(data: dict):
             if st.button("ℹ️ Player Info",
                          key=f"{key_prefix}_modal_{p.get('player_id','')}{name[:6]}",
                          use_container_width=True, type="primary"):
-                _jig_src = "JIG AI" if "ai" in key_prefix else ("JIG Way" if "way" in key_prefix else "JIG")
                 st.session_state["show_modal"] = p
-                st.session_state["modal_source_tab"] = _jig_src
-                st.session_state["modal_source_section"] = _jig_src
+                st.session_state["modal_source_tab"] = "Hits"
+                st.session_state["modal_source_section"] = "Hits"
                 st.rerun()
         with _fc:
             st.link_button("📲 Open on FanDuel", _fanduel_url(name), use_container_width=True)
@@ -3042,43 +3239,13 @@ def tab_jig(data: dict):
     )
 
     st.markdown(
-        "<div style='font-size:22px; font-weight:900; color:#FF6666; "
-        "letter-spacing:2px; margin-bottom:2px;'>⚙️ JIG</div>"
+        "<div style='font-size:22px; font-weight:900; color:#a78bfa; "
+        "letter-spacing:2px; margin-bottom:2px;'>⚡ JIG</div>"
         "<div style='font-size:12px; color:#888; margin-bottom:12px;'>"
-        "Power contact index — xSLG · ISO · Hard Hit · Barrel · Launch Angle · Pull% · Pitcher Mix</div>",
+        "Matchup Intelligence Workspace  ·  Pitch Exploitation  ·  "
+        "Arsenal Vulnerability  ·  HR Environment Scouting</div>",
         unsafe_allow_html=True,
     )
-
-    _JIG_SLIDER_KEYS = ["jig_slg","jig_iso","jig_hh","jig_brl","jig_la","jig_pull","jig_pit","jig_score"]
-    with st.expander("⚙️ JIG Thresholds", expanded=False):
-        if st.button("↺ Reset to defaults", key="jig_reset"):
-            for _k in _JIG_SLIDER_KEYS:
-                st.session_state.pop(_k, None)
-            st.rerun()
-        tc1, tc2, tc3 = st.columns(3)
-        with tc1:
-            slg_min    = st.slider("Min xSLG",          0.00, 0.70, 0.40, 0.01, key="jig_slg")
-            iso_min    = st.slider("Min ISO",            0.00, 0.45, 0.15, 0.01, key="jig_iso")
-        with tc2:
-            hh_min     = st.slider("Min Hard Hit%",      0.0, 60.0, 35.0, 0.5,  key="jig_hh")
-            brl_min    = st.slider("Min Barrel%",         0.0, 25.0,  5.0, 0.5,  key="jig_brl")
-        with tc3:
-            la_min     = st.slider("Min Launch Angle°",  0.0, 25.0, 10.0, 0.5,  key="jig_la")
-            pull_min   = st.slider("Min Pull%",          0.0, 60.0, 38.0, 0.5,  key="jig_pull")
-            pit_min    = st.slider("Min Pitcher Factor", 0.70, 1.30, 0.95, 0.01, key="jig_pit")
-        score_min  = st.slider("Min JIG Score (Picks gate)", 0, 100, 40, 1, key="jig_score")
-
-    def _jig_metrics(p):
-        # Prefer xSLG (Statcast expected); fall back to actual season SLG
-        xslg_v = _pf(p.get("xslg"), 0.0)
-        slg  = xslg_v if xslg_v > 0.0 else _pf(p.get("actual_slg"), 0.0)
-        iso  = _pf(p.get("xiso"), 0.0)
-        hh   = _pf(p.get("hard_hit"))
-        brl  = _pf(p.get("barrel_pct"))
-        la   = _pf(p.get("avg_launch_angle"))
-        pull = _pf(p.get("pull_pct"))
-        pit  = _pf(p.get("pitcher_factor"), 1.0)
-        return slg, iso, hh, brl, la, pull, pit
 
     def _hvy_metrics(p):
         """HVY-specific metrics: xSLG, ISO, Hard Hit, Barrel, Sweet Spot (HR window), Pull AIR."""
@@ -3100,247 +3267,7 @@ def tab_jig(data: dict):
     def _n(val, thr, scale):
         return min(max((val - thr) / scale + 0.5, 0.0), 1.0)
 
-    def _jig_ai_score(metrics):
-        # AI-optimized: barrel-first weighting based on HR-prediction importance
-        slg, iso, hh, brl, la, pull, pit = metrics
-        return round((
-            _n(brl,  brl_min,  6.0)  * 0.25 +
-            _n(slg,  slg_min,  0.15) * 0.20 +
-            _n(pit,  pit_min,  0.15) * 0.20 +
-            _n(hh,   hh_min,   12.0) * 0.15 +
-            _n(iso,  iso_min,  0.12) * 0.10 +
-            _n(pull, pull_min, 8.0)  * 0.07 +
-            _n(la,   la_min,   10.0) * 0.03
-        ) * 100, 1)
-
-    def _jig_way_score(metrics):
-        # The JIG Way: SLG → Pitcher → Pull% → ISO → Barrel% → Hard Hit → Launch
-        slg, iso, hh, brl, la, pull, pit = metrics
-        return round((
-            _n(slg,  slg_min,  0.15) * 0.25 +
-            _n(pit,  pit_min,  0.15) * 0.20 +
-            _n(pull, pull_min, 8.0)  * 0.15 +
-            _n(iso,  iso_min,  0.12) * 0.15 +
-            _n(brl,  brl_min,  6.0)  * 0.10 +
-            _n(hh,   hh_min,   12.0) * 0.10 +
-            _n(la,   la_min,   10.0) * 0.05
-        ) * 100, 1)
-
-    def _jig_card(entry, key_prefix="jig"):
-        p   = entry["player"]
-        jig = entry["jig"]
-        slg, iso, hh, brl, la, pull, pit = entry["metrics"]
-        name  = p.get("player_name", "Unknown")
-        team  = p.get("team", "")
-        opp   = p.get("opponent", "")
-        pit_n = p.get("pitcher_name", "TBD")
-        odds  = p.get("best_american")
-        ev    = p.get("ev_pct", 0)
-        ev_c  = "#4ade80" if ev > 0 else "#f87171"
-        jc    = "#4ade80" if jig >= 60 else "#f59e0b" if jig >= 40 else "#f87171"
-        _j_edge   = p.get("edge_pct", 0)
-        _j_ec     = _edge_col(_j_edge)
-        _j_tier   = p.get("confidence_tier", "C")
-        _j_tc     = {"S": "#FFD700", "A": "#4ade80", "B": "#facc15", "C": "#f87171"}.get(_j_tier, "#888")
-        _j_pit_lbl = _pitcher_label(pit_n, p.get("pitcher_factor", 1.0), p.get("platoon_factor", 1.0))
-        _j_hand   = p.get("pitcher_hand", "")
-        _j_hand_s = f" ({'RHP' if _j_hand == 'R' else 'LHP' if _j_hand == 'L' else ''})" if _j_hand else ""
-        status_html, is_live = _game_status_badge(p)
-        border = "#f87171" if is_live else "#1e3a5f"
-        status_row = (f"<div style='font-size:11px; margin:2px 0 8px;'>{status_html}</div>"
-                      if status_html else "")
-        _j_photo = _player_photo_html(p.get("player_id"), size=44)
-        st.markdown(
-            f"<div style='background:#0d0d1e; border:1px solid {border}; border-radius:10px; "
-            f"padding:14px 16px; margin-bottom:10px;'>"
-            f"<div style='display:flex; justify-content:space-between; align-items:center;'>"
-            f"<div style='display:flex;align-items:center;'>{_j_photo}"
-            f"<div style='font-size:15px; font-weight:800; color:#f0f0f0;'>{name}</div></div>"
-            f"<div style='font-size:18px; font-weight:900; color:{jc};'>JIG {jig:.0f}"
-            f"<span style='font-size:11px;color:{_j_tc};font-weight:700;margin-left:8px;'>{_j_tier}-Tier</span></div>"
-            f"</div>"
-            f"<div style='font-size:12px; color:#888; margin:2px 0 4px;'>"
-            f"{team} vs {opp} &nbsp;·&nbsp; vs {_j_pit_lbl}{_j_hand_s}</div>"
-            f"{status_row}"
-            f"<div style='display:grid; grid-template-columns:repeat(4,1fr); gap:6px; font-size:11px;'>"
-            f"<div class='stat-box'>"
-            f"<div style='color:#666;'>{_slg_label(p)}</div>{_badge(slg, slg_min, f'{slg:.3f}')}</div>"
-            f"<div class='stat-box'>"
-            f"<div style='color:#666;'>ISO</div>{_badge(iso, iso_min, f'{iso:.3f}')}</div>"
-            f"<div class='stat-box'>"
-            f"<div style='color:#666;'>Hard Hit</div>{_badge(hh, hh_min, f'{hh:.1f}%')}</div>"
-            f"<div class='stat-box'>"
-            f"<div style='color:#666;'>Barrel</div>{_badge(brl, brl_min, f'{brl:.1f}%')}</div>"
-            f"<div class='stat-box'>"
-            f"<div style='color:#666;'>Launch°</div>{_badge(la, la_min, '--' if p.get('avg_launch_angle') in (None, '--') else f'{la:.1f}°')}</div>"
-            f"<div class='stat-box'>"
-            f"<div style='color:#666;'>Pull%</div>{_badge(pull, pull_min, '--' if p.get('pull_pct') in (None, '--') else f'{pull:.1f}%')}</div>"
-            f"<div class='stat-box'>"
-            f"<div style='color:#666;'>Pit Fac</div>{_badge(pit, pit_min, f'{pit:.3f}x')}</div>"
-            f"</div>"
-            + (f"<div style='margin-top:8px; font-size:12px; display:flex; gap:12px; flex-wrap:wrap;'>"
-               f"<span style='color:#FF6666; font-weight:700;'>{_fmt_american(odds)}</span>"
-               f"<span style='color:#a78bfa;'>MDL {p.get('model_prob',0)*100:.0f}%</span>"
-               f"<span style='color:{ev_c};'>EV {ev:+.1f}%</span>"
-               f"<span style='color:{_j_ec};'>Edge {_j_edge:+.1f}%</span>"
-               f"</div>" if odds else "")
-            + "</div>",
-            unsafe_allow_html=True,
-        )
-        _bc, _fc = st.columns(2)
-        with _bc:
-            if st.button("ℹ️ Player Info", key=f"{key_prefix}_modal_{p.get('player_id','')}{name[:6]}",
-                         use_container_width=True, type="primary"):
-                st.session_state["show_modal"] = p
-                st.rerun()
-        with _fc:
-            st.link_button("📲 Open on FanDuel", _fanduel_url(name), use_container_width=True)
-
-    def _render_jig_views(score_fn, key_sfx):
-        _entries = []
-        for p in all_players:
-            m = _jig_metrics(p)   # compute once; reused in card, debug, and All tab
-            s = score_fn(m)
-            _entries.append({"player": p, "jig": s, "metrics": m, "passes": s >= score_min})
-        scored    = sorted(_entries, key=lambda x: x["jig"], reverse=True)
-        qualified = [x for x in scored if x["passes"]]
-        prime_timed = [x for x in qualified
-                       if x["player"].get("best_american") and x["player"].get("ev_pct", 0) > 0]
-
-        # Prime (unfiltered) — rescore raw players when time gate is active
-        if _cutoff is not None and all_players_raw is not all_players:
-            _raw_entries = []
-            for p in all_players_raw:
-                m = _jig_metrics(p)
-                s = score_fn(m)
-                _raw_entries.append({"player": p, "jig": s, "metrics": m, "passes": s >= score_min})
-            _raw_qual = [x for x in _raw_entries if x["passes"]]
-            prime = [x for x in _raw_qual
-                     if x["player"].get("best_american") and x["player"].get("ev_pct", 0) > 0]
-        else:
-            prime = prime_timed
-
-        with st.expander(f"🔍 Debug — {len(all_players)} players, {len(qualified)} qualified", expanded=len(qualified)==0):
-            st.write(f"**Gate:** JIG ≥ {score_min} | slg {slg_min} iso {iso_min} hh {hh_min} brl {brl_min} la {la_min} pull {pull_min} pit {pit_min}")
-            if all_players:
-                dbg = []
-                for entry in scored[:20]:
-                    p = entry["player"]
-                    slg, iso, hh, brl, la, pull, pit = entry["metrics"]
-                    dbg.append({
-                        "Name": p.get("player_name","")[:18], "JIG": entry["jig"],
-                        "passes": entry["passes"],
-                        "slg→": round(slg,3), "iso→": round(iso,3),
-                        "hh→": round(hh,1),   "brl→": round(brl,1),
-                        "la→": round(la,1),   "pull→": round(pull,1),
-                        "pit→": round(pit,3),
-                    })
-                st.dataframe(pd.DataFrame(dbg), hide_index=True, use_container_width=True)
-            else:
-                st.warning("all_players is EMPTY — pipeline returned no players.")
-
-        # Read time-gate info for Prime Time tab label
-        _jig_cutoff = st.session_state.get("cutoff_utc_hour")
-        if _jig_cutoff is not None:
-            _jig_et_h  = (_jig_cutoff - 4) % 24
-            _jig_h12   = _jig_et_h % 12 or 12
-            _jig_ampm  = "AM" if _jig_et_h < 12 else "PM"
-            _jig_time_label = f"{_jig_h12}:00 {_jig_ampm} ET"
-        else:
-            _jig_time_label = None
-
-        _jq, _jp, _ja, _jpr, _jpt = st.tabs([
-            "📱 Quick Picks",
-            f"⚡ Picks ({len(qualified)})",
-            f"📊 All ({len(scored)})",
-            f"⭐ Prime ({len(prime)})",
-            f"⏰ Prime Time ({len(prime_timed)})",
-        ])
-
-        with _jq:
-            if not qualified:
-                st.info("No players meet all JIG thresholds — lower thresholds in the expander above.")
-            else:
-                for entry in qualified[:3]:
-                    _jig_card(entry, key_prefix=f"jq_{key_sfx}")
-                if len(qualified) > 3:
-                    st.caption(f"Top 3 of {len(qualified)} qualified. See Picks tab for all.")
-
-        with _jp:
-            if not qualified:
-                st.info("No players meet all JIG thresholds — lower thresholds in the expander above.")
-            else:
-                st.caption(f"{len(qualified)} players pass all JIG criteria — ranked by JIG score.")
-                for entry in qualified:
-                    _jig_card(entry, key_prefix=f"jp_{key_sfx}")
-
-        with _ja:
-            _ja_ver = st.session_state.get(f"_jig_all_ver_{key_sfx}", 0)
-            rows = []
-            for entry in scored:
-                p = entry["player"]
-                slg, iso, hh, brl, la, pull, pit = entry["metrics"]
-                _ja_tier     = p.get("confidence_tier", "C")
-                _ja_tier_lbl = {"S": "🌟 S", "A": "✅ A", "B": "🟡 B", "C": "🔴 C"}.get(_ja_tier, _ja_tier)
-                rows.append({
-                    "Player":   p.get("player_name", ""),
-                    "Team":     p.get("team", ""),
-                    "Tier":     _ja_tier_lbl,
-                    "JIG":      entry["jig"],
-                    "Passes":   "✅" if entry["passes"] else "",
-                    "MDL%":     f"{p.get('model_prob',0)*100:.1f}%",
-                    "EV%":      f"{p.get('ev_pct',0):+.1f}%",
-                    "Edge%":    f"{p.get('edge_pct',0):+.1f}%",
-                    "xSLG":     f"{slg:.3f}",
-                    "ISO":      f"{iso:.3f}" if iso else "--",
-                    "Hard Hit": f"{hh:.1f}%" if hh else "--",
-                    "Barrel":   f"{brl:.1f}%" if brl else "--",
-                    "Launch°":  f"{la:.1f}" if la else "--",
-                    "Pull%":    f"{pull:.1f}%" if pull else "--",
-                    "Pit Fac":  f"{pit:.3f}",
-                    "Pitcher":  p.get("pitcher_name", ""),
-                    "Odds":     _fmt_american(p.get("best_american")),
-                })
-            if rows:
-                _ja_sel = st.dataframe(
-                    pd.DataFrame(rows), hide_index=True, use_container_width=True,
-                    on_select="rerun", selection_mode="single-row",
-                    key=f"jig_all_df_{key_sfx}_{_ja_ver}",
-                    column_config={
-                        "JIG": st.column_config.ProgressColumn("JIG", min_value=0, max_value=100, format="%.0f"),
-                    },
-                )
-                _ja_rows = getattr(getattr(_ja_sel, "selection", None), "rows", [])
-                if _ja_rows and 0 <= _ja_rows[0] < len(scored):
-                    st.session_state[f"_jig_all_ver_{key_sfx}"] = _ja_ver + 1
-                    _jig_all_src = "JIG AI" if key_sfx == "ai" else "JIG Way"
-                    st.session_state["show_modal"] = scored[_ja_rows[0]]["player"]
-                    st.session_state["modal_source_tab"] = _jig_all_src
-                    st.session_state["modal_source_section"] = _jig_all_src
-                    st.rerun()
-
-        with _jpr:
-            if not prime:
-                st.info("No prime JIG plays — need qualified players with positive-EV odds.")
-            else:
-                st.caption(f"{len(prime)} players pass all JIG criteria with positive EV.")
-                for entry in prime:
-                    _jig_card(entry, key_prefix=f"jpr_{key_sfx}")
-
-        with _jpt:
-            if _jig_cutoff is None:
-                st.info("No game start time selected. Set 'Only show games starting after…' in the sidebar to show prime JIG plays for later games only.")
-            elif not prime_timed:
-                st.info(f"No prime JIG plays for games at/after {_jig_time_label}.")
-            else:
-                st.caption(
-                    f"⏰ {len(prime_timed)} prime JIG player{'s' if len(prime_timed) != 1 else ''} "
-                    f"for games at/after {_jig_time_label} — ranked by JIG score."
-                )
-                for entry in prime_timed:
-                    _jig_card(entry, key_prefix=f"jpt_{key_sfx}")
-
-    # ── HVY Pitch Mix helpers ─────────────────────────────────────────────────
+    # ── JIG card helpers ──────────────────────────────────────────────────────
 
     def _hvy_card(entry, key_prefix="hvy"):
         p    = entry["player"]
@@ -3357,7 +3284,7 @@ def tab_jig(data: dict):
         hc    = "#4ade80" if hvy >= 60 else "#f59e0b" if hvy >= 40 else "#f87171"
         mod   = ctx.get("hvy_modifier", 1.0)
         mod_c = "#4ade80" if mod > 1.0 else "#f87171" if mod < 1.0 else "#888"
-        mod_s = f"{'▲' if mod > 1.0 else '▼' if mod < 1.0 else '●'} {mod:.2f}×"
+        mod_s = f"{'▲' if mod > 1.0 else '▼' if mod < 1.0 else '●'} {mod*100:.0f}%"
         _hvy_tier   = p.get("confidence_tier", "C")
         _hvy_tc     = {"S": "#FFD700", "A": "#4ade80", "B": "#facc15", "C": "#f87171"}.get(_hvy_tier, "#888")
         _hvy_edge   = p.get("edge_pct", 0)
@@ -3917,58 +3844,40 @@ def tab_jig(data: dict):
                          key=f"{key_prefix}_modal_{p.get('player_id','')}{name[:6]}",
                          use_container_width=True, type="primary"):
                 st.session_state["show_modal"] = p
-                st.session_state["modal_source_tab"] = "HVY Pitch Mix"
-                st.session_state["modal_source_section"] = "HVY Pitch Mix"
+                st.session_state["modal_source_tab"] = "JIG"
+                st.session_state["modal_source_section"] = "JIG · Matchups"
                 st.rerun()
         with _fc:
             st.link_button("📲 Open on FanDuel", _fanduel_url(name), use_container_width=True)
 
-    def _render_hvy_views(hvy_contexts: dict):
-        """Render HVY Pitch Mix views — context-aware HR prediction engine."""
-        # ── HVY-specific sliders (independent of JIG Way sliders) ─────────────
-        _tc1, _tc2, _tc3, _tc4 = st.columns(4)
-        with _tc1:
-            hvy_slg_min = st.slider("Min xSLG",       0.00, 0.70, 0.40, 0.01, key="hvy_slg")
-            hvy_iso_min = st.slider("Min ISO",         0.00, 0.45, 0.15, 0.01, key="hvy_iso")
-        with _tc2:
-            hvy_hh_min  = st.slider("Min Hard Hit%",   0.0, 60.0, 35.0, 0.5,  key="hvy_hh")
-            hvy_brl_min = st.slider("Min Barrel%",     0.0, 25.0,  5.0, 0.5,  key="hvy_brl")
-        with _tc3:
-            hvy_ss_min  = st.slider("Min HR Window%",  0.0, 50.0, 28.0, 0.5,  key="hvy_ss")
-            hvy_pa_min  = st.slider("Min Pull AIR%",   0.0, 40.0, 12.0, 0.5,  key="hvy_pa")
-        with _tc4:
-            hvy_matchup_min = st.slider(
-                "Min Matchup Modifier",
-                min_value=0.75, max_value=1.40, value=0.85, step=0.01,
-                key="hvy_matchup",
-                help=(
-                    "Filter by pitch-mix matchup outlook (HVY modifier).\n\n"
-                    "≥ 1.20 → Strong Batter Advantage\n"
-                    "≥ 1.08 → Batter Edge\n"
-                    "≥ 1.03 → Slight Batter Edge\n"
-                    "≥ 0.97 → Even Matchup\n"
-                    "≥ 0.92 → Slight Pitcher Edge\n"
-                    "≥ 0.85 → Pitcher Edge\n"
-                    "< 0.85 → Strong Pitcher Advantage (blocked by default)"
-                ),
-            )
-        hvy_score_min = st.slider("Min HVY Score (Picks gate)", 0, 100, 40, 1, key="hvy_score")
+    def _render_hvy_views(hvy_contexts: dict, src_players: list = None):
+        """Render JIG Matchup Intelligence views."""
+        # Scoring reference thresholds (fixed — calibrated midpoints, not user-adjustable)
+        # Filter gates: take the stricter of Main TCC and JIG TCC values
+        _main_mod_pct  = st.session_state.get("tac_min_matchup_pct",     75)
+        _jig_mod_pct   = st.session_state.get("jig_tac_min_matchup_pct", 75)
+        hvy_matchup_min = max(_main_mod_pct, _jig_mod_pct) / 100.0
+        _main_hvy      = st.session_state.get("tac_min_hvy_score",     0)
+        _jig_hvy       = st.session_state.get("jig_tac_min_hvy_score", 0)
+        hvy_score_min  = max(_main_hvy, _jig_hvy)
+
+        _players = src_players if src_players is not None else all_players
 
         def _hvy_base_score(metrics):
             """xSLG 25% · Barrel 20% · ISO 15% · Pull AIR 15% · Hard Hit 15% · HR Window 10%"""
             slg, iso, hh, brl, ss, pull_air = metrics
             return round((
-                _n(slg,      hvy_slg_min, 0.15) * 0.25 +
-                _n(brl,      hvy_brl_min, 6.0)  * 0.20 +
-                _n(iso,      hvy_iso_min, 0.12) * 0.15 +
-                _n(pull_air, hvy_pa_min,  8.0)  * 0.15 +
-                _n(hh,       hvy_hh_min,  12.0) * 0.15 +
-                _n(ss,       hvy_ss_min,  8.0)  * 0.10
+                _n(slg,      0.40, 0.15) * 0.25 +
+                _n(brl,      5.0,  6.0)  * 0.20 +
+                _n(iso,      0.15, 0.12) * 0.15 +
+                _n(pull_air, 12.0, 8.0)  * 0.15 +
+                _n(hh,       35.0, 12.0) * 0.15 +
+                _n(ss,       28.0, 8.0)  * 0.10
             ) * 100, 1)
 
         # ── Build scored entries ───────────────────────────────────────────────
         _entries = []
-        for p in all_players:
+        for p in _players:
             m   = _hvy_metrics(p)
             pid = p.get("player_id")
             ctx = hvy_contexts.get(pid, {})
@@ -4001,12 +3910,10 @@ def tab_jig(data: dict):
                      and x["player"].get("best_american")
                      and x["player"].get("ev_pct", 0) > 0]
 
-        with st.expander(f"🔍 Debug — {len(all_players)} players, {len(qualified)} qualified HVY",
+        with st.expander(f"🔍 Debug — {len(_players)} players, {len(qualified)} qualified HVY",
                          expanded=len(qualified) == 0):
-            st.write(f"**Gate:** HVY ≥ {hvy_score_min} | "
-                     f"xSLG {hvy_slg_min} ISO {hvy_iso_min} HH {hvy_hh_min} "
-                     f"Brl {hvy_brl_min} SS {hvy_ss_min} PullAIR {hvy_pa_min} "
-                     f"Matchup Modifier ≥ {hvy_matchup_min:.2f}×")
+            st.write(f"**Gate:** HVY ≥ {hvy_score_min} | Matchup Modifier ≥ {hvy_matchup_min:.2f}×  "
+                     f"·  Scoring refs: xSLG 0.40 · ISO 0.15 · HH 35.0 · Brl 5.0 · SS 28.0 · PullAIR 12.0")
             _savant_ok = st.session_state.get("_hvy_savant_ok")
             _cand_n    = st.session_state.get("_hvy_candidates_n", 0)
             _ctx_with_data = sum(
@@ -4024,10 +3931,10 @@ def tab_jig(data: dict):
                          f"({_cand_n} candidates loaded)")
 
         _hq, _hp, _ha, _hpr = st.tabs([
-            "📱 Quick Picks",
-            f"⚡ Picks ({len(qualified)})",
-            "📋 All Players",
-            "🏆 Prime Picks",
+            f"🎯 Matchups ({len(qualified)})",
+            "⚡ Arsenal",
+            "💪 Power Profiles",
+            "🔗 Stacks",
         ])
 
         with _hq:
@@ -4037,13 +3944,13 @@ def tab_jig(data: dict):
                 for entry in qualified[:3]:
                     _hvy_card(entry, key_prefix="hvyq")
                 if len(qualified) > 3:
-                    st.caption(f"Top 3 of {len(qualified)} qualified. See Picks tab for all.")
+                    st.caption(f"Top 3 of {len(qualified)} qualified. See Arsenal tab for all.")
 
         with _hp:
             if not qualified:
                 st.info("No players meet HVY thresholds.")
             else:
-                st.caption(f"{len(qualified)} players pass all HVY criteria — ranked by HVY score.")
+                st.caption(f"{len(qualified)} players qualify · ranked by HVY score · pitch exploitation + arsenal vulnerability")
                 for entry in qualified:
                     _hvy_card(entry, key_prefix="hvyp")
 
@@ -4087,82 +3994,175 @@ def tab_jig(data: dict):
                 if _sel_rows and 0 <= _sel_rows[0] < len(scored):
                     st.session_state["_hvy_all_ver"] = _hvy_ver + 1
                     st.session_state["show_modal"] = scored[_sel_rows[0]]["player"]
-                    st.session_state["modal_source_tab"] = "HVY Pitch Mix"
-                    st.session_state["modal_source_section"] = "HVY Pitch Mix"
+                    st.session_state["modal_source_tab"] = "JIG"
+                    st.session_state["modal_source_section"] = "JIG · Power Profiles"
                     st.rerun()
+
+            if rows:
+                st.markdown("---")
+                with st.expander("📊 Full Pitch Mix Analysis", expanded=False):
+                    st.caption(
+                        f"{len(scored)} players · ranked by HVY score · "
+                        "full arsenal matchup cards with pitch mix breakdown"
+                    )
+                    for entry in scored:
+                        _hvy_card(entry, key_prefix="hvyha")
 
         with _hpr:
             if not prime:
-                st.info("No prime HVY plays — need qualified players with positive-EV odds.")
+                st.info("No prime JIG plays — need qualified players with positive-EV odds.")
             else:
-                st.caption(f"{len(prime)} prime HVY picks with positive EV.")
+                st.caption(f"{len(prime)} prime JIG picks with positive EV · stack-ready matchups.")
                 for entry in prime:
                     _hvy_card(entry, key_prefix="hvypr")
 
-    # ── Outer tabs ────────────────────────────────────────────────────────────
-
-    _outer_ai, _outer_way, _outer_hvy = st.tabs(["⚡ JIG AI", "🎯 The JIG Way", "🔥 HVY Pitch Mix"])
-
-    with _outer_ai:
-        st.caption("Barrel (25%) · xSLG (20%) · Pitcher (20%) · Hard Hit (15%) · ISO (10%) · Pull% (7%) · Launch (3%)")
-        _render_jig_views(_jig_ai_score, "ai")
-
-    with _outer_way:
-        st.caption("xSLG (25%) · Pitcher (20%) · Pull% (15%) · ISO (15%) · Barrel (10%) · Hard Hit (10%) · Launch (5%)")
-        _render_jig_views(_jig_way_score, "way")
-
-    with _outer_hvy:
-        st.caption("xSLG (25%) · Barrel (20%) · ISO (15%) · Pull AIR (15%) · Hard Hit (15%) · HR Window (10%) · Context modifier: arsenal matchup · hand splits · contact shape · environment · H2H")
-        from clients.pitch_mix import HVY_CACHE_VERSION as _HVY_VER
-        _hvy_ck = f"hvy_ctx_{data.get('date', '')}_{_HVY_VER}"
-        if _hvy_ck not in st.session_state:
-            # Use the UNFILTERED player list so that Prime Picks (which can include
-            # pre-cutoff games when a time gate is active) always has contexts loaded.
-            # Contexts are keyed by player_id and reused regardless of time-gate state.
-            _hvy_candidates = [p for p in all_players_raw if p.get("player_id")]
-            _unique_pitchers = len({p.get("pitcher_id") for p in _hvy_candidates if p.get("pitcher_id")})
-            _spinner_msg = (
-                f"Loading pitch mix data for {len(_hvy_candidates)} players "
-                f"across {_unique_pitchers} pitchers…"
+    # ── JIG — Pitch Mix Intelligence ──────────────────────────────────────────
+    st.caption(
+        "xSLG (25%) · Barrel (20%) · ISO (15%) · Pull AIR (15%) · Hard Hit (15%) · HR Window (10%)"
+        "  ·  Context: arsenal matchup · hand splits · contact shape · environment · H2H  ·  "
+        "Global filters via Main → ⚙️ Tactical Command Center"
+    )
+    from clients.pitch_mix import HVY_CACHE_VERSION as _HVY_VER
+    _hvy_ck = f"hvy_ctx_{data.get('date', '')}_{_HVY_VER}"
+    if _hvy_ck not in st.session_state:
+        _hvy_candidates = [p for p in all_players_raw if p.get("player_id")]
+        _unique_pitchers = len({p.get("pitcher_id") for p in _hvy_candidates if p.get("pitcher_id")})
+        with st.spinner(
+            f"Loading pitch mix data for {len(_hvy_candidates)} players "
+            f"across {_unique_pitchers} pitchers…"
+        ):
+            from clients import arsenal as _ar_client
+            from clients import pitch_mix as _pm_client
+            try:
+                _ar_data = _ar_client.get_pitcher_arsenal(config.CURRENT_SEASON)
+            except Exception:
+                _ar_data = {}
+            _hvy_ctxs = _pm_client.load_hvy_contexts_batch(_hvy_candidates, _ar_data)
+            _savant_ok = any(
+                bool(ctx.get("pitcher_arsenal") or ctx.get("batter_vs"))
+                for ctx in _hvy_ctxs.values()
             )
-            with st.spinner(_spinner_msg):
-                from clients import arsenal as _ar_client
-                from clients import pitch_mix as _pm_client
-                try:
-                    _ar_data = _ar_client.get_pitcher_arsenal(config.CURRENT_SEASON)
-                except Exception:
-                    _ar_data = {}
-                _hvy_ctxs = _pm_client.load_hvy_contexts_batch(_hvy_candidates, _ar_data)
-                # Savant connectivity check — surfaces server-side blocks in the UI
-                _savant_ok = any(
-                    bool(ctx.get("pitcher_arsenal") or ctx.get("batter_vs"))
-                    for ctx in _hvy_ctxs.values()
-                )
-                st.session_state["_hvy_savant_ok"] = _savant_ok
-                st.session_state["_hvy_candidates_n"] = len(_hvy_candidates)
-                st.session_state[_hvy_ck] = _hvy_ctxs
+            st.session_state["_hvy_savant_ok"] = _savant_ok
+            st.session_state["_hvy_candidates_n"] = len(_hvy_candidates)
+            st.session_state[_hvy_ck] = _hvy_ctxs
 
-        # Auto-clear stale empty cache on each rerun
-        _cached_ctxs = st.session_state.get(_hvy_ck, {})
-        if _cached_ctxs:
-            _cand_count  = len([p for p in all_players if p.get("best_american")])
-            _has_arsenal = sum(1 for _c in _cached_ctxs.values() if _c.get("pitcher_arsenal"))
-            if _cand_count > 0 and _has_arsenal / max(_cand_count, 1) < 0.20:
-                st.session_state.pop(_hvy_ck, None)
+    _cached_ctxs = st.session_state.get(_hvy_ck, {})
+    if _cached_ctxs:
+        _cand_count  = len([p for p in all_players if p.get("best_american")])
+        _has_arsenal = sum(1 for _c in _cached_ctxs.values() if _c.get("pitcher_arsenal"))
+        if _cand_count > 0 and _has_arsenal / max(_cand_count, 1) < 0.20:
+            st.session_state.pop(_hvy_ck, None)
+            st.rerun()
+
+    _col_refresh, _col_status = st.columns([1, 4])
+    with _col_refresh:
+        if st.button("🔄 Refresh Pitch Data", key="hvy_refresh"):
+            from clients import pitch_mix as _pm_clear, arsenal as _ar_clear
+            _pm_clear.clear_caches()
+            _ar_clear.clear_caches()
+            st.session_state.pop(_hvy_ck, None)
+            st.rerun()
+
+    # ── JIG Tactical Command Center ───────────────────────────────────────────
+    _jig_tac_stat_keys = [
+        "jig_tac_min_barrel", "jig_tac_min_hh", "jig_tac_min_xslg", "jig_tac_min_iso",
+        "jig_tac_min_pull_air", "jig_tac_min_hr_window",
+        "jig_tac_min_matchup_pct", "jig_tac_min_hvy_score",
+    ]
+    with st.expander("⚙️ JIG Tactical Command Center", expanded=False):
+        _jrc, _jreset = st.columns([5, 1])
+        with _jreset:
+            if st.button("Reset", key="jig_tac_reset"):
+                for _k in _jig_tac_stat_keys + ["jig_tac_exclude_started", "jig_tac_include_live"]:
+                    st.session_state.pop(_k, None)
                 st.rerun()
+        with _jrc:
+            st.caption("Narrow JIG player universe by batter profile + matchup context")
 
-        _col_refresh, _col_status = st.columns([1, 4])
-        with _col_refresh:
-            if st.button("🔄 Refresh Pitch Data", key="hvy_refresh"):
-                # Clear both the session-state cache AND the module-level
-                # in-process caches so stale empty-result entries are evicted.
-                from clients import pitch_mix as _pm_clear, arsenal as _ar_clear
-                _pm_clear.clear_caches()
-                _ar_clear.clear_caches()
-                st.session_state.pop(_hvy_ck, None)
-                st.rerun()
+        st.markdown(
+            "<div style='font-size:10px;color:#a78bfa;font-weight:700;"
+            "letter-spacing:1px;margin:8px 0 4px;'>BATTER PROFILE FILTERS</div>",
+            unsafe_allow_html=True,
+        )
+        _ja1, _ja2, _ja3, _ja4, _ja5, _ja6 = st.columns(6)
+        with _ja1:
+            st.slider("Min Barrel%",   0.0, 20.0, 0.0, 0.5, key="jig_tac_min_barrel",
+                      help="Statcast barrel rate floor")
+        with _ja2:
+            st.slider("Min Hard Hit%", 0.0, 60.0, 0.0, 1.0, key="jig_tac_min_hh",
+                      help="Hard-hit rate floor (≥95mph exit velo)")
+        with _ja3:
+            st.slider("Min xSLG",      0.0,  0.8, 0.0, 0.01, key="jig_tac_min_xslg",
+                      help="Expected slugging percentage floor", format="%.2f")
+        with _ja4:
+            st.slider("Min ISO",       0.0,  0.4, 0.0, 0.01, key="jig_tac_min_iso",
+                      help="Isolated power (SLG−AVG) floor", format="%.2f")
+        with _ja5:
+            st.slider("Min Pull Air%", 0.0, 30.0, 0.0, 0.5, key="jig_tac_min_pull_air",
+                      help="Pulled-airborne contact rate floor")
+        with _ja6:
+            st.slider("Min HR Window%",0.0, 50.0, 0.0, 1.0, key="jig_tac_min_hr_window",
+                      help="Sweet-spot% floor (8–32° launch angle)")
 
-        _render_hvy_views(st.session_state.get(_hvy_ck, {}))
+        st.markdown(
+            "<div style='font-size:10px;color:#a78bfa;font-weight:700;"
+            "letter-spacing:1px;margin:8px 0 4px;'>MATCHUP / HVY FILTERS</div>",
+            unsafe_allow_html=True,
+        )
+        _jb1, _jb2, _jb3 = st.columns(3)
+        with _jb1:
+            st.slider(
+                "Min Matchup Modifier", 75, 140, 75, 1,
+                key="jig_tac_min_matchup_pct",
+                format="%d%%",
+                help="HVY modifier floor (100%=neutral, 110%=favorable)",
+            )
+        with _jb2:
+            st.slider(
+                "Min HVY Score", 0, 100, 0, 1,
+                key="jig_tac_min_hvy_score",
+                help="Composite batter power score floor (0–100)",
+            )
+        with _jb3:
+            _jig_cutoff = st.session_state.get("cutoff_utc_hour")
+            if _jig_cutoff is not None:
+                _jig_et = (_jig_cutoff - 4) % 24
+                _jig_h12 = _jig_et % 12 or 12
+                _jig_ampm = "AM" if _jig_et < 12 else "PM"
+                st.caption(f"⏰ Time gate: {_jig_h12}:00 {_jig_ampm} ET  ←  sidebar")
+            else:
+                st.caption("⏰ No time gate  ←  sidebar")
+
+        _jte1, _jte2 = st.columns(2)
+        with _jte1:
+            st.toggle("Exclude Started Games", value=False, key="jig_tac_exclude_started")
+        with _jte2:
+            st.toggle("Include Live Games",    value=False, key="jig_tac_include_live")
+
+    # Build JIG-TCC-filtered player list
+    _jig_tac_params = {
+        "min_barrel":      st.session_state.get("jig_tac_min_barrel",    0.0),
+        "min_hh":          st.session_state.get("jig_tac_min_hh",        0.0),
+        "min_xslg":        st.session_state.get("jig_tac_min_xslg",      0.0),
+        "min_iso":         st.session_state.get("jig_tac_min_iso",        0.0),
+        "min_pull_air":    st.session_state.get("jig_tac_min_pull_air",  0.0),
+        "min_hr_window":   st.session_state.get("jig_tac_min_hr_window", 0.0),
+        "min_ev":          0.0,
+        "min_edge":        0.0,
+        "min_conf":        0.0,
+        "min_model_prob":  0.0,
+        "exclude_started": st.session_state.get("jig_tac_exclude_started", False),
+        "include_live":    st.session_state.get("jig_tac_include_live",    False),
+    }
+    _any_jig_tac = (
+        any(_jig_tac_params[k] > 0 for k in (
+            "min_barrel", "min_hh", "min_xslg", "min_iso", "min_pull_air", "min_hr_window",
+        ))
+        or _jig_tac_params["exclude_started"]
+    )
+    _jig_filtered = _apply_tactical_filters(all_players, _jig_tac_params) if _any_jig_tac else None
+
+    _render_hvy_views(st.session_state.get(_hvy_ck, {}), src_players=_jig_filtered)
 
 def tab_parlays(data: dict):
     ranked          = data.get("ranked", [])
@@ -4491,7 +4491,7 @@ def tab_performance():
                 f"{storage_note}"
             )
         else:
-            st.info("No picks logged yet. Load the **Today's Picks** tab to auto-log today's selections.")
+            st.info("No picks logged yet. Load the **Main** tab to auto-log today's selections.")
 
     if clv:
         st.markdown('<div class="section-header">🎯 Closing Line Value</div>',
@@ -4579,7 +4579,7 @@ def tab_performance():
                     })
                 if tier_rows:
                     st.dataframe(pd.DataFrame(tier_rows), hide_index=True, use_container_width=True)
-                    st.caption("Tier assigned at pick time using EV%, Edge%, and Confidence — same logic as the Rating column in Today's Picks.")
+                    st.caption("Tier assigned at pick time using EV%, Edge%, and Confidence — same logic as the Rating column in Main.")
     except Exception as e:
         st.warning(f"Performance by tier unavailable: {e}")
 
@@ -4853,7 +4853,7 @@ def tab_performance():
                 },
             )
         else:
-            st.caption("No picks logged yet — open Today's Picks tab to auto-log.")
+            st.caption("No picks logged yet — open Main tab to auto-log.")
     except Exception as e:
         st.error(f"Could not load picks log: {e}")
 
@@ -4941,18 +4941,6 @@ def tab_performance():
                         st.dataframe(_cal_df.style.applymap(_cb, subset=["Bias(pp)"]),
                                      hide_index=True, use_container_width=True)
 
-                    _jig = _analysis.get("jig_comparison", {})
-                    if _jig.get("ai") and _jig.get("way"):
-                        st.markdown("#### JIG AI vs The JIG Way")
-                        _jc1, _jc2 = st.columns(2)
-                        with _jc1:
-                            st.metric("⚡ JIG AI", _jig["ai"].get("Win%","—"),
-                                      delta=_jig["ai"].get("ROI%","—"), delta_color="normal")
-                            st.caption(f"{_jig['ai'].get('Picks',0)} picks · {_jig['ai'].get('Net P&L','—')}")
-                        with _jc2:
-                            st.metric("🎯 The JIG Way", _jig["way"].get("Win%","—"),
-                                      delta=_jig["way"].get("ROI%","—"), delta_color="normal")
-                            st.caption(f"{_jig['way'].get('Picks',0)} picks · {_jig['way'].get('Net P&L','—')}")
 
                 _suggestions = _analysis.get("suggestions", [])
                 if _suggestions:
@@ -5619,12 +5607,13 @@ The app will open full-screen like a native app.
     if _banner.exists():
         st.image(str(_banner), use_container_width=True)
     st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
-        "📋  TODAY'S PICKS",
-        "📊  PERFORMANCE",
-        "🎯  ADVANCED STRATEGIES",
-        "⚙️  JIG",
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+        "⚾  MAIN",
+        "⚡  JIG",
+        "🔥  26",
+        "🧩  ADVANCED STRATEGIES",
         "🏃  HITS",
+        "📊  PERFORMANCE",
     ])
 
     with tab1:
@@ -5640,13 +5629,30 @@ The app will open full-screen like a native app.
 
     with tab2:
         try:
-            tab_performance()
+            tab_jig(get_data())
         except Exception as _e:
-            st.error(f"Performance tab error: {_e}")
+            st.error(f"JIG tab error: {_e}")
             if __import__("os").getenv("DEBUG") == "true":
                     st.code(_tb.format_exc())
 
     with tab3:
+        st.markdown(
+            "<div style='padding:40px 20px;text-align:center;'>"
+            "<div style='font-size:32px;font-weight:900;color:#FF6666;"
+            "letter-spacing:4px;text-shadow:0 0 30px rgba(255,100,50,0.6);'>"
+            "🔥 26</div>"
+            "<div style='font-size:14px;color:#666;margin-top:12px;letter-spacing:2px;'>"
+            "ALTERNATIVE POWER-PROFILE METHODOLOGY</div>"
+            "<div style='font-size:12px;color:#444;margin-top:24px;max-width:480px;"
+            "margin-left:auto;margin-right:auto;line-height:1.8;'>"
+            "A simplified explosive-bat philosophy.<br>"
+            "Separate from the Main quantitative engine.<br>"
+            "Coming in a future session."
+            "</div></div>",
+            unsafe_allow_html=True,
+        )
+
+    with tab4:
         try:
             tab_advanced_strategies(
                 _gate_data(get_data(), st.session_state.get("cutoff_utc_hour")),
@@ -5657,19 +5663,19 @@ The app will open full-screen like a native app.
             if __import__("os").getenv("DEBUG") == "true":
                     st.code(_tb.format_exc())
 
-    with tab4:
-        try:
-            tab_jig(get_data())
-        except Exception as _e:
-            st.error(f"JIG tab error: {_e}")
-            if __import__("os").getenv("DEBUG") == "true":
-                    st.code(_tb.format_exc())
-
     with tab5:
         try:
             tab_hits(_gate_data(get_data(), st.session_state.get("cutoff_utc_hour")))
         except Exception as _e:
             st.error(f"Hits tab error: {_e}")
+            if __import__("os").getenv("DEBUG") == "true":
+                    st.code(_tb.format_exc())
+
+    with tab6:
+        try:
+            tab_performance()
+        except Exception as _e:
+            st.error(f"Performance tab error: {_e}")
             if __import__("os").getenv("DEBUG") == "true":
                     st.code(_tb.format_exc())
 
