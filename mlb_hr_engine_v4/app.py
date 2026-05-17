@@ -81,6 +81,7 @@ try:
     from tracking import pnl as pnl_tracker, clv as clv_tracker
     from tracking import line_movement as lm_tracker
     from strategies_ui import tab_advanced_strategies
+    from clients.pull_air import resolve_pull_air_pct
 except ImportError as e:
     print(f"Import error: {e}")
     print(f"Current directory: {current_dir}")
@@ -102,6 +103,7 @@ except ImportError as e:
     from output.ranker import rank_picks as _rank_picks
     from tracking import pnl as pnl_tracker, clv as clv_tracker
     from tracking import line_movement as lm_tracker
+    from clients.pull_air import resolve_pull_air_pct
     # Try to import strategies UI
     try:
         from strategies_ui import tab_advanced_strategies
@@ -1126,6 +1128,24 @@ def _fetch_live_status(game_pk: int) -> dict:
         return {}
 
 
+@st.cache_data(ttl=120, show_spinner=False)
+def _cached_steam_moves() -> dict:
+    """Line movement data cached 2 min — prevents disk read on every slider interaction."""
+    try:
+        return lm_tracker.get_movement_today()
+    except Exception:
+        return {}
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def _cached_pnl_results() -> list:
+    """P&L results cached 5 min — prevents CSV read on every sidebar slider interaction."""
+    try:
+        return pnl_tracker._load_results()
+    except Exception:
+        return []
+
+
 def _game_status_badge(player: dict) -> "tuple[str, bool]":
     """Return (html_badge, is_live) for embedding in player cards and modals.
 
@@ -1236,7 +1256,6 @@ def _apply_tactical_filters(players: list, tac: dict) -> list:
     These filters control visibility only — they do not rerank or rescore players.
     """
     import datetime as _dti
-    from clients.pull_air import resolve_pull_air_pct
 
     def _num(v, d=0.0):
         f = _pf(v, d)
@@ -1361,13 +1380,21 @@ def _render_qualified_table(
     confs  = [p.get("confidence", 0) for p in ranked]
     scores = [p.get("score", 0) for p in ranked]
 
+    model_rng = _rng(models, suffix="%")
+    mkt_rng   = _rng(mkts, suffix="%")
+    edge_rng  = _rng(edges, sign=True, suffix="%")
+    ev_rng    = _rng(evs, sign=True, suffix="%")
+    bet_rng   = f"${min(bets):.0f} → ${max(bets):.0f}" if bets else "N/A"
+    conf_rng  = _rng(confs, fmt=".0f")
+    score_rng = _rng(scores, fmt=".1f")
+
     range_items = [
-        ("Model%", _rng(models, suffix="%")),
-        ("Mkt%",   _rng(mkts, suffix="%")),
-        ("Edge",   _rng(edges, sign=True, suffix="%")),
-        ("EV%",    _rng(evs, sign=True, suffix="%")),
-        ("Bet $",  f"${min(bets):.0f} → ${max(bets):.0f}" if bets else "N/A"),
-        ("Conf",   _rng(confs, fmt=".0f")),
+        ("Model%", model_rng),
+        ("Mkt%",   mkt_rng),
+        ("Edge",   edge_rng),
+        ("EV%",    ev_rng),
+        ("Bet $",  bet_rng),
+        ("Conf",   conf_rng),
     ]
     range_html = "".join(
         f"<span style='white-space:nowrap'>"
@@ -1390,14 +1417,6 @@ def _render_qualified_table(
         "</div>",
         unsafe_allow_html=True,
     )
-
-    ev_rng    = _rng(evs, sign=True, suffix="%")
-    edge_rng  = _rng(edges, sign=True, suffix="%")
-    model_rng = _rng(models, suffix="%")
-    mkt_rng   = _rng(mkts, suffix="%")
-    bet_rng   = f"${min(bets):.0f} → ${max(bets):.0f}" if bets else "N/A"
-    conf_rng  = _rng(confs, fmt=".0f")
-    score_rng = _rng(scores, fmt=".1f")
 
     session_br = st.session_state.get("bankroll_override", config.BANKROLL)
 
@@ -1526,8 +1545,14 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
             from portfolio.optimizer import PortfolioOptimizer, CONSTRAINT_PRESETS
             _preset_key = st.session_state.get("optimizer_preset", "moderate")
             _opt_constraints = CONSTRAINT_PRESETS.get(_preset_key)
-            _opt = PortfolioOptimizer(constraints=_opt_constraints)
-            _optimizer_result = _opt.optimize(ranked)
+            _ranked_fp = hash(tuple(p.get("player_name", "") for p in ranked))
+            _opt_cache_key = f"opt_result_{_preset_key}_{_ranked_fp}"
+            if _opt_cache_key in st.session_state:
+                _optimizer_result = st.session_state[_opt_cache_key]
+            else:
+                _opt = PortfolioOptimizer(constraints=_opt_constraints)
+                _optimizer_result = _opt.optimize(ranked)
+                st.session_state[_opt_cache_key] = _optimizer_result
             st.session_state["optimizer_result"] = _optimizer_result
             _optimizer_selected_names = {
                 r.get("player_name", "") for r in _optimizer_result.get("selected", [])
@@ -1754,7 +1779,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
     _steam_names: set = set()
     _steam_details: list = []   # [(name, open_odds, curr_odds, move_pct, is_ranked)]
     try:
-        _lm_today = lm_tracker.get_movement_today()
+        _lm_today = _cached_steam_moves()
         _ranked_names = {p.get("player_name") for p in ranked}
         for _lm_name, _lm_snaps in _lm_today.items():
             _lm_summ = lm_tracker.movement_summary(_lm_snaps)
@@ -2021,9 +2046,10 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
     )
 
     # ── Pre-compute status + urgency once for all players (avoids O(N) re-calls per render pass)
+    # Use ranked (full universe) so Elite tab cache-hits for players filtered out of TCC view
     _status_cache: dict = {}   # player_id → (html, is_live)
     _urgency_cache: dict = {}  # player_id → (gt_str, urgency_col, urgency_lbl)
-    for _pc_p in _tac_ranked:
+    for _pc_p in ranked:
         _pc_pid = _pc_p.get("player_id") or _pc_p.get("player_name", "")
         _status_cache[_pc_pid] = _game_status_badge(_pc_p)
         _pc_gt = _game_time_et(_pc_p.get("game_time_utc", ""))
@@ -2947,7 +2973,8 @@ def tab_hits(data: dict):
         _h_pit_lbl = _pitcher_label(pit_n, p.get("pitcher_factor", 1.0), p.get("platoon_factor", 1.0))
         _h_hand   = p.get("pitcher_hand", "")
         _h_hand_s = f" ({'RHP' if _h_hand == 'R' else 'LHP' if _h_hand == 'L' else ''})" if _h_hand else ""
-        status_html, is_live = _game_status_badge(p)
+        _h_pid = p.get("player_id") or p.get("player_name", "")
+        status_html, is_live = _hit_status_cache.get(_h_pid) or _game_status_badge(p)
         border = "#f87171" if is_live else "#1e3a5f"
         status_row = (f"<div style='font-size:11px; margin:2px 0 8px;'>{status_html}</div>"
                       if status_html else "")
@@ -3016,6 +3043,13 @@ def tab_hits(data: dict):
     qualified = [x for x in scored if x["passes"]]
     prime     = [x for x in qualified
                  if x["player"].get("best_american") and x["player"].get("ev_pct", 0) > 0]
+
+    # Pre-build status cache for all players to avoid O(N) badge calls in card render loops
+    _hit_status_cache: dict = {}
+    for _hsc_entry in scored:
+        _hsc_p = _hsc_entry["player"]
+        _hsc_pid = _hsc_p.get("player_id") or _hsc_p.get("player_name", "")
+        _hit_status_cache[_hsc_pid] = _game_status_badge(_hsc_p)
 
     # BTS pool: all players with a real xBA and starting lineup spot, ranked by hit probability
     bts_pool  = sorted(
@@ -3344,8 +3378,6 @@ def tab_jig(data: dict):
 
     def _hvy_metrics(p):
         """HVY-specific metrics: xSLG, ISO, Hard Hit, Barrel, Sweet Spot (HR window), Pull AIR."""
-        from clients.pull_air import resolve_pull_air_pct
-
         xslg_v   = _pf(p.get("xslg"), 0.0)
         slg      = xslg_v if xslg_v > 0.0 else _pf(p.get("actual_slg"), 0.0)
         iso      = _pf(p.get("xiso"), 0.0)
@@ -3362,6 +3394,8 @@ def tab_jig(data: dict):
         return min(max((val - thr) / scale + 0.5, 0.0), 1.0)
 
     # ── JIG card helpers ──────────────────────────────────────────────────────
+    # Status cache populated after scored list is built; _hvy_card reads from it
+    _jig_status_cache: dict = {}
 
     def _hvy_card(entry, key_prefix="hvy"):
         p    = entry["player"]
@@ -3387,7 +3421,8 @@ def tab_jig(data: dict):
         pit_hand    = p.get("pitcher_hand", "")
         pit_hand_lbl = f" ({'RHP' if pit_hand == 'R' else 'LHP' if pit_hand == 'L' else ''})" if pit_hand else ""
         _hvy_pit_lbl = _pitcher_label(pit_n, p.get("pitcher_factor", 1.0), p.get("platoon_factor", 1.0))
-        status_html, is_live = _game_status_badge(p)
+        _hvy_pid = p.get("player_id") or p.get("player_name", "")
+        status_html, is_live = _jig_status_cache.get(_hvy_pid) or _game_status_badge(p)
         border   = "#f87171" if is_live else "#1e3a5f"
         status_row = (f"<div style='font-size:11px;margin:2px 0 8px;'>{status_html}</div>"
                       if status_html else "")
@@ -3473,7 +3508,7 @@ def tab_jig(data: dict):
 
         from clients.pitch_mix import pitch_label, pitch_color
 
-        with st.expander("📊 Pitch Mix Analysis", expanded=True):
+        with st.expander("📊 Pitch Mix Analysis", expanded=False):
             if _prior_note:
                 st.caption(_prior_note)
 
@@ -4046,6 +4081,13 @@ def tab_jig(data: dict):
         qualified = [x for x in scored if x["passes"]]
         prime     = [x for x in qualified
                      if x["player"].get("best_american") and x["player"].get("ev_pct", 0) > 0]
+
+        # Populate JIG status cache once for all scored players (avoids per-card badge calls)
+        _jig_status_cache.clear()
+        for _jsc_e in scored:
+            _jsc_p = _jsc_e["player"]
+            _jsc_pid = _jsc_p.get("player_id") or _jsc_p.get("player_name", "")
+            _jig_status_cache[_jsc_pid] = _game_status_badge(_jsc_p)
 
         if _cutoff is not None and all_players_raw is not all_players:
             _raw = []
@@ -5242,7 +5284,7 @@ def main():
 
         # Show current bankroll = input + cumulative settled P&L
         try:
-            _br_results = pnl_tracker._load_results()
+            _br_results = _cached_pnl_results()
             _br_pnl = sum(
                 float(r.get("profit_loss", 0) or 0)
                 for r in _br_results
