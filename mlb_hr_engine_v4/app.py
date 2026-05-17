@@ -2070,7 +2070,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                 _render_qualified_table(_display_pool, scale, min_ev, min_edge, _steam_names, "qv_slate")
         if all_by_model:
             with st.expander(f"🌐 Full Universe ({len(all_by_model)} players with odds)", expanded=False):
-                _render_model_df(all_by_model)
+                _render_qualified_table(all_by_model, scale, min_ev, min_edge, _steam_names, "qv_universe")
 
     # ── TAB 2: ELITE PICKS ────────────────────────────────────────────────────
     with tab_elite:
