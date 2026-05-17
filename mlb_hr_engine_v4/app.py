@@ -1461,6 +1461,39 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
     n_batters = data.get("batter_count", 0)
     scale     = _bankroll_scale()
 
+    # ── Portfolio optimizer ───────────────────────────────────────────────────
+    _optimizer_on = st.session_state.get("optimizer_on", False)
+    _optimizer_result = None
+    _optimizer_selected_names: set[str] = set()
+    if _optimizer_on and ranked:
+        try:
+            from portfolio.optimizer import PortfolioOptimizer, CONSTRAINT_PRESETS
+            _preset_key = st.session_state.get("optimizer_preset", "moderate")
+            _opt_constraints = CONSTRAINT_PRESETS.get(_preset_key)
+            _opt = PortfolioOptimizer(constraints=_opt_constraints)
+            _optimizer_result = _opt.optimize(ranked)
+            st.session_state["optimizer_result"] = _optimizer_result
+            _optimizer_selected_names = {
+                r.get("player_name", "") for r in _optimizer_result.get("selected", [])
+            }
+            # Show optimizer banner
+            _on = _optimizer_result["n_selected"]
+            _om = _optimizer_result["n_input"]
+            _osummary = (_opt_constraints.summary() if _opt_constraints
+                         else _optimizer_result.get("summary", ""))
+            st.markdown(
+                f"<div style='background:#0a1a0a; border:1px solid #1a4a1a; border-left:4px solid #4ade80; "
+                f"border-radius:6px; padding:8px 14px; margin-bottom:10px; font-size:12px;'>"
+                f"<b style='color:#4ade80;'>🎯 Portfolio Optimizer Active</b> &nbsp;·&nbsp; "
+                f"<span style='color:#f0f0f0;'>{_on} picks selected</span> "
+                f"<span style='color:#555;'>from {_om} qualified</span> &nbsp;·&nbsp; "
+                f"<span style='color:#888;'>{_osummary}</span>"
+                f"</div>",
+                unsafe_allow_html=True,
+            )
+        except Exception as _oe:
+            st.warning(f"Portfolio optimizer error: {_oe}")
+
     # Build odds quota display
     q_used      = quota.get("used")
     q_remaining = quota.get("remaining")
@@ -1742,8 +1775,13 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
             unsafe_allow_html=True,
         )
 
+    _picks_tab_label = (
+        f"⚡ Picks ({_optimizer_result['n_selected']}/{len(ranked)} opt)"
+        if _optimizer_on and _optimizer_result
+        else f"⚡ Picks ({len(ranked)})"
+    )
     sub1, sub2, sub3, sub4, sub5 = st.tabs([
-        f"⚡ Picks ({len(ranked)})",
+        _picks_tab_label,
         f"📊 All ({len(all_by_model)})",
         f"⭐ Prime ({_n_prime})",
         f"⏰ Prime Time ({_n_prime_timed})",
@@ -1753,10 +1791,11 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
     # ── TAB: Qualified Picks ─────────────────────────────────────────────────
     with sub1:
         roster_confirmed = [p for p in ranked if p.get("lineup_spot") is not None]
+        _slate_n = len(_optimizer_selected_names) if (_optimizer_on and _optimizer_selected_names) else len(ranked)
         _quick_tab, _timeline_tab, _slate_tab, _confirmed_tab, _movement_tab, _odds_cmp_tab, _pitchmix_tab = st.tabs([
             "📱 Quick View",
             "⏰ By Game Time",
-            f"📊 All Picks ({len(ranked)})",
+            f"📊 All Picks ({_slate_n})" + (" 🎯" if _optimizer_on and _optimizer_selected_names else ""),
             f"✅ Confirmed ({len(roster_confirmed)})",
             "📊 Line Movement",
             "📊 Odds",
@@ -1764,7 +1803,11 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
         ])
 
         with _quick_tab:
-            _quick_pool = ranked[:10] if ranked else []
+            # When optimizer is on, show only selected picks in quick view
+            if _optimizer_on and _optimizer_selected_names:
+                _quick_pool = [p for p in ranked if p.get("player_name") in _optimizer_selected_names][:10]
+            else:
+                _quick_pool = ranked[:10] if ranked else []
             if not _quick_pool:
                 st.info(
                     f"No qualified picks (EV ≥ {min_ev:.1f}%, Edge ≥ {min_edge:.1f}%). "
@@ -1773,7 +1816,8 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                 )
             else:
                 _now_et = _dt.datetime.now(_EDT)
-                st.caption("Top picks — tap player name to view details & add to FD Slip.")
+                _qv_caption = "Top optimizer picks — tap to view details & add to FD Slip." if _optimizer_on and _optimizer_selected_names else "Top picks — tap player name to view details & add to FD Slip."
+                st.caption(_qv_caption)
                 for _qi, _qp in enumerate(_quick_pool):
                     _qev      = _qp.get("ev_pct", 0)
                     _qedge    = _qp.get("edge_pct", 0)
@@ -1821,6 +1865,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                     _steam_border = "#f87171" if _qis_live else ("#666600" if _qis_steam else "#1e1e40")
                     _steam_bg     = "#1a0000" if _qis_live else ("#1a1a00" if _qis_steam else "#0d0d20")
                     _steam_badge  = "<span style='background:#444400;color:#FFD700;font-size:10px;padding:1px 6px;border-radius:4px;margin-left:6px;'>📈 STEAM</span>" if _qis_steam else ""
+                    _qopt_badge   = "<span style='background:#0a3a0a;color:#4ade80;font-size:10px;padding:1px 6px;border-radius:4px;margin-left:6px;'>🎯 OPT</span>" if (_optimizer_on and _qp.get("player_name") in _optimizer_selected_names) else ""
                     _qweather     = _weather_badge(_qp)
                     _qphoto       = _player_photo_html(_qp.get("player_id"), size=40)
 
@@ -1843,7 +1888,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                         # row 1: photo + matchup + steam badge + odds link
                         f"<div style='display:flex; justify-content:space-between; align-items:flex-start;'>"
                         f"<div style='display:flex;align-items:center;'>{_qphoto}"
-                        f"<div style='font-size:13px; color:#888;'>{_qteam}{_spot_str} vs {_qpit_lbl}{_qhand_lbl}{_steam_badge}</div></div>"
+                        f"<div style='font-size:13px; color:#888;'>{_qteam}{_spot_str} vs {_qpit_lbl}{_qhand_lbl}{_steam_badge}{_qopt_badge}</div></div>"
                         f"<a href='{_qurl}' target='_blank' style='text-decoration:none;'>"
                         f"<div style='text-align:right;'>"
                         f"<div style='font-size:20px; font-weight:700; color:#FF6666;'>{_fmt_american(_qodds)}</div>"
@@ -2012,7 +2057,12 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                         f"Set Min EV ≤ {best_ev:.1f}% and Min Edge ≤ {best_edge:.1f}% to see the top pick."
                     )
             else:
-                _render_qualified_table(ranked, scale, min_ev, min_edge,
+                _slate_ranked = (
+                    [p for p in ranked if p.get("player_name") in _optimizer_selected_names]
+                    if _optimizer_on and _optimizer_selected_names
+                    else ranked
+                )
+                _render_qualified_table(_slate_ranked, scale, min_ev, min_edge,
                                         steam_names=_steam_names, key_suffix="slate")
 
         with _confirmed_tab:
@@ -5555,6 +5605,44 @@ def main():
 
         st.divider()
 
+        # ── Portfolio Optimizer ───────────────────────────────────────────────
+        st.markdown("#### 🎯 Portfolio Optimizer")
+        _opt_on = st.toggle(
+            "Enable optimizer",
+            value=st.session_state.get("optimizer_on", False),
+            key="optimizer_on",
+            help=(
+                "Filters today's picks to a focused, diversified slate using the portfolio optimizer. "
+                "Caps exposure per team, removes low-quality picks, and prioritizes barrel rate."
+            ),
+        )
+        if _opt_on:
+            _opt_preset = st.selectbox(
+                "Preset",
+                options=["moderate", "conservative", "barrel_focused", "relaxed"],
+                index=["moderate", "conservative", "barrel_focused", "relaxed"].index(
+                    st.session_state.get("optimizer_preset", "moderate")
+                ),
+                format_func=lambda x: {
+                    "moderate":       "Moderate (20 picks, 4/team)",
+                    "conservative":   "Conservative (15 picks, 3/team, barrel≥6%)",
+                    "barrel_focused": "Barrel-Focused (15 picks, 4/team, barrel≥8%)",
+                    "relaxed":        "Relaxed (30 picks, 6/team)",
+                }[x],
+                label_visibility="collapsed",
+                key="optimizer_preset_select",
+            )
+            st.session_state["optimizer_preset"] = _opt_preset
+            _opt_result = st.session_state.get("optimizer_result")
+            if _opt_result:
+                _on = _opt_result.get("n_selected", 0)
+                _om = _opt_result.get("n_input", 0)
+                st.caption(f"✅ {_on}/{_om} picks selected · {_opt_preset}")
+        else:
+            st.session_state.pop("optimizer_preset", None)
+
+        st.divider()
+
         # ── Game time gate ────────────────────────────────────────────────────
         st.markdown("#### ⏰ Game Time Cutoff")
         _time_gate_on = st.toggle(
@@ -5925,6 +6013,17 @@ def main():
                     )
                 except Exception as e:
                     st.error(f"Error: {e}")
+
+        if st.button("📸 Capture Closing Lines (CLV)", width='stretch',
+                     help="Fetch today's current odds and compute Closing Line Value for logged picks. Run ~30 min before first pitch."):
+            with st.spinner("Capturing closing lines…"):
+                try:
+                    _today_str = _dt.date.today().isoformat()
+                    _clv_result = clv_tracker.fetch_and_compute_clv(_today_str)
+                    _clv_n = _clv_result if isinstance(_clv_result, int) else len(_clv_result or [])
+                    st.success(f"CLV captured for {_clv_n} pick(s).")
+                except Exception as e:
+                    st.error(f"CLV capture failed: {e}")
 
         st.divider()
 

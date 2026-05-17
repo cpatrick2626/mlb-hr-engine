@@ -415,7 +415,7 @@ def _build_row(player: dict, today: str, source_tab: str, source_section: str) -
     odds       = player.get("fanduel_american") or player.get("best_american") or ""
     bet        = _f("bet_dollars") or 10.0
     player_name = player.get("player_name", "")
-    sportsbook  = player.get("best_book") or player.get("sportsbook") or ""
+    sportsbook  = player.get("best_book") or player.get("best_bookmaker") or player.get("sportsbook") or ""
 
     # market_prob_pct: prefer explicit key, fall back to market_no_vig_prob
     mkt_raw = player.get("market_prob_pct") or player.get("market_no_vig_prob")
