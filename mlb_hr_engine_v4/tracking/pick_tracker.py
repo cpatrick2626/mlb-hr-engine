@@ -1,8 +1,18 @@
 """
-Unified Pick Tracker
+Unified Pick Tracker  (Session 25 schema: v2)
 
 Logs every pick from every tab/section with full model context.
 Settlement fills in hr_result / profit_loss via pnl._settle_date().
+
+Session 25 additions (backward-compatible — migrate_schema appends to existing CSV):
+  pick_id        — deterministic ID: sha1(date+player+source_tab)[:12]
+  opponent       — opposing team
+  pitcher        — opposing pitcher name
+  sportsbook     — book the odds were sourced from
+  best_odds      — best available American odds at pick time
+  market_prob_pct— no-vig implied probability from market
+  engine_version — e.g. "v4"
+  logged_at      — ISO-8601 UTC timestamp of log write
 
 Performance notes:
 - _load_all() reads the CSV once; callers receive the rows list.
@@ -12,24 +22,46 @@ Performance notes:
 """
 
 import csv
+import hashlib
 import os
 import unicodedata
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 LOG_PATH = Path(__file__).parent / "pick_tracker.csv"
 
+# Session 25 current version tag (bump whenever calibration params change)
+ENGINE_VERSION = "v4"
+
 FIELDS = [
+    # ── Core identity ──────────────────────────────────────────────────────────
     "date", "source_tab", "source_section",
     "player_name", "team", "player_id",
     "american_odds", "bet_dollars",
+    # ── Model output ──────────────────────────────────────────────────────────
     "model_prob_pct", "ev_pct", "edge_pct", "confidence",
+    # ── Context multipliers ────────────────────────────────────────────────────
     "park_factor", "pitcher_factor", "platoon_factor", "weather_factor", "streak_factor",
+    # ── Statcast signals ───────────────────────────────────────────────────────
     "barrel_pct", "exit_velo", "hard_hit_pct", "launch_angle",
     "xslg", "slg", "iso", "pull_pct",
+    # ── Pitcher stats ──────────────────────────────────────────────────────────
     "pitcher_hr9", "pitcher_k_pct",
+    # ── Lineup ────────────────────────────────────────────────────────────────
     "lineup_spot",
+    # ── Session 25 additions (migrate_schema appends to existing CSVs) ────────
+    "pick_id", "opponent", "pitcher",
+    "sportsbook", "best_odds", "market_prob_pct",
+    "engine_version", "logged_at",
+    # ── Settlement (filled by settle_date / pnl._settle_date) ─────────────────
     "hr_result", "profit_loss",
+]
+
+# Fields added in Session 25 — used by _migrate_schema() to extend existing CSVs
+_SESSION25_FIELDS = [
+    "pick_id", "opponent", "pitcher",
+    "sportsbook", "best_odds", "market_prob_pct",
+    "engine_version", "logged_at",
 ]
 
 
@@ -48,21 +80,28 @@ def log_picks_bulk(players: list[dict], source_tab: str, source_section: str = "
     if not players:
         return 0
 
+    _migrate_schema()   # ensure CSV has all Session 25 columns before writing
+
     today     = date.today().isoformat()
     all_rows  = _load_all()
-    # Build O(1) dedup key set
-    existing  = frozenset(
+    # Dedup on pick_id (deterministic) — falls back to (date, tab, section, name)
+    existing_ids   = frozenset(r.get("pick_id", "") for r in all_rows if r.get("pick_id"))
+    existing_keys  = frozenset(
         (r.get("date"), r.get("source_tab"), r.get("source_section"), r.get("player_name"))
         for r in all_rows
     )
 
     new_rows = []
     for player in players:
-        name = player.get("player_name", "")
-        key  = (today, source_tab, source_section, name)
-        if key in existing:
+        name   = player.get("player_name", "")
+        pid    = _gen_pick_id(today, name, source_tab)
+        if pid in existing_ids:
             continue
-        existing = existing | {key}   # update so duplicates within the batch are also caught
+        key = (today, source_tab, source_section, name)
+        if key in existing_keys:
+            continue
+        existing_ids  = existing_ids  | {pid}
+        existing_keys = existing_keys | {key}
         new_rows.append(_build_row(player, today, source_tab, source_section))
 
     if new_rows:
@@ -239,6 +278,42 @@ def expire_stale(days: int = 7) -> int:
 
 # ── Internal ──────────────────────────────────────────────────────────────────
 
+def _gen_pick_id(date_str: str, player_name: str, source_tab: str) -> str:
+    """Deterministic 12-char pick ID: sha1(date+player+source)[:12].
+    Same inputs → same ID, so re-logging the same pick generates the same ID (natural dedup)."""
+    raw = f"{date_str}|{player_name.strip().lower()}|{source_tab.strip().lower()}"
+    return hashlib.sha1(raw.encode()).hexdigest()[:12]
+
+
+def _migrate_schema() -> None:
+    """Add Session 25 columns to an existing CSV without disrupting existing data."""
+    if not LOG_PATH.exists():
+        return
+    with open(LOG_PATH, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        existing_fields = list(reader.fieldnames or [])
+        rows = list(reader)
+    missing = [f for f in _SESSION25_FIELDS if f not in existing_fields]
+    if not missing:
+        return
+    # Append missing columns (preserves existing column order, adds new at end before outcomes)
+    new_fields = existing_fields + missing
+    tmp = LOG_PATH.with_suffix(".tmp")
+    try:
+        with open(tmp, "w", newline="", encoding="utf-8") as f:
+            writer = csv.DictWriter(f, fieldnames=new_fields, extrasaction="ignore")
+            writer.writeheader()
+            for row in rows:
+                writer.writerow(row)
+        os.replace(tmp, LOG_PATH)
+    except Exception:
+        if tmp.exists():
+            try:
+                tmp.unlink()
+            except Exception:
+                pass
+
+
 def _norm(name: str) -> str:
     """Fold accents and lowercase for robust name matching (e.g. 'José' → 'jose')."""
     return unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode("ascii").lower().strip()
@@ -281,39 +356,66 @@ def _build_row(player: dict, today: str, source_tab: str, source_section: str) -
         except (TypeError, ValueError):
             return default
 
-    odds = player.get("fanduel_american") or player.get("best_american") or ""
-    bet  = _f("bet_dollars") or 10.0
+    odds       = player.get("fanduel_american") or player.get("best_american") or ""
+    bet        = _f("bet_dollars") or 10.0
+    player_name = player.get("player_name", "")
+    sportsbook  = player.get("best_book") or player.get("sportsbook") or ""
+
+    # market_prob_pct: prefer explicit key, fall back to market_no_vig_prob
+    mkt_raw = player.get("market_prob_pct") or player.get("market_no_vig_prob")
+    if mkt_raw is not None:
+        try:
+            mkt_p = float(str(mkt_raw).replace("%","").strip())
+            # If value looks like a fraction (0 < x < 1), convert to pct
+            if mkt_p and mkt_p < 1.0:
+                mkt_p = mkt_p * 100
+            market_prob_str = f"{mkt_p:.2f}"
+        except (ValueError, TypeError):
+            market_prob_str = ""
+    else:
+        market_prob_str = ""
+
     return {
-        "date":           today,
-        "source_tab":     source_tab,
-        "source_section": source_section,
-        "player_name":    player.get("player_name", ""),
-        "team":           player.get("team", ""),
-        "player_id":      player.get("player_id", ""),
-        "american_odds":  str(odds),
-        "bet_dollars":    f"{bet:.2f}",
-        "model_prob_pct": f"{_f('model_prob') * 100:.2f}",
-        "ev_pct":         f"{_f('ev_pct'):.2f}",
-        "edge_pct":       f"{_f('edge_pct'):.2f}",
-        "confidence":     f"{_f('confidence'):.1f}",
-        "park_factor":    f"{_f('park_factor', 1.0):.4f}",
-        "pitcher_factor": f"{_f('pitcher_factor', 1.0):.4f}",
-        "platoon_factor": f"{_f('platoon_factor', 1.0):.4f}",
-        "weather_factor": f"{_f('weather_factor', 1.0):.4f}",
-        "streak_factor":  f"{_f('streak_factor', 1.0):.4f}",
-        "barrel_pct":     f"{_f('barrel_pct') or _f('brl_pct'):.2f}",
-        "exit_velo":      f"{_f('exit_velo'):.1f}",
-        "hard_hit_pct":   f"{_f('hard_hit_pct') or _f('hh_pct'):.2f}",
-        "launch_angle":   f"{_f('launch_angle') or _f('la'):.1f}",
-        "xslg":           f"{_f('xslg') or _f('x_slg'):.4f}",
-        "slg":            f"{_f('slg'):.4f}",
-        "iso":            f"{_f('iso'):.4f}",
-        "pull_pct":       f"{_f('pull_pct'):.2f}",
-        "pitcher_hr9":    f"{_f('pitcher_hr9'):.3f}",
-        "pitcher_k_pct":  f"{_f('pitcher_k_pct'):.4f}",
-        "lineup_spot":    str(player.get("lineup_spot", "")),
-        "hr_result":      "",
-        "profit_loss":    "",
+        "date":            today,
+        "source_tab":      source_tab,
+        "source_section":  source_section,
+        "player_name":     player_name,
+        "team":            player.get("team", ""),
+        "player_id":       player.get("player_id", ""),
+        "american_odds":   str(odds),
+        "bet_dollars":     f"{bet:.2f}",
+        "model_prob_pct":  f"{_f('model_prob') * 100:.2f}",
+        "ev_pct":          f"{_f('ev_pct'):.2f}",
+        "edge_pct":        f"{_f('edge_pct'):.2f}",
+        "confidence":      f"{_f('confidence'):.1f}",
+        "park_factor":     f"{_f('park_factor', 1.0):.4f}",
+        "pitcher_factor":  f"{_f('pitcher_factor', 1.0):.4f}",
+        "platoon_factor":  f"{_f('platoon_factor', 1.0):.4f}",
+        "weather_factor":  f"{_f('weather_factor', 1.0):.4f}",
+        "streak_factor":   f"{_f('streak_factor', 1.0):.4f}",
+        "barrel_pct":      f"{_f('barrel_pct') or _f('brl_pct'):.2f}",
+        "exit_velo":       f"{_f('exit_velo'):.1f}",
+        "hard_hit_pct":    f"{_f('hard_hit_pct') or _f('hh_pct'):.2f}",
+        "launch_angle":    f"{_f('launch_angle') or _f('la'):.1f}",
+        "xslg":            f"{_f('xslg') or _f('x_slg'):.4f}",
+        "slg":             f"{_f('slg'):.4f}",
+        "iso":             f"{_f('iso'):.4f}",
+        "pull_pct":        f"{_f('pull_pct'):.2f}",
+        "pitcher_hr9":     f"{_f('pitcher_hr9'):.3f}",
+        "pitcher_k_pct":   f"{_f('pitcher_k_pct'):.4f}",
+        "lineup_spot":     str(player.get("lineup_spot", "")),
+        # Session 25 fields
+        "pick_id":         _gen_pick_id(today, player_name, source_tab),
+        "opponent":        player.get("opponent", ""),
+        "pitcher":         player.get("pitcher_name", "") or player.get("pitcher", ""),
+        "sportsbook":      sportsbook,
+        "best_odds":       str(odds),
+        "market_prob_pct": market_prob_str,
+        "engine_version":  ENGINE_VERSION,
+        "logged_at":       datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+        # Settlement
+        "hr_result":       "",
+        "profit_loss":     "",
     }
 
 

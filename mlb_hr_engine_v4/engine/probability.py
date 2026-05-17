@@ -21,6 +21,7 @@ def base_hr_rate(
     recent_stats: dict,
     statcast_mult: float = 1.0,
     recent_weight: float | None = None,
+    barrel_rate: float = 0.0,
 ) -> float:
     season_pa = int(season_stats.get("plateAppearances", 0))
     season_hr = int(season_stats.get("homeRuns", 0))
@@ -34,7 +35,19 @@ def base_hr_rate(
     # Floor lowered 0.40→0.30: a player with statcast_mult=0.25 was anchored to 40% of
     # league avg (over-prediction); 0.30 floor is more faithful to the signal. The zero-HR
     # suppressor (lines ~75-89) provides additional discounting on top of this anchor.
-    reg_target_adj = max(0.30, min(1.0, statcast_mult))
+    #
+    # Elite regression target ceiling (Session 23): for confirmed high-barrel hitters
+    # (barrel_rate >= ELITE_REG_TARGET_BARREL_THRESHOLD), the ceiling is raised above 1.0
+    # so the Bayesian anchor reflects their elevated power level rather than pulling them
+    # toward league average. Analysis: V1a variant improved Brier by 0.00027 with zero
+    # change to barrel<8% batters. Rollback: ELITE_REG_TARGET_ENABLED=False in config.py.
+    if (getattr(config, "ELITE_REG_TARGET_ENABLED", False)
+            and statcast_mult > 1.0
+            and barrel_rate >= getattr(config, "ELITE_REG_TARGET_BARREL_THRESHOLD", 0.08)):
+        ceiling = getattr(config, "ELITE_REG_TARGET_CEILING", 1.5)
+        reg_target_adj = max(0.30, min(ceiling, statcast_mult))
+    else:
+        reg_target_adj = max(0.30, min(1.0, statcast_mult))
     regression_target = config.LEAGUE_AVG_HR_PA * reg_target_adj
 
     # Adaptive regression: reduce prior weight as sample grows, floored at 50% of

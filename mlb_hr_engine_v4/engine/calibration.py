@@ -104,12 +104,17 @@ def crossover_prob(a: float, b: float) -> float:
     return sigmoid(b / (1.0 - a))
 
 
-def apply_calibration(p: float) -> float:
+def apply_calibration(p: float, barrel_rate: float = 0.0) -> float:
     """
     Apply the configured calibration transform to a raw model probability.
 
     Returns p unchanged when calibration is disabled (default).
     Output is clamped to (0.001, MAX_GAME_HR_PROB].
+
+    barrel_rate: batter's Statcast barrel% (brl_pa fraction, e.g. 0.12 = 12%).
+      Used only when ELITE_PLATT_ENABLED=True — elite barrel hitters receive a
+      lighter Platt transform (higher crossover) to reduce compression of their
+      already-underestimated pre-calibration probabilities.
 
     Integration points:
       pipeline.py — applied after apply_prob_scale()
@@ -120,8 +125,19 @@ def apply_calibration(p: float) -> float:
     method = getattr(config, "CALIBRATION_METHOD", "none")
 
     if method == "platt":
-        a      = getattr(config, "CALIBRATION_PLATT_A", 1.0)
-        b      = getattr(config, "CALIBRATION_PLATT_B", 0.0)
+        # Elite tier Platt (Session 23): confirmed high-barrel hitters receive lighter
+        # calibration so the Platt transform does not compound the pre-calibration
+        # under-prediction from regression compression. Standard crossover=10.9% compresses
+        # everything above; elite Platt crossover=22.3% is near-identity up to 29%.
+        # Analysis: V4a variant improved Brier 0.00024; top-50 accuracy 26%→30%;
+        # new 25-30% picks created (actual HR rate 29.9%). Rollback: ELITE_PLATT_ENABLED=False.
+        if (getattr(config, "ELITE_PLATT_ENABLED", False)
+                and barrel_rate >= getattr(config, "ELITE_PLATT_BARREL_THRESHOLD", 0.10)):
+            a = getattr(config, "ELITE_PLATT_A", 0.92)
+            b = getattr(config, "ELITE_PLATT_B", -0.10)
+        else:
+            a = getattr(config, "CALIBRATION_PLATT_A", 1.0)
+            b = getattr(config, "CALIBRATION_PLATT_B", 0.0)
         result = platt_scale(p, a, b)
     elif method == "isotonic":
         bp     = getattr(config, "CALIBRATION_ISOTONIC_BREAKPOINTS", [])

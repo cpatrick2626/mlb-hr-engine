@@ -75,9 +75,11 @@ def _score_player(r: dict, date_str: str, batter_data: dict, pitcher_data: dict)
     sc_pa      = sc_stats.get("pa", 0)
     sc_source  = sc_stats.get("statcast_source", "current" if sc_stats else "none")
 
-    power_mult = statcast_client.batter_power_multiplier(pid, batter_data)
-    raw_rate   = prob.base_hr_rate(season_stats, recent_stats, statcast_mult=power_mult)
-    hr_rate    = prob.statcast_blended_rate(
+    power_mult  = statcast_client.batter_power_multiplier(pid, batter_data)
+    sc_barrel   = float(sc_stats.get("barrel_rate") or 0.0)
+    raw_rate    = prob.base_hr_rate(season_stats, recent_stats, statcast_mult=power_mult,
+                                    barrel_rate=sc_barrel)
+    hr_rate     = prob.statcast_blended_rate(
         raw_rate, power_mult, season_pa,
         statcast_pa=sc_pa, statcast_source=sc_source,
     )

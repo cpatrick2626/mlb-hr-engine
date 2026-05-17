@@ -60,8 +60,10 @@ def _build_player_profile(
     # Default to "current" only when the player IS in batter_data (tier-1 rows have no key set);
     # players absent entirely get "none" so confidence_score awards no Statcast bonus.
     sc_source  = sc_stats.get("statcast_source", "current" if sc_stats else "none")
+    sc_barrel  = float(sc_stats.get("barrel_rate") or 0.0)
     raw_rate   = prob.base_hr_rate(season_stats, recent_stats, statcast_mult=power_mult,
-                                    recent_weight=_aw.get("recent_weight"))
+                                    recent_weight=_aw.get("recent_weight"),
+                                    barrel_rate=sc_barrel)
     hr_rate    = prob.statcast_blended_rate(
         raw_rate, power_mult, season_pa,
         statcast_pa=sc_pa, statcast_source=sc_source,
@@ -155,7 +157,8 @@ def _build_player_profile(
     # Apply adaptive calibration scale (moves model_prob toward observed hit rate)
     model_prob = round(_aw.apply_prob_scale(model_prob), 4)
     # Apply post-model probability calibration (monotone → ranking preserved)
-    model_prob = round(_cal.apply_calibration(model_prob), 4)
+    # barrel_rate passed for elite tier Platt (ELITE_PLATT_ENABLED in config.py)
+    model_prob = round(_cal.apply_calibration(model_prob, barrel_rate=sc_barrel), 4)
 
     return {
         "player_id": player_id, "player_name": player_name,

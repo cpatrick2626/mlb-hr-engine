@@ -182,3 +182,37 @@ CALIBRATION_ISOTONIC_VALUES:      list = []  # calibrated prob at each breakpoin
 # Rollback: set CONTEXT_MODERATION_ENABLED=False
 CONTEXT_MODERATION_ENABLED:       bool  = True   # activated — validated 2026-05-16
 CONTEXT_MODERATION_LOW_POWER_CAP: float = 1.25   # combined cap for power_mult < 1.0
+
+# ── Elite Regression Target (engine/probability.py) ───────────────────────────
+# Raises the Bayesian regression target ceiling for confirmed high-barrel hitters.
+# Current behaviour: reg_target_adj = max(0.30, min(1.0, statcast_mult))
+#   → regression always anchors at league avg (0.030) for all power_mult>=1.0 batters.
+# New behaviour: ceiling raised to ELITE_REG_TARGET_CEILING for barrel>=THRESHOLD.
+#   → elite hitters (barrel>=8%) get a higher anchor, reducing compression.
+#
+# Analysis (analyze_adaptive_regression.py, 2026-05-16, Session 23):
+#   V1a variant: Brier -0.00027 vs baseline; elite barrel 12-15% bias -10.97→-9.00pp
+#   Average batters (barrel<8%) are completely unaffected (correction=1.0 for all).
+#   Spearman rank stability vs baseline: 0.9970 (GOOD).
+#   Ceiling=1.5: regression target for PM=1.75 rises from 0.030 to 0.045 (+50%).
+#   Rollback: set ELITE_REG_TARGET_ENABLED=False.
+ELITE_REG_TARGET_ENABLED:           bool  = True   # activated — validated 2026-05-16
+ELITE_REG_TARGET_CEILING:           float = 1.5    # max(0.30, min(ceiling, power_mult))
+ELITE_REG_TARGET_BARREL_THRESHOLD:  float = 0.08   # barrel_rate >= this to apply ceiling
+
+# ── Elite Tier Platt Calibration (engine/calibration.py) ─────────────────────
+# Applies lighter Platt compression to confirmed elite barrel hitters.
+# Standard Platt crossover=10.9%: compresses everything above, including 20-29%.
+# Elite Platt (A=0.92, B=-0.10): crossover=22.3% — near-identity up to 29%.
+#
+# Analysis (analyze_adaptive_regression.py, 2026-05-16, Session 23):
+#   V4a variant: Brier -0.00024 vs baseline; 20-25% bucket: +0.5pp (nearly perfect).
+#   New 25-30% picks created: 177 picks, actual HR rate = 29.9% — genuine value.
+#   Top-50 pick accuracy: 30% vs 26% baseline.
+#   Spearman rank stability: 0.9991 (GOOD).
+#   Average batters (barrel<10%) see standard Platt — completely unchanged.
+#   Rollback: set ELITE_PLATT_ENABLED=False.
+ELITE_PLATT_ENABLED:              bool  = True    # activated — validated 2026-05-16
+ELITE_PLATT_A:                    float = 0.92    # slope for elite barrel hitters
+ELITE_PLATT_B:                    float = -0.10   # intercept for elite barrel hitters
+ELITE_PLATT_BARREL_THRESHOLD:     float = 0.10    # barrel_rate >= this to use elite params

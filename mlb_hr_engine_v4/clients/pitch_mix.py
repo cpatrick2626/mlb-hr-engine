@@ -168,6 +168,14 @@ def _fetch_pitcher_savant(pitcher_id: int) -> dict:
     Falls back to the prior season when the current season has < _MIN_PITCHER_PA rows
     (handles IL stints, early-season returns, openers with few starts).
     Returns 'data_year' so the UI can label prior-year data.
+
+    Data integrity:
+      - hfGT=R| restricts to regular-season games only (prevents Spring Training /
+        postseason contamination — primary source of inflated HR counts).
+      - (game_pk, at_bat_number) deduplication guards against suspended/replayed
+        games that can appear as duplicate rows in Savant exports.
+      - game_year validation skips any row whose year does not match the queried
+        season (defensive layer for Savant pagination edge cases).
     """
     if pitcher_id in _PITCHER_SAVANT_CACHE:
         return _PITCHER_SAVANT_CACHE[pitcher_id]
@@ -189,6 +197,9 @@ def _fetch_pitcher_savant(pitcher_id: int) -> dict:
                     "season":            season,
                     "type":              "details",
                     "hfAB":              _HF_AB,
+                    # Restrict to regular season: excludes Spring Training (S/E) and
+                    # postseason (F/D/L/W) which Savant includes without this filter.
+                    "hfGT":              "R|",
                 },
                 timeout=20,
             )
@@ -198,6 +209,7 @@ def _fetch_pitcher_savant(pitcher_id: int) -> dict:
             pitch_totals:         dict[str, dict] = {}           # overall (all batters)
             pitch_totals_by_stand: dict[str, dict] = {"R": {}, "L": {}}  # vs RHB / vs LHB
             total_rows = 0
+            seen_pa: set = set()  # (game_pk, at_bat_number) — dedup guard
 
             for row in csv.DictReader(io.StringIO(resp.text.lstrip("﻿"))):
                 pt    = (row.get("pitch_type") or "").strip().upper()
@@ -205,6 +217,25 @@ def _fetch_pitcher_savant(pitcher_id: int) -> dict:
                 stand = (row.get("stand") or "").strip().upper()
                 if not ev or not pt:
                     continue
+
+                # game_year validation: skip rows contaminated from the wrong season.
+                # game_year is populated by Savant; fall back to game_date year when absent.
+                raw_year = row.get("game_year") or (row.get("game_date") or "")[:4]
+                try:
+                    row_season = int(raw_year) if raw_year else season
+                except (ValueError, TypeError):
+                    row_season = season
+                if row_season != season:
+                    continue
+
+                # Deduplication: each plate appearance must be counted only once.
+                # Suspended games resumed on a later date can produce duplicate rows.
+                pa_key = (row.get("game_pk", ""), row.get("at_bat_number", ""))
+                if pa_key[0] and pa_key[1]:
+                    if pa_key in seen_pa:
+                        continue
+                    seen_pa.add(pa_key)
+
                 total_rows += 1
 
                 if stand in ("L", "R"):

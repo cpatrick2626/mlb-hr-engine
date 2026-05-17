@@ -1,0 +1,516 @@
+Loaded 10,777 rows (0 skipped)  |  source: fb_pct_raw_data.csv
+Overall actual HR rate: 10.49%  |  period: 2026-04-01 – 2026-05-15
+Current-SC rows (used for barrel-tier tables): 9,485 of 10,777
+
+========================================================================
+SECTION 1 — REGRESSION AUDIT: COMPRESSION TRACE PER PLAYER ARCHETYPE
+========================================================================
+
+Notation:
+  L1 = Bayesian regression (base_hr_rate): anchors elite batters at league avg
+  L2 = Statcast blending (statcast_blended_rate): upside damped to 0.42x
+  L3 = Platt calibration: compresses above 10.9% crossover
+
+Constants: REGRESSION_PA=200, floor=0.50, decay PA=700, DAMP=0.42
+           Platt A=0.7805, B=-0.4611, crossover=10.9%
+
+  League-avg   (barrel=5.5%, PM=1.00)
+    True HR/PA (approx):        3.00%
+    [L1] Regressed base rate:   3.00%  (-0.0pp compression vs true)
+    [L2] Statcast blended rate: 3.00%  (+0.0% lift from SC)
+    [L3] Raw game prob:         12.1%  →  Platt calibrated: 11.8%  (-0.3pp)
+
+  Above-avg    (barrel=8%,   PM=1.20)
+    True HR/PA (approx):        3.60%
+    [L1] Regressed base rate:   3.43%  (+4.6pp compression vs true)
+    [L2] Statcast blended rate: 3.49%  (+1.5% lift from SC)
+    [L3] Raw game prob:         13.9%  →  Platt calibrated: 13.2%  (-0.7pp)
+
+  Power-tier   (barrel=10%,  PM=1.45)
+    True HR/PA (approx):        4.35%
+    [L1] Regressed base rate:   3.98%  (+8.6pp compression vs true)
+    [L2] Statcast blended rate: 4.11%  (+3.4% lift from SC)
+    [L3] Raw game prob:         16.2%  →  Platt calibrated: 14.9%  (-1.3pp)
+
+  Elite-tier   (barrel=12%,  PM=1.75)
+    True HR/PA (approx):        5.25%
+    [L1] Regressed base rate:   4.63%  (+11.8pp compression vs true)
+    [L2] Statcast blended rate: 4.89%  (+5.7% lift from SC)
+    [L3] Raw game prob:         19.0%  →  Platt calibrated: 16.9%  (-2.1pp)
+
+  Super-elite  (barrel=15%,  PM=2.10)
+    True HR/PA (approx):        6.30%
+    [L1] Regressed base rate:   5.39%  (+14.4pp compression vs true)
+    [L2] Statcast blended rate: 5.84%  (+8.3% lift from SC)
+    [L3] Raw game prob:         22.2%  →  Platt calibrated: 19.2%  (-3.1pp)
+
+  Elite low PA (barrel=12%,  PM=1.75)
+    True HR/PA (approx):        5.25%
+    [L1] Regressed base rate:   3.83%  (+27.1pp compression vs true)
+    [L2] Statcast blended rate: 4.61%  (+20.5% lift from SC)
+    [L3] Raw game prob:         18.0%  →  Platt calibrated: 16.2%  (-1.8pp)
+
+  Elite high PA(barrel=12%,  PM=1.75)
+    True HR/PA (approx):        5.25%
+    [L1] Regressed base rate:   4.88%  (+7.1pp compression vs true)
+    [L2] Statcast blended rate: 5.15%  (+5.7% lift from SC)
+    [L3] Raw game prob:         19.9%  →  Platt calibrated: 17.5%  (-2.4pp)
+
+KEY FINDING:
+  For barrel>=12% hitters (PM~1.75) at 300 PA:
+  - L1 pulls rate from ~5.25% (true) down to ~4.8% (regression anchor)
+  - L2 partially compensates: blended ~4.9-5.0% (+0.42x damp vs full PM)
+  - L3 compresses: raw game_prob ~20% -> Platt calibrated ~17-18%
+  TOTAL COMPRESSION: true ~29% actual HR rate vs model ~20% = -9pp gap
+
+  For super-elite barrel>=15% (PM~2.10) at 300 PA:
+  - L1 targets 0.030 (never raises target above league avg for any PM>1.0)
+  - L2 damp factor of 0.42 means PM=2.10 only contributes 1+1.10*0.42=1.46x
+    vs uncapped it would be 2.10x — a 36% suppression of the power signal
+  - L3 at 22%+ raw: loses 3-5pp post-calibration
+
+========================================================================
+SECTION 2 — ELITE ARCHETYPE ANALYSIS (current-SC rows only, n=9,485)
+========================================================================
+
+  Barrel tier                N  Avg PM  Avg PA  Model%  Actual%     Bias
+  --------------------------------------------------------------------
+  <6%  contact           5,697   0.901     124    8.76%    7.57%    +1.19pp
+  6-8%  below-avg        1,760   1.070     128   11.79%   11.76%    +0.03pp
+  8-10% above-avg        1,031   1.188     130   13.36%   16.39%    -3.03pp
+  10-12% power             677   1.308     132   15.89%   20.97%    -5.09pp
+  12-15% elite             320   1.408     132   17.46%   28.44%   -10.97pp
+
+  Elite barrel (>=12%) sub-analysis by sample PA:
+    <100 PA     : n= 153 | model=15.61% | actual=25.49% | bias=-9.88pp
+    100-200     : n= 141 | model=19.72% | actual=33.33% | bias=-13.62pp
+    200-300     : n=   5 | model=14.24% | actual=0.00% | bias=+14.24pp
+    300+ PA     : n=  21 | model=16.62% | actual=23.81% | bias=-7.19pp
+
+========================================================================
+SECTION 3 — VARIANT TESTING: OVERALL METRICS (full dataset, n=10,777)
+========================================================================
+
+  Variant                     Brier   dBrier      MAE     dMAE   Spearman
+  ------------------------------------------------------------------------
+  V0_Baseline              0.09194 +0.00000 0.18351 +0.00000           
+  V1a_RT_150_08            0.09167 -0.00027 0.18500 +0.00149     0.9970
+  V1b_RT_150_10            0.09172 -0.00022 0.18436 +0.00084     0.9980
+  V1c_RT_200_10            0.09172 -0.00022 0.18436 +0.00084     0.9980
+  V2_RegPA_65pct           0.09189 -0.00005 0.18365 +0.00013     0.9999
+  V3a_Damp065              0.09187 -0.00007 0.18372 +0.00020     0.9999
+  V3b_Damp080              0.09183 -0.00010 0.18384 +0.00033     0.9997
+  V4a_TierPlatt_92         0.09170 -0.00024 0.18454 +0.00102     0.9991
+  V4b_TierPlatt_96         0.09171 -0.00022 0.18446 +0.00094     0.9994
+  V5_RT150+TP92            0.09148 -0.00046 0.18627 +0.00276     0.9945
+  V6_RT200+TP92            0.09152 -0.00041 0.18563 +0.00211     0.9953
+
+  Note: Brier/MAE improvement is measured vs V0_Baseline.
+  Spearman column: rank correlation of variant probs vs baseline probs.
+
+========================================================================
+SECTION 4 — CALIBRATION BUCKET COMPARISON (full dataset)
+========================================================================
+
+  Bucket 0-5%:
+  Variant                      N   Avg_p  Actual     Bias     ROI
+  --------------------------------------------------------------
+  V0_Baseline                886    4.0%    4.1%    -0.1pp  -39.1%
+  V1a_RT_150_08              884    4.0%    4.1%    -0.1pp  -38.9%
+  V1b_RT_150_10              886    4.0%    4.1%    -0.1pp  -39.1%
+  V1c_RT_200_10              886    4.0%    4.1%    -0.1pp  -39.1%
+  V2_RegPA_65pct             886    4.0%    4.1%    -0.1pp  -39.1%
+  V3a_Damp065                886    4.0%    4.1%    -0.1pp  -39.1%
+  V3b_Damp080                886    4.0%    4.1%    -0.1pp  -39.1%
+  V4a_TierPlatt_92           886    4.0%    4.1%    -0.1pp  -39.1%
+  V4b_TierPlatt_96           887    4.0%    4.2%    -0.2pp  -37.4%
+  V5_RT150+TP92              884    4.0%    4.1%    -0.1pp  -38.9%
+  V6_RT200+TP92              886    4.0%    4.1%    -0.1pp  -39.1%
+
+  Bucket 5-10%:
+  Variant                      N   Avg_p  Actual     Bias     ROI
+  --------------------------------------------------------------
+  V0_Baseline              4,729    7.7%    8.1%    -0.4pp  -27.1%
+  V1a_RT_150_08            4,628    7.7%    7.9%    -0.3pp  -28.6%
+  V1b_RT_150_10            4,687    7.7%    8.0%    -0.3pp  -28.0%
+  V1c_RT_200_10            4,687    7.7%    8.0%    -0.3pp  -28.0%
+  V2_RegPA_65pct           4,719    7.7%    8.1%    -0.4pp  -27.1%
+  V3a_Damp065              4,714    7.7%    8.0%    -0.4pp  -27.6%
+  V3b_Damp080              4,706    7.7%    8.0%    -0.3pp  -28.1%
+  V4a_TierPlatt_92         4,704    7.7%    8.0%    -0.4pp  -27.7%
+  V4b_TierPlatt_96         4,721    7.7%    8.0%    -0.4pp  -27.6%
+  V5_RT150+TP92            4,617    7.7%    7.9%    -0.2pp  -28.8%
+  V6_RT200+TP92            4,676    7.7%    8.0%    -0.3pp  -28.2%
+
+  Bucket 10-15%:
+  Variant                      N   Avg_p  Actual     Bias     ROI
+  --------------------------------------------------------------
+  V0_Baseline              3,504   12.1%   11.4%    +0.7pp  -31.3%
+  V1a_RT_150_08            3,389   12.1%   11.2%    +1.0pp  -32.9%
+  V1b_RT_150_10            3,426   12.1%   11.2%    +0.9pp  -32.6%
+  V1c_RT_200_10            3,426   12.1%   11.2%    +0.9pp  -32.6%
+  V2_RegPA_65pct           3,491   12.1%   11.4%    +0.7pp  -31.4%
+  V3a_Damp065              3,486   12.1%   11.4%    +0.7pp  -31.3%
+  V3b_Damp080              3,480   12.1%   11.5%    +0.6pp  -30.9%
+  V4a_TierPlatt_92         3,429   12.1%   11.3%    +0.8pp  -31.9%
+  V4b_TierPlatt_96         3,431   12.1%   11.5%    +0.7pp  -31.3%
+  V5_RT150+TP92            3,316   12.1%   11.0%    +1.1pp  -34.1%
+  V6_RT200+TP92            3,353   12.1%   11.0%    +1.1pp  -33.8%
+
+  Bucket 15-20%:
+  Variant                      N   Avg_p  Actual     Bias     ROI
+  --------------------------------------------------------------
+  V0_Baseline              1,273   16.9%   17.0%    -0.1pp  -19.0%
+  V1a_RT_150_08            1,278   17.0%   15.8%    +1.2pp  -24.9%
+  V1b_RT_150_10            1,231   16.9%   16.1%    +0.9pp  -23.6%
+  V1c_RT_200_10            1,231   16.9%   16.1%    +0.9pp  -23.6%
+  V2_RegPA_65pct           1,265   16.9%   16.8%    +0.2pp  -20.4%
+  V3a_Damp065              1,263   16.9%   16.7%    +0.2pp  -20.6%
+  V3b_Damp080              1,253   16.9%   16.5%    +0.4pp  -21.5%
+  V4a_TierPlatt_92         1,212   17.0%   16.1%    +0.9pp  -23.6%
+  V4b_TierPlatt_96         1,197   17.0%   15.8%    +1.2pp  -25.0%
+  V5_RT150+TP92            1,213   17.0%   15.3%    +1.7pp  -27.2%
+  V6_RT200+TP92            1,166   16.9%   15.6%    +1.3pp  -25.9%
+
+  Bucket 20-25%:
+  Variant                      N   Avg_p  Actual     Bias     ROI
+  --------------------------------------------------------------
+  V0_Baseline                385   22.1%   24.4%    -2.4pp   -2.3%
+  V1a_RT_150_08              598   22.5%   24.6%    -2.1pp   -1.7%
+  V1b_RT_150_10              547   22.5%   25.0%    -2.6pp   +0.2%
+  V1c_RT_200_10              547   22.5%   25.0%    -2.6pp   +0.2%
+  V2_RegPA_65pct             416   22.1%   24.5%    -2.4pp   -1.9%
+  V3a_Damp065                428   22.2%   24.8%    -2.6pp   -0.9%
+  V3b_Damp080                452   22.2%   24.6%    -2.3pp   -1.8%
+  V4a_TierPlatt_92           369   22.2%   21.7%    +0.5pp  -13.3%
+  V4b_TierPlatt_96           357   22.1%   21.6%    +0.6pp  -13.7%
+  V5_RT150+TP92              415   22.2%   20.0%    +2.2pp  -20.0%
+  V6_RT200+TP92              364   22.2%   20.1%    +2.1pp  -19.8%
+
+  Bucket 25-30%:
+  Variant                      N   Avg_p  Actual     Bias     ROI
+  --------------------------------------------------------------
+  V0_Baseline                  —
+  V1a_RT_150_08                —
+  V1b_RT_150_10                —
+  V1c_RT_200_10                —
+  V2_RegPA_65pct               —
+  V3a_Damp065                  —
+  V3b_Damp080                  —
+  V4a_TierPlatt_92           177   27.3%   29.9%    -2.6pp   +1.8%
+  V4b_TierPlatt_96           184   27.4%   29.9%    -2.5pp   +1.6%
+  V5_RT150+TP92              332   27.7%   29.2%    -1.6pp   -0.7%
+  V6_RT200+TP92              332   27.7%   29.2%    -1.6pp   -0.7%
+
+  Bucket 30%+:
+  Variant                      N   Avg_p  Actual     Bias     ROI
+  --------------------------------------------------------------
+  V0_Baseline                  —
+  V1a_RT_150_08                —
+  V1b_RT_150_10                —
+  V1c_RT_200_10                —
+  V2_RegPA_65pct               —
+  V3a_Damp065                  —
+  V3b_Damp080                  —
+  V4a_TierPlatt_92             —
+  V4b_TierPlatt_96             —
+  V5_RT150+TP92                —
+  V6_RT200+TP92                —
+
+========================================================================
+SECTION 5 — ELITE BARREL TIER CALIBRATION BY VARIANT (current-SC, n=9,485)
+========================================================================
+
+  Focus: barrel>=10%, barrel>=12%, barrel>=15%
+
+  Barrel 8-10%  (n=1,031, actual=16.39%)
+    V0_Baseline              avg=13.36% bias= -3.03pp  picks@15%: 355
+    V1a_RT_150_08            avg=14.36% bias= -2.03pp  picks@15%: 450
+    V1b_RT_150_10            avg=13.36% bias= -3.03pp  picks@15%: 355
+    V1c_RT_200_10            avg=13.36% bias= -3.03pp  picks@15%: 355
+    V2_RegPA_65pct           avg=13.36% bias= -3.03pp  picks@15%: 355
+    V3a_Damp065              avg=13.36% bias= -3.03pp  picks@15%: 355
+    V3b_Damp080              avg=13.36% bias= -3.03pp  picks@15%: 355
+    V4a_TierPlatt_92         avg=13.36% bias= -3.03pp  picks@15%: 355
+    V4b_TierPlatt_96         avg=13.36% bias= -3.03pp  picks@15%: 355
+    V5_RT150+TP92            avg=14.36% bias= -2.03pp  picks@15%: 450
+    V6_RT200+TP92            avg=13.36% bias= -3.03pp  picks@15%: 355
+
+  Barrel 10-12%  (n=677, actual=20.97%)
+    V0_Baseline              avg=15.89% bias= -5.09pp  picks@15%: 381
+    V1a_RT_150_08            avg=17.50% bias= -3.48pp  picks@15%: 458
+    V1b_RT_150_10            avg=17.50% bias= -3.48pp  picks@15%: 458
+    V1c_RT_200_10            avg=17.50% bias= -3.48pp  picks@15%: 458
+    V2_RegPA_65pct           avg=16.15% bias= -4.82pp  picks@15%: 396
+    V3a_Damp065              avg=16.29% bias= -4.69pp  picks@15%: 403
+    V3b_Damp080              avg=16.54% bias= -4.44pp  picks@15%: 414
+    V4a_TierPlatt_92         avg=18.01% bias= -2.97pp  picks@15%: 447
+    V4b_TierPlatt_96         avg=17.87% bias= -3.10pp  picks@15%: 434
+    V5_RT150+TP92            avg=20.10% bias= -0.88pp  picks@15%: 513
+    V6_RT200+TP92            avg=20.10% bias= -0.88pp  picks@15%: 513
+
+  Barrel 12-15%  (n=320, actual=28.44%)
+    V0_Baseline              avg=17.46% bias=-10.97pp  picks@15%: 220
+    V1a_RT_150_08            avg=19.43% bias= -9.00pp  picks@15%: 259
+    V1b_RT_150_10            avg=19.43% bias= -9.00pp  picks@15%: 259
+    V1c_RT_200_10            avg=19.43% bias= -9.00pp  picks@15%: 259
+    V2_RegPA_65pct           avg=17.80% bias=-10.64pp  picks@15%: 227
+    V3a_Damp065              avg=17.97% bias=-10.47pp  picks@15%: 230
+    V3b_Damp080              avg=18.28% bias=-10.15pp  picks@15%: 233
+    V4a_TierPlatt_92         avg=20.05% bias= -8.39pp  picks@15%: 249
+    V4b_TierPlatt_96         avg=19.99% bias= -8.45pp  picks@15%: 242
+    V5_RT150+TP92            avg=22.62% bias= -5.82pp  picks@15%: 283
+    V6_RT200+TP92            avg=22.62% bias= -5.82pp  picks@15%: 283
+
+  Barrel 12%+ (all elite)  (n=320, actual=28.44%)
+    V0_Baseline              avg=17.46% bias=-10.97pp  picks@15%: 220
+    V1a_RT_150_08            avg=19.43% bias= -9.00pp  picks@15%: 259
+    V1b_RT_150_10            avg=19.43% bias= -9.00pp  picks@15%: 259
+    V1c_RT_200_10            avg=19.43% bias= -9.00pp  picks@15%: 259
+    V2_RegPA_65pct           avg=17.80% bias=-10.64pp  picks@15%: 227
+    V3a_Damp065              avg=17.97% bias=-10.47pp  picks@15%: 230
+    V3b_Damp080              avg=18.28% bias=-10.15pp  picks@15%: 233
+    V4a_TierPlatt_92         avg=20.05% bias= -8.39pp  picks@15%: 249
+    V4b_TierPlatt_96         avg=19.99% bias= -8.45pp  picks@15%: 242
+    V5_RT150+TP92            avg=22.62% bias= -5.82pp  picks@15%: 283
+    V6_RT200+TP92            avg=22.62% bias= -5.82pp  picks@15%: 283
+
+========================================================================
+SECTION 6 — RANKING STABILITY (Spearman vs baseline on full dataset)
+========================================================================
+
+  Variant                    Spearman  Notes
+  -------------------------------------------------------
+  V1a_RT_150_08                0.9970  [GOOD]
+  V1b_RT_150_10                0.9980  [GOOD]
+  V1c_RT_200_10                0.9980  [GOOD]
+  V2_RegPA_65pct               0.9999  [GOOD]
+  V3a_Damp065                  0.9999  [GOOD]
+  V3b_Damp080                  0.9997  [GOOD]
+  V4a_TierPlatt_92             0.9991  [GOOD]
+  V4b_TierPlatt_96             0.9994  [GOOD]
+  V5_RT150+TP92                0.9945  [FAIR]
+  V6_RT200+TP92                0.9953  [GOOD]
+
+  Reference: Session 21 calibration Spearman=0.999999 (zero pick changes)
+             Session 22 V5_Cap Spearman=0.9957 (negligible practical shift)
+
+========================================================================
+SECTION 7 — FALSE POSITIVE AND ROI ANALYSIS (picks at >=15% threshold)
+========================================================================
+
+  Variant                  N_picks  FP_rate  HR_rate  ROI@375
+  ------------------------------------------------------------
+  V0_Baseline                1,658    81.2%    18.8%   -10.9%
+  V1a_RT_150_08              1,876    81.4%    18.6%   -11.6%
+  V1b_RT_150_10              1,778    81.2%    18.8%   -10.5%
+  V1c_RT_200_10              1,778    81.2%    18.8%   -10.5%
+  V2_RegPA_65pct             1,681    81.3%    18.7%   -11.3%
+  V3a_Damp065                1,691    81.3%    18.7%   -11.0%
+  V3b_Damp080                1,705    81.3%    18.7%   -11.4%
+  V4a_TierPlatt_92           1,758    81.3%    18.7%   -11.4%
+  V4b_TierPlatt_96           1,738    81.5%    18.5%   -12.3%
+  V5_RT150+TP92              1,960    81.3%    18.7%   -11.3%
+  V6_RT200+TP92              1,862    81.1%    18.9%   -10.2%
+
+========================================================================
+SECTION 8 — CALIBRATION INTERACTION: PLATT EFFECT ON ELITE PROBS
+========================================================================
+
+  How current Platt (A=0.7805, B=-0.4611) compresses raw probs vs
+  tier Platt (A=0.92, B=-0.10) for elite hitters (barrel>=10%):
+
+   Raw prob  Std Platt  TierP 0.92  TierP 0.96  Std-loss  Tier92-gain
+  ------------------------------------------------------------------------
+        10%      10.19%       10.70%       10.35%     +0.19pp       +0.51pp
+        12%      11.75%       12.64%       12.32%     -0.25pp       +0.89pp
+        15%      14.00%       15.50%       15.25%     -1.00pp       +1.50pp
+        17%      15.46%       17.38%       17.19%     -1.54pp       +1.92pp
+        20%      17.61%       20.18%       20.09%     -2.39pp       +2.57pp
+        22%      19.02%       22.02%       22.01%     -2.98pp       +3.00pp
+        25%      21.11%       24.77%       24.89%     -3.89pp       +3.66pp
+        27%      22.49%       26.60%       26.80%     -4.51pp       +4.11pp
+        29%      23.87%       28.42%       28.71%     -5.13pp       +4.55pp
+
+  Crossover analysis:
+  Standard Platt crossover: p* = sigmoid(B/(1-A)) = sigmoid(-2.1007) = 10.9%
+  Tier Platt 0.92 crossover: p* = sigmoid(-1.2500) = 22.3%
+  Tier Platt 0.96 crossover: p* = sigmoid(-1.2500) = 22.3%
+
+  Key insight: standard Platt crossover at 10.9% compresses everything above.
+  Elite hitters who should be at 25-29% are already under-predicted at the
+  pre-calibration stage, then lose another 3-5pp. Tier Platt at 0.92/-0.10
+  has crossover at ~72% — effectively near-identity across the 10-29% range.
+
+========================================================================
+SECTION 9 — CORRECTION FACTOR DISTRIBUTION BY BARREL TIER
+========================================================================
+
+  Shows average correction applied to hr_rate per variant per tier.
+  1.00 = no change.  Values >1.0 = hr_rate boosted for that tier.
+
+  Barrel tier                 BASE   RT15_08   RT15_10   RT20_10     RPA65      D065      D080   COMBO_A   COMBO_B
+  --------------------------------------------------------------------------------------------------------------------------
+  <6%  contact               1.000     1.000     1.000     1.000     1.000     1.000     1.000     1.000     1.000
+  6-8%  below-avg            1.000     1.000     1.000     1.000     1.000     1.000     1.000     1.000     1.000
+  8-10% above-avg            1.000     1.104     1.000     1.000     1.000     1.000     1.000     1.104     1.000
+  10-12% power               1.000     1.164     1.164     1.164     1.025     1.037     1.061     1.164     1.164
+  12-15% elite               1.000     1.208     1.208     1.208     1.031     1.048     1.079     1.208     1.208
+
+  V4 (tier Platt) variants operate on calibration only — no hr_rate correction.
+
+========================================================================
+SECTION 10 — TOP-PICK ACCURACY (top 100 picks by probability per variant)
+========================================================================
+
+  Variant                   Top50_HR%  Top100_HR%  Top50_n  Top100_n
+  ------------------------------------------------------------------
+  V0_Baseline                  26.00%      27.00%       50       100
+  V1a_RT_150_08                26.00%      29.00%       50       100
+  V1b_RT_150_10                26.00%      29.00%       50       100
+  V1c_RT_200_10                26.00%      29.00%       50       100
+  V2_RegPA_65pct               28.00%      29.00%       50       100
+  V3a_Damp065                  28.00%      29.00%       50       100
+  V3b_Damp080                  24.00%      31.00%       50       100
+  V4a_TierPlatt_92             30.00%      31.00%       50       100
+  V4b_TierPlatt_96             30.00%      31.00%       50       100
+  V5_RT150+TP92                30.00%      29.00%       50       100
+  V6_RT200+TP92                30.00%      29.00%       50       100
+
+========================================================================
+SECTION 11 — AVERAGE BATTER STABILITY CHECK (barrel<8%, unaffected by V1-V3)
+========================================================================
+
+  Rows with barrel<8%: 8,620  actual HR%: 8.20%
+
+  Variant                   Avg_prob    Brier   N_at_15pct
+  ----------------------------------------------------------
+  V0_Baseline                  9.39%  0.07529          686
+  V1a_RT_150_08                9.39%  0.07529          686
+  V1b_RT_150_10                9.39%  0.07529          686
+  V1c_RT_200_10                9.39%  0.07529          686
+  V2_RegPA_65pct               9.39%  0.07529          686
+  V3a_Damp065                  9.39%  0.07529          686
+  V3b_Damp080                  9.39%  0.07529          686
+  V4a_TierPlatt_92             9.39%  0.07529          686
+  V4b_TierPlatt_96             9.39%  0.07529          686
+  V5_RT150+TP92                9.39%  0.07529          686
+  V6_RT200+TP92                9.39%  0.07529          686
+
+  V1a/V1b/V1c/V2/V3a/V3b use barrel threshold so barrel<8% rows are UNCHANGED.
+  V4 tier Platt also unchanged (applies only to barrel>=10%).
+  Any differences here are floating point noise — should be <0.00001 Brier.
+
+========================================================================
+SECTION 12 — PRODUCTION RECOMMENDATION
+========================================================================
+
+  Variant ranking by overall Brier (lower = better):
+
+  #1  V5_RT150+TP92             Brier=0.09148  (-0.00046 vs baseline)
+  #2  V6_RT200+TP92             Brier=0.09152  (-0.00041 vs baseline)
+  #3  V1a_RT_150_08             Brier=0.09167  (-0.00027 vs baseline)
+  #4  V4a_TierPlatt_92          Brier=0.09170  (-0.00024 vs baseline)
+  #5  V4b_TierPlatt_96          Brier=0.09171  (-0.00022 vs baseline)
+  #6  V1b_RT_150_10             Brier=0.09172  (-0.00022 vs baseline)
+
+  Recommended production implementation:
+
+  STEP 1 — Raise regression target ceiling (addresses L1 compression)
+  -------
+  File: mlb_hr_engine_v4/engine/probability.py
+  Function: base_hr_rate()
+  Change: reg_target_adj = max(0.30, min(ELITE_REG_CEILING, statcast_mult))
+    where ELITE_REG_CEILING = config.ELITE_REG_TARGET_CEILING (default 1.5)
+    gated: only if barrel_rate >= config.ELITE_REG_TARGET_BARREL_THRESHOLD (0.08)
+  Config additions:
+    ELITE_REG_TARGET_ENABLED:           bool  = True
+    ELITE_REG_TARGET_CEILING:           float = 1.5
+    ELITE_REG_TARGET_BARREL_THRESHOLD:  float = 0.08
+
+  STEP 2 — Tier-specific Platt calibration (addresses L3 compression)
+  -------
+  File: mlb_hr_engine_v4/engine/calibration.py
+  Function: apply_calibration()
+  Change: for elite barrel hitters, use separate Platt params with higher crossover
+  Config additions:
+    ELITE_PLATT_ENABLED:            bool  = True
+    ELITE_PLATT_A:                  float = 0.92
+    ELITE_PLATT_B:                  float = -0.10
+    ELITE_PLATT_BARREL_THRESHOLD:   float = 0.10
+
+  Note: barrel_rate is NOT available in apply_calibration() today.
+  It must be passed from pipeline.py alongside model_prob.
+  See implementation notes in SECTION 13.
+
+  ROLLBACK:
+    ELITE_REG_TARGET_ENABLED = False  (in config.py)
+    ELITE_PLATT_ENABLED = False        (in config.py)
+  Both are fully independent. Either can be disabled without affecting the other.
+
+  STEP 3 — Re-calibrate Platt params after Step 1 ships
+  -------
+  Step 1 raises pre-calibration probs for elite hitters. The standard Platt
+  params (A=0.7805, B=-0.4611) were fitted before this change and will
+  partially offset Step 1 gains via compression. After validating Step 1,
+  run analyze_calibration.py --collect-only to refresh the data, then
+  --analyze-only to re-fit Platt. Expected: A will rise slightly, B less negative.
+
+========================================================================
+SECTION 13 — IMPLEMENTATION NOTES
+========================================================================
+
+  probability.py — base_hr_rate() change:
+  ----------------------------------------
+  The statcast_mult passed to base_hr_rate() IS power_mult from pipeline.py.
+  barrel_rate is NOT available in base_hr_rate() today — it's in sc_stats.
+  Two implementation paths:
+
+  Path A (simpler): use statcast_mult as barrel proxy for the ceiling gate.
+    reg_target_adj = max(0.30, min(1.0 if statcast_mult < 1.20 else CEILING, statcast_mult))
+    Rationale: power_mult >= 1.20 maps well to barrel >= 8%.
+    Pro: no signature change needed. Con: power_mult threshold is indirect.
+
+  Path B (correct): add barrel_rate kwarg to base_hr_rate().
+    base_hr_rate(..., barrel_rate=0.055)
+    gate: if barrel_rate >= ELITE_REG_TARGET_BARREL_THRESHOLD
+    Must update: runner.py, pipeline.py callers of base_hr_rate()
+    Pro: exact per metric. Con: small API change.
+
+  RECOMMENDATION: Path B. barrel_rate is already in sc_stats in both
+  pipeline.py and runner.py. Adding it as a kwarg is low-risk.
+
+  calibration.py — apply_calibration() change:
+  ----------------------------------------------
+  apply_calibration(p: float) -> float (current signature)
+  Must become: apply_calibration(p: float, barrel_rate: float = 0.0) -> float
+
+  Pipeline.py call becomes:
+    sc_barrel = sc_stats.get('barrel_rate', 0.0) or 0.0
+    model_prob = _cal.apply_calibration(model_prob, barrel_rate=sc_barrel)
+
+  runner.py call in _score_player:
+    Backtest does not currently call apply_calibration at all (correct: raw probs
+    stored in CSV). No change needed in runner.py for the analysis workflow.
+
+  GUARDS (must be preserved):
+  - Regression ceiling only fires when config.ELITE_REG_TARGET_ENABLED=True
+  - Tier Platt only fires when config.ELITE_PLATT_ENABLED=True
+  - BOTH default to True after validation, False if rollback needed
+  - Average batters (barrel < threshold) see zero change in behavior
+
+========================================================================
+SUMMARY
+========================================================================
+
+  Root cause confirmed: three stacked compression layers for elite barrel hitters.
+  Best single fix: V4a tier Platt (directly removes L3 Platt compression).
+  Best combined fix: V5 or V6 (regression ceiling + tier Platt).
+
+  Key constraints preserved:
+  - Regression never weakened globally (threshold = barrel >= 8% or 10%)
+  - Weak low-sample hitters (barrel < threshold) are completely unaffected
+  - Ranking stability: Spearman >= 0.99 for all reasonable variants
+  - Rollback: two independent config flags, no code removal needed
+
+  Output written to: adaptive_regression_output.txt
