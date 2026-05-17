@@ -95,18 +95,21 @@ def _finalize_pitch_stats(totals: dict, total_pa_denom: int) -> dict:
     out = {}
     denom = total_pa_denom or 1
     for pt, p in totals.items():
-        _ab       = p["ab"] or 1
-        _pitch_ba  = round(p["h"]  / _ab, 3)
-        _pitch_slg = round(p["tb"] / _ab, 3)
-        _pitch_iso = round(max(0.0, _pitch_slg - _pitch_ba), 3)
+        _ab       = p.get("ab", 0)
+        # Require ≥3 AB to show BA/SLG — prevents 0.000 from pure-walk or tiny samples
+        _pitch_ba  = round(p["h"]  / _ab, 3) if _ab >= 3 else None
+        _pitch_slg = round(p["tb"] / _ab, 3) if _ab >= 3 else None
+        _pitch_iso = round(max(0.0, _pitch_slg - _pitch_ba), 3) if _pitch_ba is not None else None
         _disp_hh  = round(p["hard_hit"] / p["contact"], 3) if p.get("contact", 0) >= 5 else None
+        # Require ≥10 PA to show HR rate — prevents extreme small-sample HR%
+        _hr_rate  = round(p["hr"] / p["pa"], 3) if p["pa"] >= 10 else None
         out[pt] = {
             "pa":        p["pa"],
             "pitch_pct": round(p["pa"] / denom, 4),
             "hr":        p["hr"],
             "k":         p["k"],
             "k_pct":     round(p["k"]  / p["pa"], 3) if p["pa"] else 0.0,
-            "hr_rate":   round(p["hr"] / p["pa"], 3) if p["pa"] else 0.0,
+            "hr_rate":   _hr_rate,
             "avg_speed": round(p["speed_sum"] / p["speed_n"], 1) if p["speed_n"] else None,
             "display_hh": _disp_hh,
             # BA/SLG/ISO allowed vs this pitch type — used in arsenal display table
