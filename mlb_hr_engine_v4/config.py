@@ -223,3 +223,18 @@ ELITE_PLATT_ENABLED:              bool  = True    # activated — validated 2026
 ELITE_PLATT_A:                    float = 0.92    # slope for elite barrel hitters
 ELITE_PLATT_B:                    float = -0.10   # intercept for elite barrel hitters
 ELITE_PLATT_BARREL_THRESHOLD:     float = 0.10    # barrel_rate >= this to use elite params
+
+# ── Portfolio Management (Session 27) ─────────────────────────────────────────
+# Controls for portfolio/optimizer.py daily pick selection.
+# These do NOT affect the model or EV calculation — they filter which picks to BET.
+# Tune after accumulating n≥200 settled picks per preset configuration.
+#
+# Presets: conservative (15 picks, 3/team), moderate (20, 4/team), relaxed (30, 6/team),
+#          barrel_focused (15, 4/team, barrel≥8%).
+# Rollback: increase PORTFOLIO_MAX_PICKS_DAILY and PORTFOLIO_MAX_PICKS_PER_TEAM to large values.
+PORTFOLIO_MAX_PICKS_DAILY:      int   = 20      # max total bets per day (moderate preset)
+PORTFOLIO_MAX_PICKS_PER_TEAM:   int   = 4       # max picks from same lineup per day
+PORTFOLIO_MIN_BARREL_PCT:       float = 0.0     # 0 = no barrel floor; set 6.0+ to filter quality
+PORTFOLIO_MIN_EV_PCT:           float = 3.0     # mirrors existing MIN_EV_PCT (no change by default)
+PORTFOLIO_CORRELATION_LINEUP:   float = 0.40    # estimated same-lineup pairwise ρ (factor model)
+PORTFOLIO_CORRELATION_CROSSGAME:float = 0.04    # estimated cross-game same-day pairwise ρ
