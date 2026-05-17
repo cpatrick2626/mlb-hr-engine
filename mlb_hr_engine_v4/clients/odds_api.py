@@ -50,6 +50,14 @@ def get_hr_odds_all_games() -> tuple[list[dict], str, dict]:
         _save_cache(props, quota)
         return props, "The Odds API", quota
 
+    # Fresh fetch returned nothing (quota exhausted, network error, etc.).
+    # Serve the expired cache as a last resort so the pipeline still has odds data.
+    stale = _load_cache_stale()
+    if stale:
+        stale_props, stale_quota = stale
+        print(f"[odds_api] WARNING: live fetch failed — serving {len(stale_props)} stale cached props")
+        return stale_props, "The Odds API (stale cache)", stale_quota
+
     return [], "none", {"used": None, "remaining": None}
 
 
@@ -79,6 +87,21 @@ def _load_cache() -> tuple[list[dict], dict] | None:
         if age_minutes > CACHE_TTL_MINUTES:
             return None
         return data["props"], data["quota"]
+    except Exception:
+        return None
+
+
+def _load_cache_stale() -> tuple[list[dict], dict] | None:
+    """Load cache regardless of age — used as last-resort fallback when live fetch fails."""
+    try:
+        if not _CACHE_PATH.exists():
+            return None
+        with open(_CACHE_PATH, encoding="utf-8") as f:
+            data = json.load(f)
+        props = data.get("props")
+        if not props:
+            return None
+        return props, data.get("quota", {"used": None, "remaining": None})
     except Exception:
         return None
 

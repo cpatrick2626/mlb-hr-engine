@@ -270,13 +270,15 @@ def _fetch_pitcher_savant(pitcher_id: int) -> dict:
                     continue
 
                 # game_year validation: skip rows contaminated from the wrong season.
-                # game_year is populated by Savant; fall back to game_date year when absent.
-                raw_year = row.get("game_year") or (row.get("game_date") or "")[:4]
+                # Savant may name this column "game_year" or "year"; fall back to game_date year.
+                raw_year = (row.get("game_year") or row.get("year")
+                            or (row.get("game_date") or "")[:4])
                 try:
                     row_season = int(raw_year) if raw_year else season
                 except (ValueError, TypeError):
                     row_season = season
-                if row_season != season:
+                # Only skip rows with an explicit wrong-year value; empty game_year is not skipped.
+                if raw_year and row_season != season:
                     continue
 
                 # Deduplication: each plate appearance must be counted only once.
@@ -314,9 +316,13 @@ def _fetch_pitcher_savant(pitcher_id: int) -> dict:
 
             # Skip this season if too sparse; try prior year
             if total_rows < _MIN_PITCHER_PA:
+                print(f"[pitch_mix] pitcher {pitcher_id} season={season}: only {total_rows} rows — trying prior year")
                 continue
 
             total_pa = sum(h["pa"] for h in hand_totals.values()) or 1
+            total_hr = sum(h.get("hr", 0) for h in hand_totals.values())
+            print(f"[pitch_mix] pitcher {pitcher_id} season={season}: {total_rows} PA-ending rows, "
+                  f"{total_hr} HR ({len(seen_pa)} deduped)")
             hand_splits: dict[str, dict] = {"R": {}, "L": {}}
             for hand, h in hand_totals.items():
                 ab  = h["ab"] or 1
@@ -499,13 +505,15 @@ def _fetch_all_batter_pitch_splits(batter_id: int) -> None:
             if not raw_pt or not ev:
                 continue
 
-            # year validation — skip stale rows
-            raw_year = row.get("game_year") or (row.get("game_date") or "")[:4]
+            # year validation — skip stale rows; check "year" as Savant column alias
+            raw_year = (row.get("game_year") or row.get("year")
+                        or (row.get("game_date") or "")[:4])
             try:
                 row_season = int(raw_year) if raw_year else season
             except (ValueError, TypeError):
                 row_season = season
-            if row_season != season:
+            # Only skip when year is explicitly wrong; missing year field is not a reason to skip.
+            if raw_year and row_season != season:
                 continue
 
             # Deduplication: each plate appearance counted once
@@ -653,6 +661,11 @@ def _build_pitcher_arsenal(pitcher_id: int | None, arsenal_data: dict | None,
 
     def _merge_display(entry: dict, pt: str, live: dict) -> dict:
         ds = _disp.get((pitcher_id, pt), {})
+        # Fallback chain for display metrics (NOT used by formula):
+        #   1. disp_stats (pitch-arsenal-stats leaderboard, separate fetch)
+        #   2. entry (from arsenal_data — same endpoint, already parsed with whiff/HH/RV)
+        # This ensures whiff%/HH%/RV/100 are populated even when disp_stats is empty
+        # (e.g., when the leaderboard fetch returns different column names by year).
         return {
             **entry,
             # Override leaderboard pitch_pct with per-stand value when available
@@ -662,9 +675,9 @@ def _build_pitcher_arsenal(pitcher_id: int | None, arsenal_data: dict | None,
             "hr_rate":       live.get("hr_rate"),
             "pa":            live.get("pa", 0),
             # Display-only — NOT used by formula
-            "display_whiff": ds.get("whiff_pct"),
-            "display_hh":    live.get("display_hh") or ds.get("hard_hit_pct"),
-            "display_rv100": ds.get("rv_per100"),
+            "display_whiff": ds.get("whiff_pct") or entry.get("whiff_pct"),
+            "display_hh":    live.get("display_hh") or ds.get("hard_hit_pct") or entry.get("hard_hit_pct"),
+            "display_rv100": ds.get("rv_per100")   if ds.get("rv_per100") is not None else entry.get("rv_per100"),
         }
 
     if from_leaderboard:

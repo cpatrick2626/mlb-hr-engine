@@ -1459,6 +1459,8 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
     source    = data.get("odds_source", "none")
     quota     = data.get("odds_quota", {})
     n_batters = data.get("batter_count", 0)
+    n_with_odds = data.get("n_with_odds") or stats.get("n_with_odds", 0)
+    fail_reasons = data.get("fail_reasons", {})
     scale     = _bankroll_scale()
 
     # ── Portfolio optimizer ───────────────────────────────────────────────────
@@ -1534,7 +1536,8 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
         f"background:#110000; border:1px solid #330000; border-radius:6px; padding:8px 14px;'>"
         f"📅 {data.get('date','')} &nbsp;|&nbsp; "
         f"Games: <b style='color:#f0f0f0'>{stats.get('games',0)}</b> &nbsp;|&nbsp; "
-        f"Players: <b style='color:#f0f0f0'>{stats.get('players',0)}</b> &nbsp;|&nbsp; "
+        f"Players: <b style='color:#f0f0f0'>{stats.get('players',0)}</b> "
+        f"<span style='color:#555'>({n_with_odds} with odds)</span> &nbsp;|&nbsp; "
         f"Qualified: <b style='color:#FF3333'>{len(ranked)}</b> "
         f"<span style='color:#555'>(EV≥{min_ev:.0f}% Edge≥{min_edge:.1f}%"
         + (f" Conf≥{min_confidence:.0f}" if min_confidence > 0 else "")
@@ -1798,6 +1801,38 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                 f"No qualified picks (EV ≥ {min_ev:.1f}%, Edge ≥ {min_edge:.1f}%). "
                 "Try sliding filters left in the sidebar or click 'Force Refresh Data'."
             )
+            # Diagnostic: show why picks are failing when there's odds data but 0 qualify
+            if n_with_odds > 0 and fail_reasons:
+                _top_fails = sorted(fail_reasons.items(), key=lambda x: x[1], reverse=True)[:5]
+                _fail_html = " &nbsp;·&nbsp; ".join(
+                    f"<b>{r}</b> ({n})" for r, n in _top_fails
+                )
+                st.markdown(
+                    f"<div style='background:#1a0a00;border:1px solid #553300;border-radius:6px;"
+                    f"padding:8px 14px;font-size:11px;color:#aaa;margin-top:8px;'>"
+                    f"<b style='color:#FFD700;'>Diagnostic</b> — {n_with_odds} players have odds, "
+                    f"top filter failures: {_fail_html}"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+                # Show the top 10 players with odds and their EV/edge for debugging
+                _odds_players = [p for p in all_players if p.get("best_american")]
+                _odds_players.sort(key=lambda x: x.get("edge_pct", -999), reverse=True)
+                if _odds_players:
+                    with st.expander(f"🔍 Players with odds — edge breakdown ({len(_odds_players)} players)", expanded=False):
+                        import pandas as _pd
+                        _diag_rows = []
+                        for _dp in _odds_players[:20]:
+                            _diag_rows.append({
+                                "Player": _dp.get("player_name", ""),
+                                "Odds": _fmt_american(_dp.get("best_american")),
+                                "Model%": f"{_dp.get('model_prob',0)*100:.1f}%",
+                                "Mkt NV%": f"{_dp.get('market_no_vig_prob',0)*100:.1f}%",
+                                "Edge%": f"{_dp.get('edge_pct',0):+.1f}%",
+                                "EV%": f"{_dp.get('ev_pct',0):+.1f}%",
+                                "Fails": " | ".join(_dp.get("filter_reasons", [])),
+                            })
+                        st.dataframe(_pd.DataFrame(_diag_rows), use_container_width=True, hide_index=True)
         else:
             _qv_steam_n = len(_steam_names & {p.get("player_name") for p in _display_pool})
             _qv_live_n  = sum(1 for p in _display_pool if _game_status_badge(p)[1])

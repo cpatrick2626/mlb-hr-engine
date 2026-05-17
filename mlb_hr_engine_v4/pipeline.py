@@ -239,9 +239,11 @@ def _match_odds(player, odds_lookup, unique_names):
     # Fold accents before matching so 'José' == 'Jose' at the fuzzy layer
     folded_name = _ascii_fold(player["player_name"])
     if folded_name not in _NAME_MATCH_CACHE:
+        # 85 threshold: catches middle-initial differences ("Michael A. Taylor" ↔ "Michael Taylor")
+        # while still preventing false matches between distinct names.
         m = fuzz_process.extractOne(
             folded_name, unique_names,
-            scorer=fuzz.token_sort_ratio, score_cutoff=90,
+            scorer=fuzz.token_sort_ratio, score_cutoff=85,
         )
         _NAME_MATCH_CACHE[folded_name] = m[0] if m else None
     matched_name = _NAME_MATCH_CACHE[folded_name]
@@ -358,6 +360,10 @@ def load_game_data(
 
     _ET = timezone(timedelta(hours=-4))  # EDT (Apr–Oct)
     game_date = target_date or (config.TARGET_DATE or datetime.now(_ET).strftime("%Y-%m-%d"))
+
+    # Clear stale name-match cache so expired None entries from a previous run
+    # (e.g., a run where props were empty or quota-exhausted) don't block matching.
+    _NAME_MATCH_CACHE.clear()
 
     # Run adaptive learning if new settled picks are available since last run
     try:
@@ -521,22 +527,32 @@ def load_game_data(
     _cb("Computing EV...")
     # Pre-build odds lookup structure once (O(n))
     odds_lookup, unique_names = _build_odds_lookup(all_props)
+    print(f"[pipeline] odds props: {len(all_props)} lines | {len(unique_names)} unique players")
 
     # Now match each player using the pre-built structure (O(1) per player)
     for p in all_players:
         _match_odds(p, odds_lookup, unique_names)
         _enrich_with_ev(p)
 
+    n_with_odds = sum(1 for p in all_players if p.get("best_american"))
+    print(f"[pipeline] {n_with_odds}/{len(all_players)} players matched to odds")
+
     qualified    = []
     team_players: dict[str, list[dict]] = {}
     sc_counts    = {"current": 0, "blended": 0, "prior": 0, "none": 0}
     pit_ids: set = set()
+    _fail_reason_counts: dict[str, int] = {}
     for p in all_players:
         passed, reasons = filters.apply_filters(p)
         p["filter_reasons"] = reasons
         p["soft_flags"]     = filters.soft_flags(p)
         if passed:
             qualified.append(p)
+        else:
+            for r in reasons:
+                # Bucket by the first word of the reason for concise summary
+                bucket = r.split("(")[0].split("≥")[0].split(">")[0].strip()
+                _fail_reason_counts[bucket] = _fail_reason_counts.get(bucket, 0) + 1
         if p.get("best_american"):
             team_players.setdefault(p["team"], []).append(p)
         src = p.get("statcast_source") or ""
@@ -546,6 +562,11 @@ def load_game_data(
 
     for team in team_players:
         team_players[team].sort(key=lambda x: x.get("model_prob", 0), reverse=True)
+
+    if _fail_reason_counts:
+        sorted_fails = sorted(_fail_reason_counts.items(), key=lambda x: x[1], reverse=True)
+        print(f"[pipeline] filter failure summary: {dict(sorted_fails)}")
+    print(f"[pipeline] {len(qualified)} qualified of {len(all_players)} total")
 
     ranked      = ranker.rank_picks(qualified)
     all_by_model = ranker.rank_all_by_model(all_players)
@@ -583,11 +604,14 @@ def load_game_data(
         "team_players":  team_players,
         "auto_parlays":    auto_parlays,
         "profile_parlays": profile_parlays,
+        "n_with_odds":  n_with_odds,
+        "fail_reasons": _fail_reason_counts,
         "stats": {
             "games":     len(games),
             "players":   len(all_players),
             "qualified": len(qualified),
             "filtered":  len(all_players) - len(qualified),
+            "n_with_odds": n_with_odds,
             "sc_current":  sc_counts["current"],
             "sc_blended":  sc_counts["blended"],
             "sc_prior":    sc_counts["prior"],
