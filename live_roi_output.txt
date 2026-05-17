@@ -5,7 +5,7 @@
 
   Run date:    2026-05-16
   Data sources: pick_tracker.csv (settled) + results.csv
-  Settled picks (all):   324
+  Settled picks (all):   630
   Picks with real bets:  262
   CLV log entries:       0
 
@@ -215,13 +215,13 @@ Barrel        n       Wins    HR%       RealROI%    SynROI(S24)   Gap
 
 Prob Bkt    n       HR%       Model%    Bias    
   ----------------------------------------
-<6%         106     7.55%     4.11%     -3.43pp 
-6-8%        58      5.17%     7.02%     +1.85pp 
-8-10%       53      11.32%    9.05%     -2.27pp 
-10-12%      40      15.00%    10.91%    -4.09pp   [!] n=40 < 50 -- treat as directional only, not statistically significant
-12-15%      39      7.69%     13.20%    +5.51pp   [!] n=39 < 50 -- treat as directional only, not statistically significant
-15-20%      20      15.00%    16.99%    +1.99pp   [!] n=20 < 50 -- treat as directional only, not statistically significant
-20%+        8       0.00%     25.04%    +25.04pp  [!] n=8 < 50 -- treat as directional only, not statistically significant
+<6%         211     6.64%     4.23%     -2.40pp 
+6-8%        119     7.56%     7.09%     -0.47pp 
+8-10%       97      9.28%     8.99%     -0.29pp 
+10-12%      76      11.84%    10.80%    -1.04pp 
+12-15%      75      10.67%    13.36%    +2.69pp 
+15-20%      40      17.50%    17.30%    -0.20pp   [!] n=40 < 50 -- treat as directional only, not statistically significant
+20%+        12      8.33%     24.29%    +15.96pp  [!] n=12 < 50 -- treat as directional only, not statistically significant
 
   CALIBRATION ALERT THRESHOLDS:
     |bias| > 3pp in any bucket with n>=50 -> re-run analyze_calibration.py
@@ -262,11 +262,11 @@ Prob Bkt    n       HR%       Model%    Bias
   5d. Drift Detection Summary
 --------------------------------------------------------------------------------------------------------
 
-  Overall model probability:   8.69%
-  Overall actual HR rate:      8.95%
-  Overall calibration bias:    -0.26pp
+  Overall model probability:   8.60%
+  Overall actual HR rate:      9.05%
+  Overall calibration bias:    -0.45pp
   Drift status:                STABLE -- no calibration drift detected
-  [!] n=324 is sufficient for reliable drift detection
+  [!] n=630 is sufficient for reliable drift detection
 
 --------------------------------------------------------------------------------------------------------
   5e. Daily ROI Dashboard -- Current State
@@ -277,7 +277,7 @@ Prob Bkt    n       HR%       Model%    Bias
   All-time (settled):      262 picks   ROI=-30.3%
 
   SETTLEMENT STATUS:
-    pick_tracker.csv settled rows: 313
+    pick_tracker.csv settled rows: 619
     results.csv settled rows:      11
     CLV entries with close:        0
 
@@ -286,7 +286,7 @@ Prob Bkt    n       HR%       Model%    Bias
 =========================================================================================================
 
   [Current State]
-  Total settled picks: 324
+  Total settled picks: 630
   Picks with real bets: 262
   Overall ROI: -30.3%  (n=262)
   CLV tracking: not yet collecting closing lines
@@ -304,9 +304,9 @@ Prob Bkt    n       HR%       Model%    Bias
   n=  200: Overall ROI statistically meaningful; CLV vs ROI correlation visible
           Status: [COMPLETE]
   n=  500: Segment-level ROI reliable; threshold optimization feasible
-          Status: [need 176 more]
+          Status: [COMPLETE]
   n= 1000: Full production validation; re-calibration confidence high
-          Status: [need 676 more]
+          Status: [need 370 more]
 
   [Immediate Next Actions]
   1. Run settle_pick_tracker.py daily (or auto-trigger from app.py startup)
