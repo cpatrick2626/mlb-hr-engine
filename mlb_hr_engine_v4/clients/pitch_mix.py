@@ -32,7 +32,7 @@ MLB_API = "https://statsapi.mlb.com/api/v1"
 SAVANT  = "https://baseballsavant.mlb.com"
 
 # Bump this whenever the context schema changes — forces Streamlit session-state cache to refresh.
-HVY_CACHE_VERSION = "10"
+HVY_CACHE_VERSION = "11"
 
 # {pitcher_id: {"hand_splits": {...}, "pitch_stats": {...}, "data_year": int}}
 _PITCHER_SAVANT_CACHE: dict[int, dict] = {}
@@ -146,6 +146,30 @@ def _canonical_pt(pt: str) -> str:
     return _PITCH_CANONICAL.get(pt, pt)
 
 
+def _pitch_keys(pt: str) -> list[str]:
+    """Canonical lookup order for pitch joins across Savant/leaderboard aliases."""
+    raw = (pt or "").strip().upper()
+    if not raw:
+        return []
+    canon = _canonical_pt(raw)
+    keys: list[str] = []
+    for key in (canon, raw, *_PITCH_ALIASES.get(canon, [])):
+        if key and key not in keys:
+            keys.append(key)
+    return keys
+
+
+def _lookup_pitch(mapping: dict | None, pt: str) -> dict:
+    """Return the first matching pitch row across canonical and alias codes."""
+    if not mapping:
+        return {}
+    for key in _pitch_keys(pt):
+        row = mapping.get(key)
+        if row:
+            return row
+    return {}
+
+
 def _first_not_none(*vals):
     """Return the first non-None value, preserving legitimate 0/0.0 metrics."""
     for v in vals:
@@ -224,6 +248,57 @@ def _build_pitch_rows(pitcher_arsenal: list[dict]) -> list[dict]:
             "avg_speed":    entry.get("avg_speed"),
         })
     return rows
+
+
+def _build_batter_rows(pitcher_arsenal: list[dict], batter_vs: dict) -> list[dict]:
+    """Build canonical batter-vs-pitch rows ordered by arsenal first, then remainder."""
+    ordered_pts: list[str] = []
+    for entry in sorted(pitcher_arsenal, key=lambda x: x.get("pitch_pct", 0), reverse=True):
+        pt = _canonical_pt(entry.get("pitch_type", ""))
+        if pt and pt not in ordered_pts:
+            ordered_pts.append(pt)
+    for pt, _stats in sorted(batter_vs.items(), key=lambda x: x[1].get("pa", 0), reverse=True):
+        canon = _canonical_pt(pt)
+        if canon and canon not in ordered_pts:
+            ordered_pts.append(canon)
+
+    rows = []
+    for pt in ordered_pts:
+        stats = _lookup_pitch(batter_vs, pt)
+        ba = stats.get("ba")
+        slg = stats.get("slg")
+        rows.append({
+            "pitch_type": pt,
+            "pa": stats.get("pa"),
+            "hr": stats.get("hr"),
+            "hr_rate": stats.get("hr_rate"),
+            "ba": ba,
+            "slg": slg,
+            "iso": round(max(0.0, slg - ba), 3) if ba is not None and slg is not None else None,
+            "k_pct": stats.get("k_pct"),
+        })
+    return rows
+
+
+def _build_canonical_pitch_mix(
+    pitcher_arsenal: list[dict],
+    batter_vs: dict,
+    hand_splits: dict,
+    h2h: dict,
+    data_year: int,
+) -> dict:
+    """One canonical Pitch Mix object shared by all Main and JIG player cards."""
+    pitch_rows = _build_pitch_rows(pitcher_arsenal)
+    batter_rows = _build_batter_rows(pitcher_arsenal, batter_vs)
+    return {
+        "arsenal": pitcher_arsenal,
+        "pitch_rows": pitch_rows,
+        "batter_vs": batter_vs,
+        "batter_rows": batter_rows,
+        "hand_splits": hand_splits,
+        "h2h": h2h,
+        "data_year": data_year,
+    }
 
 
 # ── Pitcher data (single Savant query) ────────────────────────────────────────
@@ -324,11 +399,11 @@ def _fetch_pitcher_savant(pitcher_id: int) -> dict:
                         h["h"] += 1; h["tb"] += 1; h["ab"] += 1
                     elif ev not in ("walk", "hit_by_pitch", "catcher_interf"):
                         h["ab"] += 1
-                    # Per-stand pitch stats
-                    _acc_pitch_row(pitch_totals_by_stand[stand], pt, ev, row)
+                    # Per-stand pitch stats — use canonical code so keys are era-agnostic
+                    _acc_pitch_row(pitch_totals_by_stand[stand], _canonical_pt(pt), ev, row)
 
-                # Overall pitch stats
-                _acc_pitch_row(pitch_totals, pt, ev, row)
+                # Overall pitch stats — canonicalize (SV→ST, FA→FF) for consistent keys
+                _acc_pitch_row(pitch_totals, _canonical_pt(pt), ev, row)
 
             # Skip this season if too sparse; try prior year
             if total_rows < _MIN_PITCHER_PA:
@@ -595,11 +670,12 @@ def load_hvy_context(player: dict, arsenal_data: dict | None = None,
         effective_batter_side = "R" if pitcher_hand == "L" else "L"
     else:
         effective_batter_side = batter_side
-    pitcher_arsenal = _build_pitcher_arsenal(pitcher_id, arsenal_data, disp_stats, effective_batter_side)
+    pitcher_arsenal = _build_pitcher_arsenal_canonical(pitcher_id, arsenal_data, disp_stats, effective_batter_side)
     hand_splits     = get_pitcher_hand_splits(pitcher_id) if pitcher_id else {"R": {}, "L": {}}
     h2h             = get_h2h(pitcher_id, batter_id) if pitcher_id and batter_id else {}
     batter_vs       = get_batter_vs_pitches(batter_id, pitcher_hand) if batter_id else {}
     data_year       = get_pitcher_data_year(pitcher_id) if pitcher_id else config.CURRENT_SEASON
+    pitch_mix       = _build_canonical_pitch_mix(pitcher_arsenal, batter_vs, hand_splits, h2h, data_year)
 
     modifier = _compute_modifier(player, pitcher_arsenal, hand_splits, h2h, batter_vs)
 
@@ -616,15 +692,15 @@ def load_hvy_context(player: dict, arsenal_data: dict | None = None,
               f"(player={player.get('player_name', '?')}) — Signal 2 neutral")
 
     return {
+        "pitch_mix":       pitch_mix,
         "pitcher_arsenal": pitcher_arsenal,
         "hand_splits":     hand_splits,
         "h2h":             h2h,
         "batter_vs":       batter_vs,
         "hvy_modifier":    modifier,
         "data_year":       data_year,
-        # pitch_rows: display-ready list with fields scaled to 0-100 percent.
-        # pitch_usage and whiff_pct are floats in percent form (e.g. 42.0 for 42%).
-        "pitch_rows":      _build_pitch_rows(pitcher_arsenal),
+        "pitch_rows":      pitch_mix["pitch_rows"],
+        "batter_rows":     pitch_mix["batter_rows"],
     }
 
 
@@ -704,8 +780,22 @@ def _build_pitcher_arsenal(pitcher_id: int | None, arsenal_data: dict | None,
             "display_rv100": ds.get("rv_per100")   if ds.get("rv_per100") is not None else entry.get("rv_per100"),
         }
 
+    def _ps_lookup(pt: str) -> dict:
+        """Resolve pitch stats with canonical/alias fallback so leaderboard codes match
+        Savant raw codes across era changes (FA↔FF, SV↔ST)."""
+        live = pitch_stats.get(pt) or {}
+        if not live:
+            ct = _canonical_pt(pt)
+            live = pitch_stats.get(ct) or {}
+        if not live:
+            for _alias in _PITCH_ALIASES.get(_canonical_pt(pt), []):
+                live = pitch_stats.get(_alias) or {}
+                if live:
+                    break
+        return live
+
     if from_leaderboard:
-        merged = [_merge_display(e, e.get("pitch_type", ""), pitch_stats.get(e.get("pitch_type", ""), {}))
+        merged = [_merge_display(e, e.get("pitch_type", ""), _ps_lookup(e.get("pitch_type", "")))
                   for e in from_leaderboard]
         merged = _normalize_pitch_pct(merged, pitcher_id)
         return merged
@@ -756,6 +846,104 @@ def _normalize_pitch_pct(arsenal: list[dict], pitcher_id: int) -> list[dict]:
         for e in arsenal:
             e["pitch_pct"] = round(e["pitch_pct"] / total, 4)
     return arsenal
+
+
+def _build_pitcher_arsenal_canonical(
+    pitcher_id: int | None,
+    arsenal_data: dict | None,
+    disp_stats: dict | None = None,
+    batter_side: str = "",
+) -> list[dict]:
+    """Canonical pitch-mix merge used by all Main and JIG cards."""
+    if not pitcher_id:
+        return []
+
+    from_leaderboard: list[dict] = (arsenal_data or {}).get(pitcher_id) or []
+    split_pitch_stats = get_pitcher_pitch_stats(pitcher_id, batter_side)
+    overall_pitch_stats = get_pitcher_pitch_stats(pitcher_id, "")
+    _disp = disp_stats or {}
+
+    def _disp_lookup(pt: str) -> dict:
+        for key in _pitch_keys(pt):
+            ds = _disp.get((pitcher_id, key), {})
+            if ds:
+                return ds
+        return {}
+
+    def _merge_display(entry: dict, pt: str, split_live: dict, overall_live: dict) -> dict:
+        ds = _disp_lookup(pt)
+        return {
+            **entry,
+            "pitch_type": _canonical_pt(pt),
+            "pitch_pct": _first_not_none(
+                split_live.get("pitch_pct"),
+                overall_live.get("pitch_pct"),
+                entry.get("pitch_pct"),
+                0.0,
+            ),
+            "avg_speed": _first_not_none(
+                split_live.get("avg_speed"),
+                overall_live.get("avg_speed"),
+                entry.get("avg_speed"),
+            ),
+            "k_pct": _first_not_none(split_live.get("k_pct"), overall_live.get("k_pct")),
+            "hr_rate": _first_not_none(split_live.get("hr_rate"), overall_live.get("hr_rate")),
+            "pa": _first_not_none(split_live.get("pa"), overall_live.get("pa"), entry.get("pa"), 0),
+            "pitch_ba": _first_not_none(split_live.get("pitch_ba"), overall_live.get("pitch_ba")),
+            "pitch_slg": _first_not_none(split_live.get("pitch_slg"), overall_live.get("pitch_slg")),
+            "pitch_iso": _first_not_none(split_live.get("pitch_iso"), overall_live.get("pitch_iso")),
+            "display_whiff": _first_not_none(ds.get("whiff_pct"), entry.get("whiff_pct")),
+            "display_hh": _first_not_none(
+                split_live.get("display_hh"),
+                overall_live.get("display_hh"),
+                ds.get("hard_hit_pct"),
+                entry.get("hard_hit_pct"),
+            ),
+            "display_rv100": _first_not_none(ds.get("rv_per100"), entry.get("rv_per100")),
+        }
+
+    leaderboard_by_pitch: dict[str, dict] = {}
+    for entry in from_leaderboard:
+        pt = _canonical_pt(entry.get("pitch_type", ""))
+        if not pt:
+            continue
+        current = leaderboard_by_pitch.get(pt, {})
+        leaderboard_by_pitch[pt] = {
+            **current,
+            **entry,
+            "pitch_type": pt,
+            "pitch_pct": _first_not_none(entry.get("pitch_pct"), current.get("pitch_pct"), 0.0),
+            "pa": _first_not_none(entry.get("pa"), current.get("pa"), 0),
+            "avg_speed": _first_not_none(entry.get("avg_speed"), current.get("avg_speed")),
+            "whiff_pct": _first_not_none(entry.get("whiff_pct"), current.get("whiff_pct")),
+            "hard_hit_pct": _first_not_none(entry.get("hard_hit_pct"), current.get("hard_hit_pct")),
+            "rv_per100": _first_not_none(entry.get("rv_per100"), current.get("rv_per100")),
+        }
+
+    if not leaderboard_by_pitch and not overall_pitch_stats:
+        print(f"[pitch_mix] WARNING: no arsenal data for pitcher {pitcher_id} â€” HVY modifier uses reduced signal")
+        return []
+
+    all_pts = {
+        *leaderboard_by_pitch.keys(),
+        *[_canonical_pt(pt) for pt in split_pitch_stats.keys()],
+        *[_canonical_pt(pt) for pt in overall_pitch_stats.keys()],
+    }
+    arsenal = []
+    for pt in all_pts:
+        entry = _lookup_pitch(leaderboard_by_pitch, pt)
+        split_live = _lookup_pitch(split_pitch_stats, pt)
+        overall_live = _lookup_pitch(overall_pitch_stats, pt)
+        arsenal.append(_merge_display(entry, pt, split_live, overall_live))
+
+    arsenal.sort(
+        key=lambda x: (
+            -(_first_not_none(x.get("pitch_pct"), 0.0)),
+            -(_first_not_none(x.get("pa"), 0)),
+            x.get("pitch_type", ""),
+        )
+    )
+    return _normalize_pitch_pct(arsenal, pitcher_id)
 
 
 # ── Modifier computation ───────────────────────────────────────────────────────
@@ -863,8 +1051,8 @@ def _compute_modifier(
                 continue
             pa  = entry.get("pa", 0)
             reliability = min(1.0, pa / 30.0)
-            raw_k  = entry.get("k_pct")   or _LG_K_PA
-            raw_hr = entry.get("hr_rate") or _LG_HR_PA
+            raw_k  = _first_not_none(entry.get("k_pct"), _LG_K_PA)
+            raw_hr = _first_not_none(entry.get("hr_rate"), _LG_HR_PA)
             eff_k  = raw_k  * reliability + _LG_K_PA  * (1.0 - reliability)
             eff_hr = raw_hr * reliability + _LG_HR_PA * (1.0 - reliability)
             w_k  += pct * eff_k

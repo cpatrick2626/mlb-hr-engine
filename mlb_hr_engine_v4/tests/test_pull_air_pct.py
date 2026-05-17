@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 _ROOT = Path(__file__).resolve().parents[1]
 if str(_ROOT) not in sys.path:
@@ -152,6 +153,68 @@ class TestPullAirResolver(unittest.TestCase):
         }
         m = pitch_mix._compute_modifier(player, [], {"R": {}, "L": {}}, {}, {})
         self.assertTrue(0.70 <= m <= 1.40)
+
+    def test_canonical_pitcher_arsenal_falls_back_to_overall_split_metrics(self) -> None:
+        from clients import pitch_mix
+
+        arsenal_data = {
+            99: [
+                {"pitch_type": "FF", "pitch_pct": 0.55, "rv_per100": 1.2, "pa": 40, "whiff_pct": 0.24, "hard_hit_pct": 0.40},
+                {"pitch_type": "SL", "pitch_pct": 0.45, "rv_per100": -0.4, "pa": 30, "whiff_pct": 0.31, "hard_hit_pct": 0.28},
+            ]
+        }
+        split_stats = {
+            "FF": {"pitch_pct": 0.60, "pa": 18, "avg_speed": 96.2, "k_pct": 0.22, "hr_rate": 0.0, "pitch_ba": 0.250, "pitch_slg": 0.410, "pitch_iso": 0.160, "display_hh": 0.33}
+        }
+        overall_stats = {
+            "FF": {"pitch_pct": 0.56, "pa": 48, "avg_speed": 96.1, "k_pct": 0.24, "hr_rate": 0.021, "pitch_ba": 0.244, "pitch_slg": 0.401, "pitch_iso": 0.157, "display_hh": 0.35},
+            "SL": {"pitch_pct": 0.44, "pa": 36, "avg_speed": 86.5, "k_pct": 0.38, "hr_rate": 0.0, "pitch_ba": 0.188, "pitch_slg": 0.250, "pitch_iso": 0.062, "display_hh": 0.22},
+        }
+
+        with mock.patch.object(pitch_mix, "get_pitcher_pitch_stats", side_effect=[split_stats, overall_stats]):
+            rows = pitch_mix._build_pitcher_arsenal_canonical(99, arsenal_data, {}, "L")
+
+        by_pitch = {row["pitch_type"]: row for row in rows}
+        self.assertEqual(set(by_pitch), {"FF", "SL"})
+        self.assertAlmostEqual(by_pitch["SL"]["pitch_ba"], 0.188, places=3)
+        self.assertAlmostEqual(by_pitch["SL"]["pitch_slg"], 0.250, places=3)
+        self.assertAlmostEqual(by_pitch["SL"]["hr_rate"], 0.0, places=3)
+
+    def test_canonical_pitcher_arsenal_keeps_live_only_pitch_rows(self) -> None:
+        from clients import pitch_mix
+
+        arsenal_data = {
+            99: [
+                {"pitch_type": "FF", "pitch_pct": 0.70, "rv_per100": 0.8, "pa": 50, "whiff_pct": 0.22, "hard_hit_pct": 0.41},
+            ]
+        }
+        split_stats = {
+            "FF": {"pitch_pct": 0.62, "pa": 24, "avg_speed": 95.8, "k_pct": 0.21, "hr_rate": 0.042, "pitch_ba": 0.280, "pitch_slg": 0.520, "pitch_iso": 0.240, "display_hh": 0.41},
+            "ST": {"pitch_pct": 0.38, "pa": 16, "avg_speed": 83.1, "k_pct": 0.34, "hr_rate": 0.0, "pitch_ba": 0.190, "pitch_slg": 0.240, "pitch_iso": 0.050, "display_hh": 0.25},
+        }
+        overall_stats = split_stats
+
+        with mock.patch.object(pitch_mix, "get_pitcher_pitch_stats", side_effect=[split_stats, overall_stats]):
+            rows = pitch_mix._build_pitcher_arsenal_canonical(99, arsenal_data, {}, "L")
+
+        by_pitch = {row["pitch_type"]: row for row in rows}
+        self.assertEqual(set(by_pitch), {"FF", "ST"})
+        self.assertAlmostEqual(sum(row["pitch_pct"] for row in rows), 1.0, places=2)
+
+    def test_canonical_batter_rows_resolve_aliases_once(self) -> None:
+        from clients import pitch_mix
+
+        pitcher_arsenal = [{"pitch_type": "ST", "pitch_pct": 0.35}, {"pitch_type": "FF", "pitch_pct": 0.65}]
+        batter_vs = {
+            "SV": {"pa": 7, "hr": 1, "hr_rate": 1 / 7, "ba": 0.286, "slg": 0.714, "k_pct": 0.143},
+            "FF": {"pa": 10, "hr": 0, "hr_rate": 0.0, "ba": 0.300, "slg": 0.500, "k_pct": 0.200},
+        }
+
+        rows = pitch_mix._build_batter_rows(pitcher_arsenal, batter_vs)
+        by_pitch = {row["pitch_type"]: row for row in rows}
+        self.assertIn("ST", by_pitch)
+        self.assertEqual(by_pitch["ST"]["hr"], 1)
+        self.assertAlmostEqual(by_pitch["FF"]["hr_rate"], 0.0, places=3)
 
 
 if __name__ == "__main__":
