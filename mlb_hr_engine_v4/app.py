@@ -1235,15 +1235,12 @@ def _apply_tactical_filters(players: list, tac: dict) -> list:
 
     These filters control visibility only — they do not rerank or rescore players.
     """
-    import math as _m
     import datetime as _dti
+    from clients.pull_air import resolve_pull_air_pct
 
-    def _sf(v, d=0.0):
-        try:
-            f = float(v)
-            return d if _m.isnan(f) or _m.isinf(f) else f
-        except (TypeError, ValueError):
-            return d
+    def _num(v, d=0.0):
+        f = _pf(v, d)
+        return f if np.isfinite(f) else d
 
     min_barrel    = tac.get("min_barrel",    0.0)
     min_hh        = tac.get("min_hh",        0.0)
@@ -1262,21 +1259,18 @@ def _apply_tactical_filters(players: list, tac: dict) -> list:
 
     result = []
     for p in players:
-        if _sf(p.get("barrel_pct"))        < min_barrel:    continue
-        if _sf(p.get("hard_hit"))          < min_hh:        continue
-        _xslg = _sf(p.get("xslg")) or _sf(p.get("actual_slg"))
+        if _num(p.get("barrel_pct"))        < min_barrel:    continue
+        if _num(p.get("hard_hit"))          < min_hh:        continue
+        _xslg = _num(p.get("xslg")) or _num(p.get("actual_slg"))
         if _xslg                           < min_xslg:      continue
-        if _sf(p.get("xiso"))              < min_iso:       continue
-        _pull    = _sf(p.get("pull_pct"))
-        _fb      = _sf(p.get("fb_pct"))
-        _ld      = _sf(p.get("ld_pct"))
-        _pull_air = _pull * (_fb + _ld) / 100.0
+        if _num(p.get("xiso"))              < min_iso:       continue
+        _pull_air = resolve_pull_air_pct(p)
         if _pull_air                       < min_pull_air:  continue
-        if _sf(p.get("sweet_spot_pct"))    < min_hr_win:    continue
-        if _sf(p.get("ev_pct"),   -999)   < min_ev:        continue
-        if _sf(p.get("edge_pct"), -999)   < min_edge:      continue
-        if _sf(p.get("confidence"), 0)    < min_conf:      continue
-        if _sf(p.get("model_prob"), 0) * 100 < min_model_prob: continue
+        if _num(p.get("sweet_spot_pct"))    < min_hr_win:    continue
+        if _num(p.get("ev_pct"),   -999)   < min_ev:        continue
+        if _num(p.get("edge_pct"), -999)   < min_edge:      continue
+        if _num(p.get("confidence"), 0)    < min_conf:      continue
+        if _num(p.get("model_prob"), 0) * 100 < min_model_prob: continue
         if excl_started and _now_utc is not None:
             _gt = p.get("game_time_utc", "")
             if _gt:
@@ -1843,8 +1837,39 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
         "tac_min_barrel", "tac_min_hh", "tac_min_xslg", "tac_min_iso",
         "tac_min_pull_air", "tac_min_hr_window",
         "tac_min_ev", "tac_min_edge", "tac_min_conf", "tac_min_model_prob",
+        "tac_min_pit_hr_total", "tac_min_pit_hr_lhb", "tac_min_pit_hr_rhb",
     ]
-    _tac_n_active = sum(1 for _k in _tac_stat_keys if st.session_state.get(_k, 0.0) > 0.0)
+    # Neutral defaults: reset returns to a true no-filter state so widget state,
+    # active counts, and the eligible universe stay synchronized.
+    _tac_reset_defaults = {
+        "tac_min_barrel":     0.0,
+        "tac_min_hh":         0.0,
+        "tac_min_xslg":       0.0,
+        "tac_min_iso":        0.0,
+        "tac_min_pull_air":   0.0,
+        "tac_min_hr_window":  0.0,
+        "tac_min_matchup_pct": 75,
+        "tac_min_hvy_score":  0,
+        "tac_min_ev":         0.0,
+        "tac_min_edge":       0.0,
+        "tac_min_conf":       0.0,
+        "tac_min_model_prob": 0.0,
+        "tac_min_pit_hr_total": 0,
+        "tac_min_pit_hr_lhb":   0,
+        "tac_min_pit_hr_rhb":   0,
+        "tac_exclude_started": False,
+        "tac_include_live":   False,
+    }
+    def _tac_is_active(key: str) -> bool:
+        val = st.session_state.get(key, _tac_reset_defaults.get(key, 0.0))
+        if key == "tac_min_matchup_pct":
+            return float(val or 0) > 75.0
+        return float(val or 0) > 0.0
+
+    _tac_n_active = sum(
+        1 for _k in (_tac_stat_keys + ["tac_min_matchup_pct", "tac_min_hvy_score"])
+        if _tac_is_active(_k)
+    )
     if st.session_state.get("tac_exclude_started", False):
         _tac_n_active += 1
     _tac_panel_lbl = "⚙️  Tactical Command Center" + (
@@ -1854,17 +1879,14 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
         _tr0, _tr1 = st.columns([1, 5])
         with _tr0:
             if st.button("↺ Reset", key="tac_reset_all"):
-                for _k in _tac_stat_keys + [
-                    "tac_min_matchup_pct", "tac_min_hvy_score",
-                    "tac_exclude_started", "tac_include_live",
-                ]:
-                    st.session_state.pop(_k, None)
+                for _k, _v in _tac_reset_defaults.items():
+                    st.session_state[_k] = _v
                 st.rerun()
         with _tr1:
             st.caption(
                 f"Market thresholds (sidebar): EV ≥ {min_ev:.0f}%  ·  "
                 f"Edge ≥ {min_edge:.0f}%  ·  Conf ≥ {min_confidence}  ·  "
-                f"Filters below narrow the eligible universe for all 4 tabs."
+                "Filters below narrow the Main player universe; matchup/HVY controls apply within Matchup Edge."
             )
 
         _tf1, _tf2, _tf3, _tf4 = st.columns(4)
@@ -1902,12 +1924,37 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                 "Min Matchup Modifier", 75, 140, 75, 1,
                 key="tac_min_matchup_pct",
                 format="%d%%",
-                help="HVY modifier filter (100%=neutral, 110%=favorable) — active in Matchup Edge once pitch data is loaded",
+                help="HVY modifier filter (100%=neutral, 110%=favorable) — active in JIG Matchup Edge once pitch data is loaded",
             )
             st.slider(
                 "Min HVY Score", 0, 100, 0, 1,
                 key="tac_min_hvy_score",
-                help="HVY score gate (0–100) — active in JIG once pitch data is loaded",
+                help="HVY composite matchup score gate (0–100) — active in JIG once pitch data is loaded",
+            )
+
+        st.markdown(
+            "<div style='font-size:10px;color:#f97316;font-weight:700;"
+            "letter-spacing:1px;margin:8px 0 4px;'>PITCHER VULNERABILITY</div>",
+            unsafe_allow_html=True,
+        )
+        _tv1, _tv2, _tv3 = st.columns(3)
+        with _tv1:
+            st.slider(
+                "Min Total HR Allowed", 0, 30, 0, 1,
+                key="tac_min_pit_hr_total",
+                help="Pitcher must have allowed ≥ N HRs total (season) — 0 = no filter",
+            )
+        with _tv2:
+            st.slider(
+                "Min HR vs LHB", 0, 20, 0, 1,
+                key="tac_min_pit_hr_lhb",
+                help="Pitcher must have allowed ≥ N HRs vs left-handed batters — applied only to LHBs",
+            )
+        with _tv3:
+            st.slider(
+                "Min HR vs RHB", 0, 20, 0, 1,
+                key="tac_min_pit_hr_rhb",
+                help="Pitcher must have allowed ≥ N HRs vs right-handed batters — applied only to RHBs",
             )
 
         st.markdown(
@@ -1976,11 +2023,12 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
         if _optimizer_on and _optimizer_selected_names else _tac_ranked
     )
 
-    tab_qv, tab_elite, tab_edge, tab_port = st.tabs([
+    tab_qv, tab_elite, tab_edge, tab_port, tab_fs = st.tabs([
         f"⚡  QUICK VIEW  ({len(_display_pool)})",
         f"💎  ELITE  ({_n_elite})",
         "🎯  MATCHUP EDGE",
         "📊  PORTFOLIO",
+        f"🗂️  FULL SLATE  ({len(_tac_ranked)})",
     ])
 
     # ── TAB 1: QUICK VIEW ─────────────────────────────────────────────────────
@@ -2774,6 +2822,34 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                             )
 
 
+    # -- TAB 5: FULL SLATE --------------------------------------------------------
+    with tab_fs:
+        st.markdown(
+            "<span style='color:#a78bfa;font-size:13px;font-weight:700;letter-spacing:1px;'>"
+            "FULL SLATE</span>"
+            "<span style='color:#555;font-size:11px;margin-left:12px;'>"
+            "all eligible players · ranked EV×0.40 + Edge×0.35 + Confidence×0.25</span>",
+            unsafe_allow_html=True,
+        )
+        if not _tac_ranked:
+            st.info("No players eligible after current TCC filters.")
+        else:
+            _fs_sorted = sorted(
+                _tac_ranked,
+                key=lambda p: (
+                    (p.get("ev_pct",    0) or 0) * 0.40 +
+                    (p.get("edge_pct",  0) or 0) * 0.35 +
+                    (p.get("confidence",0) or 0) * 0.25
+                ),
+                reverse=True,
+            )
+            st.caption(
+                f"{len(_fs_sorted)} players · composite score: EV×0.40 + Edge×0.35 + Conf×0.25 · "
+                "TCC filters applied · use sidebar EV/Edge thresholds to narrow further"
+            )
+            _render_qualified_table(_fs_sorted, scale, min_ev, min_edge, _steam_names, "fs_main")
+
+
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 # TAB 2 — PARLAYS
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
@@ -3249,16 +3325,15 @@ def tab_jig(data: dict):
 
     def _hvy_metrics(p):
         """HVY-specific metrics: xSLG, ISO, Hard Hit, Barrel, Sweet Spot (HR window), Pull AIR."""
+        from clients.pull_air import resolve_pull_air_pct
+
         xslg_v   = _pf(p.get("xslg"), 0.0)
         slg      = xslg_v if xslg_v > 0.0 else _pf(p.get("actual_slg"), 0.0)
         iso      = _pf(p.get("xiso"), 0.0)
         hh       = _pf(p.get("hard_hit"))
         brl      = _pf(p.get("barrel_pct"))
         ss       = _pf(p.get("sweet_spot_pct"))   # HR launch window proxy (8–32°)
-        pull     = _pf(p.get("pull_pct"))
-        fb       = _pf(p.get("fb_pct"))
-        ld       = _pf(p.get("ld_pct"))
-        pull_air = pull * (fb + ld) / 100.0        # pulled airborne contact only
+        pull_air = resolve_pull_air_pct(p)
         return slg, iso, hh, brl, ss, pull_air
 
     def _slg_label(p):
@@ -3308,15 +3383,33 @@ def tab_jig(data: dict):
         slg_lbl = _slg_label(p)
         pa_str  = f"{pull_air:.1f}%" if pull_air > 0 else "—"
         _hvy_photo = _player_photo_html(p.get("player_id"), size=44)
+        # ── Dual grade system: Matchup Grade (HVY score) vs Model Grade (confidence tier)
+        # These are intentionally SEPARATE — great matchup + poor value, or vice versa, is a feature.
+        _mt_grade, _mt_c, _mt_bg = (
+            ("A+ ELITE",  "#4ade80",  "#052010") if hvy >= 70 else
+            ("A FAVOR",   "#86efac",  "#041a0c") if hvy >= 55 else
+            ("B MODERATE","#facc15",  "#1a1400") if hvy >= 40 else
+            ("C NEUTRAL",  "#94a3b8", "#111827") if hvy >= 25 else
+            ("D AVOID",    "#f87171", "#1a0505")
+        )
+        _mg_label = {"S": "S+ ELITE", "A": "A MODEL", "B": "B MODEL", "C": "C MODEL"}.get(_hvy_tier, f"{_hvy_tier} MODEL")
         st.markdown(
             f"<div style='background:#111827;border:1px solid {border};border-radius:10px;"
             f"padding:14px 16px;margin-bottom:6px;'>"
-            f"<div style='display:flex;justify-content:space-between;align-items:center;'>"
+            f"<div style='display:flex;justify-content:space-between;align-items:flex-start;'>"
             f"<div style='display:flex;align-items:center;'>{_hvy_photo}"
             f"<div style='font-size:15px;font-weight:800;color:#f0f0f0;'>{name}</div></div>"
-            f"<div style='font-size:18px;font-weight:900;color:{hc};'>HVY {hvy:.0f}"
-            f"<span style='font-size:10px;color:#666;margin-left:4px;'>(Base {base:.0f})</span>"
-            f"<span style='font-size:11px;color:{_hvy_tc};font-weight:700;margin-left:8px;'>{_hvy_tier}-Tier</span></div>"
+            f"<div style='text-align:right;'>"
+            f"<div style='font-size:17px;font-weight:900;color:{hc};margin-bottom:3px;'>HVY {hvy:.0f}"
+            f"<span style='font-size:10px;color:#555;margin-left:4px;'>base {base:.0f}</span></div>"
+            f"<div style='display:flex;gap:5px;justify-content:flex-end;flex-wrap:wrap;'>"
+            f"<span style='font-size:9px;font-weight:700;color:{_mt_c};"
+            f"background:{_mt_bg};border:1px solid {_mt_c}44;border-radius:4px;padding:2px 6px;"
+            f"letter-spacing:0.5px;'>MATCHUP: {_mt_grade}</span>"
+            f"<span style='font-size:9px;font-weight:700;color:{_hvy_tc};"
+            f"background:#0f172a;border:1px solid {_hvy_tc}44;border-radius:4px;padding:2px 6px;"
+            f"letter-spacing:0.5px;'>MODEL: {_mg_label}</span>"
+            f"</div></div>"
             f"</div>"
             f"<div style='font-size:12px;color:#888;margin:2px 0 4px;'>"
             f"{team} vs {opp} &nbsp;·&nbsp; vs {_hvy_pit_lbl}{pit_hand_lbl}</div>"
@@ -3408,6 +3501,11 @@ def tab_jig(data: dict):
                     whf   = f"{whf_v*100:.0f}%" if whf_v is not None else "—"
                     hh_p  = f"{hh_v*100:.0f}%" if hh_v is not None else "—"
                     rv_s  = f"{rv:+.1f}" if rv is not None else "—"
+                    # Per-pitch BA/SLG allowed by pitcher
+                    p_ba_v  = px.get("pitch_ba")
+                    p_slg_v = px.get("pitch_slg")
+                    p_ba_s  = f"{p_ba_v:.3f}" if p_ba_v is not None else "—"
+                    p_slg_s = f"{p_slg_v:.3f}" if p_slg_v is not None else "—"
                     # Pitch label favorability color
                     _fav = 0.0
                     if whf_v is not None: _fav -= (whf_v - _LG_WHIFF) * 3.0
@@ -3419,17 +3517,21 @@ def tab_jig(data: dict):
                     pc = ("#4ade80" if _fav >= 0.15 else
                           "#f87171" if _fav <= -0.15 else "#facc15")
                     # Cell backgrounds
-                    use_bg = ("#14532d" if use_v >= 35 else "#166534" if use_v >= 20 else "#0f172a")
-                    k_bg   = ("#7f1d1d" if (k_v or 0) >= 0.28 else "#450a0a" if (k_v or 0) >= 0.22
-                              else "#166534" if k_v is not None and k_v < 0.15 else "#0f172a")
-                    hr_bg  = ("#14532d" if (hr_v or 0) >= 0.04 else "#166534" if (hr_v or 0) >= 0.03
-                              else "#7f1d1d" if hr_v is not None and (hr_v or 0) < 0.015 else "#0f172a")
-                    whf_bg = ("#7f1d1d" if (whf_v or 0) >= 0.30 else "#450a0a" if (whf_v or 0) >= 0.22
-                              else "#166534" if (whf_v or 0) < 0.15 and whf_v is not None else "#0f172a")
-                    hh_bg  = ("#14532d" if (hh_v or 0) >= 0.50 else "#166534" if (hh_v or 0) >= 0.42
-                              else "#7f1d1d" if (hh_v or 0) < 0.34 and hh_v is not None else "#0f172a")
-                    rv_bg  = ("#7f1d1d" if (rv or 0) < -1.0 else "#450a0a" if (rv or 0) < 0
-                              else "#14532d" if (rv or 0) > 2.5 else "#166534" if (rv or 0) > 1.0 else "#0f172a")
+                    use_bg  = ("#14532d" if use_v >= 35 else "#166534" if use_v >= 20 else "#0f172a")
+                    k_bg    = ("#7f1d1d" if (k_v or 0) >= 0.28 else "#450a0a" if (k_v or 0) >= 0.22
+                               else "#166534" if k_v is not None and k_v < 0.15 else "#0f172a")
+                    hr_bg   = ("#14532d" if (hr_v or 0) >= 0.04 else "#166534" if (hr_v or 0) >= 0.03
+                               else "#7f1d1d" if hr_v is not None and (hr_v or 0) < 0.015 else "#0f172a")
+                    whf_bg  = ("#7f1d1d" if (whf_v or 0) >= 0.30 else "#450a0a" if (whf_v or 0) >= 0.22
+                               else "#166534" if (whf_v or 0) < 0.15 and whf_v is not None else "#0f172a")
+                    hh_bg   = ("#14532d" if (hh_v or 0) >= 0.50 else "#166534" if (hh_v or 0) >= 0.42
+                               else "#7f1d1d" if (hh_v or 0) < 0.34 and hh_v is not None else "#0f172a")
+                    rv_bg   = ("#7f1d1d" if (rv or 0) < -1.0 else "#450a0a" if (rv or 0) < 0
+                               else "#14532d" if (rv or 0) > 2.5 else "#166534" if (rv or 0) > 1.0 else "#0f172a")
+                    ba_bg   = ("#14532d" if (p_ba_v or 0) >= 0.310 else "#166534" if (p_ba_v or 0) >= 0.270
+                               else "#7f1d1d" if p_ba_v is not None and (p_ba_v or 0) < 0.220 else "#0f172a")
+                    slg_bg  = ("#14532d" if (p_slg_v or 0) >= 0.500 else "#166534" if (p_slg_v or 0) >= 0.420
+                               else "#7f1d1d" if p_slg_v is not None and (p_slg_v or 0) < 0.320 else "#0f172a")
                     rows += (
                         f"<tr>"
                         f"<td style='padding:4px 6px;'><b style='color:{pc};font-size:11px;'>{lbl}</b></td>"
@@ -3437,6 +3539,8 @@ def tab_jig(data: dict):
                         f"<td style='background:#0f172a;color:#94a3b8;{_td}'>{spd}</td>"
                         f"<td style='background:{k_bg};color:#e2e8f0;{_td}'>{kp_s}</td>"
                         f"<td style='background:{hr_bg};color:#e2e8f0;{_td}'>{hrp_s}</td>"
+                        f"<td style='background:{ba_bg};color:#e2e8f0;{_td}'>{p_ba_s}</td>"
+                        f"<td style='background:{slg_bg};color:#e2e8f0;{_td}'>{p_slg_s}</td>"
                         f"<td style='background:{whf_bg};color:#e2e8f0;{_td}'>{whf}</td>"
                         f"<td style='background:{hh_bg};color:#e2e8f0;{_td}'>{hh_p}</td>"
                         f"<td style='background:{rv_bg};color:#e2e8f0;{_td}'>{rv_s}</td>"
@@ -3448,9 +3552,9 @@ def tab_jig(data: dict):
                     "<thead>"
                     "<tr style='background:#0f172a;'>"
                     f"<th colspan='3' style='background:#0f172a;padding:2px 6px;border-bottom:0;'></th>"
-                    f"<th colspan='5' style='background:#0a1628;color:#3b82f6;font-size:9px;"
+                    f"<th colspan='7' style='background:#0a1628;color:#3b82f6;font-size:9px;"
                     f"letter-spacing:1px;font-weight:700;padding:3px 6px;text-align:center;"
-                    f"border-top:2px solid #1e3a5f;border-bottom:0;'>── STATS ──</th>"
+                    f"border-top:2px solid #1e3a5f;border-bottom:0;'>── PITCHER ALLOWED ──</th>"
                     "</tr>"
                     "<tr>"
                     f"<th style='{_th_l}'>Pitch</th>"
@@ -3458,6 +3562,8 @@ def tab_jig(data: dict):
                     f"<th style='{_th}'>MPH</th>"
                     f"<th style='{_th}border-left:1px solid #1e3a5f;'>K%</th>"
                     f"<th style='{_th}'>HR%</th>"
+                    f"<th style='{_th}'>BA</th>"
+                    f"<th style='{_th}'>SLG</th>"
                     f"<th style='{_th}'>Whiff%</th>"
                     f"<th style='{_th}'>HH%</th>"
                     f"<th style='{_th}'>RV/100</th>"
@@ -3467,7 +3573,7 @@ def tab_jig(data: dict):
                     "</table>"
                     "<div style='font-size:9px;color:#475569;margin-top:3px;'>"
                     "Pitch: 🟢 batter-favoring · 🔴 pitcher-favoring · 🟡 neutral"
-                    " &nbsp;|&nbsp; K%/Whiff%: 🔴=high · HH%: 🟢=high · RV/100: 🟢=positive</div>",
+                    " &nbsp;|&nbsp; K%/Whiff%: 🔴=high · BA/SLG/HH%: 🟢=high (hitter-friendly) · RV/100: 🟢=positive</div>",
                     unsafe_allow_html=True,
                 )
 
@@ -3710,6 +3816,8 @@ def tab_jig(data: dict):
                                    (_sp_l.get("slg", 0) * _sp_l.get("pa", 0))) / _sp_pa
                         _sp_iso = ((_sp_r.get("iso", 0) * _sp_r.get("pa", 0)) +
                                    (_sp_l.get("iso", 0) * _sp_l.get("pa", 0))) / _sp_pa
+                        _sp_ba  = ((_sp_r.get("ba", 0) * _sp_r.get("pa", 0)) +
+                                   (_sp_l.get("ba", 0) * _sp_l.get("pa", 0))) / _sp_pa
                         _row_bg = "#1e293b"
                         _lbl_c  = "#94a3b8"
                         _badge  = ""
@@ -3720,17 +3828,19 @@ def tab_jig(data: dict):
                             _sp_rows += (
                                 f"<tr style='background:#111827;'>"
                                 f"<td style='color:#555;padding:4px 6px;'>{_lbl}</td>"
-                                f"<td colspan='5' style='color:#444;font-size:10px;padding:4px 6px;'>no data</td></tr>"
+                                f"<td colspan='6' style='color:#444;font-size:10px;padding:4px 6px;'>no data</td></tr>"
                             )
                             continue
                         _sp_hr  = _sp.get("hr", 0)
+                        _sp_ba  = _sp.get("ba", 0.0)
                         _sp_slg = _sp.get("slg", 0.0)
                         _sp_iso = _sp.get("iso", 0.0)
                         _row_bg = "#1a3a2a" if _hand == _this_hand else "#111827"
                         _lbl_c  = "#fbbf24" if _hand == _this_hand else "#94a3b8"
                         _badge  = " ◀" if _hand == _this_hand else ""
                     _sp_hrr = _sp_hr / max(_sp_pa, 1)
-                    _hr9    = round(_sp_hrr * 27, 2)
+                    _ba_c   = ("#4ade80" if _sp_ba >= 0.290 else
+                               "#f87171" if _sp_ba < 0.220 else "#f0f0f0")
                     _slg_c  = ("#4ade80" if _sp_slg >= 0.450 else
                                "#f87171" if _sp_slg < 0.330 else "#f0f0f0")
                     _iso_c  = ("#4ade80" if _sp_iso >= 0.200 else
@@ -3744,6 +3854,7 @@ def tab_jig(data: dict):
                         f"<td style='padding:4px 6px;text-align:center;'>{_sp_pa}</td>"
                         f"<td style='padding:4px 6px;text-align:center;color:{_hr_c};font-weight:700;'>{_sp_hr}</td>"
                         f"<td style='padding:4px 6px;text-align:center;color:{_hr_c};'>{_sp_hrr:.3f}</td>"
+                        f"<td style='padding:4px 6px;text-align:center;color:{_ba_c};'>{_sp_ba:.3f}</td>"
                         f"<td style='padding:4px 6px;text-align:center;color:{_slg_c};font-weight:700;'>{_sp_slg:.3f}</td>"
                         f"<td style='padding:4px 6px;text-align:center;color:{_iso_c};'>{_sp_iso:.3f}</td>"
                         f"</tr>"
@@ -3757,11 +3868,12 @@ def tab_jig(data: dict):
                         "<th style='padding:4px 6px;text-align:center;'>PA</th>"
                         "<th style='padding:4px 6px;text-align:center;'>HR</th>"
                         "<th style='padding:4px 6px;text-align:center;'>HR/PA</th>"
+                        "<th style='padding:4px 6px;text-align:center;'>BA</th>"
                         "<th style='padding:4px 6px;text-align:center;'>SLG</th>"
                         "<th style='padding:4px 6px;text-align:center;'>ISO</th>"
                         f"</tr>{_sp_rows}</table>"
                         "<div style='font-size:9px;color:#555;margin-bottom:8px;'>"
-                        "🟢 green = favorable for batter &nbsp;|&nbsp; 🔴 red = favorable for pitcher</div>",
+                        "🟢 green = favorable for batter &nbsp;|&nbsp; 🔴 red = favorable for pitcher &nbsp;|&nbsp; ◀ current matchup</div>",
                         unsafe_allow_html=True,
                     )
                 else:
@@ -3852,14 +3964,9 @@ def tab_jig(data: dict):
 
     def _render_hvy_views(hvy_contexts: dict, src_players: list = None):
         """Render JIG Matchup Intelligence views."""
-        # Scoring reference thresholds (fixed — calibrated midpoints, not user-adjustable)
-        # Filter gates: take the stricter of Main TCC and JIG TCC values
-        _main_mod_pct  = st.session_state.get("tac_min_matchup_pct",     75)
-        _jig_mod_pct   = st.session_state.get("jig_tac_min_matchup_pct", 75)
-        hvy_matchup_min = max(_main_mod_pct, _jig_mod_pct) / 100.0
-        _main_hvy      = st.session_state.get("tac_min_hvy_score",     0)
-        _jig_hvy       = st.session_state.get("jig_tac_min_hvy_score", 0)
-        hvy_score_min  = max(_main_hvy, _jig_hvy)
+        # JIG thresholds are independent from Main TCC thresholds.
+        hvy_matchup_min = st.session_state.get("jig_tac_min_matchup_pct", 75) / 100.0
+        hvy_score_min   = st.session_state.get("jig_tac_min_hvy_score", 0)
 
         _players = src_players if src_players is not None else all_players
 
@@ -3892,6 +3999,31 @@ def tab_jig(data: dict):
         scored    = sorted(_entries, key=lambda x: x["jig"], reverse=True)
         # Apply matchup modifier filter
         scored    = [x for x in scored if x["ctx"].get("hvy_modifier", 1.0) >= hvy_matchup_min]
+
+        # JIG pitcher-vulnerability thresholds are independent from Main TCC thresholds.
+        _pit_hr_min_total = st.session_state.get("jig_tac_min_pit_hr_total", 0)
+        _pit_hr_min_lhb   = st.session_state.get("jig_tac_min_pit_hr_lhb", 0)
+        _pit_hr_min_rhb   = st.session_state.get("jig_tac_min_pit_hr_rhb", 0)
+        if _pit_hr_min_total > 0 or _pit_hr_min_lhb > 0 or _pit_hr_min_rhb > 0:
+            def _pit_hr_passes(entry):
+                _splits = entry["ctx"].get("hand_splits", {})
+                if not _splits:
+                    return True  # no data — don't penalize
+                _hr_L = _splits.get("L", {}).get("hr", 0) or 0
+                _hr_R = _splits.get("R", {}).get("hr", 0) or 0
+                _hr_tot = _hr_L + _hr_R
+                if _pit_hr_min_total > 0 and _hr_tot < _pit_hr_min_total:
+                    return False
+                _hand = (entry["player"].get("batter_side") or
+                         entry["player"].get("batter_hand") or
+                         entry["player"].get("stand") or "R").upper()
+                if _pit_hr_min_lhb > 0 and _hand == "L" and _hr_L < _pit_hr_min_lhb:
+                    return False
+                if _pit_hr_min_rhb > 0 and _hand == "R" and _hr_R < _pit_hr_min_rhb:
+                    return False
+                return True
+            scored = [x for x in scored if _pit_hr_passes(x)]
+
         qualified = [x for x in scored if x["passes"]]
         prime     = [x for x in qualified
                      if x["player"].get("best_american") and x["player"].get("ev_pct", 0) > 0]
@@ -3912,7 +4044,14 @@ def tab_jig(data: dict):
 
         with st.expander(f"🔍 Debug — {len(_players)} players, {len(qualified)} qualified HVY",
                          expanded=len(qualified) == 0):
-            st.write(f"**Gate:** HVY ≥ {hvy_score_min} | Matchup Modifier ≥ {hvy_matchup_min:.2f}×  "
+            _pit_debug = ""
+            if _pit_hr_min_total > 0 or _pit_hr_min_lhb > 0 or _pit_hr_min_rhb > 0:
+                _pit_debug = (
+                    f" | Pit HR ≥ {_pit_hr_min_total} total"
+                    + (f" / ≥{_pit_hr_min_lhb} vs LHB" if _pit_hr_min_lhb > 0 else "")
+                    + (f" / ≥{_pit_hr_min_rhb} vs RHB" if _pit_hr_min_rhb > 0 else "")
+                )
+            st.write(f"**Gate:** HVY ≥ {hvy_score_min} | Matchup Modifier ≥ {hvy_matchup_min:.2f}×{_pit_debug}  "
                      f"·  Scoring refs: xSLG 0.40 · ISO 0.15 · HH 35.0 · Brl 5.0 · SS 28.0 · PullAIR 12.0")
             _savant_ok = st.session_state.get("_hvy_savant_ok")
             _cand_n    = st.session_state.get("_hvy_candidates_n", 0)
@@ -3930,11 +4069,12 @@ def tab_jig(data: dict):
                 st.write(f"**Savant data:** {_ctx_with_data} / {len(hvy_contexts)} contexts have pitch data "
                          f"({_cand_n} candidates loaded)")
 
-        _hq, _hp, _ha, _hpr = st.tabs([
+        _hq, _hp, _ha, _hpr, _hfts = st.tabs([
             f"🎯 Matchups ({len(qualified)})",
             "⚡ Arsenal",
             "💪 Power Profiles",
             "🔗 Stacks",
+            f"🗂️ Full Tactical ({len(scored)})",
         ])
 
         with _hq:
@@ -4016,11 +4156,30 @@ def tab_jig(data: dict):
                 for entry in prime:
                     _hvy_card(entry, key_prefix="hvypr")
 
+        with _hfts:
+            st.markdown(
+                "<span style='color:#f97316;font-size:13px;font-weight:700;letter-spacing:1px;'>"
+                "FULL TACTICAL SLATE</span>"
+                "<span style='color:#555;font-size:11px;margin-left:12px;'>"
+                "all players passing TCC batter filters · ranked by HVY score · "
+                "no HVY threshold gate applied</span>",
+                unsafe_allow_html=True,
+            )
+            if not scored:
+                st.info("No players available — refresh pitch data or lower TCC batter filters.")
+            else:
+                st.caption(
+                    f"{len(scored)} players · sorted by HVY score · "
+                    "matchup modifier and pitcher HR filters still applied · threshold gate removed"
+                )
+                for entry in scored:
+                    _hvy_card(entry, key_prefix="hvyfts")
+
     # ── JIG — Pitch Mix Intelligence ──────────────────────────────────────────
     st.caption(
         "xSLG (25%) · Barrel (20%) · ISO (15%) · Pull AIR (15%) · Hard Hit (15%) · HR Window (10%)"
         "  ·  Context: arsenal matchup · hand splits · contact shape · environment · H2H  ·  "
-        "Global filters via Main → ⚙️ Tactical Command Center"
+        "JIG Tactical Command Center controls apply only within JIG."
     )
     from clients.pitch_mix import HVY_CACHE_VERSION as _HVY_VER
     _hvy_ck = f"hvy_ctx_{data.get('date', '')}_{_HVY_VER}"
@@ -4068,13 +4227,29 @@ def tab_jig(data: dict):
         "jig_tac_min_barrel", "jig_tac_min_hh", "jig_tac_min_xslg", "jig_tac_min_iso",
         "jig_tac_min_pull_air", "jig_tac_min_hr_window",
         "jig_tac_min_matchup_pct", "jig_tac_min_hvy_score",
+        "jig_tac_min_pit_hr_total", "jig_tac_min_pit_hr_lhb", "jig_tac_min_pit_hr_rhb",
     ]
+    _jig_tac_reset_defaults = {
+        "jig_tac_min_barrel": 0.0,
+        "jig_tac_min_hh": 0.0,
+        "jig_tac_min_xslg": 0.0,
+        "jig_tac_min_iso": 0.0,
+        "jig_tac_min_pull_air": 0.0,
+        "jig_tac_min_hr_window": 0.0,
+        "jig_tac_min_matchup_pct": 75,
+        "jig_tac_min_hvy_score": 0,
+        "jig_tac_min_pit_hr_total": 0,
+        "jig_tac_min_pit_hr_lhb": 0,
+        "jig_tac_min_pit_hr_rhb": 0,
+        "jig_tac_exclude_started": False,
+        "jig_tac_include_live": False,
+    }
     with st.expander("⚙️ JIG Tactical Command Center", expanded=False):
         _jrc, _jreset = st.columns([5, 1])
         with _jreset:
             if st.button("Reset", key="jig_tac_reset"):
-                for _k in _jig_tac_stat_keys + ["jig_tac_exclude_started", "jig_tac_include_live"]:
-                    st.session_state.pop(_k, None)
+                for _k, _v in _jig_tac_reset_defaults.items():
+                    st.session_state[_k] = _v
                 st.rerun()
         with _jrc:
             st.caption("Narrow JIG player universe by batter profile + matchup context")
@@ -4121,7 +4296,7 @@ def tab_jig(data: dict):
             st.slider(
                 "Min HVY Score", 0, 100, 0, 1,
                 key="jig_tac_min_hvy_score",
-                help="Composite batter power score floor (0–100)",
+                help="Composite batter matchup score floor (0–100)",
             )
         with _jb3:
             _jig_cutoff = st.session_state.get("cutoff_utc_hour")
@@ -4132,6 +4307,31 @@ def tab_jig(data: dict):
                 st.caption(f"⏰ Time gate: {_jig_h12}:00 {_jig_ampm} ET  ←  sidebar")
             else:
                 st.caption("⏰ No time gate  ←  sidebar")
+
+        st.markdown(
+            "<div style='font-size:10px;color:#f97316;font-weight:700;"
+            "letter-spacing:1px;margin:8px 0 4px;'>PITCHER VULNERABILITY</div>",
+            unsafe_allow_html=True,
+        )
+        _jv1, _jv2, _jv3, _jv4, _jv5 = st.columns(5)
+        with _jv1:
+            st.slider(
+                "Min Total HR Allowed", 0, 30, 0, 1,
+                key="jig_tac_min_pit_hr_total",
+                help="Pitcher must have allowed ≥ N HRs total (season) — 0 = no filter",
+            )
+        with _jv2:
+            st.slider(
+                "Min HR vs LHB", 0, 20, 0, 1,
+                key="jig_tac_min_pit_hr_lhb",
+                help="Pitcher must have allowed ≥ N HRs vs LHBs — applied only to LHBs",
+            )
+        with _jv3:
+            st.slider(
+                "Min HR vs RHB", 0, 20, 0, 1,
+                key="jig_tac_min_pit_hr_rhb",
+                help="Pitcher must have allowed ≥ N HRs vs RHBs — applied only to RHBs",
+            )
 
         _jte1, _jte2 = st.columns(2)
         with _jte1:

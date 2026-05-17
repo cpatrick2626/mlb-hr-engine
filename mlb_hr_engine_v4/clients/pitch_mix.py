@@ -95,7 +95,11 @@ def _finalize_pitch_stats(totals: dict, total_pa_denom: int) -> dict:
     out = {}
     denom = total_pa_denom or 1
     for pt, p in totals.items():
-        _disp_hh = round(p["hard_hit"] / p["contact"], 3) if p.get("contact", 0) >= 5 else None
+        _ab       = p["ab"] or 1
+        _pitch_ba  = round(p["h"]  / _ab, 3)
+        _pitch_slg = round(p["tb"] / _ab, 3)
+        _pitch_iso = round(max(0.0, _pitch_slg - _pitch_ba), 3)
+        _disp_hh  = round(p["hard_hit"] / p["contact"], 3) if p.get("contact", 0) >= 5 else None
         out[pt] = {
             "pa":        p["pa"],
             "pitch_pct": round(p["pa"] / denom, 4),
@@ -105,6 +109,10 @@ def _finalize_pitch_stats(totals: dict, total_pa_denom: int) -> dict:
             "hr_rate":   round(p["hr"] / p["pa"], 3) if p["pa"] else 0.0,
             "avg_speed": round(p["speed_sum"] / p["speed_n"], 1) if p["speed_n"] else None,
             "display_hh": _disp_hh,
+            # BA/SLG/ISO allowed vs this pitch type — used in arsenal display table
+            "pitch_ba":  _pitch_ba,
+            "pitch_slg": _pitch_slg,
+            "pitch_iso": _pitch_iso,
         }
     return out
 
@@ -136,6 +144,14 @@ for _alias, _canon in _PITCH_CANONICAL.items():
 def _canonical_pt(pt: str) -> str:
     """Return canonical pitch type code, resolving known Savant naming changes."""
     return _PITCH_CANONICAL.get(pt, pt)
+
+
+def _first_not_none(*vals):
+    """Return the first non-None value, preserving legitimate 0/0.0 metrics."""
+    for v in vals:
+        if v is not None:
+            return v
+    return None
 
 # League-average baselines for modifier signals — canonical values from config.py.
 # Update config.py (not here) at each mid-season refresh.
@@ -329,7 +345,7 @@ def _fetch_pitcher_savant(pitcher_id: int) -> dict:
                 slg = round(h["tb"] / ab, 3)
                 avg = round(h["h"]  / ab, 3)
                 iso = round(max(0.0, slg - avg), 3)
-                hand_splits[hand] = {"pa": h["pa"], "hr": h["hr"], "slg": slg, "iso": iso}
+                hand_splits[hand] = {"pa": h["pa"], "hr": h["hr"], "ba": avg, "slg": slg, "iso": iso}
 
             pitch_stats     = _finalize_pitch_stats(pitch_totals, total_pa)
             r_pa            = hand_totals.get("R", {}).get("pa", 0)
@@ -674,9 +690,17 @@ def _build_pitcher_arsenal(pitcher_id: int | None, arsenal_data: dict | None,
             "k_pct":         live.get("k_pct"),
             "hr_rate":       live.get("hr_rate"),
             "pa":            live.get("pa", 0),
+            # Per-pitch BA/SLG/ISO allowed by the pitcher — display only, not used by formula
+            "pitch_ba":      live.get("pitch_ba"),
+            "pitch_slg":     live.get("pitch_slg"),
+            "pitch_iso":     live.get("pitch_iso"),
             # Display-only — NOT used by formula
-            "display_whiff": ds.get("whiff_pct") or entry.get("whiff_pct"),
-            "display_hh":    live.get("display_hh") or ds.get("hard_hit_pct") or entry.get("hard_hit_pct"),
+            "display_whiff": _first_not_none(ds.get("whiff_pct"), entry.get("whiff_pct")),
+            "display_hh":    _first_not_none(
+                live.get("display_hh"),
+                ds.get("hard_hit_pct"),
+                entry.get("hard_hit_pct"),
+            ),
             "display_rv100": ds.get("rv_per100")   if ds.get("rv_per100") is not None else entry.get("rv_per100"),
         }
 
@@ -703,8 +727,11 @@ def _build_pitcher_arsenal(pitcher_id: int | None, arsenal_data: dict | None,
             "hard_hit_pct":  None,       # formula field — keep None
             "k_pct":         ps.get("k_pct"),
             "hr_rate":       ps.get("hr_rate"),
+            "pitch_ba":      ps.get("pitch_ba"),
+            "pitch_slg":     ps.get("pitch_slg"),
+            "pitch_iso":     ps.get("pitch_iso"),
             "display_whiff": ds.get("whiff_pct"),
-            "display_hh":    ps.get("display_hh") or ds.get("hard_hit_pct"),
+            "display_hh":    _first_not_none(ps.get("display_hh"), ds.get("hard_hit_pct")),
             "display_rv100": ds.get("rv_per100"),
         })
     arsenal = _normalize_pitch_pct(arsenal, pitcher_id)
