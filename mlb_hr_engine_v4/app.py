@@ -1813,11 +1813,154 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                 + f"</div>",
                 unsafe_allow_html=True,
             )
-            _qv_pairs = [_qv_pool[i:i+2] for i in range(0, len(_qv_pool), 2)]
+            # ── ALPHA SLATE: top 3 picks, full-width ──────────────────────────
+            _qv_top  = _qv_pool[:3]
+            _qv_rest = _qv_pool[3:]
+            if _qv_top:
+                st.markdown(
+                    "<div style='font-size:10px;color:#a78bfa;font-weight:700;letter-spacing:2px;"
+                    "margin:0 0 6px;'>ALPHA SLATE</div>",
+                    unsafe_allow_html=True,
+                )
+            for _qi, _qp in enumerate(_qv_top):
+                _qev       = _qp.get("ev_pct", 0)
+                _qedge     = _qp.get("edge_pct", 0)
+                _qodds     = _qp.get("best_american")
+                _qmodel    = _qp.get("model_prob", 0) * 100
+                _qteam     = _qp.get("team", "")
+                _qopp      = _qp.get("opponent", "")
+                _qspot     = _qp.get("lineup_spot")
+                _qbarrel   = _pf(_qp.get("barrel_pct"), 0.0)
+                _qev_col   = "#4ade80" if _qev >= 0 else "#f87171"
+                _qedge_col = _edge_col(_qedge)
+                _qtier     = _qp.get("confidence_tier", "C")
+                _qtier_col = {"S": "#FFD700", "A": "#4ade80", "B": "#facc15", "C": "#f87171"}.get(_qtier, "#888")
+                _qurl      = _fanduel_url(_qp["player_name"])
+                _qis_steam = _qp.get("player_name") in _steam_names
+                _qstatus_html, _qis_live = _game_status_badge(_qp)
+                _qgt = _game_time_et(_qp.get("game_time_utc", ""))
+                if _qgt:
+                    _qgt_str = _qgt.strftime('%I:%M %p ET').lstrip('0')
+                    _qgt_dt  = _dt.datetime.combine(_now_et.date(), _qgt, tzinfo=_EDT)
+                    _mins_to = int((_qgt_dt - _now_et).total_seconds() / 60)
+                    if _mins_to < 0:
+                        _urgency_col = "#555"; _urgency_lbl = ""
+                    elif _mins_to < 60:
+                        _urgency_col = "#f87171"; _urgency_lbl = f"BET NOW · {_mins_to}m"
+                    elif _mins_to < 120:
+                        _urgency_col = "#FFD700"; _urgency_lbl = f"{_mins_to}m"
+                    else:
+                        _urgency_col = "#4ade80"; _urgency_lbl = f"{_mins_to // 60}h {_mins_to % 60}m"
+                else:
+                    _qgt_str = "TBD"; _urgency_col = "#555"; _urgency_lbl = ""
+                _steam_border = "#f87171" if _qis_live else ("#666600" if _qis_steam else "#2a2a50")
+                _steam_bg     = "#1a0000" if _qis_live else ("#1a1a00" if _qis_steam else "#0e0e24")
+                _qopt_badge = (
+                    "<span style='background:#0a3a0a;color:#4ade80;font-size:9px;"
+                    "padding:1px 5px;border-radius:3px;'>🎯 OPT</span>"
+                    if (_optimizer_on and _qp.get("player_name") in _optimizer_selected_names) else ""
+                )
+                _qsteam_badge = (
+                    "<span style='background:#444400;color:#FFD700;font-size:9px;"
+                    "padding:1px 5px;border-radius:3px;'>📈 STEAM</span>"
+                    if _qis_steam else ""
+                )
+                _rank_col  = ["#FFD700", "#C0C0C0", "#CD7F32"][_qi]
+                _rank_badge = (
+                    f"<span style='background:#1e1e40;color:{_rank_col};font-size:13px;"
+                    f"font-weight:900;padding:3px 8px;border-radius:5px;min-width:28px;"
+                    f"display:inline-block;text-align:center;'>#{_qi+1}</span>"
+                )
+                _brl_badge = (
+                    f"<span style='background:#0a2a0a;color:#4ade80;font-size:9px;"
+                    f"padding:1px 5px;border-radius:3px;'>🛢 {_qbarrel:.1f}%</span>"
+                    if _qbarrel >= 6 else ""
+                )
+                _qphoto   = _player_photo_html(_qp.get("player_id"), size=48)
+                _qhand    = _qp.get("pitcher_hand", "")
+                _qpit_n   = _qp.get("pitcher_name", "")
+                _qhand_lbl = f" ({'RHP' if _qhand == 'R' else 'LHP'})" if _qhand else ""
+                _qpit_lbl  = _pitcher_label(_qpit_n, _qp.get("pitcher_factor", 1.0), _qp.get("platoon_factor", 1.0)) if _qpit_n else "TBD"
+                _qbet      = _qp.get("bet_size") or _qp.get("bet_dollars")
+                _qbrl_meter_pct = min(100, int(_qbarrel / 18.0 * 100))
+                _qbrl_col  = "#4ade80" if _qbarrel >= 10 else "#86efac" if _qbarrel >= 8 else "#f0f0f0" if _qbarrel >= 6 else "#555"
+
+                if st.button(
+                    f"{'✅' if _qspot is not None else '⏳'} {_qp['player_name']}",
+                    key=f"oi_qv_{_qi}",
+                    use_container_width=True,
+                ):
+                    st.session_state["show_modal"] = _qp
+                    st.session_state["modal_source_tab"] = "Quick View"
+                    st.rerun()
+
+                st.markdown(
+                    f"<div style='background:{_steam_bg};border:1px solid {_steam_border};"
+                    f"border-radius:10px;padding:12px 16px;margin-bottom:6px;'>"
+                    # Row 1: rank + photo + identity + odds
+                    f"<div style='display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;'>"
+                    f"<div style='display:flex;align-items:center;gap:8px;'>"
+                    f"{_rank_badge}{_qphoto}"
+                    f"<div>"
+                    f"<div style='font-size:12px;color:#888;margin-top:2px;'>"
+                    f"{_qteam} vs {_qopp} · {_qpit_lbl}{_qhand_lbl}"
+                    + (f"  <span style='font-size:10px;color:#555;'>Bat #{_qspot}</span>" if _qspot else "")
+                    + f"</div></div></div>"
+                    f"<div style='text-align:right;'>"
+                    f"<a href='{_qurl}' target='_blank' style='text-decoration:none;'>"
+                    f"<div style='font-size:22px;font-weight:700;color:#FF6666;'>{_fmt_american(_qodds)}</div>"
+                    f"<div style='font-size:10px;color:#888;'>best odds ↗</div></a>"
+                    + (f"<div style='font-size:10px;color:#555;margin-top:2px;'>Bet ${float(_qbet):.0f}</div>" if _qbet else "")
+                    + f"</div></div>"
+                    # Row 2: game time + badges
+                    f"<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;'>"
+                    f"<div style='font-size:11px;'>"
+                    + (_qstatus_html if _qstatus_html else
+                       f"<span style='color:#888;'>🕐 {_qgt_str}</span>"
+                       + (f"  <span style='font-weight:700;color:{_urgency_col};'>· {_urgency_lbl}</span>" if _urgency_lbl else ""))
+                    + f"</div>"
+                    f"<div style='display:flex;gap:4px;'>{_brl_badge}{_qsteam_badge}{_qopt_badge}</div>"
+                    f"</div>"
+                    # Barrel meter (if barrel >= 6%)
+                    + (
+                        f"<div style='background:#111;border-radius:3px;height:3px;margin-bottom:8px;'>"
+                        f"<div style='background:{_qbrl_col};width:{_qbrl_meter_pct}%;height:3px;border-radius:3px;'>"
+                        f"</div></div>"
+                        if _qbarrel >= 6 else ""
+                    )
+                    # Row 3: stat pills — MODEL / EV / EDGE / TIER / BARREL
+                    + f"<div style='display:flex;gap:4px;'>"
+                    f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:5px;padding:5px 2px;'>"
+                    f"<div style='font-size:15px;font-weight:700;color:#a78bfa;'>{_qmodel:.0f}%</div>"
+                    f"<div style='font-size:9px;color:#555;'>MODEL</div></div>"
+                    f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:5px;padding:5px 2px;'>"
+                    f"<div style='font-size:15px;font-weight:700;color:{_qev_col};'>{_qev:+.1f}%</div>"
+                    f"<div style='font-size:9px;color:#555;'>EV</div></div>"
+                    f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:5px;padding:5px 2px;'>"
+                    f"<div style='font-size:15px;font-weight:700;color:{_qedge_col};'>{_qedge:+.1f}%</div>"
+                    f"<div style='font-size:9px;color:#555;'>EDGE</div></div>"
+                    f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:5px;padding:5px 2px;'>"
+                    f"<div style='font-size:15px;font-weight:700;color:{_qtier_col};'>{_qtier}</div>"
+                    f"<div style='font-size:9px;color:#555;'>TIER</div></div>"
+                    f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:5px;padding:5px 2px;'>"
+                    f"<div style='font-size:15px;font-weight:700;color:{_qbrl_col};'>{_qbarrel:.1f}%</div>"
+                    f"<div style='font-size:9px;color:#555;'>BARREL</div></div>"
+                    f"</div></div>",
+                    unsafe_allow_html=True,
+                )
+
+            # ── EXTENDED SLATE: picks 4–12, 2-col grid ─────────────────────────
+            if _qv_rest:
+                st.markdown(
+                    "<div style='font-size:10px;color:#444;font-weight:700;letter-spacing:2px;"
+                    "margin:10px 0 6px;'>EXTENDED SLATE</div>",
+                    unsafe_allow_html=True,
+                )
+            _qv_pairs = [_qv_rest[i:i+2] for i in range(0, len(_qv_rest), 2)]
             for _pair_idx, _pair in enumerate(_qv_pairs):
                 _cols = st.columns(2)
                 for _col_idx, _qp in enumerate(_pair):
-                    _qi = _pair_idx * 2 + _col_idx
+                    _qi = 3 + _pair_idx * 2 + _col_idx
                     with _cols[_col_idx]:
                         _qev       = _qp.get("ev_pct", 0)
                         _qedge     = _qp.get("edge_pct", 0)
