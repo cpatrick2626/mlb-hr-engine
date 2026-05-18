@@ -186,10 +186,12 @@ def render_preset_bar(preset_key_ss: str, presets: dict, reset_cb=None) -> None:
                 help=pdef.get("help", ""),
                 use_container_width=True,
             ):
+                _changed = any(st.session_state.get(k) != v for k, v in pdef["values"].items())
                 for k, v in pdef["values"].items():
                     st.session_state[k] = v
                 st.session_state[preset_key_ss] = pk
-                st.rerun()
+                if _changed:
+                    st.rerun()
     if reset_cb is not None:
         with cols[-1]:
             if st.button("↺ Reset", key=f"_preset_reset_{preset_key_ss}", use_container_width=True):

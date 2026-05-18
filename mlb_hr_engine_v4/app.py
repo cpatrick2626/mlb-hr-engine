@@ -37,7 +37,7 @@ st.set_page_config(
     page_title="Codex HR Engine",
     page_icon="⚾",
     layout="wide",
-    initial_sidebar_state="expanded",
+    initial_sidebar_state="auto",
 )
 
 # PWA + mobile home-screen support
@@ -2589,18 +2589,42 @@ def _render_full_slate_all_players(
         return 9999
 
     sorted_gks = sorted(games.keys(), key=_gsk)
+    _n_total_games = len(sorted_gks)
 
     # Summary line
     n_qual  = sum(1 for p in all_players if p.get("player_name") in qualified_names)
     n_elite = sum(1 for p in all_players if _pf(p.get("barrel_pct"), 0) >= 8.0)
     n_odds  = sum(1 for p in all_players if p.get("ev_pct") is not None)
+
+    # Page size control — limit games rendered to reduce DOM size and mobile memory
+    if _n_total_games > 10:
+        _fs_game_opts = [5, 10, _n_total_games]
+    elif _n_total_games > 5:
+        _fs_game_opts = [5, _n_total_games]
+    else:
+        _fs_game_opts = [_n_total_games]
+    _fs_game_limit_raw = st.session_state.get("fs_game_limit", _fs_game_opts[0])
+    _fs_cols = st.columns([3, 1])
+    with _fs_cols[1]:
+        _fs_game_limit = st.selectbox(
+            "Games",
+            options=_fs_game_opts,
+            index=min(_fs_game_opts.index(_fs_game_limit_raw)
+                      if _fs_game_limit_raw in _fs_game_opts else 0,
+                      len(_fs_game_opts) - 1),
+            format_func=lambda x: "All games" if x == _n_total_games else f"{x} games",
+            key="fs_game_limit",
+            label_visibility="collapsed",
+        )
+    sorted_gks_shown = sorted_gks[:_fs_game_limit]
+
     st.markdown(
         f"<div style='font-size:11px;color:#888;margin-bottom:4px;'>"
         f"<b style='color:#eee;'>{len(all_players)}</b> players &nbsp;&middot;&nbsp; "
         f"<b style='color:#eee;'>{len(games)}</b> games &nbsp;&middot;&nbsp; "
-        f"<span style='color:#4ade80;'>{n_qual}</span> sidebar-qualified &nbsp;&middot;&nbsp; "
+        f"<span style='color:#4ade80;'>{n_qual}</span> qualified &nbsp;&middot;&nbsp; "
         f"<span style='color:#FFD700;'>{n_elite}</span> elite barrel "
-        f"&nbsp;&middot;&nbsp; <span style='color:#555;'>{len(all_players)-n_odds}</span> no market line"
+        f"&nbsp;&middot;&nbsp; <span style='color:#555;'>{len(all_players)-n_odds}</span> no odds"
         f"</div>"
         f"<div style='font-size:9px;color:#333;padding:2px 8px;margin-bottom:4px;"
         f"font-family:monospace;letter-spacing:0.5px;'>"
@@ -2610,7 +2634,13 @@ def _render_full_slate_all_players(
         unsafe_allow_html=True,
     )
 
-    for gk in sorted_gks:
+    if len(sorted_gks_shown) < _n_total_games:
+        st.caption(
+            f"Showing {len(sorted_gks_shown)} of {_n_total_games} games — "
+            "select 'All games' above to expand."
+        )
+
+    for gk in sorted_gks_shown:
         game_players = sorted(
             games[gk],
             key=lambda p: (p.get("team", ""), int(p.get("lineup_spot") or 99)),
@@ -2658,10 +2688,12 @@ def _render_full_slate_all_players(
             f"<span style='font-size:10px;color:#555;'>{n_game_qual} qual</span>"
             f"</div>"
             f"<div style='font-size:10px;color:#666;margin-top:3px;'>"
-            f"<span style='color:#a78bfa'>{away_team}</span> → "
+            f"<span style='color:#a78bfa'>{away_team}</span>"
+            f"<span style='color:#444;font-size:9px;'> bats vs </span>"
             f"<span style='color:#aaa'>{home_pitcher}</span>"
             f" &nbsp;&middot;&nbsp; "
-            f"<span style='color:#a78bfa'>{home_team}</span> → "
+            f"<span style='color:#a78bfa'>{home_team}</span>"
+            f"<span style='color:#444;font-size:9px;'> bats vs </span>"
             f"<span style='color:#aaa'>{away_pitcher}</span>"
             f"</div></div>"
         )
@@ -2817,6 +2849,13 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
 
     st.markdown('<div class="section-header">&#9889; MAIN</div>',
                 unsafe_allow_html=True)
+    st.markdown(
+        "<div style='font-size:11px;color:#555;letter-spacing:0.5px;margin:-4px 0 8px;'>"
+        "Quantitative Market-Aware Intelligence &nbsp;·&nbsp; EV / Edge Ranked &nbsp;·&nbsp; "
+        "Statcast Calibrated"
+        "</div>",
+        unsafe_allow_html=True,
+    )
 
     # Lineup readiness + slate status
     n_confirmed  = sum(1 for p in all_players if p.get("lineup_spot"))
@@ -3662,7 +3701,27 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                     if _me_ctxs.get(_mp.get("player_id"), {}).get("hvy_modifier", 1.0) >= _me_mod_min
                 ]
 
-            for _mi, _mp in enumerate(_me_sorted):
+            # Page size — default 25 to prevent large DOM on mobile
+            _me_n_total = len(_me_sorted)
+            _me_pg_opts = [25, 50, _me_n_total] if _me_n_total > 50 else ([25, _me_n_total] if _me_n_total > 25 else [_me_n_total])
+            _me_pg_opts = sorted(set(_me_pg_opts))
+            _me_pg_raw  = st.session_state.get("me_page_size", _me_pg_opts[0])
+            _me_pg_idx  = _me_pg_opts.index(_me_pg_raw) if _me_pg_raw in _me_pg_opts else 0
+            _me_pg_cols = st.columns([3, 1])
+            with _me_pg_cols[0]:
+                if _me_n_total > _me_pg_opts[0]:
+                    st.caption(f"Showing top {min(st.session_state.get('me_page_size', _me_pg_opts[0]), _me_n_total)} of {_me_n_total} picks")
+            with _me_pg_cols[1]:
+                _me_page_size = st.selectbox(
+                    "Show", options=_me_pg_opts,
+                    index=_me_pg_idx,
+                    format_func=lambda x: "All" if x == _me_n_total else str(x),
+                    key="me_page_size",
+                    label_visibility="collapsed",
+                )
+            _me_sorted_page = _me_sorted[:_me_page_size]
+
+            for _mi, _mp in enumerate(_me_sorted_page):
                 _mp_pid   = _mp.get("player_id")
                 _mp_ctx   = _me_ctxs.get(_mp_pid, {})
                 _mp_mod   = _mp_ctx.get("hvy_modifier", 1.0)
@@ -3719,13 +3778,24 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                     st.session_state["modal_source_tab"] = "Matchup Edge"
                     st.rerun()
 
+                _mp_wf   = float(_mp.get("weather_factor", 1.0) or 1.0)
+                _mp_wsum = _weather_summary(_mp)
+                if _mp_wsum and abs(_mp_wf - 1.0) >= 0.04:
+                    _mp_wc = "#4ade80" if _mp_wf >= 1.08 else "#f87171" if _mp_wf <= 0.93 else "#888"
+                    _mp_weather_frag = (
+                        f"<span style='font-size:9px;color:{_mp_wc};margin-left:5px;'>🌤 {_mp_wsum}</span>")
+                else:
+                    _mp_weather_frag = ""
+
                 st.markdown(
                     f"<div style='background:{_mp_bg};border:1px solid {_mp_border};border-radius:10px;"
-                    f"padding:12px 16px;margin-bottom:2px;'>"
+                    f"padding:12px 16px;margin-bottom:2px;position:relative;overflow:hidden;'>"
+                    f"<div style='position:absolute;top:0;left:0;right:0;height:2px;"
+                    f"background:linear-gradient(90deg,transparent,{_mp_lbl_col},transparent);opacity:0.55;'></div>"
                     f"<div style='display:flex;justify-content:space-between;align-items:center;'>"
                     f"<div style='display:flex;align-items:center;gap:8px;'>{_mp_photo}"
                     f"<div><div style='font-size:12px;color:#888;'>"
-                    f"{_mp_team} vs {_mp_opp} · {_mp_pit_lbl}{_mp_hand_lbl}{_mp_prior_note}</div>"
+                    f"{_mp_team} vs {_mp_opp} · {_mp_pit_lbl}{_mp_hand_lbl}{_mp_prior_note}{_mp_weather_frag}</div>"
                     + (f"<div style='font-size:11px;margin-top:2px;'>{_mp_status_html}</div>"
                        if _mp_status_html else "")
                     + f"</div></div>"
@@ -4443,8 +4513,23 @@ def tab_hits(data: dict):
         if not qualified:
             st.info("No players meet all Hit thresholds — lower thresholds in the expander above.")
         else:
-            st.caption(f"{len(qualified)} players pass all Hit criteria — ranked by HIT score.")
-            for entry in qualified:
+            _hits_n_total = len(qualified)
+            _hits_pg_opts = [25, 50, _hits_n_total] if _hits_n_total > 50 else ([25, _hits_n_total] if _hits_n_total > 25 else [_hits_n_total])
+            _hits_pg_opts = sorted(set(_hits_pg_opts))
+            _hits_pg_raw  = st.session_state.get("hits_hp_page_size", _hits_pg_opts[0])
+            _hits_pg_idx  = _hits_pg_opts.index(_hits_pg_raw) if _hits_pg_raw in _hits_pg_opts else 0
+            _hits_cols    = st.columns([3, 1])
+            with _hits_cols[0]:
+                st.caption(f"Top {min(st.session_state.get('hits_hp_page_size', _hits_pg_opts[0]), _hits_n_total)} of {_hits_n_total} players pass all Hit criteria — ranked by HIT score.")
+            with _hits_cols[1]:
+                _hits_page_size = st.selectbox(
+                    "Show", options=_hits_pg_opts,
+                    index=_hits_pg_idx,
+                    format_func=lambda x: "All" if x == _hits_n_total else str(x),
+                    key="hits_hp_page_size",
+                    label_visibility="collapsed",
+                )
+            for entry in qualified[:_hits_page_size]:
                 _hit_card(entry, key_prefix="hp")
 
     with _ha:
@@ -4590,9 +4675,21 @@ def tab_jig(data: dict):
         )
         _mg_label = {"S": "S+ ELITE", "A": "A MODEL", "B": "B MODEL", "C": "C MODEL"}.get(_hvy_tier, f"{_hvy_tier} MODEL")
         _hvy_mod_bar_pct = min(100, max(0, int((mod - 0.75) / 0.60 * 100)))
+        # Weather — game context continuity across all card types
+        _hvy_wf   = float(p.get("weather_factor", 1.0) or 1.0)
+        _hvy_wsum = _weather_summary(p)
+        if _hvy_wsum and abs(_hvy_wf - 1.0) >= 0.04:
+            _hvy_wc = "#4ade80" if _hvy_wf >= 1.08 else "#f87171" if _hvy_wf <= 0.93 else "#888"
+            _hvy_weather_frag = (
+                f"<span style='font-size:9px;color:{_hvy_wc};margin-left:4px;'>🌤 {_hvy_wsum}</span>")
+        else:
+            _hvy_weather_frag = ""
         st.markdown(
             f"<div style='background:#111827;border:1px solid {border};border-radius:10px;"
-            f"padding:14px 16px;margin-bottom:6px;'>"
+            f"padding:14px 16px;margin-bottom:6px;position:relative;overflow:hidden;'>"
+            # Top accent hairline — matchup grade color, shared skeleton with Quick View / Elite
+            f"<div style='position:absolute;top:0;left:0;right:0;height:2px;"
+            f"background:linear-gradient(90deg,transparent,{_mt_c},transparent);opacity:0.6;'></div>"
             f"<div style='display:flex;justify-content:space-between;align-items:flex-start;'>"
             f"<div style='display:flex;align-items:center;'>{_hvy_photo}"
             f"<div style='font-size:15px;font-weight:800;color:#f0f0f0;'>{name}</div></div>"
@@ -4641,13 +4738,17 @@ def tab_jig(data: dict):
             f"<div style='flex:1;text-align:center;background:#0c0c1e;border-radius:4px;padding:3px 2px;'>"
             f"<div style='font-size:13px;font-weight:700;color:{ev_c};'>{ev:+.1f}%</div>"
             f"<div style='font-size:8px;color:#4a4a70;'>EV</div></div>"
-            f"<div style='flex:1;text-align:center;background:#0c0c1e;border-radius:4px;padding:3px 2px;'>"
+            f"<div style='flex:1;text-align:center;background:#0c0c1e;border-radius:4px;padding:3px 2px;"
+            f"border-right:1px solid #1e1e35;'>"
             f"<div style='font-size:13px;font-weight:700;color:{_hvy_ec};'>{_hvy_edge:+.1f}%</div>"
             f"<div style='font-size:8px;color:#4a4a70;'>EDGE</div></div>"
             f"<div style='flex:1;text-align:center;background:#0a0a14;border-radius:4px;padding:3px 2px;'>"
             f"<div style='font-size:11px;font-weight:700;color:{mod_c};'>{mod_s}</div>"
             f"<div style='font-size:8px;color:#444;'>HVY</div></div>"
-            f"</div></div>",
+            f"</div>"
+            + (f"<div style='margin-top:4px;padding-top:3px;border-top:1px solid #1a1a2a;'>"
+               f"{_hvy_weather_frag}</div>" if _hvy_weather_frag else "")
+            + f"</div>",
             unsafe_allow_html=True,
         )
 
@@ -4833,8 +4934,23 @@ def tab_jig(data: dict):
             if not qualified:
                 st.info("No players meet HVY thresholds.")
             else:
-                st.caption(f"{len(qualified)} players qualify · ranked by HVY score · pitch exploitation + arsenal vulnerability")
-                for entry in qualified:
+                _hp_n_total = len(qualified)
+                _hp_pg_opts = [25, 50, _hp_n_total] if _hp_n_total > 50 else ([25, _hp_n_total] if _hp_n_total > 25 else [_hp_n_total])
+                _hp_pg_opts = sorted(set(_hp_pg_opts))
+                _hp_pg_raw  = st.session_state.get("jig_hp_page_size", _hp_pg_opts[0])
+                _hp_pg_idx  = _hp_pg_opts.index(_hp_pg_raw) if _hp_pg_raw in _hp_pg_opts else 0
+                _hp_cols    = st.columns([3, 1])
+                with _hp_cols[0]:
+                    st.caption(f"Top {min(st.session_state.get('jig_hp_page_size', _hp_pg_opts[0]), _hp_n_total)} of {_hp_n_total} qualified · ranked by HVY score · pitch exploitation + arsenal vulnerability")
+                with _hp_cols[1]:
+                    _hp_page_size = st.selectbox(
+                        "Show", options=_hp_pg_opts,
+                        index=_hp_pg_idx,
+                        format_func=lambda x: "All" if x == _hp_n_total else str(x),
+                        key="jig_hp_page_size",
+                        label_visibility="collapsed",
+                    )
+                for entry in qualified[:_hp_page_size]:
                     _hvy_card(entry, key_prefix="hvyp")
 
         with _ha:
@@ -4882,14 +4998,7 @@ def tab_jig(data: dict):
                     st.rerun()
 
             if rows:
-                st.markdown("---")
-                with st.expander("📊 Full Pitch Mix Analysis", expanded=False):
-                    st.caption(
-                        f"{len(scored)} players · ranked by HVY score · "
-                        "full arsenal matchup cards with pitch mix breakdown"
-                    )
-                    for entry in scored:
-                        _hvy_card(entry, key_prefix="hvyha")
+                st.caption("Full HVY cards with pitch mix breakdown → see Full Tactical tab.")
 
         with _hpr:
             if not prime:
@@ -4911,11 +5020,28 @@ def tab_jig(data: dict):
             if not scored:
                 st.info("No players available — refresh pitch data or lower TCC batter filters.")
             else:
-                st.caption(
-                    f"{len(scored)} players · sorted by HVY score · "
-                    "matchup modifier and pitcher HR filters still applied · threshold gate removed"
-                )
-                for entry in scored:
+                _fts_n_total = len(scored)
+                _fts_pg_opts = [25, 50, 100, _fts_n_total] if _fts_n_total > 100 else (
+                    [25, 50, _fts_n_total] if _fts_n_total > 50 else (
+                    [25, _fts_n_total] if _fts_n_total > 25 else [_fts_n_total]))
+                _fts_pg_opts = sorted(set(_fts_pg_opts))
+                _fts_pg_raw  = st.session_state.get("jig_fts_page_size", _fts_pg_opts[0])
+                _fts_pg_idx  = _fts_pg_opts.index(_fts_pg_raw) if _fts_pg_raw in _fts_pg_opts else 0
+                _fts_cols    = st.columns([3, 1])
+                with _fts_cols[0]:
+                    st.caption(
+                        f"Top {min(st.session_state.get('jig_fts_page_size', _fts_pg_opts[0]), _fts_n_total)} of {_fts_n_total} players · "
+                        "sorted by HVY score · matchup modifier and pitcher HR filters still applied"
+                    )
+                with _fts_cols[1]:
+                    _fts_page_size = st.selectbox(
+                        "Show", options=_fts_pg_opts,
+                        index=_fts_pg_idx,
+                        format_func=lambda x: "All" if x == _fts_n_total else str(x),
+                        key="jig_fts_page_size",
+                        label_visibility="collapsed",
+                    )
+                for entry in scored[:_fts_page_size]:
                     _hvy_card(entry, key_prefix="hvyfts")
 
     # ── JIG — Pitch Mix Intelligence ──────────────────────────────────────────
@@ -4952,7 +5078,10 @@ def tab_jig(data: dict):
     if _cached_ctxs:
         _cand_count  = len([p for p in all_players if p.get("best_american")])
         _has_arsenal = sum(1 for _c in _cached_ctxs.values() if _c.get("pitcher_arsenal"))
-        if _cand_count > 0 and _has_arsenal / max(_cand_count, 1) < 0.20:
+        _retry_key   = f"hvy_retry_{data.get('date', '')}"
+        _retry_count = st.session_state.get(_retry_key, 0)
+        if _cand_count > 0 and _has_arsenal / max(_cand_count, 1) < 0.20 and _retry_count < 1:
+            st.session_state[_retry_key] = _retry_count + 1
             st.session_state.pop(_hvy_ck, None)
             st.rerun()
 
