@@ -220,15 +220,19 @@ def _run_settlement(settle_date: str, out) -> dict:
         mod  = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
 
-        result = mod.settle_date(settle_date)
-        n_new    = result.get("newly_settled", 0)
-        n_void   = result.get("newly_void", 0)
-        n_total  = result.get("total_settled", 0)
+        fields, rows = mod._load()
+        result = mod.settle_date(settle_date, rows, fields, verbose=False)
+        mod._save(fields, rows)
+
+        n_new    = result.get("settled", 0)
+        n_void   = result.get("dnp", 0)
+        n_total  = sum(1 for r in rows if r.get("hr_result") in ("0", "1"))
 
         out(f"  Settled {n_new} new picks ({n_void} void/DNP)")
         out(f"  Cumulative settled: {n_total}")
 
-        cum = result.get("cumulative", {})
+        from tracking.pick_tracker import total_summary
+        cum = total_summary()
         if cum.get("decided", 0) > 0:
             out(f"  Win rate: {cum.get('win_rate',0)*100:.1f}% | "
                 f"ROI: {cum.get('roi',0):+.1f}% | "

@@ -1,3 +1,288 @@
+import itertools
+import streamlit as st
+
+# ── Module-level helpers (moved here so cached functions below are stable) ──
+
+def _ato_d(american) -> float:
+    american = int(american)
+    if not american:
+        return 1.01
+    if american >= 100:
+        return (american / 100.0) + 1
+    return (100.0 / abs(american)) + 1
+
+
+def _dta(decimal: float) -> int:
+    if decimal >= 2.0:
+        return int((decimal - 1) * 100)
+    return int(-100 / (decimal - 1))
+
+
+def _diverse_top(parlays: list, limit: int = 10) -> list:
+    """Each player appears in at most one slip; slips ranked by best combined odds."""
+    used: set = set()
+    result = []
+    for p in sorted(parlays, key=lambda x: x.get("american_odds", 0), reverse=True):
+        legs = p.get("legs", [])
+        if not any(name in used for name in legs):
+            result.append(p)
+            used.update(legs)
+            if len(result) >= limit:
+                break
+    return result
+
+
+# ── Module-level cached computations ────────────────────────────────────────
+# IMPORTANT: These MUST be at module level. Defining @st.cache_data functions
+# inside another function re-registers them on every call, causing cache misses
+# every render. Moving them here makes the function object stable across reruns.
+
+@st.cache_data(ttl=120, show_spinner=False)
+def _cached_strategy_perf(mtime: float):
+    try:
+        from tracking import strategy_log as _sl
+        return _sl.summary(), _sl.all_picks()
+    except Exception:
+        return [], []
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _cached_corr_parlays(player_ids: tuple, _all_players: list):
+    try:
+        from strategies import find_correlated_parlays
+    except ImportError:
+        return []
+    return find_correlated_parlays(
+        players=_all_players,
+        max_legs=3,
+        min_correlation=0.15,
+        min_individual_prob=0.08,
+    )
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _cached_power_parlays(player_ids: tuple, _all_players: list):
+    def _to_float(val, default=0.0):
+        try:
+            return float(str(val).replace("%", "").strip())
+        except (TypeError, ValueError):
+            return default
+
+    def _power_score(p):
+        brl = _to_float(p.get("barrel_pct") or p.get("brl_pct"))
+        ev  = _to_float(p.get("exit_velo"))
+        gb  = _to_float(p.get("gb_pct"), default=50.0)
+        pf  = _to_float(p.get("pitcher_factor"), default=1.0)
+        return (
+            min(brl / 18.0, 1.0) * 0.40 +
+            max(0.0, (ev - 85.0) / 15.0) * 0.30 +
+            max(0.0, (50.0 - gb) / 30.0) * 0.20 +
+            max(0.0, (pf - 1.0) / 0.5) * 0.10
+        )
+
+    candidates = [p for p in _all_players if p.get("model_prob", 0) >= 0.08 and p.get("best_american")]
+    if not candidates:
+        return []
+    scored = sorted(candidates, key=_power_score, reverse=True)[:20]
+    parlays = []
+    for n_legs in (2, 3):
+        pool = scored if n_legs == 2 else scored[:12]
+        for combo in itertools.combinations(pool, n_legs):
+            base_prob = parlay_odds = 1.0
+            for p in combo:
+                base_prob *= p.get("model_prob", 0)
+                parlay_odds *= _ato_d(p["best_american"])
+            ev = (parlay_odds * base_prob) - 1
+            if ev > 0:
+                parlays.append({
+                    "legs":         [p["player_name"] for p in combo],
+                    "teams":        [p.get("team", "") for p in combo],
+                    "power_scores": [round(_power_score(p), 3) for p in combo],
+                    "barrel_pcts":  [_to_float(p.get("barrel_pct") or p.get("brl_pct")) for p in combo],
+                    "exit_velos":   [_to_float(p.get("exit_velo")) for p in combo],
+                    "base_prob":    base_prob,
+                    "parlay_odds":  parlay_odds,
+                    "american_odds": _dta(parlay_odds),
+                    "ev_pct":       ev * 100,
+                    "n_legs":       n_legs,
+                })
+    return _diverse_top(sorted(parlays, key=lambda x: x["ev_pct"], reverse=True))
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _cached_park_parlays(player_ids: tuple, _all_players: list):
+    from collections import defaultdict
+    park_players = sorted(
+        [p for p in _all_players
+         if p.get("park_factor", 1.0) >= 1.08
+         and p.get("model_prob", 0) >= 0.07
+         and p.get("best_american")],
+        key=lambda p: p.get("park_factor", 1.0) * p.get("model_prob", 0),
+        reverse=True,
+    )[:25]
+    parlays = []
+    for n_legs in (2, 3):
+        pool = park_players if n_legs == 2 else park_players[:15]
+        for combo in itertools.combinations(pool, n_legs):
+            base_prob = parlay_odds = 1.0
+            avg_park = sum(p.get("park_factor", 1.0) for p in combo) / len(combo)
+            for p in combo:
+                base_prob *= p.get("model_prob", 0)
+                parlay_odds *= _ato_d(p["best_american"])
+            park_boost = 1.0 + (avg_park - 1.0) * 0.5
+            adj_prob = min(base_prob * park_boost, 0.25)
+            ev = (parlay_odds * adj_prob) - 1
+            if ev > 0:
+                parlays.append({
+                    "legs":         [p["player_name"] for p in combo],
+                    "teams":        [p.get("team", "") for p in combo],
+                    "park_factors": [round(p.get("park_factor", 1.0), 3) for p in combo],
+                    "avg_park":     round(avg_park, 3),
+                    "park_boost":   round(park_boost, 3),
+                    "base_prob":    base_prob,
+                    "adj_prob":     adj_prob,
+                    "parlay_odds":  parlay_odds,
+                    "american_odds": _dta(parlay_odds),
+                    "ev_pct":       ev * 100,
+                    "n_legs":       n_legs,
+                })
+    return _diverse_top(sorted(parlays, key=lambda x: x["ev_pct"], reverse=True))
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _cached_pitcher_targets(player_ids: tuple, _all_players: list):
+    from collections import defaultdict
+    by_pitcher = defaultdict(list)
+    for p in _all_players:
+        if p.get("model_prob", 0) < 0.07 or not p.get("best_american"):
+            continue
+        pid_name = p.get("pitcher_name", "TBD")
+        if pid_name and pid_name != "TBD":
+            by_pitcher[pid_name].append(p)
+    parlays = []
+    for pitcher_name, hitters in by_pitcher.items():
+        if len(hitters) < 2:
+            continue
+        avg_pit_fac = sum(h.get("pitcher_factor", 1.0) for h in hitters) / len(hitters)
+        avg_pit_hr9 = sum(h.get("pitcher_hr9", 0.0) for h in hitters) / len(hitters)
+        if avg_pit_fac < 1.05 and avg_pit_hr9 < 1.2:
+            continue
+        hitters_sorted = sorted(hitters, key=lambda h: h.get("model_prob", 0), reverse=True)
+        for n_legs in (2, 3):
+            pool = hitters_sorted[:min(n_legs + 3, len(hitters_sorted))]
+            for combo in itertools.combinations(pool, n_legs):
+                base_prob = parlay_odds = 1.0
+                for h in combo:
+                    base_prob *= h.get("model_prob", 0)
+                    parlay_odds *= _ato_d(h["best_american"])
+                corr_boost = 1.0 + 0.08 * (n_legs - 1)
+                adj_prob = min(base_prob * corr_boost, 0.30)
+                ev = (parlay_odds * adj_prob) - 1
+                if ev > 0:
+                    parlays.append({
+                        "pitcher_name":  pitcher_name,
+                        "pitcher_factor": round(avg_pit_fac, 3),
+                        "pitcher_hr9":    round(avg_pit_hr9, 2),
+                        "legs":           [h["player_name"] for h in combo],
+                        "teams":          [h.get("team", "") for h in combo],
+                        "model_probs":    [round(h.get("model_prob", 0) * 100, 1) for h in combo],
+                        "odds_each":      [h["best_american"] for h in combo],
+                        "corr_boost":     corr_boost,
+                        "base_prob":      base_prob,
+                        "adj_prob":       adj_prob,
+                        "parlay_odds":    parlay_odds,
+                        "american_odds":  _dta(parlay_odds),
+                        "ev_pct":         ev * 100,
+                        "n_legs":         n_legs,
+                    })
+    return _diverse_top(sorted(parlays, key=lambda x: x["ev_pct"], reverse=True))
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _cached_stars_aligned(player_ids: tuple, _all_players: list):
+    def _alignment_score(p) -> float:
+        park   = p.get("park_factor",    1.0)
+        pit    = p.get("pitcher_factor", 1.0)
+        wx     = p.get("weather_factor", 1.0)
+        plat   = p.get("platoon_factor", 1.0)
+        streak = p.get("streak_factor",  1.0)
+        raw = park * pit * wx * plat * streak
+        penalty = sum(max(0.0, 1.0 - f) for f in [park, pit, wx, plat, streak])
+        return raw - penalty * 0.5
+
+    candidates = sorted(
+        [p for p in _all_players
+         if p.get("park_factor",    1.0) >= 0.98
+         and p.get("pitcher_factor", 1.0) >= 1.00
+         and p.get("weather_factor", 1.0) >= 1.00
+         and p.get("platoon_factor", 1.0) >= 1.00
+         and p.get("model_prob",     0.0) >= 0.08
+         and p.get("best_american")],
+        key=_alignment_score,
+        reverse=True,
+    )[:20]
+    parlays = []
+    for n_legs in (2, 3):
+        pool = candidates if n_legs == 2 else candidates[:12]
+        for combo in itertools.combinations(pool, n_legs):
+            base_prob = parlay_odds = 1.0
+            for p in combo:
+                base_prob *= p.get("model_prob", 0)
+                parlay_odds *= _ato_d(p["best_american"])
+            ev = (parlay_odds * base_prob) - 1
+            if ev > 0:
+                parlays.append({
+                    "legs":     [p["player_name"] for p in combo],
+                    "teams":    [p.get("team", "") for p in combo],
+                    "factors":  [{
+                        "park":    round(p.get("park_factor",    1.0), 3),
+                        "pitcher": round(p.get("pitcher_factor", 1.0), 3),
+                        "weather": round(p.get("weather_factor", 1.0), 3),
+                        "platoon": round(p.get("platoon_factor", 1.0), 3),
+                        "streak":  round(p.get("streak_factor",  1.0), 3),
+                    } for p in combo],
+                    "scores":        [round(_alignment_score(p), 3) for p in combo],
+                    "base_prob":     base_prob,
+                    "parlay_odds":   parlay_odds,
+                    "american_odds": _dta(parlay_odds),
+                    "ev_pct":        ev * 100,
+                    "n_legs":        n_legs,
+                })
+    return _diverse_top(sorted(parlays, key=lambda x: x["ev_pct"], reverse=True))
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _cached_multi_edge(player_ids: tuple, _all_players: list):
+    _THRESHOLDS = {
+        "park":    ("park_factor",    1.05),
+        "pitcher": ("pitcher_factor", 1.05),
+        "platoon": ("platoon_factor", 1.05),
+        "weather": ("weather_factor", 1.04),
+        "streak":  ("streak_factor",  1.03),
+    }
+    candidates = []
+    for p in _all_players:
+        if p.get("model_prob", 0) < 0.06 or not p.get("best_american"):
+            continue
+        confirmed = [
+            edge for edge, (field, threshold) in _THRESHOLDS.items()
+            if p.get(field, 1.0) >= threshold
+        ]
+        if len(confirmed) < 3:
+            continue
+        edge_product = 1.0
+        for edge, (field, _) in _THRESHOLDS.items():
+            if edge in confirmed:
+                edge_product *= p.get(field, 1.0)
+        candidates.append({
+            **p,
+            "_confirmed":    confirmed,
+            "_edge_count":   len(confirmed),
+            "_edge_product": round(edge_product, 4),
+        })
+    return sorted(candidates, key=lambda x: (x["_edge_count"], x["_edge_product"]), reverse=True)[:15]
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 # ADVANCED STRATEGIES (formerly Tab 4)
 # ═══════════════════════════════════════════════════════════════════════════
@@ -32,19 +317,6 @@ def tab_advanced_strategies(data: dict, parlays_callback=None):
         if odds is None:
             return "--"
         return f"+{odds}" if int(odds) > 0 else str(odds)
-
-    def _ato_d(american) -> float:
-        american = int(american)
-        if not american:
-            return 1.01
-        if american >= 100:
-            return (american / 100.0) + 1
-        return (100.0 / abs(american)) + 1
-
-    def _dta(decimal: float) -> int:
-        if decimal >= 2.0:
-            return int((decimal - 1) * 100)
-        return int(-100 / (decimal - 1))
 
     def _add_to_fd_slip(player_names: list, all_players: list) -> int:
         player_map = {p["player_name"]: p for p in all_players if p.get("player_name")}
@@ -83,10 +355,6 @@ def tab_advanced_strategies(data: dict, parlays_callback=None):
     try:
         from tracking import strategy_log as _sl
         import os as _os
-
-        @st.cache_data(ttl=120, show_spinner=False)
-        def _cached_strategy_perf(mtime: float):
-            return _sl.summary(), _sl.all_picks()
 
         _sl_mtime = _os.path.getmtime(_sl.LOG_PATH) if _sl.LOG_PATH.exists() else 0.0
         _perf_data, _all_picks = _cached_strategy_perf(_sl_mtime)
@@ -310,34 +578,12 @@ def tab_advanced_strategies(data: dict, parlays_callback=None):
             with _rc2:
                 st.link_button("FD →", _fd_url(player_name), use_container_width=True)
 
-        def _diverse_top(parlays: list, limit: int = 10) -> list:
-            """Each player appears in at most one slip; slips ranked by best combined odds."""
-            used: set = set()
-            result = []
-            for p in sorted(parlays, key=lambda x: x.get("american_odds", 0), reverse=True):
-                legs = p.get("legs", [])
-                if not any(name in used for name in legs):
-                    result.append(p)
-                    used.update(legs)
-                    if len(result) >= limit:
-                        break
-            return result
-
         if strategy_type == "Correlation Parlays":
             st.markdown("### 🔗 Correlation-Based Parlays")
             st.info("Same-team players facing the same pitcher — correlation bonus applied to EV")
 
-            @st.cache_data(ttl=3600, show_spinner=False)
-            def _cached_corr_parlays(player_ids: tuple):
-                return find_correlated_parlays(
-                    players=all_players,
-                    max_legs=3,
-                    min_correlation=0.15,
-                    min_individual_prob=0.08,
-                )
-
             _cache_key = tuple(p.get("player_name", "") for p in all_players)
-            corr_parlays = _diverse_top(_cached_corr_parlays(_cache_key))
+            corr_parlays = _diverse_top(_cached_corr_parlays(_cache_key, all_players))
 
             if corr_parlays:
                 for i, parlay in enumerate(corr_parlays[:5], 1):
@@ -370,60 +616,8 @@ def tab_advanced_strategies(data: dict, parlays_callback=None):
             st.markdown("### ⚡ Power Profile Parlays")
             st.info("Players with elite barrel%, high exit velocity, and low GB% — pure power metrics vs weak pitchers")
 
-            @st.cache_data(ttl=3600, show_spinner=False)
-            def _cached_power_parlays(player_ids: tuple):
-                def _to_float(val, default=0.0):
-                    try:
-                        return float(str(val).replace("%", "").strip())
-                    except (TypeError, ValueError):
-                        return default
-
-                def _power_score(p):
-                    brl = _to_float(p.get("barrel_pct") or p.get("brl_pct"))
-                    ev  = _to_float(p.get("exit_velo"))
-                    gb  = _to_float(p.get("gb_pct"), default=50.0)
-                    pf  = _to_float(p.get("pitcher_factor"), default=1.0)
-                    brl_n = min(brl / 18.0, 1.0)
-                    ev_n  = max(0.0, (ev - 85.0) / 15.0)
-                    gb_n  = max(0.0, (50.0 - gb) / 30.0)
-                    pf_n  = max(0.0, (pf - 1.0) / 0.5)
-                    return brl_n * 0.40 + ev_n * 0.30 + gb_n * 0.20 + pf_n * 0.10
-
-                candidates = [
-                    p for p in all_players
-                    if p.get("model_prob", 0) >= 0.08 and p.get("best_american")
-                ]
-                if not candidates:
-                    return []
-                scored = sorted(candidates, key=_power_score, reverse=True)[:20]
-
-                parlays = []
-                for n_legs in (2, 3):
-                    pool = scored if n_legs == 2 else scored[:12]
-                    for combo in itertools.combinations(pool, n_legs):
-                        base_prob = 1.0
-                        parlay_odds = 1.0
-                        for p in combo:
-                            base_prob *= p.get("model_prob", 0)
-                            parlay_odds *= _ato_d(p["best_american"])
-                        ev = (parlay_odds * base_prob) - 1
-                        if ev > 0:
-                            parlays.append({
-                                "legs": [p["player_name"] for p in combo],
-                                "teams": [p.get("team", "") for p in combo],
-                                "power_scores": [round(_power_score(p), 3) for p in combo],
-                                "barrel_pcts": [_to_float(p.get("barrel_pct") or p.get("brl_pct")) for p in combo],
-                                "exit_velos": [_to_float(p.get("exit_velo")) for p in combo],
-                                "base_prob": base_prob,
-                                "parlay_odds": parlay_odds,
-                                "american_odds": _dta(parlay_odds),
-                                "ev_pct": ev * 100,
-                                "n_legs": n_legs,
-                            })
-                return _diverse_top(sorted(parlays, key=lambda x: x["ev_pct"], reverse=True))
-
             _pp_key = tuple(p.get("player_name", "") for p in all_players)
-            power_parlays = _cached_power_parlays(_pp_key)
+            power_parlays = _cached_power_parlays(_pp_key, all_players)
 
             if power_parlays:
                 for i, pp in enumerate(power_parlays, 1):
@@ -457,54 +651,8 @@ def tab_advanced_strategies(data: dict, parlays_callback=None):
             st.markdown("### 🏟️ Park Monster Parlays")
             st.info("Players in the most hitter-friendly parks — Coors, Great American, Fenway, etc. — where the ball flies")
 
-            @st.cache_data(ttl=3600, show_spinner=False)
-            def _cached_park_parlays(player_ids: tuple):
-                from collections import defaultdict
-                min_park = 1.08
-                park_players = sorted(
-                    [p for p in all_players
-                     if p.get("park_factor", 1.0) >= min_park
-                     and p.get("model_prob", 0) >= 0.07
-                     and p.get("best_american")],
-                    key=lambda p: p.get("park_factor", 1.0) * p.get("model_prob", 0),
-                    reverse=True,
-                )[:25]
-
-                by_park = defaultdict(list)
-                for p in park_players:
-                    by_park[round(p.get("park_factor", 1.0), 2)].append(p)
-
-                parlays = []
-                for n_legs in (2, 3):
-                    pool = park_players if n_legs == 2 else park_players[:15]
-                    for combo in itertools.combinations(pool, n_legs):
-                        base_prob = 1.0
-                        parlay_odds = 1.0
-                        avg_park = sum(p.get("park_factor", 1.0) for p in combo) / len(combo)
-                        for p in combo:
-                            base_prob *= p.get("model_prob", 0)
-                            parlay_odds *= _ato_d(p["best_american"])
-                        park_boost = 1.0 + (avg_park - 1.0) * 0.5
-                        adj_prob = min(base_prob * park_boost, 0.25)
-                        ev = (parlay_odds * adj_prob) - 1
-                        if ev > 0:
-                            parlays.append({
-                                "legs": [p["player_name"] for p in combo],
-                                "teams": [p.get("team", "") for p in combo],
-                                "park_factors": [round(p.get("park_factor", 1.0), 3) for p in combo],
-                                "avg_park": round(avg_park, 3),
-                                "park_boost": round(park_boost, 3),
-                                "base_prob": base_prob,
-                                "adj_prob": adj_prob,
-                                "parlay_odds": parlay_odds,
-                                "american_odds": _dta(parlay_odds),
-                                "ev_pct": ev * 100,
-                                "n_legs": n_legs,
-                            })
-                return _diverse_top(sorted(parlays, key=lambda x: x["ev_pct"], reverse=True))
-
             _park_key = tuple(p.get("player_name", "") for p in all_players)
-            park_parlays = _cached_park_parlays(_park_key)
+            park_parlays = _cached_park_parlays(_park_key, all_players)
 
             if park_parlays:
                 for i, par in enumerate(park_parlays, 1):
@@ -538,62 +686,8 @@ def tab_advanced_strategies(data: dict, parlays_callback=None):
                 "and their HRs are correlated through the shared matchup."
             )
 
-            @st.cache_data(ttl=3600, show_spinner=False)
-            def _cached_pitcher_targets(player_ids: tuple):
-                from collections import defaultdict
-                # Group qualified players (model_prob >= 0.07, has odds) by opponent pitcher
-                by_pitcher = defaultdict(list)
-                for p in all_players:
-                    if p.get("model_prob", 0) < 0.07 or not p.get("best_american"):
-                        continue
-                    pid_name = p.get("pitcher_name", "TBD")
-                    if pid_name and pid_name != "TBD":
-                        by_pitcher[pid_name].append(p)
-
-                parlays = []
-                for pitcher_name, hitters in by_pitcher.items():
-                    if len(hitters) < 2:
-                        continue
-                    # Use the pitcher factor from any hitter facing this pitcher
-                    avg_pit_fac = sum(h.get("pitcher_factor", 1.0) for h in hitters) / len(hitters)
-                    avg_pit_hr9 = sum(h.get("pitcher_hr9", 0.0) for h in hitters) / len(hitters)
-                    if avg_pit_fac < 1.05 and avg_pit_hr9 < 1.2:
-                        continue  # pitcher isn't particularly HR-prone
-
-                    hitters_sorted = sorted(hitters, key=lambda h: h.get("model_prob", 0), reverse=True)
-                    for n_legs in (2, 3):
-                        pool = hitters_sorted[:min(n_legs + 3, len(hitters_sorted))]
-                        for combo in itertools.combinations(pool, n_legs):
-                            base_prob = 1.0
-                            parlay_odds = 1.0
-                            for h in combo:
-                                base_prob *= h.get("model_prob", 0)
-                                parlay_odds *= _ato_d(h["best_american"])
-                            # Same-pitcher correlation boost: 8% per leg above 1
-                            corr_boost = 1.0 + 0.08 * (n_legs - 1)
-                            adj_prob = min(base_prob * corr_boost, 0.30)
-                            ev = (parlay_odds * adj_prob) - 1
-                            if ev > 0:
-                                parlays.append({
-                                    "pitcher_name": pitcher_name,
-                                    "pitcher_factor": round(avg_pit_fac, 3),
-                                    "pitcher_hr9":   round(avg_pit_hr9, 2),
-                                    "legs":          [h["player_name"] for h in combo],
-                                    "teams":         [h.get("team", "") for h in combo],
-                                    "model_probs":   [round(h.get("model_prob", 0) * 100, 1) for h in combo],
-                                    "odds_each":     [h["best_american"] for h in combo],
-                                    "corr_boost":    corr_boost,
-                                    "base_prob":     base_prob,
-                                    "adj_prob":      adj_prob,
-                                    "parlay_odds":   parlay_odds,
-                                    "american_odds": _dta(parlay_odds),
-                                    "ev_pct":        ev * 100,
-                                    "n_legs":        n_legs,
-                                })
-                return _diverse_top(sorted(parlays, key=lambda x: x["ev_pct"], reverse=True))
-
             _pt_key = tuple(p.get("player_name", "") for p in all_players)
-            pt_parlays = _cached_pitcher_targets(_pt_key)
+            pt_parlays = _cached_pitcher_targets(_pt_key, all_players)
 
             if pt_parlays:
                 for i, pt in enumerate(pt_parlays, 1):
@@ -638,66 +732,8 @@ def tab_advanced_strategies(data: dict, parlays_callback=None):
                 "These are the 'everything is right today' plays — rare but highest-conviction."
             )
 
-            @st.cache_data(ttl=3600, show_spinner=False)
-            def _cached_stars_aligned(player_ids: tuple):
-                def _alignment_score(p) -> float:
-                    park    = p.get("park_factor",    1.0)
-                    pit     = p.get("pitcher_factor", 1.0)
-                    wx      = p.get("weather_factor", 1.0)
-                    plat    = p.get("platoon_factor", 1.0)
-                    streak  = p.get("streak_factor",  1.0)
-                    # Score = product of all factors > 1.0; penalize any factor < 1.0
-                    raw = (park * pit * wx * plat * streak)
-                    penalty = sum(
-                        max(0.0, 1.0 - f)
-                        for f in [park, pit, wx, plat, streak]
-                    )
-                    return raw - penalty * 0.5
-
-                candidates = sorted(
-                    [p for p in all_players
-                     if p.get("park_factor",    1.0) >= 0.98
-                     and p.get("pitcher_factor", 1.0) >= 1.00
-                     and p.get("weather_factor", 1.0) >= 1.00
-                     and p.get("platoon_factor", 1.0) >= 1.00
-                     and p.get("model_prob",     0.0) >= 0.08
-                     and p.get("best_american")],
-                    key=_alignment_score,
-                    reverse=True,
-                )[:20]
-
-                parlays = []
-                for n_legs in (2, 3):
-                    pool = candidates if n_legs == 2 else candidates[:12]
-                    for combo in itertools.combinations(pool, n_legs):
-                        base_prob = 1.0
-                        parlay_odds = 1.0
-                        for p in combo:
-                            base_prob *= p.get("model_prob", 0)
-                            parlay_odds *= _ato_d(p["best_american"])
-                        ev = (parlay_odds * base_prob) - 1
-                        if ev > 0:
-                            parlays.append({
-                                "legs":     [p["player_name"] for p in combo],
-                                "teams":    [p.get("team", "") for p in combo],
-                                "factors":  [{
-                                    "park":    round(p.get("park_factor",    1.0), 3),
-                                    "pitcher": round(p.get("pitcher_factor", 1.0), 3),
-                                    "weather": round(p.get("weather_factor", 1.0), 3),
-                                    "platoon": round(p.get("platoon_factor", 1.0), 3),
-                                    "streak":  round(p.get("streak_factor",  1.0), 3),
-                                } for p in combo],
-                                "scores":        [round(_alignment_score(p), 3) for p in combo],
-                                "base_prob":     base_prob,
-                                "parlay_odds":   parlay_odds,
-                                "american_odds": _dta(parlay_odds),
-                                "ev_pct":        ev * 100,
-                                "n_legs":        n_legs,
-                            })
-                return _diverse_top(sorted(parlays, key=lambda x: x["ev_pct"], reverse=True))
-
             _sa_key = tuple(p.get("player_name", "") for p in all_players)
-            sa_parlays = _cached_stars_aligned(_sa_key)
+            sa_parlays = _cached_stars_aligned(_sa_key, all_players)
 
             if sa_parlays:
                 for i, sa in enumerate(sa_parlays, 1):
@@ -949,40 +985,8 @@ def tab_advanced_strategies(data: dict, parlays_callback=None):
                 "Each confirmed edge is independent — stacking them materially increases conviction."
             )
 
-            @st.cache_data(ttl=3600, show_spinner=False)
-            def _cached_multi_edge(player_ids: tuple):
-                _THRESHOLDS = {
-                    "park":    ("park_factor",    1.05),
-                    "pitcher": ("pitcher_factor", 1.05),
-                    "platoon": ("platoon_factor", 1.05),
-                    "weather": ("weather_factor", 1.04),
-                    "streak":  ("streak_factor",  1.03),
-                }
-
-                candidates = []
-                for p in all_players:
-                    if p.get("model_prob", 0) < 0.06 or not p.get("best_american"):
-                        continue
-                    confirmed = [
-                        edge for edge, (field, threshold) in _THRESHOLDS.items()
-                        if p.get(field, 1.0) >= threshold
-                    ]
-                    if len(confirmed) < 3:
-                        continue
-                    edge_product = 1.0
-                    for edge, (field, _) in _THRESHOLDS.items():
-                        if edge in confirmed:
-                            edge_product *= p.get(field, 1.0)
-                    candidates.append({
-                        **p,
-                        "_confirmed": confirmed,
-                        "_edge_count": len(confirmed),
-                        "_edge_product": round(edge_product, 4),
-                    })
-                return sorted(candidates, key=lambda x: (x["_edge_count"], x["_edge_product"]), reverse=True)[:15]
-
             _me_key = tuple(p.get("player_name", "") for p in all_players)
-            me_players = _cached_multi_edge(_me_key)
+            me_players = _cached_multi_edge(_me_key, all_players)
 
             if me_players:
                 _used_me: set = set()

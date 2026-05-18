@@ -1073,7 +1073,7 @@ def _intelligence_card_html(
         # Right: odds + tier
         f"<div style='text-align:right;flex-shrink:0;margin-left:6px;'>"
         f"<div style='font-size:16px;font-weight:700;color:#FF6666;line-height:1;'>{odds_fmt}</div>"
-        f"<div style='font-size:7px;color:{tier_col};font-weight:700;margin-top:1px;'>"
+        f"<div style='font-size:8px;color:{tier_col};font-weight:700;margin-top:1px;letter-spacing:0.3px;'>"
         f"{tier}-TIER{badges_html}</div>"
         f"</div></div>"
 
@@ -1092,26 +1092,29 @@ def _intelligence_card_html(
            f"</div>"
            if barrel >= 5.0 else "")
 
-        # ── Row 3: Quantitative stat pills ──
+        # ── Row 3: Stat pills — PRIMARY market signals (MDL/EV/EDGE) | SECONDARY context (BRL/ENV) ──
         + f"<div style='display:flex;gap:2px;margin-bottom:4px;'>"
-        f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:4px;padding:3px 1px;'>"
-        f"<div style='font-size:12px;font-weight:700;color:#a78bfa;line-height:1.1;'>{model_p:.0f}%</div>"
-        f"<div style='font-size:7px;color:#3a3a55;letter-spacing:0.3px;'>MDL</div></div>"
+        # Primary: model, EV, edge — slightly brighter bg + larger font to dominate attention
+        f"<div style='flex:1;text-align:center;background:#0c0c22;border-radius:4px;padding:4px 1px;'>"
+        f"<div style='font-size:13px;font-weight:700;color:#a78bfa;line-height:1.1;'>{model_p:.0f}%</div>"
+        f"<div style='font-size:7px;color:#4a4a70;letter-spacing:0.3px;'>MDL</div></div>"
 
-        f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:4px;padding:3px 1px;'>"
-        f"<div style='font-size:12px;font-weight:700;color:{ev_col_};line-height:1.1;'>{ev:+.1f}%</div>"
-        f"<div style='font-size:7px;color:#3a3a55;'>EV</div></div>"
+        f"<div style='flex:1;text-align:center;background:#0c0c22;border-radius:4px;padding:4px 1px;'>"
+        f"<div style='font-size:13px;font-weight:700;color:{ev_col_};line-height:1.1;'>{ev:+.1f}%</div>"
+        f"<div style='font-size:7px;color:#4a4a70;'>EV</div></div>"
 
-        f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:4px;padding:3px 1px;'>"
-        f"<div style='font-size:12px;font-weight:700;color:{edge_col_};line-height:1.1;'>{edge:+.1f}%</div>"
-        f"<div style='font-size:7px;color:#3a3a55;'>EDGE</div></div>"
+        f"<div style='flex:1;text-align:center;background:#0c0c22;border-radius:4px;padding:4px 1px;"
+        f"border-right:1px solid #1e1e35;'>"
+        f"<div style='font-size:13px;font-weight:700;color:{edge_col_};line-height:1.1;'>{edge:+.1f}%</div>"
+        f"<div style='font-size:7px;color:#4a4a70;'>EDGE</div></div>"
 
-        f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:4px;padding:3px 1px;'>"
+        # Secondary: barrel + environment — quieter background, standard size
+        f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:4px;padding:4px 1px;'>"
         f"<div style='font-size:12px;font-weight:700;color:{brl_col};line-height:1.1;'>{barrel:.1f}%</div>"
         f"<div style='font-size:7px;color:#3a3a55;'>BRL</div></div>"
 
-        f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:4px;padding:3px 1px;'>"
-        f"<div style='font-size:11px;font-weight:700;color:{env_col_};line-height:1.1;'>{env_lbl}</div>"
+        f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:4px;padding:4px 1px;'>"
+        f"<div style='font-size:10px;font-weight:700;color:{env_col_};line-height:1.1;'>{env_lbl}</div>"
         f"<div style='font-size:7px;color:#3a3a55;'>ENV</div></div>"
         f"</div>"
 
@@ -1120,7 +1123,7 @@ def _intelligence_card_html(
 
         # ── Row 5: HVY matchup bar + weather ──
         + f"<div style='display:flex;align-items:center;gap:5px;margin-top:4px;'>"
-        f"<div style='font-size:7px;color:#444;letter-spacing:0.5px;white-space:nowrap;'>MTCH</div>"
+        f"<div style='font-size:8px;color:#555;letter-spacing:0.5px;white-space:nowrap;'>HVY</div>"
         f"<div style='flex:1;background:#111;border-radius:2px;height:3px;'>"
         f"<div style='background:{hvy_col};width:{hvy_bar}%;height:3px;border-radius:2px;'></div></div>"
         f"<div style='font-size:8px;font-weight:700;color:{hvy_col};'>{hvy_lbl}</div>"
@@ -1268,13 +1271,13 @@ def _elite_card_html(
         # ── Barrel power meter ──
         f"<div style='background:#111;border-radius:3px;height:4px;margin:0 0 6px;'>"
         f"<div style='background:{grade_col};width:{brl_pct}%;height:4px;border-radius:3px;"
-        f"box-shadow:0 0 6px {grade_col}44;'></div></div>"
+        f"box-shadow:0 0 8px {grade_col}66;'></div></div>"
 
-        # ── Row 2: Statcast power cluster ──
+        # ── Row 2: Statcast power cluster — BRL is the hero metric here ──
         f"<div style='display:flex;gap:2px;margin-bottom:5px;'>"
         f"<div style='flex:1;text-align:center;background:#0e0e0e;border-radius:4px;padding:3px 1px;'>"
-        f"<div style='font-size:11px;font-weight:800;color:{brl_col};line-height:1.1;'>{barrel:.1f}%</div>"
-        f"<div style='font-size:7px;color:#3a3a3a;letter-spacing:0.3px;'>BRL</div></div>"
+        f"<div style='font-size:13px;font-weight:900;color:{brl_col};line-height:1.1;'>{barrel:.1f}%</div>"
+        f"<div style='font-size:7px;color:#4a4a4a;letter-spacing:0.3px;'>BRL</div></div>"
 
         f"<div style='flex:1;text-align:center;background:#0e0e0e;border-radius:4px;padding:3px 1px;'>"
         f"<div style='font-size:11px;font-weight:700;color:{hh_col};line-height:1.1;'>{hh:.0f}%</div>"
@@ -1293,27 +1296,27 @@ def _elite_card_html(
         f"<div style='font-size:7px;color:#3a3a3a;'>FB%</div></div>"
         f"</div>"
 
-        # ── Row 3: Market signals ──
+        # ── Row 3: Market signals — EV and EDGE are primary decision signals ──
         f"<div style='display:flex;gap:2px;margin-bottom:4px;'>"
         f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:4px;padding:3px 1px;'>"
         f"<div style='font-size:11px;font-weight:700;color:#a78bfa;line-height:1.1;'>{model_p:.0f}%</div>"
-        f"<div style='font-size:7px;color:#2a2a40;'>MDL</div></div>"
+        f"<div style='font-size:7px;color:#3a3a55;'>MDL</div></div>"
 
-        f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:4px;padding:3px 1px;'>"
-        f"<div style='font-size:11px;font-weight:700;color:{ev_col_};line-height:1.1;'>{ev:+.1f}%</div>"
-        f"<div style='font-size:7px;color:#2a2a40;'>EV</div></div>"
+        f"<div style='flex:1;text-align:center;background:#0c0c22;border-radius:4px;padding:3px 1px;'>"
+        f"<div style='font-size:12px;font-weight:700;color:{ev_col_};line-height:1.1;'>{ev:+.1f}%</div>"
+        f"<div style='font-size:7px;color:#4a4a70;'>EV</div></div>"
 
-        f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:4px;padding:3px 1px;'>"
-        f"<div style='font-size:11px;font-weight:700;color:{edge_col_};line-height:1.1;'>{edge:+.1f}%</div>"
-        f"<div style='font-size:7px;color:#2a2a40;'>EDGE</div></div>"
+        f"<div style='flex:1;text-align:center;background:#0c0c22;border-radius:4px;padding:3px 1px;'>"
+        f"<div style='font-size:12px;font-weight:700;color:{edge_col_};line-height:1.1;'>{edge:+.1f}%</div>"
+        f"<div style='font-size:7px;color:#4a4a70;'>EDGE</div></div>"
 
         f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:4px;padding:3px 1px;'>"
         f"<div style='font-size:11px;font-weight:700;color:#FF6666;line-height:1.1;'>{odds_fmt}</div>"
-        f"<div style='font-size:7px;color:#2a2a40;'>ODDS</div></div>"
+        f"<div style='font-size:7px;color:#3a3a55;'>ODDS</div></div>"
 
         f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:4px;padding:3px 1px;'>"
-        f"<div style='font-size:11px;font-weight:700;color:{env_col_};line-height:1.1;'>{env_lbl}</div>"
-        f"<div style='font-size:7px;color:#2a2a40;'>ENV</div></div>"
+        f"<div style='font-size:10px;font-weight:700;color:{env_col_};line-height:1.1;'>{env_lbl}</div>"
+        f"<div style='font-size:7px;color:#3a3a55;'>ENV</div></div>"
         f"</div>"
 
         # ── Pitcher row ──
@@ -1327,7 +1330,7 @@ def _elite_card_html(
 
         # ── HVY matchup bar + weather ──
         + f"<div style='display:flex;align-items:center;gap:5px;margin-top:3px;'>"
-        f"<div style='font-size:7px;color:#333;letter-spacing:0.5px;white-space:nowrap;'>MTCH</div>"
+        f"<div style='font-size:8px;color:#555;letter-spacing:0.5px;white-space:nowrap;'>HVY</div>"
         f"<div style='flex:1;background:#111;border-radius:2px;height:3px;'>"
         f"<div style='background:{hvy_col};width:{hvy_bar}%;height:3px;border-radius:2px;'></div></div>"
         f"<div style='font-size:8px;font-weight:700;color:{hvy_col};'>{hvy_lbl}</div>"
@@ -2176,9 +2179,9 @@ def _render_pitch_mix_expander(ctx: dict, p: dict, key_prefix: str, expanded: bo
                 "border-radius:6px;overflow:hidden;'>"
                 "<thead><tr style='background:#0f172a;'>"
                 f"<th colspan='3' style='background:#0f172a;padding:2px 6px;border-bottom:0;'></th>"
-                f"<th colspan='7' style='background:#0a1628;color:#3b82f6;font-size:9px;"
+                f"<th colspan='7' style='background:#0a1628;color:#60a5fa;font-size:9px;"
                 f"letter-spacing:1px;font-weight:700;padding:3px 6px;text-align:center;"
-                f"border-top:2px solid #1e3a5f;border-bottom:0;'>── PITCHER ALLOWED ──</th>"
+                f"border-top:2px solid #2563eb;border-bottom:0;'>── PITCHER ALLOWED ──</th>"
                 "</tr><tr>"
                 f"<th style='{_th_l}'>Pitch</th>"
                 f"<th style='{_th}'>Use%</th>"
@@ -2192,9 +2195,9 @@ def _render_pitch_mix_expander(ctx: dict, p: dict, key_prefix: str, expanded: bo
                 f"<th style='{_th}'>RV/100</th>"
                 "</tr></thead>"
                 f"<tbody>{rows}</tbody></table>"
-                "<div style='font-size:9px;color:#475569;margin-top:3px;'>"
+                "<div style='font-size:10px;color:#4b5563;margin-top:4px;'>"
                 "Pitch: 🟢 batter-favoring · 🔴 pitcher-favoring · 🟡 neutral"
-                " &nbsp;|&nbsp; K%/Whiff%: 🔴=high · BA/SLG/HH%: 🟢=high (hitter-friendly) · RV/100: 🟢=positive</div>",
+                " &nbsp;|&nbsp; K%/Whiff%: 🔴=high strikeout risk · BA/SLG/HH%: 🟢=hitter-friendly · RV/100: 🟢=positive value</div>",
                 unsafe_allow_html=True,
             )
 
@@ -2328,9 +2331,9 @@ def _render_pitch_mix_expander(ctx: dict, p: dict, key_prefix: str, expanded: bo
                     f"<th style='{_th2}'>K%</th>"
                     "</tr></thead>"
                     f"<tbody>{brows}</tbody></table>"
-                    "<div style='font-size:9px;color:#475569;margin-top:3px;'>"
-                    "Pitch: 🟢=batter wins · 🔴=pitcher wins"
-                    " &nbsp;|&nbsp; ISO=SLG−BA (power) · HR%=HR per PA</div>",
+                    "<div style='font-size:10px;color:#4b5563;margin-top:4px;'>"
+                    "Pitch: 🟢=batter-favoring · 🔴=pitcher-favoring"
+                    " &nbsp;|&nbsp; ISO=SLG−BA (power index) · HR%=HR per PA</div>",
                     unsafe_allow_html=True,
                 )
                 _sa_lbl = "▲ Fewer Pitches" if _show_all else "▼ Show All Pitches"
@@ -2716,19 +2719,19 @@ def _render_full_slate_all_players(
                 f"<div style='display:flex;align-items:center;padding:3px 8px;"
                 f"background:{row_bg};border-bottom:1px solid #0f0f0f;gap:5px;"
                 f"flex-wrap:nowrap;'>"
-                f"<span style='color:#444;font-size:9px;min-width:14px;text-align:right'>{spot_s}</span>"
+                f"<span style='color:#555;font-size:9px;min-width:14px;text-align:right'>{spot_s}</span>"
                 f"<span style='color:#ddd;font-size:11px;min-width:145px;"
                 f"overflow:hidden;white-space:nowrap;text-overflow:ellipsis'>{pname}</span>"
                 f"<span style='color:#666;font-size:10px;min-width:30px'>{pteam}</span>"
-                f"<span style='color:#444;font-size:9px'>BRL</span>"
+                f"<span style='color:#555;font-size:9px'>BRL</span>"
                 f"<span style='color:{brl_col};font-size:11px;font-weight:600;min-width:36px'>{brl_s}</span>"
-                f"<span style='color:#444;font-size:9px'>MDL</span>"
+                f"<span style='color:#555;font-size:9px'>MDL</span>"
                 f"<span style='color:{model_col};font-size:11px;min-width:36px'>{model_s}</span>"
-                f"<span style='color:#444;font-size:9px'>EV</span>"
+                f"<span style='color:#4a4a70;font-size:9px'>EV</span>"
                 f"<span style='color:{ev_col};font-size:11px;min-width:38px'>{ev_s}</span>"
-                f"<span style='color:#444;font-size:9px'>EDG</span>"
+                f"<span style='color:#4a4a70;font-size:9px'>EDG</span>"
                 f"<span style='color:{edge_col};font-size:11px;min-width:38px'>{edge_s}</span>"
-                f"<span style='color:#444;font-size:9px'>CNF</span>"
+                f"<span style='color:#555;font-size:9px'>CNF</span>"
                 f"<span style='color:#888;font-size:11px;min-width:24px'>{conf_s}</span>"
                 f"{badges}"
                 f"</div>"
@@ -3731,29 +3734,35 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                     f"<div style='font-size:10px;color:{_mp_lbl_col};font-weight:700;'>MATCHUP: {_mp_lbl}</div>"
                     f"</div></div>"
                     + _mp_mod_bar
-                    + f"<div style='display:flex;gap:4px;margin-top:6px;'>"
+                    # ── Stat pills: context group (MODEL/BARREL/QUANT) | market group (EV/EDGE/ODDS) ──
+                    + f"<div style='display:flex;gap:2px;margin-top:6px;'>"
+                    # Context
                     f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:5px;padding:4px 2px;'>"
-                    f"<div style='font-size:13px;font-weight:700;color:#a78bfa;'>{_mp_model:.0f}%</div>"
-                    f"<div style='font-size:9px;color:#555;'>MODEL</div></div>"
+                    f"<div style='font-size:12px;font-weight:700;color:#a78bfa;'>{_mp_model:.0f}%</div>"
+                    f"<div style='font-size:8px;color:#4a4a6a;'>MODEL</div></div>"
                     f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:5px;padding:4px 2px;'>"
-                    f"<div style='font-size:13px;font-weight:700;color:{_mp_ev_col};'>{_mp_ev:+.1f}%</div>"
-                    f"<div style='font-size:9px;color:#555;'>EV</div></div>"
-                    f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:5px;padding:4px 2px;'>"
-                    f"<div style='font-size:13px;font-weight:700;color:{_edge_col(_mp_edge)};'>{_mp_edge:+.1f}%</div>"
-                    f"<div style='font-size:9px;color:#555;'>EDGE</div></div>"
-                    f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:5px;padding:4px 2px;'>"
-                    f"<div style='font-size:13px;font-weight:700;color:{_mp_brl_col};'>{_mp_brl:.1f}%</div>"
-                    f"<div style='font-size:9px;color:#555;'>BARREL</div></div>"
-                    f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:5px;padding:4px 2px;'>"
-                    f"<div style='font-size:13px;font-weight:700;color:{_mp_tier_col};'>{_mp_tier}</div>"
-                    f"<div style='font-size:9px;color:#555;'>QUANT</div></div>"
-                    f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:5px;padding:4px 2px;'>"
+                    f"<div style='font-size:12px;font-weight:700;color:{_mp_brl_col};'>{_mp_brl:.1f}%</div>"
+                    f"<div style='font-size:8px;color:#4a4a6a;'>BARREL</div></div>"
+                    f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:5px;padding:4px 2px;"
+                    f"border-right:1px solid #1e1e35;'>"
+                    f"<div style='font-size:12px;font-weight:700;color:{_mp_tier_col};'>{_mp_tier}</div>"
+                    f"<div style='font-size:8px;color:#4a4a6a;'>QUANT</div></div>"
+                    # Market — primary decision signals, slightly brighter bg
+                    f"<div style='flex:1;text-align:center;background:#0c0c1e;border-radius:5px;padding:4px 2px;'>"
+                    f"<div style='font-size:14px;font-weight:700;color:{_mp_ev_col};'>{_mp_ev:+.1f}%</div>"
+                    f"<div style='font-size:8px;color:#55558a;'>EV</div></div>"
+                    f"<div style='flex:1;text-align:center;background:#0c0c1e;border-radius:5px;padding:4px 2px;'>"
+                    f"<div style='font-size:14px;font-weight:700;color:{_edge_col(_mp_edge)};'>{_mp_edge:+.1f}%</div>"
+                    f"<div style='font-size:8px;color:#55558a;'>EDGE</div></div>"
+                    f"<div style='flex:1;text-align:center;background:#0c0c1e;border-radius:5px;padding:4px 2px;'>"
                     f"<a href='{_mp_url}' target='_blank' style='text-decoration:none;'>"
-                    f"<div style='font-size:13px;font-weight:700;color:#FF6666;'>{_fmt_american(_mp_odds)}</div>"
-                    f"<div style='font-size:9px;color:#555;'>ODDS ↗</div></a></div>"
+                    f"<div style='font-size:14px;font-weight:700;color:#FF6666;'>{_fmt_american(_mp_odds)}</div>"
+                    f"<div style='font-size:8px;color:#55558a;'>ODDS ↗</div></a></div>"
                     f"</div>"
                     + (
-                        "<div style='display:flex;flex-wrap:wrap;gap:4px;margin-top:8px;'>"
+                        "<div style='font-size:8px;color:#444;letter-spacing:1px;"
+                        "margin-top:8px;margin-bottom:3px;'>ARSENAL</div>"
+                        "<div style='display:flex;flex-wrap:wrap;gap:4px;'>"
                         + "".join(
                             _me_pitch_badge(pr, _me_pitch_label, _me_pitch_color)
                             for pr in _mp_pitch_rows[:6]
@@ -4580,6 +4589,7 @@ def tab_jig(data: dict):
             ("D AVOID",    "#f87171", "#1a0505")
         )
         _mg_label = {"S": "S+ ELITE", "A": "A MODEL", "B": "B MODEL", "C": "C MODEL"}.get(_hvy_tier, f"{_hvy_tier} MODEL")
+        _hvy_mod_bar_pct = min(100, max(0, int((mod - 0.75) / 0.60 * 100)))
         st.markdown(
             f"<div style='background:#111827;border:1px solid {border};border-radius:10px;"
             f"padding:14px 16px;margin-bottom:6px;'>"
@@ -4598,30 +4608,45 @@ def tab_jig(data: dict):
             f"letter-spacing:0.5px;'>MODEL: {_mg_label}</span>"
             f"</div></div>"
             f"</div>"
-            f"<div style='font-size:12px;color:#888;margin:2px 0 4px;'>"
+            # HVY modifier progress bar — visual matchup strength indicator
+            f"<div style='background:#0d1117;border-radius:2px;height:3px;margin:6px 0 4px;'>"
+            f"<div style='background:{mod_c};width:{_hvy_mod_bar_pct}%;"
+            f"height:3px;border-radius:2px;'></div></div>"
+            f"<div style='font-size:12px;color:#888;margin:0 0 4px;'>"
             f"{team} vs {opp} &nbsp;·&nbsp; vs {_hvy_pit_lbl}{pit_hand_lbl}</div>"
             f"{status_row}"
             f"<div style='display:grid;grid-template-columns:repeat(3,1fr);gap:4px;"
             f"font-size:11px;margin:6px 0;'>"
-            f"<div class='stat-box'><div style='color:#666;'>{slg_lbl}</div>"
+            f"<div class='stat-box'><div style='color:#888;'>{slg_lbl}</div>"
             f"<div style='color:{slg_c};font-weight:700;'>{slg:.3f}</div></div>"
-            f"<div class='stat-box'><div style='color:#666;'>Barrel</div>"
+            f"<div class='stat-box'><div style='color:#888;'>Barrel</div>"
             f"<div style='color:{brl_c};font-weight:700;'>{brl:.1f}%</div></div>"
-            f"<div class='stat-box'><div style='color:#666;'>Hard Hit</div>"
+            f"<div class='stat-box'><div style='color:#888;'>Hard Hit</div>"
             f"<div style='color:{hh_c};font-weight:700;'>{hh:.1f}%</div></div>"
-            f"<div class='stat-box'><div style='color:#666;'>HR Window</div>"
+            f"<div class='stat-box'><div style='color:#888;'>HR Window</div>"
             f"<div style='color:{ss_c};font-weight:700;'>{ss:.1f}%</div></div>"
-            f"<div class='stat-box'><div style='color:#666;'>Pull AIR</div>"
+            f"<div class='stat-box'><div style='color:#888;'>Pull AIR</div>"
             f"<div style='color:{pa_c};font-weight:700;'>{pa_str}</div></div>"
-            f"<div class='stat-box'><div style='color:#666;'>ISO</div>"
+            f"<div class='stat-box'><div style='color:#888;'>ISO</div>"
             f"<div style='color:{iso_c};font-weight:700;'>{iso:.3f}</div></div>"
             f"</div>"
-            f"<div style='display:flex;gap:10px;font-size:12px;margin-bottom:4px;flex-wrap:wrap;'>"
-            f"<span style='color:#f0f0f0;font-weight:700;'>{odds_str}</span>"
-            f"<span style='color:#a78bfa;'>MDL {_hvy_model:.0f}%</span>"
-            f"<span>EV: <b style='color:{ev_c};'>{ev:+.1f}%</b></span>"
-            f"<span>Edge: <b style='color:{_hvy_ec};'>{_hvy_edge:+.1f}%</b></span>"
-            f"<span style='font-size:10px;color:{mod_c};'>Modifier: {mod_s}</span>"
+            # ── Bottom row: stat pills — ODDS/MDL (context) | EV/EDGE (market primary) | HVY modifier ──
+            f"<div style='display:flex;gap:2px;margin-bottom:2px;'>"
+            f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:4px;padding:3px 2px;'>"
+            f"<div style='font-size:13px;font-weight:700;color:#FF6666;'>{odds_str}</div>"
+            f"<div style='font-size:8px;color:#555;'>ODDS</div></div>"
+            f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:4px;padding:3px 2px;'>"
+            f"<div style='font-size:12px;font-weight:700;color:#a78bfa;'>{_hvy_model:.0f}%</div>"
+            f"<div style='font-size:8px;color:#555;'>MDL</div></div>"
+            f"<div style='flex:1;text-align:center;background:#0c0c1e;border-radius:4px;padding:3px 2px;'>"
+            f"<div style='font-size:13px;font-weight:700;color:{ev_c};'>{ev:+.1f}%</div>"
+            f"<div style='font-size:8px;color:#4a4a70;'>EV</div></div>"
+            f"<div style='flex:1;text-align:center;background:#0c0c1e;border-radius:4px;padding:3px 2px;'>"
+            f"<div style='font-size:13px;font-weight:700;color:{_hvy_ec};'>{_hvy_edge:+.1f}%</div>"
+            f"<div style='font-size:8px;color:#4a4a70;'>EDGE</div></div>"
+            f"<div style='flex:1;text-align:center;background:#0a0a14;border-radius:4px;padding:3px 2px;'>"
+            f"<div style='font-size:11px;font-weight:700;color:{mod_c};'>{mod_s}</div>"
+            f"<div style='font-size:8px;color:#444;'>HVY</div></div>"
             f"</div></div>",
             unsafe_allow_html=True,
         )
