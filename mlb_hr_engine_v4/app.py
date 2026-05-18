@@ -2063,36 +2063,68 @@ def _render_qualified_table(
 
 
 def _render_pitch_mix_expander(ctx: dict, p: dict, key_prefix: str, expanded: bool = False) -> None:
-    """Shared pitch mix expander — identical depth on every tab."""
-    from clients.pitch_mix import pitch_label, pitch_color
-    import config as _cfg
-
+    """Shared pitch mix expander — lazy-loaded to reduce render pressure on long slates."""
     if not ctx:
         return
 
-    name        = p.get("player_name", "Unknown")
-    pit_n       = p.get("pitcher_name", "TBD")
-    pit_hand    = p.get("pitcher_hand", "")
-    bat_side    = p.get("batter_side", "")
-    pit_hand_lbl = (f" ({'RHP' if pit_hand == 'R' else 'LHP' if pit_hand == 'L' else ''})"
-                    if pit_hand else "")
-    bat_side_lbl = (f" ({'RHB' if bat_side == 'R' else 'LHB' if bat_side == 'L' else ''})"
-                    if bat_side else "")
+    # Lazy load gate: collapsed sections only render a cheap 2-widget placeholder.
+    # Full analysis (3 HTML tables, multiple loops) only builds after the user clicks Load.
+    # State persists for the session so each player loads once.
+    _uid = str(p.get("player_id") or p.get("player_name", "unk"))
+    _pm_loaded_key = f"_pm_loaded_{key_prefix}_{_uid}"
+    _is_loaded = st.session_state.get(_pm_loaded_key, False)
 
-    pitch_mix       = ctx.get("pitch_mix", {})
-    pitcher_arsenal = pitch_mix.get("arsenal", ctx.get("pitcher_arsenal", []))
-    hand_splits     = pitch_mix.get("hand_splits", ctx.get("hand_splits", {}))
-    h2h             = pitch_mix.get("h2h", ctx.get("h2h", {}))
-    batter_rows     = pitch_mix.get("batter_rows", ctx.get("batter_rows", []))
-    _data_year      = pitch_mix.get("data_year", ctx.get("data_year", _cfg.CURRENT_SEASON))
-    _yr_label       = (f" ({_data_year})" if _data_year != _cfg.CURRENT_SEASON
-                       else f" ({_cfg.CURRENT_SEASON})")
-    _prior_note     = (f" ⚠️ *{_data_year} data — pitcher has no {_cfg.CURRENT_SEASON} starts yet*"
-                       if _data_year != _cfg.CURRENT_SEASON else "")
+    # When caller passes expanded=True (e.g. global expand-all setting), auto-mark as loaded
+    # so the expander opens directly to full content rather than the lightweight placeholder.
+    if expanded and not _is_loaded:
+        st.session_state[_pm_loaded_key] = True
+        _is_loaded = True
 
-    pitches = []
+    with st.expander("📊 Pitch Mix Analysis", expanded=expanded or _is_loaded):
+        if not _is_loaded:
+            # Lightweight placeholder — no HTML tables or loops execute here
+            _prev_pit = p.get("pitcher_name", "TBD")
+            _prev_n   = len((ctx.get("pitch_mix") or {}).get("arsenal", []))
+            st.markdown(
+                f"<div style='color:#64748b;font-size:11px;padding:2px 0;'>"
+                f"vs {_prev_pit} &nbsp;·&nbsp; {_prev_n} pitch types tracked</div>",
+                unsafe_allow_html=True,
+            )
+            if st.button(
+                "▶ Load Full Analysis",
+                key=f"pm_load_{key_prefix}_{_uid}",
+                use_container_width=True,
+            ):
+                st.session_state[_pm_loaded_key] = True
+                st.rerun()
+            return
 
-    with st.expander("📊 Pitch Mix Analysis", expanded=expanded):
+        # ── Full pitch mix analysis (only builds after Load is clicked) ────────
+        from clients.pitch_mix import pitch_label, pitch_color
+        import config as _cfg
+
+        name        = p.get("player_name", "Unknown")
+        pit_n       = p.get("pitcher_name", "TBD")
+        pit_hand    = p.get("pitcher_hand", "")
+        bat_side    = p.get("batter_side", "")
+        pit_hand_lbl = (f" ({'RHP' if pit_hand == 'R' else 'LHP' if pit_hand == 'L' else ''})"
+                        if pit_hand else "")
+        bat_side_lbl = (f" ({'RHB' if bat_side == 'R' else 'LHB' if bat_side == 'L' else ''})"
+                        if bat_side else "")
+
+        pitch_mix       = ctx.get("pitch_mix", {})
+        pitcher_arsenal = pitch_mix.get("arsenal", ctx.get("pitcher_arsenal", []))
+        hand_splits     = pitch_mix.get("hand_splits", ctx.get("hand_splits", {}))
+        h2h             = pitch_mix.get("h2h", ctx.get("h2h", {}))
+        batter_rows     = pitch_mix.get("batter_rows", ctx.get("batter_rows", []))
+        _data_year      = pitch_mix.get("data_year", ctx.get("data_year", _cfg.CURRENT_SEASON))
+        _yr_label       = (f" ({_data_year})" if _data_year != _cfg.CURRENT_SEASON
+                           else f" ({_cfg.CURRENT_SEASON})")
+        _prior_note     = (f" ⚠️ *{_data_year} data — pitcher has no {_cfg.CURRENT_SEASON} starts yet*"
+                           if _data_year != _cfg.CURRENT_SEASON else "")
+
+        pitches = []
+
         if _prior_note:
             st.caption(_prior_note)
 
@@ -2704,8 +2736,8 @@ def _render_full_slate_all_players(
             f"</div></div>"
         )
 
-        # Batter rows for this game (built as one HTML string, one st.markdown call)
-        rows_html = "<div style='margin-bottom:2px'>"
+        # Batter rows for this game (list+join avoids O(n²) string copies)
+        _row_parts = ["<div style='margin-bottom:2px'>"]
         for _ri, p in enumerate(game_players):
             pname  = p.get("player_name", "?")
             pteam  = p.get("team", "?")
@@ -2755,7 +2787,7 @@ def _render_full_slate_all_players(
             row_bg  = "#0f0f1e" if is_tac_qual else "#0a0a14" if is_qual else _alt_bg
             _row_lc = "#FFD700" if brl >= 12 else "#4ade80" if is_tac_qual else "#60a5fa" if is_qual else "#1a1a28"
 
-            rows_html += (
+            _row_parts.append(
                 f"<div style='display:flex;align-items:center;padding:3px 8px 3px 9px;"
                 f"background:{row_bg};border-bottom:1px solid #0c0c12;"
                 f"border-left:2px solid {_row_lc};gap:5px;flex-wrap:nowrap;'>"
@@ -2776,8 +2808,8 @@ def _render_full_slate_all_players(
                 f"{badges}"
                 f"</div>"
             )
-        rows_html += "</div>"
-        st.markdown(header_html + rows_html, unsafe_allow_html=True)
+        _row_parts.append("</div>")
+        st.markdown(header_html + "".join(_row_parts), unsafe_allow_html=True)
 
 
 def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int | None = None, min_confidence: float = 0):
