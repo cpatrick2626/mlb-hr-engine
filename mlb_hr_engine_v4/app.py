@@ -1092,7 +1092,7 @@ def _intelligence_card_html(
            if barrel >= 5.0 else "")
 
         # ── Row 3: Quantitative stat pills ──
-        f"<div style='display:flex;gap:2px;margin-bottom:4px;'>"
+        + f"<div style='display:flex;gap:2px;margin-bottom:4px;'>"
         f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:4px;padding:3px 1px;'>"
         f"<div style='font-size:12px;font-weight:700;color:#a78bfa;line-height:1.1;'>{model_p:.0f}%</div>"
         f"<div style='font-size:7px;color:#3a3a55;letter-spacing:0.3px;'>MDL</div></div>"
@@ -1118,7 +1118,7 @@ def _intelligence_card_html(
         + pitch_html
 
         # ── Row 5: HVY matchup bar + weather ──
-        f"<div style='display:flex;align-items:center;gap:5px;margin-top:4px;'>"
+        + f"<div style='display:flex;align-items:center;gap:5px;margin-top:4px;'>"
         f"<div style='font-size:7px;color:#444;letter-spacing:0.5px;white-space:nowrap;'>MTCH</div>"
         f"<div style='flex:1;background:#111;border-radius:2px;height:3px;'>"
         f"<div style='background:{hvy_col};width:{hvy_bar}%;height:3px;border-radius:2px;'></div></div>"
@@ -1325,7 +1325,7 @@ def _elite_card_html(
         + pitch_html
 
         # ── HVY matchup bar + weather ──
-        f"<div style='display:flex;align-items:center;gap:5px;margin-top:3px;'>"
+        + f"<div style='display:flex;align-items:center;gap:5px;margin-top:3px;'>"
         f"<div style='font-size:7px;color:#333;letter-spacing:0.5px;white-space:nowrap;'>MTCH</div>"
         f"<div style='flex:1;background:#111;border-radius:2px;height:3px;'>"
         f"<div style='background:{hvy_col};width:{hvy_bar}%;height:3px;border-radius:2px;'></div></div>"
