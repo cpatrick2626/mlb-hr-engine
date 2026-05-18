@@ -402,12 +402,11 @@ def _safe_float(val, default=0.0) -> float:
 
 
 def _load_rows() -> list[dict]:
+    # Only read pick_tracker.csv — results.csv is a legacy schema with decimal odds
+    # and different field names; mixing it in causes false ERROR/WARNING reports.
     rows = []
     if LOG_PATH.exists():
         with open(LOG_PATH, newline="", encoding="utf-8") as f:
-            rows.extend(csv.DictReader(f))
-    if RESULTS_CSV.exists():
-        with open(RESULTS_CSV, newline="", encoding="utf-8") as f:
             rows.extend(csv.DictReader(f))
     return list(rows)
 

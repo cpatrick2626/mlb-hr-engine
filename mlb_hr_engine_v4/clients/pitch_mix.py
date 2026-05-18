@@ -108,7 +108,7 @@ def _finalize_pitch_stats(totals: dict, total_pa_denom: int) -> dict:
             "pitch_pct": round(p["pa"] / denom, 4),
             "hr":        p["hr"],
             "k":         p["k"],
-            "k_pct":     round(p["k"]  / p["pa"], 3) if p["pa"] else 0.0,
+            "k_pct":     round(p["k"]  / p["pa"], 3) if p["pa"] >= 5 else None,
             "hr_rate":   _hr_rate,
             "avg_speed": round(p["speed_sum"] / p["speed_n"], 1) if p["speed_n"] else None,
             "display_hh": _disp_hh,
@@ -574,7 +574,7 @@ def _fetch_all_batter_pitch_splits(batter_id: int) -> None:
                 "k":       t["k"],
                 "ba":      _ba,
                 "slg":     _slg,
-                "k_pct":   round(t["k"] / _pa, 3) if _pa else 0.0,
+                "k_pct":   round(t["k"] / _pa, 3) if _pa >= 5 else None,
                 "hr_rate": _hr_rate,
             }
         return out

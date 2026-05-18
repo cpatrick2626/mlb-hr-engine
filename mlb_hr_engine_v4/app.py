@@ -2245,7 +2245,7 @@ def _render_pitch_mix_expander(ctx: dict, p: dict, key_prefix: str) -> None:
                 bslg   = bpt.get("slg")   # None when < 3 AB
                 bba    = bpt.get("ba")    # None when < 3 AB
                 biso   = bpt.get("iso")   # None when ba or slg is None
-                bkpct  = bpt.get("k_pct", 0.0)
+                bkpct  = bpt.get("k_pct") or 0.0
                 bhr    = bpt.get("hr", 0)
                 bpa    = bpa or 0
                 bhrpct = bpt.get("hr_rate")  # None when < 10 PA

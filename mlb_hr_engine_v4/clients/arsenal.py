@@ -179,7 +179,7 @@ def _fetch_arsenal_from_stats(year: int) -> dict[int, list[dict]]:
       pa -> pa (int)
       whiff_percent -> whiff_pct (0-100 scale, converted to 0-1)
       hard_hit_percent -> hard_hit_pct (0-100 scale, converted to 0-1)
-      avg_speed: not available on this endpoint — set to None
+      mph / avg_speed / pitch_speed_mean -> avg_speed (tries multiple column names)
     """
     url = (
         "https://baseballsavant.mlb.com/leaderboard/pitch-arsenal-stats"
@@ -225,12 +225,17 @@ def _fetch_arsenal_from_stats(year: int) -> dict[int, list[dict]]:
                 if hard_hit is not None and hard_hit > 1.5:
                     hard_hit = hard_hit / 100.0
 
+                # Savant pitch-arsenal-stats CSV uses 'mph' for average velocity.
+                # Try multiple column names in case the format changes across years.
+                _spd = _f("mph") or _f("avg_speed") or _f("pitch_speed_mean") or _f("avg_mph")
+                speed = round(_spd, 1) if (_spd is not None and 70.0 <= _spd <= 110.0) else None
+
                 pitch = {
                     "pitch_type":   pt,
                     "pitch_pct":    round(pct, 4),
                     "rv_per100":    rv,
                     "pa":           int(pa_raw) if pa_raw is not None else 0,
-                    "avg_speed":    None,  # not provided by this endpoint
+                    "avg_speed":    speed,
                     "whiff_pct":    whiff,
                     "hard_hit_pct": hard_hit,
                 }
@@ -245,7 +250,15 @@ def _fetch_arsenal_from_stats(year: int) -> dict[int, list[dict]]:
             result[pid].sort(key=lambda p: p["pitch_pct"], reverse=True)
 
         if result:
-            print(f"[arsenal] stats endpoint: {len(result)} pitchers loaded for year={year}")
+            n_with_speed = sum(
+                1 for pitches in result.values()
+                if any(p.get("avg_speed") is not None
+                       for p in pitches if p.get("pitch_type", "") in _FASTBALL_TYPES)
+            )
+            print(
+                f"[arsenal] stats endpoint: {len(result)} pitchers loaded for year={year}, "
+                f"fastball avg_speed: {n_with_speed}/{len(result)} pitchers"
+            )
         return result
     except Exception as exc:
         print(f"[arsenal] stats fetch failed (year={year}): {exc}")
@@ -333,6 +346,7 @@ def pitcher_velo_decline_factor(
     pitcher_id: int,
     arsenal_curr: dict[int, list[dict]],
     arsenal_prior: dict[int, list[dict]],
+    _verbose: bool = False,
 ) -> float:
     """
     Year-over-year fastball velocity decline signal.
@@ -346,30 +360,52 @@ def pitcher_velo_decline_factor(
     Returns 1.0 when either year's data is unavailable.
     One-sided: we only boost HR risk for declines (velocity gain is handled by
     other factors and is a positive indicator for the pitcher, not an HR risk).
+
+    Set _verbose=True to log the decision path (useful for diagnostics).
     """
+    def _skip(reason: str) -> float:
+        if _verbose:
+            print(f"[arsenal] velo_decline pid={pitcher_id}: skip — {reason}")
+        return 1.0
+
     curr_pitches  = arsenal_curr.get(pitcher_id)
     prior_pitches = arsenal_prior.get(pitcher_id)
     if not curr_pitches or not prior_pitches:
-        return 1.0
+        return _skip("no curr or prior arsenal data")
 
     curr_fb  = _primary_fastball(curr_pitches)
     prior_fb = _primary_fastball(prior_pitches)
-    if curr_fb is None or prior_fb is None:
-        return 1.0
+    if curr_fb is None:
+        return _skip("no fastball with speed in curr arsenal")
+    if prior_fb is None:
+        return _skip("no fastball with speed in prior arsenal")
     if (prior_fb.get("pa") or 0) < 50:
-        return 1.0  # prior sample too thin to trust delta
+        return _skip(f"prior fastball PA={prior_fb.get('pa', 0)} < 50 (thin sample)")
 
     curr_speed  = curr_fb.get("avg_speed")
     prior_speed = prior_fb.get("avg_speed")
-    if curr_speed is None or prior_speed is None:
-        return 1.0
+    if curr_speed is None:
+        return _skip("curr avg_speed=None (data source missing velocity)")
+    if prior_speed is None:
+        return _skip("prior avg_speed=None (data source missing velocity)")
 
     delta = prior_speed - curr_speed  # positive = current year is slower
     if delta < config.VELO_DECLINE_THRESHOLD_MPH:
+        if _verbose:
+            print(
+                f"[arsenal] velo_decline pid={pitcher_id}: "
+                f"delta={delta:.1f}mph < threshold={config.VELO_DECLINE_THRESHOLD_MPH}mph — neutral"
+            )
         return 1.0
 
-    factor = 1.0 + config.VELO_DECLINE_RATE * delta
-    return round(min(1.08, factor), 3)
+    factor = round(min(1.08, 1.0 + config.VELO_DECLINE_RATE * delta), 3)
+    if _verbose:
+        print(
+            f"[arsenal] velo_decline pid={pitcher_id}: ACTIVE "
+            f"prior={prior_speed:.1f}mph curr={curr_speed:.1f}mph "
+            f"delta={delta:.1f}mph factor={factor}"
+        )
+    return factor
 
 
 # ── Internals ──────────────────────────────────────────────────────────────────
@@ -387,6 +423,87 @@ def _primary_fastball(pitches: list[dict]) -> Optional[dict]:
     return max(candidates, key=lambda p: p.get("pitch_pct", 0))
 
 
+def velo_decline_diagnostics(
+    arsenal_curr: dict[int, list[dict]],
+    arsenal_prior: dict[int, list[dict]] | None = None,
+    print_report: bool = True,
+) -> dict:
+    """
+    Summarise velocity data availability and velo-decline signal coverage.
+
+    Returns a dict:
+      n_pitchers_curr   — pitchers in current-year arsenal
+      n_with_fb_speed   — pitchers that have avg_speed on ≥1 fastball (curr)
+      n_no_speed        — pitchers with fastball but avg_speed=None (data-limited)
+      n_no_fastball     — pitchers with no fastball entry at all
+      n_active          — pitchers where decline > threshold (requires arsenal_prior)
+      n_data_limited    — pitchers where prior/curr speed is missing for comparison
+      status            — "ok" | "data_limited" | "no_data"
+    """
+    n_pitchers    = len(arsenal_curr)
+    n_with_speed  = 0
+    n_no_speed    = 0
+    n_no_fastball = 0
+
+    for pitches in arsenal_curr.values():
+        fb_pitches = [p for p in pitches if p.get("pitch_type", "") in _FASTBALL_TYPES]
+        if not fb_pitches:
+            n_no_fastball += 1
+            continue
+        if any(p.get("avg_speed") is not None for p in fb_pitches):
+            n_with_speed += 1
+        else:
+            n_no_speed += 1
+
+    n_active       = 0
+    n_data_limited = 0
+    if arsenal_prior:
+        for pid in arsenal_curr:
+            fb_curr  = _primary_fastball(arsenal_curr.get(pid, []))
+            fb_prior = _primary_fastball(arsenal_prior.get(pid, []))
+            if fb_curr is None or fb_prior is None:
+                continue
+            if fb_curr.get("avg_speed") is None or fb_prior.get("avg_speed") is None:
+                n_data_limited += 1
+                continue
+            if (fb_prior.get("pa") or 0) < 50:
+                n_data_limited += 1
+                continue
+            delta = (fb_prior["avg_speed"] or 0) - (fb_curr["avg_speed"] or 0)
+            if delta >= config.VELO_DECLINE_THRESHOLD_MPH:
+                n_active += 1
+
+    if n_with_speed == 0:
+        status = "no_data"
+    elif n_no_speed > n_with_speed:
+        status = "data_limited"
+    else:
+        status = "ok"
+
+    result = {
+        "n_pitchers_curr": n_pitchers,
+        "n_with_fb_speed": n_with_speed,
+        "n_no_speed":      n_no_speed,
+        "n_no_fastball":   n_no_fastball,
+        "n_active":        n_active,
+        "n_data_limited":  n_data_limited,
+        "status":          status,
+    }
+
+    if print_report:
+        print(
+            f"[arsenal] velo diagnostics: "
+            f"{n_pitchers} pitchers | "
+            f"speed_ok={n_with_speed} | "
+            f"no_speed={n_no_speed} | "
+            f"no_fastball={n_no_fastball} | "
+            f"active_decline={n_active} | "
+            f"data_limited={n_data_limited} | "
+            f"status={status}"
+        )
+    return result
+
+
 def _parse_arsenal_csv(raw: str) -> dict[int, list[dict]]:
     """
     Parse Savant pitch arsenal WIDE-format CSV.
@@ -398,13 +515,33 @@ def _parse_arsenal_csv(raw: str) -> dict[int, list[dict]]:
     """
     result: dict[int, list] = {}
 
-    # Map CSV column suffix → pitch type code
+    # Map CSV column suffix → pitch type code (usage columns)
     _PT_COLS: dict[str, str] = {
         "ff_pitcher": "FF", "si_pitcher": "SI", "fc_pitcher": "FC",
         "sl_pitcher": "SL", "ch_pitcher": "CH", "cu_pitcher": "CU",
         "fs_pitcher": "FS", "kn_pitcher": "KN", "st_pitcher": "ST",
         "sv_pitcher": "SV", "kc_pitcher": "KC",
     }
+    # Wide-format CSV velocity columns: prefix = pitch type code lowercased
+    # e.g. "ff_avg_speed", "si_avg_speed", "fc_avg_speed"
+    _PT_PREFIXES: dict[str, str] = {
+        "ff": "FF", "si": "SI", "fc": "FC", "sl": "SL", "ch": "CH",
+        "cu": "CU", "fs": "FS", "kn": "KN", "st": "ST", "sv": "SV", "kc": "KC",
+    }
+
+    def _row_speed(row: dict, pt_code: str) -> "float | None":
+        """Try to read avg_speed for a pitch type from wide-format velocity columns."""
+        prefix = pt_code.lower()
+        for suffix in ("_avg_speed", "_speed", "_velocity"):
+            cell = (row.get(f"{prefix}{suffix}") or "").strip()
+            if cell:
+                try:
+                    v = float(cell)
+                    if 70.0 <= v <= 110.0:
+                        return round(v, 1)
+                except (ValueError, TypeError):
+                    pass
+        return None
 
     reader = csv.DictReader(io.StringIO(raw.lstrip("﻿")))
     for row in reader:
@@ -431,7 +568,7 @@ def _parse_arsenal_csv(raw: str) -> dict[int, list[dict]]:
                     "pitch_pct":    round(pct, 4),
                     "rv_per100":    None,
                     "pa":           0,
-                    "avg_speed":    None,
+                    "avg_speed":    _row_speed(row, pt),
                     "whiff_pct":    None,
                     "hard_hit_pct": None,
                 })
