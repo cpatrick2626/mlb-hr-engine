@@ -405,6 +405,11 @@ div[data-testid="stSelectbox"] label { font-size: 12px; color: #666; }
     /* Sidebar toggle button — larger touch target (Streamlit default is small) */
     [data-testid="stSidebarCollapseButton"] button { min-width: 44px !important; min-height: 44px !important; }
 }
+
+/* ── Momentum scrolling for dataframe containers on iOS ── */
+@media (max-width: 768px) {
+    [data-testid="stDataFrame"] > div { -webkit-overflow-scrolling: touch; }
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -2677,7 +2682,8 @@ def _render_full_slate_all_players(
         # Game header (one markdown call per game)
         header_html = (
             f"<div style='background:#0d0d1a;border-left:3px solid {urg_col};"
-            f"margin:10px 0 0;padding:7px 12px;border-radius:4px;'>"
+            f"margin:22px 0 0;padding:7px 12px;border-radius:4px;"
+            f"box-shadow:0 -1px 0 0 #140014;'>"
             f"<div style='display:flex;justify-content:space-between;align-items:center;"
             f"flex-wrap:wrap;gap:6px;'>"
             f"<span style='font-size:13px;font-weight:700;color:#60a5fa;'>"
@@ -2700,7 +2706,7 @@ def _render_full_slate_all_players(
 
         # Batter rows for this game (built as one HTML string, one st.markdown call)
         rows_html = "<div style='margin-bottom:2px'>"
-        for p in game_players:
+        for _ri, p in enumerate(game_players):
             pname  = p.get("player_name", "?")
             pteam  = p.get("team", "?")
             spot_s = str(p.get("lineup_spot")) if p.get("lineup_spot") else "?"
@@ -2745,14 +2751,16 @@ def _render_full_slate_all_players(
                            "color:#60a5fa;font-size:8px;padding:1px 4px;"
                            "border-radius:2px;margin-left:3px'>ODDS</span>")
 
-            row_bg = "#0f0f1a" if is_tac_qual else "#0a0a12" if is_qual else "#080808"
+            _alt_bg = "#0d0d18" if _ri % 2 == 0 else "#090910"
+            row_bg  = "#0f0f1e" if is_tac_qual else "#0a0a14" if is_qual else _alt_bg
+            _row_lc = "#FFD700" if brl >= 12 else "#4ade80" if is_tac_qual else "#60a5fa" if is_qual else "#1a1a28"
 
             rows_html += (
-                f"<div style='display:flex;align-items:center;padding:3px 8px;"
-                f"background:{row_bg};border-bottom:1px solid #0f0f0f;gap:5px;"
-                f"flex-wrap:nowrap;'>"
+                f"<div style='display:flex;align-items:center;padding:3px 8px 3px 9px;"
+                f"background:{row_bg};border-bottom:1px solid #0c0c12;"
+                f"border-left:2px solid {_row_lc};gap:5px;flex-wrap:nowrap;'>"
                 f"<span style='color:#555;font-size:9px;min-width:14px;text-align:right'>{spot_s}</span>"
-                f"<span style='color:#ddd;font-size:11px;min-width:145px;"
+                f"<span style='color:#eee;font-size:11px;font-weight:700;min-width:145px;"
                 f"overflow:hidden;white-space:nowrap;text-overflow:ellipsis'>{pname}</span>"
                 f"<span style='color:#666;font-size:10px;min-width:30px'>{pteam}</span>"
                 f"<span style='color:#555;font-size:9px'>BRL</span>"
@@ -3788,8 +3796,9 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                     _mp_weather_frag = ""
 
                 st.markdown(
-                    f"<div style='background:{_mp_bg};border:1px solid {_mp_border};border-radius:10px;"
-                    f"padding:12px 16px;margin-bottom:2px;position:relative;overflow:hidden;'>"
+                    f"<div style='background:{_mp_bg};border:1px solid {_mp_border};"
+                    f"border-left:3px solid {_mp_lbl_col};border-radius:10px;"
+                    f"padding:12px 16px;margin-bottom:12px;position:relative;overflow:hidden;'>"
                     f"<div style='position:absolute;top:0;left:0;right:0;height:2px;"
                     f"background:linear-gradient(90deg,transparent,{_mp_lbl_col},transparent);opacity:0.55;'></div>"
                     f"<div style='display:flex;justify-content:space-between;align-items:center;'>"
@@ -4190,10 +4199,12 @@ def tab_hits(data: dict):
         border = "#f87171" if is_live else "#1e3a5f"
         status_row = (f"<div style='font-size:11px; margin:2px 0 8px;'>{status_html}</div>"
                       if status_html else "")
-        _h_photo = _player_photo_html(p.get("player_id"), size=44)
+        _h_photo  = _player_photo_html(p.get("player_id"), size=44)
+        _h_rail_c = "#4ade80" if hsco >= 60 else "#f59e0b" if hsco >= 40 else "#f87171"
         st.markdown(
-            f"<div style='background:#0d0d1e; border:1px solid {border}; border-radius:10px; "
-            f"padding:14px 16px; margin-bottom:10px;'>"
+            f"<div style='background:#0d0d1e; border:1px solid {border}; "
+            f"border-left:3px solid {_h_rail_c}; border-radius:10px; "
+            f"padding:14px 16px; margin-bottom:14px;'>"
             f"<div style='display:flex; justify-content:space-between; align-items:center;'>"
             f"<div style='display:flex;align-items:center;'>{_h_photo}"
             f"<div style='font-size:15px; font-weight:800; color:#f0f0f0;'>{name}</div></div>"
@@ -4685,8 +4696,9 @@ def tab_jig(data: dict):
         else:
             _hvy_weather_frag = ""
         st.markdown(
-            f"<div style='background:#111827;border:1px solid {border};border-radius:10px;"
-            f"padding:14px 16px;margin-bottom:6px;position:relative;overflow:hidden;'>"
+            f"<div style='background:#111827;border:1px solid {border};"
+            f"border-left:3px solid {_mt_c};border-radius:10px;"
+            f"padding:14px 16px;margin-bottom:14px;position:relative;overflow:hidden;'>"
             # Top accent hairline — matchup grade color, shared skeleton with Quick View / Elite
             f"<div style='position:absolute;top:0;left:0;right:0;height:2px;"
             f"background:linear-gradient(90deg,transparent,{_mt_c},transparent);opacity:0.6;'></div>"
