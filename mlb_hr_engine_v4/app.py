@@ -33,6 +33,28 @@ def _badge(val, thr, fmt):
     return f"<span style='color:{c}; font-weight:700;'>{fmt}</span>"
 
 
+# ── Card HTML render cache ─────────────────────────────────────────────────────
+# Keyed by (card_type, slate_ts, player_id, volatile_flags...).
+# Cleared when slate_ts (data_loaded_at) changes — safe for any rerender cadence.
+# Covers _intelligence_card_html, _elite_card_html, and Matchup Edge inline HTML.
+_CARD_CACHE: dict = {}
+_CARD_CACHE_SLATE: str = ""
+
+
+def _card_html(fp: tuple, builder) -> str:
+    """Return cached card HTML or build+cache it. builder is a zero-arg callable."""
+    global _CARD_CACHE, _CARD_CACHE_SLATE
+    slate_ts = fp[1]  # fp[0]=card_type, fp[1]=slate_ts
+    if _CARD_CACHE_SLATE != slate_ts:
+        _CARD_CACHE.clear()
+        _CARD_CACHE_SLATE = slate_ts
+    cached = _CARD_CACHE.get(fp)
+    if cached is None:
+        cached = builder()
+        _CARD_CACHE[fp] = cached
+    return cached
+
+
 st.set_page_config(
     page_title="Codex HR Engine",
     page_icon="⚾",
@@ -2711,28 +2733,32 @@ def _render_full_slate_all_players(
         )
         n_game_qual = sum(1 for p in game_players if p.get("player_name") in qualified_names)
 
-        # Game header (one markdown call per game)
+        # Game header — left border uses park factor color for instant ballpark context read
+        # urg_col drives time urgency; pk_col drives park environment signal
+        _gh_border_col = pk_col if pk_col != "#888" else urg_col
         header_html = (
-            f"<div style='background:#0d0d1a;border-left:3px solid {urg_col};"
-            f"margin:22px 0 0;padding:7px 12px;border-radius:4px;"
-            f"box-shadow:0 -1px 0 0 #140014;'>"
+            f"<div style='background:#0b0b17;border-left:3px solid {_gh_border_col};"
+            f"margin:20px 0 0;padding:6px 12px;border-radius:4px;"
+            f"border-top:1px solid #16162a;'>"
             f"<div style='display:flex;justify-content:space-between;align-items:center;"
             f"flex-wrap:wrap;gap:6px;'>"
             f"<span style='font-size:13px;font-weight:700;color:#60a5fa;'>"
             f"{away_team} @ {home_team}</span>"
             f"<span style='font-size:11px;color:{urg_col};font-weight:600;'>{gt_str}</span>"
             f"<span style='font-size:10px;color:#888;'>"
-            f"Park <span style='color:{pk_col}'>{pk:.2f}×</span>{weather_part}</span>"
-            f"<span style='font-size:10px;color:#555;'>{n_game_qual} qual</span>"
+            f"Park <span style='color:{pk_col};font-weight:600;'>{pk:.2f}×</span>{weather_part}</span>"
+            f"<span style='font-size:10px;color:{('#4ade80' if n_game_qual >= 3 else '#aaa')};'>"
+            f"{n_game_qual} qual</span>"
             f"</div>"
-            f"<div style='font-size:10px;color:#666;margin-top:3px;'>"
-            f"<span style='color:#a78bfa'>{away_team}</span>"
-            f"<span style='color:#444;font-size:9px;'> bats vs </span>"
-            f"<span style='color:#aaa'>{home_pitcher}</span>"
-            f" &nbsp;&middot;&nbsp; "
-            f"<span style='color:#a78bfa'>{home_team}</span>"
-            f"<span style='color:#444;font-size:9px;'> bats vs </span>"
-            f"<span style='color:#aaa'>{away_pitcher}</span>"
+            f"<div style='font-size:10px;color:#555;margin-top:2px;"
+            f"border-top:1px solid #13131f;padding-top:2px;'>"
+            f"<span style='color:#7c7caa'>{away_team}</span>"
+            f"<span style='color:#333;font-size:9px;'> vs </span>"
+            f"<span style='color:#888'>{home_pitcher}</span>"
+            f" <span style='color:#252535;'>·</span> "
+            f"<span style='color:#7c7caa'>{home_team}</span>"
+            f"<span style='color:#333;font-size:9px;'> vs </span>"
+            f"<span style='color:#888'>{away_pitcher}</span>"
             f"</div></div>"
         )
 
@@ -2814,8 +2840,9 @@ def _render_full_slate_all_players(
 
 def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int | None = None, min_confidence: float = 0):
     all_players = data.get("all_players", [])
+    _slate_ts = str(st.session_state.get("data_loaded_at", ""))
     _uif_fp = (
-        str(st.session_state.get("data_loaded_at", "")),
+        _slate_ts,
         min_ev, min_edge,
         cutoff_utc_hour if cutoff_utc_hour is not None else -1,
         min_confidence,
@@ -3394,7 +3421,15 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
         ))
         or _tac_params["exclude_started"]
     )
-    _tac_ranked = _apply_tactical_filters(ranked, _tac_params) if _any_tac_active else ranked
+    # Fingerprint-cache the tactical filter result — avoids re-filtering on every rerender
+    # when TCC params and ranked list are unchanged.
+    _tac_filter_fp = (_slate_ts, id(ranked), tuple(_tac_params.values()))
+    if st.session_state.get("_tac_filter_fp") == _tac_filter_fp:
+        _tac_ranked = st.session_state["_tac_ranked"]
+    else:
+        _tac_ranked = _apply_tactical_filters(ranked, _tac_params) if _any_tac_active else ranked
+        st.session_state["_tac_ranked"] = _tac_ranked
+        st.session_state["_tac_filter_fp"] = _tac_filter_fp
 
     # ── OPERATIONAL INTELLIGENCE LAYER ──────────────────────────────────────────
     _now_et = _dt.datetime.now(_EDT)
@@ -3556,9 +3591,16 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                             st.session_state["modal_source_section"] = f"Rank #{_rank}"
                             st.rerun()
 
-                        # Level 1 — Tactical Intelligence Card
+                        # Level 1 — Tactical Intelligence Card (fingerprint-cached)
+                        _qv_fp = (
+                            "ic", _slate_ts, _qpid, _rank,
+                            _qis_live, _qis_steam, _optimizer_on, _qis_opt_sel,
+                            _urgency_lbl, _qgt_str,
+                            hash(_qstatus_html) if _qstatus_html else 0,
+                            tuple(_pitch_tags) if _pitch_tags else (),
+                        )
                         st.markdown(
-                            _intelligence_card_html(
+                            _card_html(_qv_fp, lambda: _intelligence_card_html(
                                 _qp, _rank, _ctx,
                                 pitch_tags=_pitch_tags,
                                 is_steam=_qis_steam,
@@ -3569,7 +3611,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                                 urgency_lbl=_urgency_lbl,
                                 opt_active=_optimizer_on,
                                 opt_selected=_qis_opt_sel,
-                            ),
+                            )),
                             unsafe_allow_html=True,
                         )
 
@@ -3657,15 +3699,21 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                             st.session_state["modal_source_tab"] = "Elite"
                             st.rerun()
 
+                        _ep_opt_sel = _ep.get("player_name") in _optimizer_selected_names
+                        _ec_fp = (
+                            "ec", _slate_ts, _ep_pid,
+                            _ep_is_live, _optimizer_on, _ep_opt_sel,
+                            hash(_ep_status_html) if _ep_status_html else 0,
+                        )
                         st.markdown(
-                            _elite_card_html(
+                            _card_html(_ec_fp, lambda: _elite_card_html(
                                 _ep, _ep_ctx,
                                 pitch_tags=_ep_ptags,
                                 is_live=_ep_is_live,
                                 status_html=_ep_status_html,
                                 opt_active=_optimizer_on,
-                                opt_selected=_ep.get("player_name") in _optimizer_selected_names,
-                            ),
+                                opt_selected=_ep_opt_sel,
+                            )),
                             unsafe_allow_html=True,
                         )
                         _render_pitch_mix_expander(_ep_ctx, _ep, f"elite_{_el_rank}",
@@ -3827,65 +3875,78 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                 else:
                     _mp_weather_frag = ""
 
-                st.markdown(
-                    f"<div style='background:{_mp_bg};border:1px solid {_mp_border};"
-                    f"border-left:3px solid {_mp_lbl_col};border-radius:10px;"
-                    f"padding:12px 16px;margin-bottom:12px;position:relative;overflow:hidden;'>"
-                    f"<div style='position:absolute;top:0;left:0;right:0;height:2px;"
-                    f"background:linear-gradient(90deg,transparent,{_mp_lbl_col},transparent);opacity:0.55;'></div>"
-                    f"<div style='display:flex;justify-content:space-between;align-items:center;'>"
-                    f"<div style='display:flex;align-items:center;gap:8px;'>{_mp_photo}"
-                    f"<div><div style='font-size:12px;color:#888;'>"
-                    f"{_mp_team} vs {_mp_opp} · {_mp_pit_lbl}{_mp_hand_lbl}{_mp_prior_note}{_mp_weather_frag}</div>"
-                    + (f"<div style='font-size:11px;margin-top:2px;'>{_mp_status_html}</div>"
-                       if _mp_status_html else "")
-                    + f"</div></div>"
-                    f"<div style='text-align:right;'>"
-                    f"<div style='font-size:20px;font-weight:900;color:{_mp_lbl_col};'>{_mp_mod:.2f}×</div>"
-                    f"<div style='font-size:10px;color:{_mp_lbl_col};font-weight:700;'>MATCHUP: {_mp_lbl}</div>"
-                    f"</div></div>"
-                    + _mp_mod_bar
-                    # ── Stat pills: context group (MODEL/BARREL/QUANT) | market group (EV/EDGE/ODDS) ──
-                    + f"<div style='display:flex;gap:2px;margin-top:6px;'>"
-                    # Context
-                    f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:5px;padding:4px 2px;'>"
-                    f"<div style='font-size:12px;font-weight:700;color:#a78bfa;'>{_mp_model:.0f}%</div>"
-                    f"<div style='font-size:8px;color:#4a4a6a;'>MODEL</div></div>"
-                    f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:5px;padding:4px 2px;'>"
-                    f"<div style='font-size:12px;font-weight:700;color:{_mp_brl_col};'>{_mp_brl:.1f}%</div>"
-                    f"<div style='font-size:8px;color:#4a4a6a;'>BARREL</div></div>"
-                    f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:5px;padding:4px 2px;"
-                    f"border-right:1px solid #1e1e35;'>"
-                    f"<div style='font-size:12px;font-weight:700;color:{_mp_tier_col};'>{_mp_tier}</div>"
-                    f"<div style='font-size:8px;color:#4a4a6a;'>QUANT</div></div>"
-                    # Market — primary decision signals, slightly brighter bg
-                    f"<div style='flex:1;text-align:center;background:#0c0c1e;border-radius:5px;padding:4px 2px;'>"
-                    f"<div style='font-size:14px;font-weight:700;color:{_mp_ev_col};'>{_mp_ev:+.1f}%</div>"
-                    f"<div style='font-size:8px;color:#55558a;'>EV</div></div>"
-                    f"<div style='flex:1;text-align:center;background:#0c0c1e;border-radius:5px;padding:4px 2px;'>"
-                    f"<div style='font-size:14px;font-weight:700;color:{_edge_col(_mp_edge)};'>{_mp_edge:+.1f}%</div>"
-                    f"<div style='font-size:8px;color:#55558a;'>EDGE</div></div>"
-                    f"<div style='flex:1;text-align:center;background:#0c0c1e;border-radius:5px;padding:4px 2px;'>"
-                    f"<a href='{_mp_url}' target='_blank' style='text-decoration:none;'>"
-                    f"<div style='font-size:14px;font-weight:700;color:#FF6666;'>{_fmt_american(_mp_odds)}</div>"
-                    f"<div style='font-size:8px;color:#55558a;'>ODDS ↗</div></a></div>"
-                    f"</div>"
-                    + (
-                        "<div style='font-size:8px;color:#444;letter-spacing:1px;"
-                        "margin-top:8px;margin-bottom:3px;'>ARSENAL</div>"
-                        "<div style='display:flex;flex-wrap:wrap;gap:4px;'>"
-                        + "".join(
-                            _me_pitch_badge(pr, _me_pitch_label, _me_pitch_color)
-                            for pr in _mp_pitch_rows[:6]
-                        )
-                        + "</div>"
-                        if _mp_pitch_rows else
-                        "<div style='font-size:10px;color:#555;margin-top:6px;'>"
-                        "Pitch data loading…</div>"
-                    )
-                    + f"</div>",
-                    unsafe_allow_html=True,
+                # Fingerprint-cached card HTML — cache miss only on live status, mod, or pitch data change
+                _me_fp = (
+                    "me", _slate_ts, _mp_pid, _mp_is_live,
+                    round(_mp_mod, 2), len(_mp_pitch_rows),
+                    hash(_mp_status_html) if _mp_status_html else 0,
                 )
+                def _build_me_card_html(
+                    _bg=_mp_bg, _border=_mp_border, _lbl_col=_mp_lbl_col,
+                    _photo=_mp_photo, _team=_mp_team, _opp=_mp_opp,
+                    _pit_lbl=_mp_pit_lbl, _hand_lbl=_mp_hand_lbl,
+                    _prior=_mp_prior_note, _wfrag=_mp_weather_frag,
+                    _shtml=_mp_status_html, _mod=_mp_mod, _lbl=_mp_lbl,
+                    _mbar=_mp_mod_bar, _model=_mp_model, _brl_col=_mp_brl_col,
+                    _brl=_mp_brl, _tier_col=_mp_tier_col, _tier=_mp_tier,
+                    _ev_col=_mp_ev_col, _ev=_mp_ev, _edge=_mp_edge,
+                    _url=_mp_url, _odds=_mp_odds, _pitch_rows=_mp_pitch_rows,
+                ):
+                    return (
+                        f"<div style='background:{_bg};border:1px solid {_border};"
+                        f"border-left:3px solid {_lbl_col};border-radius:10px;"
+                        f"padding:12px 16px;margin-bottom:12px;position:relative;overflow:hidden;'>"
+                        f"<div style='position:absolute;top:0;left:0;right:0;height:2px;"
+                        f"background:linear-gradient(90deg,transparent,{_lbl_col},transparent);opacity:0.55;'></div>"
+                        f"<div style='display:flex;justify-content:space-between;align-items:center;'>"
+                        f"<div style='display:flex;align-items:center;gap:8px;'>{_photo}"
+                        f"<div><div style='font-size:12px;color:#888;'>"
+                        f"{_team} vs {_opp} · {_pit_lbl}{_hand_lbl}{_prior}{_wfrag}</div>"
+                        + (f"<div style='font-size:11px;margin-top:2px;'>{_shtml}</div>" if _shtml else "")
+                        + f"</div></div>"
+                        f"<div style='text-align:right;'>"
+                        f"<div style='font-size:20px;font-weight:900;color:{_lbl_col};'>{_mod:.2f}×</div>"
+                        f"<div style='font-size:10px;color:{_lbl_col};font-weight:700;'>MATCHUP: {_lbl}</div>"
+                        f"</div></div>"
+                        + _mbar
+                        + f"<div style='display:flex;gap:2px;margin-top:6px;'>"
+                        f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:5px;padding:4px 2px;'>"
+                        f"<div style='font-size:12px;font-weight:700;color:#a78bfa;'>{_model:.0f}%</div>"
+                        f"<div style='font-size:8px;color:#4a4a6a;'>MODEL</div></div>"
+                        f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:5px;padding:4px 2px;'>"
+                        f"<div style='font-size:12px;font-weight:700;color:{_brl_col};'>{_brl:.1f}%</div>"
+                        f"<div style='font-size:8px;color:#4a4a6a;'>BARREL</div></div>"
+                        f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:5px;padding:4px 2px;"
+                        f"border-right:1px solid #1e1e35;'>"
+                        f"<div style='font-size:12px;font-weight:700;color:{_tier_col};'>{_tier}</div>"
+                        f"<div style='font-size:8px;color:#4a4a6a;'>QUANT</div></div>"
+                        f"<div style='flex:1;text-align:center;background:#0c0c1e;border-radius:5px;padding:4px 2px;'>"
+                        f"<div style='font-size:14px;font-weight:700;color:{_ev_col};'>{_ev:+.1f}%</div>"
+                        f"<div style='font-size:8px;color:#55558a;'>EV</div></div>"
+                        f"<div style='flex:1;text-align:center;background:#0c0c1e;border-radius:5px;padding:4px 2px;'>"
+                        f"<div style='font-size:14px;font-weight:700;color:{_edge_col(_edge)};'>{_edge:+.1f}%</div>"
+                        f"<div style='font-size:8px;color:#55558a;'>EDGE</div></div>"
+                        f"<div style='flex:1;text-align:center;background:#0c0c1e;border-radius:5px;padding:4px 2px;'>"
+                        f"<a href='{_url}' target='_blank' style='text-decoration:none;'>"
+                        f"<div style='font-size:14px;font-weight:700;color:#FF6666;'>{_fmt_american(_odds)}</div>"
+                        f"<div style='font-size:8px;color:#55558a;'>ODDS ↗</div></a></div>"
+                        f"</div>"
+                        + (
+                            "<div style='font-size:8px;color:#444;letter-spacing:1px;"
+                            "margin-top:8px;margin-bottom:3px;'>ARSENAL</div>"
+                            "<div style='display:flex;flex-wrap:wrap;gap:4px;'>"
+                            + "".join(
+                                _me_pitch_badge(pr, _me_pitch_label, _me_pitch_color)
+                                for pr in _pitch_rows[:6]
+                            )
+                            + "</div>"
+                            if _pitch_rows else
+                            "<div style='font-size:10px;color:#555;margin-top:6px;'>"
+                            "Pitch data loading…</div>"
+                        )
+                        + f"</div>"
+                    )
+                st.markdown(_card_html(_me_fp, _build_me_card_html), unsafe_allow_html=True)
                 _render_pitch_mix_expander(_me_ctxs.get(_mp_pid, {}), _mp, f"me_{_mi}",
                                            expanded=st.session_state.get("main_pitch_mix_expanded", False))
 
@@ -4631,6 +4692,7 @@ def tab_hits(data: dict):
 # ═══════════════════════════════════════════════════════════════════════════════
 def tab_jig(data: dict):
     _cutoff = st.session_state.get("cutoff_utc_hour")
+    _jig_slate_ts = str(st.session_state.get("data_loaded_at", ""))
     all_players_raw = data.get("all_players", [])
     all_players = (
         _gate_data(data, _cutoff).get("all_players", [])
@@ -4727,74 +4789,78 @@ def tab_jig(data: dict):
                 f"<span style='font-size:9px;color:{_hvy_wc};margin-left:4px;'>🌤 {_hvy_wsum}</span>")
         else:
             _hvy_weather_frag = ""
-        st.markdown(
-            f"<div style='background:#111827;border:1px solid {border};"
-            f"border-left:3px solid {_mt_c};border-radius:10px;"
-            f"padding:14px 16px;margin-bottom:14px;position:relative;overflow:hidden;'>"
-            # Top accent hairline — matchup grade color, shared skeleton with Quick View / Elite
-            f"<div style='position:absolute;top:0;left:0;right:0;height:2px;"
-            f"background:linear-gradient(90deg,transparent,{_mt_c},transparent);opacity:0.6;'></div>"
-            f"<div style='display:flex;justify-content:space-between;align-items:flex-start;'>"
-            f"<div style='display:flex;align-items:center;'>{_hvy_photo}"
-            f"<div style='font-size:15px;font-weight:800;color:#f0f0f0;'>{name}</div></div>"
-            f"<div style='text-align:right;'>"
-            f"<div style='font-size:17px;font-weight:900;color:{hc};margin-bottom:3px;'>HVY {hvy:.0f}"
-            f"<span style='font-size:10px;color:#555;margin-left:4px;'>base {base:.0f}</span></div>"
-            f"<div style='display:flex;gap:5px;justify-content:flex-end;flex-wrap:wrap;'>"
-            f"<span style='font-size:9px;font-weight:700;color:{_mt_c};"
-            f"background:{_mt_bg};border:1px solid {_mt_c}44;border-radius:4px;padding:2px 6px;"
-            f"letter-spacing:0.5px;'>MATCHUP: {_mt_grade}</span>"
-            f"<span style='font-size:9px;font-weight:700;color:{_hvy_tc};"
-            f"background:#0f172a;border:1px solid {_hvy_tc}44;border-radius:4px;padding:2px 6px;"
-            f"letter-spacing:0.5px;'>MODEL: {_mg_label}</span>"
-            f"</div></div>"
-            f"</div>"
-            # HVY modifier progress bar — visual matchup strength indicator
-            f"<div style='background:#0d1117;border-radius:2px;height:3px;margin:6px 0 4px;'>"
-            f"<div style='background:{mod_c};width:{_hvy_mod_bar_pct}%;"
-            f"height:3px;border-radius:2px;'></div></div>"
-            f"<div style='font-size:12px;color:#888;margin:0 0 4px;'>"
-            f"{team} vs {opp} &nbsp;·&nbsp; vs {_hvy_pit_lbl}{pit_hand_lbl}</div>"
-            f"{status_row}"
-            f"<div style='display:grid;grid-template-columns:repeat(3,1fr);gap:4px;"
-            f"font-size:11px;margin:6px 0;'>"
-            f"<div class='stat-box'><div style='color:#888;'>{slg_lbl}</div>"
-            f"<div style='color:{slg_c};font-weight:700;'>{slg:.3f}</div></div>"
-            f"<div class='stat-box'><div style='color:#888;'>Barrel</div>"
-            f"<div style='color:{brl_c};font-weight:700;'>{brl:.1f}%</div></div>"
-            f"<div class='stat-box'><div style='color:#888;'>Hard Hit</div>"
-            f"<div style='color:{hh_c};font-weight:700;'>{hh:.1f}%</div></div>"
-            f"<div class='stat-box'><div style='color:#888;'>HR Window</div>"
-            f"<div style='color:{ss_c};font-weight:700;'>{ss:.1f}%</div></div>"
-            f"<div class='stat-box'><div style='color:#888;'>Pull AIR</div>"
-            f"<div style='color:{pa_c};font-weight:700;'>{pa_str}</div></div>"
-            f"<div class='stat-box'><div style='color:#888;'>ISO</div>"
-            f"<div style='color:{iso_c};font-weight:700;'>{iso:.3f}</div></div>"
-            f"</div>"
-            # ── Bottom row: stat pills — ODDS/MDL (context) | EV/EDGE (market primary) | HVY modifier ──
-            f"<div style='display:flex;gap:2px;margin-bottom:2px;'>"
-            f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:4px;padding:3px 2px;'>"
-            f"<div style='font-size:13px;font-weight:700;color:#FF6666;'>{odds_str}</div>"
-            f"<div style='font-size:8px;color:#555;'>ODDS</div></div>"
-            f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:4px;padding:3px 2px;'>"
-            f"<div style='font-size:12px;font-weight:700;color:#a78bfa;'>{_hvy_model:.0f}%</div>"
-            f"<div style='font-size:8px;color:#555;'>MDL</div></div>"
-            f"<div style='flex:1;text-align:center;background:#0c0c1e;border-radius:4px;padding:3px 2px;'>"
-            f"<div style='font-size:13px;font-weight:700;color:{ev_c};'>{ev:+.1f}%</div>"
-            f"<div style='font-size:8px;color:#4a4a70;'>EV</div></div>"
-            f"<div style='flex:1;text-align:center;background:#0c0c1e;border-radius:4px;padding:3px 2px;"
-            f"border-right:1px solid #1e1e35;'>"
-            f"<div style='font-size:13px;font-weight:700;color:{_hvy_ec};'>{_hvy_edge:+.1f}%</div>"
-            f"<div style='font-size:8px;color:#4a4a70;'>EDGE</div></div>"
-            f"<div style='flex:1;text-align:center;background:#0a0a14;border-radius:4px;padding:3px 2px;'>"
-            f"<div style='font-size:11px;font-weight:700;color:{mod_c};'>{mod_s}</div>"
-            f"<div style='font-size:8px;color:#444;'>HVY</div></div>"
-            f"</div>"
-            + (f"<div style='margin-top:4px;padding-top:3px;border-top:1px solid #1a1a2a;'>"
-               f"{_hvy_weather_frag}</div>" if _hvy_weather_frag else "")
-            + f"</div>",
-            unsafe_allow_html=True,
-        )
+
+        # Session-state HTML cache keyed by (hvy_ck, player_id, hvy_score, is_live)
+        # Invalidates when pitch data refreshes (_hvy_ck changes) or game goes live.
+        _hvy_html_cache = st.session_state.setdefault("_hvy_html_cache", {})
+        _hvy_html_fp = (_hvy_ck, _hvy_pid, round(hvy, 1), is_live, hash(status_row) if status_row else 0)
+        if _hvy_html_fp not in _hvy_html_cache:
+            _hvy_html_cache[_hvy_html_fp] = (
+                f"<div style='background:#111827;border:1px solid {border};"
+                f"border-left:3px solid {_mt_c};border-radius:10px;"
+                f"padding:14px 16px;margin-bottom:14px;position:relative;overflow:hidden;'>"
+                # Top accent hairline — matchup grade color, shared skeleton with Quick View / Elite
+                f"<div style='position:absolute;top:0;left:0;right:0;height:2px;"
+                f"background:linear-gradient(90deg,transparent,{_mt_c},transparent);opacity:0.6;'></div>"
+                f"<div style='display:flex;justify-content:space-between;align-items:flex-start;'>"
+                f"<div style='display:flex;align-items:center;'>{_hvy_photo}"
+                f"<div style='font-size:15px;font-weight:800;color:#f0f0f0;'>{name}</div></div>"
+                f"<div style='text-align:right;'>"
+                f"<div style='font-size:17px;font-weight:900;color:{hc};margin-bottom:3px;'>HVY {hvy:.0f}"
+                f"<span style='font-size:10px;color:#555;margin-left:4px;'>base {base:.0f}</span></div>"
+                f"<div style='display:flex;gap:5px;justify-content:flex-end;flex-wrap:wrap;'>"
+                f"<span style='font-size:9px;font-weight:700;color:{_mt_c};"
+                f"background:{_mt_bg};border:1px solid {_mt_c}44;border-radius:4px;padding:2px 6px;"
+                f"letter-spacing:0.5px;'>MATCHUP: {_mt_grade}</span>"
+                f"<span style='font-size:9px;font-weight:700;color:{_hvy_tc};"
+                f"background:#0f172a;border:1px solid {_hvy_tc}44;border-radius:4px;padding:2px 6px;"
+                f"letter-spacing:0.5px;'>MODEL: {_mg_label}</span>"
+                f"</div></div>"
+                f"</div>"
+                f"<div style='background:#0d1117;border-radius:2px;height:3px;margin:6px 0 4px;'>"
+                f"<div style='background:{mod_c};width:{_hvy_mod_bar_pct}%;"
+                f"height:3px;border-radius:2px;'></div></div>"
+                f"<div style='font-size:12px;color:#888;margin:0 0 4px;'>"
+                f"{team} vs {opp} &nbsp;·&nbsp; vs {_hvy_pit_lbl}{pit_hand_lbl}</div>"
+                f"{status_row}"
+                f"<div style='display:grid;grid-template-columns:repeat(3,1fr);gap:4px;"
+                f"font-size:11px;margin:6px 0;'>"
+                f"<div class='stat-box'><div style='color:#888;'>{slg_lbl}</div>"
+                f"<div style='color:{slg_c};font-weight:700;'>{slg:.3f}</div></div>"
+                f"<div class='stat-box'><div style='color:#888;'>Barrel</div>"
+                f"<div style='color:{brl_c};font-weight:700;'>{brl:.1f}%</div></div>"
+                f"<div class='stat-box'><div style='color:#888;'>Hard Hit</div>"
+                f"<div style='color:{hh_c};font-weight:700;'>{hh:.1f}%</div></div>"
+                f"<div class='stat-box'><div style='color:#888;'>HR Window</div>"
+                f"<div style='color:{ss_c};font-weight:700;'>{ss:.1f}%</div></div>"
+                f"<div class='stat-box'><div style='color:#888;'>Pull AIR</div>"
+                f"<div style='color:{pa_c};font-weight:700;'>{pa_str}</div></div>"
+                f"<div class='stat-box'><div style='color:#888;'>ISO</div>"
+                f"<div style='color:{iso_c};font-weight:700;'>{iso:.3f}</div></div>"
+                f"</div>"
+                f"<div style='display:flex;gap:2px;margin-bottom:2px;'>"
+                f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:4px;padding:3px 2px;'>"
+                f"<div style='font-size:13px;font-weight:700;color:#FF6666;'>{odds_str}</div>"
+                f"<div style='font-size:8px;color:#555;'>ODDS</div></div>"
+                f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:4px;padding:3px 2px;'>"
+                f"<div style='font-size:12px;font-weight:700;color:#a78bfa;'>{_hvy_model:.0f}%</div>"
+                f"<div style='font-size:8px;color:#555;'>MDL</div></div>"
+                f"<div style='flex:1;text-align:center;background:#0c0c1e;border-radius:4px;padding:3px 2px;'>"
+                f"<div style='font-size:13px;font-weight:700;color:{ev_c};'>{ev:+.1f}%</div>"
+                f"<div style='font-size:8px;color:#4a4a70;'>EV</div></div>"
+                f"<div style='flex:1;text-align:center;background:#0c0c1e;border-radius:4px;padding:3px 2px;"
+                f"border-right:1px solid #1e1e35;'>"
+                f"<div style='font-size:13px;font-weight:700;color:{_hvy_ec};'>{_hvy_edge:+.1f}%</div>"
+                f"<div style='font-size:8px;color:#4a4a70;'>EDGE</div></div>"
+                f"<div style='flex:1;text-align:center;background:#0a0a14;border-radius:4px;padding:3px 2px;'>"
+                f"<div style='font-size:11px;font-weight:700;color:{mod_c};'>{mod_s}</div>"
+                f"<div style='font-size:8px;color:#444;'>HVY</div></div>"
+                f"</div>"
+                + (f"<div style='margin-top:4px;padding-top:3px;border-top:1px solid #1a1a2a;'>"
+                   f"{_hvy_weather_frag}</div>" if _hvy_weather_frag else "")
+                + f"</div>"
+            )
+        st.markdown(_hvy_html_cache[_hvy_html_fp], unsafe_allow_html=True)
 
         pitcher_arsenal = ctx.get("pitcher_arsenal", [])
         hand_splits     = ctx.get("hand_splits", {})
@@ -4978,24 +5044,37 @@ def tab_jig(data: dict):
             if not qualified:
                 st.info("No players meet HVY thresholds.")
             else:
-                _hp_n_total = len(qualified)
-                _hp_pg_opts = [25, 50, _hp_n_total] if _hp_n_total > 50 else ([25, _hp_n_total] if _hp_n_total > 25 else [_hp_n_total])
-                _hp_pg_opts = sorted(set(_hp_pg_opts))
-                _hp_pg_raw  = st.session_state.get("jig_hp_page_size", _hp_pg_opts[0])
-                _hp_pg_idx  = _hp_pg_opts.index(_hp_pg_raw) if _hp_pg_raw in _hp_pg_opts else 0
-                _hp_cols    = st.columns([3, 1])
-                with _hp_cols[0]:
-                    st.caption(f"Top {min(st.session_state.get('jig_hp_page_size', _hp_pg_opts[0]), _hp_n_total)} of {_hp_n_total} qualified · ranked by HVY score · pitch exploitation + arsenal vulnerability")
-                with _hp_cols[1]:
-                    _hp_page_size = st.selectbox(
-                        "Show", options=_hp_pg_opts,
-                        index=_hp_pg_idx,
-                        format_func=lambda x: "All" if x == _hp_n_total else str(x),
-                        key="jig_hp_page_size",
-                        label_visibility="collapsed",
+                _hp_loaded_key = f"_jig_hp_loaded_{_jig_slate_ts}"
+                if not st.session_state.get(_hp_loaded_key):
+                    st.markdown(
+                        f"<div style='padding:18px 0;color:#888;font-size:12px;'>"
+                        f"<b style='color:#a78bfa;'>{len(qualified)} qualified players</b> · "
+                        f"sorted by HVY score · pitch exploitation + arsenal vulnerability"
+                        f"</div>",
+                        unsafe_allow_html=True,
                     )
-                for entry in qualified[:_hp_page_size]:
-                    _hvy_card(entry, key_prefix="hvyp")
+                    if st.button("▶ Load Power Profiles", key="load_jig_hp", type="primary"):
+                        st.session_state[_hp_loaded_key] = True
+                        st.rerun()
+                else:
+                    _hp_n_total = len(qualified)
+                    _hp_pg_opts = [25, 50, _hp_n_total] if _hp_n_total > 50 else ([25, _hp_n_total] if _hp_n_total > 25 else [_hp_n_total])
+                    _hp_pg_opts = sorted(set(_hp_pg_opts))
+                    _hp_pg_raw  = st.session_state.get("jig_hp_page_size", _hp_pg_opts[0])
+                    _hp_pg_idx  = _hp_pg_opts.index(_hp_pg_raw) if _hp_pg_raw in _hp_pg_opts else 0
+                    _hp_cols    = st.columns([3, 1])
+                    with _hp_cols[0]:
+                        st.caption(f"Top {min(st.session_state.get('jig_hp_page_size', _hp_pg_opts[0]), _hp_n_total)} of {_hp_n_total} qualified · ranked by HVY score · pitch exploitation + arsenal vulnerability")
+                    with _hp_cols[1]:
+                        _hp_page_size = st.selectbox(
+                            "Show", options=_hp_pg_opts,
+                            index=_hp_pg_idx,
+                            format_func=lambda x: "All" if x == _hp_n_total else str(x),
+                            key="jig_hp_page_size",
+                            label_visibility="collapsed",
+                        )
+                    for entry in qualified[:_hp_page_size]:
+                        _hvy_card(entry, key_prefix="hvyp")
 
         with _ha:
             import pandas as pd
@@ -5064,29 +5143,42 @@ def tab_jig(data: dict):
             if not scored:
                 st.info("No players available — refresh pitch data or lower TCC batter filters.")
             else:
-                _fts_n_total = len(scored)
-                _fts_pg_opts = [25, 50, 100, _fts_n_total] if _fts_n_total > 100 else (
-                    [25, 50, _fts_n_total] if _fts_n_total > 50 else (
-                    [25, _fts_n_total] if _fts_n_total > 25 else [_fts_n_total]))
-                _fts_pg_opts = sorted(set(_fts_pg_opts))
-                _fts_pg_raw  = st.session_state.get("jig_fts_page_size", _fts_pg_opts[0])
-                _fts_pg_idx  = _fts_pg_opts.index(_fts_pg_raw) if _fts_pg_raw in _fts_pg_opts else 0
-                _fts_cols    = st.columns([3, 1])
-                with _fts_cols[0]:
-                    st.caption(
-                        f"Top {min(st.session_state.get('jig_fts_page_size', _fts_pg_opts[0]), _fts_n_total)} of {_fts_n_total} players · "
-                        "sorted by HVY score · matchup modifier and pitcher HR filters still applied"
+                _fts_loaded_key = f"_jig_fts_loaded_{_jig_slate_ts}"
+                if not st.session_state.get(_fts_loaded_key):
+                    st.markdown(
+                        f"<div style='padding:18px 0;color:#888;font-size:12px;'>"
+                        f"<b style='color:#f97316;'>{len(scored)} players</b> in full tactical slate · "
+                        f"sorted by HVY score · no threshold gate"
+                        f"</div>",
+                        unsafe_allow_html=True,
                     )
-                with _fts_cols[1]:
-                    _fts_page_size = st.selectbox(
-                        "Show", options=_fts_pg_opts,
-                        index=_fts_pg_idx,
-                        format_func=lambda x: "All" if x == _fts_n_total else str(x),
-                        key="jig_fts_page_size",
-                        label_visibility="collapsed",
-                    )
-                for entry in scored[:_fts_page_size]:
-                    _hvy_card(entry, key_prefix="hvyfts")
+                    if st.button("▶ Load Full Tactical", key="load_jig_fts", type="primary"):
+                        st.session_state[_fts_loaded_key] = True
+                        st.rerun()
+                else:
+                    _fts_n_total = len(scored)
+                    _fts_pg_opts = [25, 50, 100, _fts_n_total] if _fts_n_total > 100 else (
+                        [25, 50, _fts_n_total] if _fts_n_total > 50 else (
+                        [25, _fts_n_total] if _fts_n_total > 25 else [_fts_n_total]))
+                    _fts_pg_opts = sorted(set(_fts_pg_opts))
+                    _fts_pg_raw  = st.session_state.get("jig_fts_page_size", _fts_pg_opts[0])
+                    _fts_pg_idx  = _fts_pg_opts.index(_fts_pg_raw) if _fts_pg_raw in _fts_pg_opts else 0
+                    _fts_cols    = st.columns([3, 1])
+                    with _fts_cols[0]:
+                        st.caption(
+                            f"Top {min(st.session_state.get('jig_fts_page_size', _fts_pg_opts[0]), _fts_n_total)} of {_fts_n_total} players · "
+                            "sorted by HVY score · matchup modifier and pitcher HR filters still applied"
+                        )
+                    with _fts_cols[1]:
+                        _fts_page_size = st.selectbox(
+                            "Show", options=_fts_pg_opts,
+                            index=_fts_pg_idx,
+                            format_func=lambda x: "All" if x == _fts_n_total else str(x),
+                            key="jig_fts_page_size",
+                            label_visibility="collapsed",
+                        )
+                    for entry in scored[:_fts_page_size]:
+                        _hvy_card(entry, key_prefix="hvyfts")
 
     # ── JIG — Pitch Mix Intelligence ──────────────────────────────────────────
     st.caption(
