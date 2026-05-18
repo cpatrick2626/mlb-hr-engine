@@ -300,6 +300,43 @@ div[data-testid="stSelectbox"] label { font-size: 12px; color: #666; }
 /* â"€â"€ Alert boxes â"€â"€ */
 [data-testid="stAlert"] { border-radius: 8px !important; border-left-width: 4px !important; }
 
+/* ══════════════════════════ TACTICAL INTELLIGENCE CARD SYSTEM ══════════════════════════ */
+
+/* Pitch attack vulnerability tags — always visible on Level 1 card */
+.tac-pitch-tag {
+    font-size: 10px;
+    padding: 2px 7px;
+    border-radius: 3px;
+    font-weight: 600;
+    white-space: nowrap;
+    display: inline-block;
+    margin: 1px 2px 1px 0;
+}
+.tac-pitch-favorable { background: #0a2010; color: #4ade80; border: 1px solid #1a5530; }
+.tac-pitch-vulnerable { background: #200808; color: #f87171; border: 1px solid #550a0a; }
+.tac-pitch-neutral    { background: #0a0a14; color: #94a3b8; border: 1px solid #1e2a3a; }
+
+/* Tactical feed card button — minimal chrome, acts as click trigger */
+.tac-btn .stButton button {
+    background: transparent !important;
+    border: none !important;
+    box-shadow: none !important;
+    color: #555 !important;
+    font-size: 10px !important;
+    font-weight: 500 !important;
+    letter-spacing: 0.5px !important;
+    text-transform: none !important;
+    padding: 2px 6px !important;
+    min-height: 22px !important;
+    margin-bottom: 2px !important;
+}
+.tac-btn .stButton button:hover {
+    background: rgba(198,1,31,0.08) !important;
+    color: #f0f0f0 !important;
+    transform: none !important;
+    box-shadow: none !important;
+}
+
 /* ══════════════════════════ MOBILE ══════════════════════════ */
 @media (max-width: 768px) {
     /* Main content — tighter padding */
@@ -827,6 +864,476 @@ def _weather_badge(player: dict) -> str:
     color = "#4ade80" if wf >= 1.08 else "#f87171" if wf <= 0.93 else "#888"
     return (
         f"<span style='font-size:11px; color:{color};'>🌤 {summary}</span>"
+    )
+
+
+def _hr_env_score(player: dict) -> tuple:
+    """Return (score 0–100, color, label) for combined HR environment (park × weather × platoon)."""
+    pk = float(player.get("park_factor",    1.0) or 1.0)
+    wf = float(player.get("weather_factor", 1.0) or 1.0)
+    pf = float(player.get("platoon_factor", 1.0) or 1.0)
+    score = min(100, max(0, (pk * wf * pf - 0.75) / 0.65 * 100))
+    if score >= 75: return score, "#4ade80", "HOT"
+    if score >= 58: return score, "#86efac", "WARM"
+    if score >= 42: return score, "#888888", "NEUT"
+    return score, "#f87171", "COLD"
+
+
+def _pitch_attack_tags(ctx: dict, player: dict, max_tags: int = 2) -> list:
+    """
+    Return list of (label, css_class) showing top pitch vulnerability/attack signals.
+    Green = batter wins this pitch. Red = pitcher wins. Blue = primary pitch.
+    """
+    from clients.pitch_mix import pitch_label as _pl
+    if not ctx:
+        return []
+    pitch_mix       = ctx.get("pitch_mix", {})
+    pitcher_arsenal = pitch_mix.get("arsenal", ctx.get("pitcher_arsenal", []))
+    batter_rows     = pitch_mix.get("batter_rows", ctx.get("batter_rows", []))
+    if not pitcher_arsenal:
+        return []
+    batter_slg = {
+        br.get("pitch_type", ""): float(br.get("slg", 0.0) or 0.0)
+        for br in batter_rows if (br.get("pa") or 0) >= 3
+    }
+    _LG_WHIFF = 0.245
+    tags = []
+    for px in sorted(pitcher_arsenal, key=lambda x: x.get("pitch_pct", 0), reverse=True)[:5]:
+        pt    = px.get("pitch_type", "")
+        lbl   = _pl(pt) if pt else pt
+        use   = (px.get("pitch_pct") or 0) * 100
+        whf   = float(px.get("display_whiff") or 0)
+        rv    = float(px.get("display_rv100") or 0)
+        hh    = float(px.get("display_hh") or 0)
+        hr_r  = float(px.get("hr_rate") or 0)
+        b_slg = batter_slg.get(pt, 0.0)
+        _fav  = -(whf - _LG_WHIFF) * 3.0 + rv / 4.0 + (hh - 0.38) * 2.0
+        if b_slg >= 0.520 or _fav >= 0.18 or hr_r >= 0.04:
+            if b_slg >= 0.520:
+                tag_lbl = f"{lbl} .{int(b_slg * 1000)} SLG"
+            elif hr_r >= 0.04:
+                tag_lbl = f"{lbl} {hr_r * 100:.1f}% HR"
+            else:
+                tag_lbl = f"{lbl} {use:.0f}% ✓"
+            tags.append((tag_lbl, "tac-pitch-favorable"))
+        elif whf >= 0.32 or _fav <= -0.20:
+            tags.append((f"{lbl} {whf * 100:.0f}% whiff", "tac-pitch-vulnerable"))
+        if len(tags) >= max_tags:
+            break
+    if not tags and pitcher_arsenal:
+        top = sorted(pitcher_arsenal, key=lambda x: x.get("pitch_pct", 0), reverse=True)[0]
+        pt  = top.get("pitch_type", "")
+        lbl = _pl(pt) if pt else pt
+        use = (top.get("pitch_pct") or 0) * 100
+        tags.append((f"{lbl} {use:.0f}% primary", "tac-pitch-neutral"))
+    return tags[:max_tags]
+
+
+def _intelligence_card_html(
+    player: dict,
+    rank: int,
+    ctx: dict,
+    pitch_tags: list = None,
+    is_steam: bool = False,
+    is_live: bool = False,
+    status_html: str = "",
+    gt_str: str = "TBD",
+    urgency_col: str = "#555",
+    urgency_lbl: str = "",
+    opt_active: bool = False,
+    opt_selected: bool = False,
+) -> str:
+    """
+    Render the Level 1 Tactical Intelligence Card HTML.
+    Compact grid card: identity + quant pills + pitch attacks + HVY matchup bar.
+    Desktop: 3-column grid. Mobile: 1-column via CSS wrap.
+    """
+    name     = player.get("player_name", "")
+    team     = player.get("team", "")
+    pit_n    = player.get("pitcher_name", "")
+    pit_hand = player.get("pitcher_hand", "")
+    pit_fac  = float(player.get("pitcher_factor",  1.0) or 1.0)
+    plat_fac = float(player.get("platoon_factor",  1.0) or 1.0)
+    spot     = player.get("lineup_spot")
+    model_p  = player.get("model_prob", 0) * 100
+    ev       = player.get("ev_pct",   0)
+    edge     = player.get("edge_pct", 0)
+    odds     = player.get("best_american")
+    barrel   = _pf(player.get("barrel_pct"), 0.0)
+    tier     = player.get("confidence_tier", "C")
+    photo    = _player_photo_html(player.get("player_id"), size=34)
+
+    # ── Value colors ──
+    ev_col_   = "#4ade80" if ev >= 0 else "#f87171"
+    edge_col_ = _edge_col(edge)
+    tier_col  = {"S": "#FFD700", "A": "#4ade80", "B": "#facc15", "C": "#f87171"}.get(tier, "#888")
+    brl_col   = ("#4ade80" if barrel >= 10 else "#86efac" if barrel >= 8
+                 else "#f0f0f0" if barrel >= 6 else "#555")
+    brl_pct   = min(100, int(barrel / 18.0 * 100))
+
+    # ── Card surface ──
+    if is_live:
+        acc, bg, border_s = "#f87171", "linear-gradient(145deg,#1a0000,#0e0000)", "#f87171"
+    elif is_steam:
+        acc, bg, border_s = "#FFD700", "linear-gradient(145deg,#0e0e00,#080800)", "#FFD700"
+    elif rank <= 3:
+        acc, bg, border_s = "#a78bfa", "linear-gradient(145deg,#0c0a1c,#07050f)", "#a78bfa"
+    else:
+        acc, bg, border_s = "#C6011F", "linear-gradient(145deg,#0c0c1c,#080808)", "#1e1e40"
+
+    # ── Rank badge ──
+    rc = {1: "#FFD700", 2: "#C0C0C0", 3: "#CD7F32"}.get(rank, "#555" if rank > 3 else "#a78bfa")
+    rank_badge = (
+        f"<span style='background:#1a1a30;color:{rc};font-size:9px;"
+        f"font-weight:900;padding:1px 5px;border-radius:3px;"
+        f"display:inline-block;text-align:center;'>#{rank}</span>"
+    )
+
+    # ── Inline badges (optimizer, steam) ──
+    badges_html = ""
+    if opt_active and opt_selected:
+        badges_html += ("<span style='background:#0a3a0a;color:#4ade80;font-size:7px;"
+                        "padding:1px 3px;border-radius:2px;margin-left:2px;'>🎯</span>")
+    if is_steam:
+        badges_html += ("<span style='background:#444400;color:#FFD700;font-size:7px;"
+                        "padding:1px 3px;border-radius:2px;margin-left:2px;'>📈</span>")
+
+    # ── Pitcher compact display ──
+    hand_s    = "R" if pit_hand == "R" else "L" if pit_hand == "L" else ""
+    plat_edge = "⚡" if plat_fac > 1.06 else ""
+    if pit_fac < 0.80:    pit_col, pit_ico = "#f87171", "🔴"
+    elif pit_fac < 0.92:  pit_col, pit_ico = "#fb923c", "🟠"
+    elif pit_fac <= 1.08: pit_col, pit_ico = "#888",    "⬜"
+    elif pit_fac <= 1.20: pit_col, pit_ico = "#facc15", "🟡"
+    else:                 pit_col, pit_ico = "#4ade80", "🟢"
+    pit_short   = (pit_n[:13] + "…") if len(pit_n) > 14 else pit_n
+    pit_display = f"{pit_ico}{pit_short}({hand_s}){plat_edge}" if pit_n else "TBD"
+
+    # ── Lineup spot ──
+    spot_html = ""
+    if spot:
+        sc = "#4ade80" if spot <= 4 else "#facc15" if spot <= 6 else "#888"
+        spot_html = f" <span style='color:{sc};font-size:8px;'>#{spot}</span>"
+    conf_badge = "✅" if spot is not None else "⏳"
+
+    # ── Environment score ──
+    _env_score, env_col_, env_lbl = _hr_env_score(player)
+
+    # ── HVY matchup ──
+    hvy_mod = float((ctx.get("hvy_modifier") if ctx else None) or 1.0)
+    if hvy_mod >= 1.20:   hvy_lbl, hvy_col = "ELITE",  "#4ade80"
+    elif hvy_mod >= 1.08: hvy_lbl, hvy_col = "FAVOR",  "#86efac"
+    elif hvy_mod >= 1.03: hvy_lbl, hvy_col = "SLIGHT", "#facc15"
+    elif hvy_mod >= 0.97: hvy_lbl, hvy_col = "EVEN",   "#888888"
+    elif hvy_mod >= 0.85: hvy_lbl, hvy_col = "TOUGH",  "#fb923c"
+    else:                  hvy_lbl, hvy_col = "AVOID",  "#f87171"
+    hvy_bar = min(100, max(0, int((hvy_mod - 0.75) / 0.60 * 100)))
+
+    # ── Weather inline ──
+    wf = float(player.get("weather_factor", 1.0) or 1.0)
+    wsum = _weather_summary(player)
+    if wsum and abs(wf - 1.0) >= 0.04:
+        wc = "#4ade80" if wf >= 1.08 else "#f87171" if wf <= 0.93 else "#888"
+        weather_frag = (f" <span style='font-size:9px;color:{wc};'>🌤 {wsum}</span>")
+    else:
+        weather_frag = ""
+
+    # ── Pitch attack tags ──
+    pitch_html = ""
+    if pitch_tags:
+        tag_items = "".join(
+            f"<span class='tac-pitch-tag {css}'>{lbl}</span>"
+            for lbl, css in pitch_tags
+        )
+        pitch_html = f"<div style='margin:4px 0 2px;line-height:1.6;'>{tag_items}</div>"
+
+    odds_fmt = _fmt_american(odds) if odds else "--"
+
+    return (
+        # ── Card shell ──
+        f"<div style='background:{bg};border:1px solid {border_s};border-radius:10px;"
+        f"padding:10px 12px;margin-bottom:3px;position:relative;overflow:hidden;'>"
+
+        # Top accent hairline
+        f"<div style='position:absolute;top:0;left:0;right:0;height:2px;"
+        f"background:linear-gradient(90deg,transparent,{acc},transparent);opacity:0.65;'></div>"
+
+        # ── Row 1: Rank · Photo · Name/Team | Odds · Tier ──
+        f"<div style='display:flex;justify-content:space-between;"
+        f"align-items:flex-start;margin-bottom:5px;'>"
+        f"<div style='display:flex;align-items:center;gap:5px;flex:1;min-width:0;'>"
+        f"{rank_badge}{photo}"
+        f"<div style='min-width:0;'>"
+        f"<div style='font-size:11px;font-weight:800;color:#f0f0f0;"
+        f"white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2;'>"
+        f"{conf_badge} {name}</div>"
+        f"<div style='font-size:9px;color:#666;line-height:1.2;'>{team}{spot_html}</div>"
+        f"</div></div>"
+        # Right: odds + tier
+        f"<div style='text-align:right;flex-shrink:0;margin-left:6px;'>"
+        f"<div style='font-size:16px;font-weight:700;color:#FF6666;line-height:1;'>{odds_fmt}</div>"
+        f"<div style='font-size:7px;color:{tier_col};font-weight:700;margin-top:1px;'>"
+        f"{tier}-TIER{badges_html}</div>"
+        f"</div></div>"
+
+        # ── Row 2: Status / game time · Pitcher ──
+        f"<div style='font-size:9px;margin-bottom:5px;line-height:1.4;'>"
+        + (status_html if status_html else
+           f"<span style='color:#666;'>🕐 {gt_str}</span>"
+           + (f" <span style='font-weight:700;color:{urgency_col};'>{urgency_lbl}</span>"
+              if urgency_lbl else ""))
+        + f"<span style='margin-left:8px;'><span style='color:{pit_col};'>{pit_display}</span></span>"
+        + f"</div>"
+
+        # ── Barrel power meter ──
+        + (f"<div style='background:#111;border-radius:2px;height:2px;margin:2px 0 5px;'>"
+           f"<div style='background:{brl_col};width:{brl_pct}%;height:2px;border-radius:2px;'></div>"
+           f"</div>"
+           if barrel >= 5.0 else "")
+
+        # ── Row 3: Quantitative stat pills ──
+        f"<div style='display:flex;gap:2px;margin-bottom:4px;'>"
+        f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:4px;padding:3px 1px;'>"
+        f"<div style='font-size:12px;font-weight:700;color:#a78bfa;line-height:1.1;'>{model_p:.0f}%</div>"
+        f"<div style='font-size:7px;color:#3a3a55;letter-spacing:0.3px;'>MDL</div></div>"
+
+        f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:4px;padding:3px 1px;'>"
+        f"<div style='font-size:12px;font-weight:700;color:{ev_col_};line-height:1.1;'>{ev:+.1f}%</div>"
+        f"<div style='font-size:7px;color:#3a3a55;'>EV</div></div>"
+
+        f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:4px;padding:3px 1px;'>"
+        f"<div style='font-size:12px;font-weight:700;color:{edge_col_};line-height:1.1;'>{edge:+.1f}%</div>"
+        f"<div style='font-size:7px;color:#3a3a55;'>EDGE</div></div>"
+
+        f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:4px;padding:3px 1px;'>"
+        f"<div style='font-size:12px;font-weight:700;color:{brl_col};line-height:1.1;'>{barrel:.1f}%</div>"
+        f"<div style='font-size:7px;color:#3a3a55;'>BRL</div></div>"
+
+        f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:4px;padding:3px 1px;'>"
+        f"<div style='font-size:11px;font-weight:700;color:{env_col_};line-height:1.1;'>{env_lbl}</div>"
+        f"<div style='font-size:7px;color:#3a3a55;'>ENV</div></div>"
+        f"</div>"
+
+        # ── Row 4: Pitch attack intelligence tags ──
+        + pitch_html
+
+        # ── Row 5: HVY matchup bar + weather ──
+        f"<div style='display:flex;align-items:center;gap:5px;margin-top:4px;'>"
+        f"<div style='font-size:7px;color:#444;letter-spacing:0.5px;white-space:nowrap;'>MTCH</div>"
+        f"<div style='flex:1;background:#111;border-radius:2px;height:3px;'>"
+        f"<div style='background:{hvy_col};width:{hvy_bar}%;height:3px;border-radius:2px;'></div></div>"
+        f"<div style='font-size:8px;font-weight:700;color:{hvy_col};'>{hvy_lbl}</div>"
+        + weather_frag
+        + f"</div>"
+
+        f"</div>"  # end card shell
+    )
+
+
+def _elite_card_html(
+    player: dict,
+    ctx: dict,
+    pitch_tags: list = None,
+    is_live: bool = False,
+    status_html: str = "",
+    opt_active: bool = False,
+    opt_selected: bool = False,
+) -> str:
+    """Dense analytical card for ELITE tab. Barrel-first, Statcast-rich, 2-col grid."""
+    name     = player.get("player_name", "")
+    team     = player.get("team", "")
+    opp      = player.get("opponent", "")
+    pit_n    = player.get("pitcher_name", "")
+    pit_hand = player.get("pitcher_hand", "")
+    pit_fac  = float(player.get("pitcher_factor",  1.0) or 1.0)
+    plat_fac = float(player.get("platoon_factor",  1.0) or 1.0)
+    spot     = player.get("lineup_spot")
+    model_p  = player.get("model_prob", 0) * 100
+    ev       = player.get("ev_pct",   0)
+    edge     = player.get("edge_pct", 0)
+    odds     = player.get("best_american")
+    barrel   = _pf(player.get("barrel_pct"), 0.0)
+    hh       = _pf(player.get("hard_hit"), 0.0)
+    xslg     = _pf(player.get("xslg") or player.get("actual_slg"), 0.0)
+    pull     = _pf(player.get("pull_pct"), 0.0)
+    fb       = _pf(player.get("fb_pct"), 0.0)
+    photo    = _player_photo_html(player.get("player_id"), size=36)
+
+    # Barrel grade
+    if barrel >= 15:
+        grade, grade_col, bg = "GOAT",  "#FF4500", "linear-gradient(145deg,#1a0800,#0e0400)"
+    elif barrel >= 12:
+        grade, grade_col, bg = "ELITE", "#FFD700", "linear-gradient(145deg,#1a1200,#0e0a00)"
+    elif barrel >= 10:
+        grade, grade_col, bg = "POWER", "#4ade80", "linear-gradient(145deg,#051505,#030e08)"
+    else:
+        grade, grade_col, bg = "SOLID", "#86efac", "linear-gradient(145deg,#051509,#030e07)"
+
+    border_s = "#f87171" if is_live else (grade_col + "55")
+
+    # Pitcher compact display
+    hand_s    = "R" if pit_hand == "R" else "L" if pit_hand == "L" else ""
+    plat_edge = "⚡" if plat_fac > 1.06 else ""
+    if pit_fac < 0.80:    pit_col, pit_ico = "#f87171", "🔴"
+    elif pit_fac < 0.92:  pit_col, pit_ico = "#fb923c", "🟠"
+    elif pit_fac <= 1.08: pit_col, pit_ico = "#888",    ""
+    elif pit_fac <= 1.20: pit_col, pit_ico = "#facc15", "🟡"
+    else:                 pit_col, pit_ico = "#4ade80", "🟢"
+    pit_short   = (pit_n[:14] + "…") if len(pit_n) > 15 else pit_n
+    pit_display = f"{pit_ico}{pit_short}({hand_s}){plat_edge}" if pit_n else "TBD"
+
+    # Lineup spot
+    conf_badge = "✅" if spot is not None else "⏳"
+    spot_html  = ""
+    if spot:
+        sc = "#4ade80" if spot <= 4 else "#facc15" if spot <= 6 else "#888"
+        spot_html = f" <span style='color:{sc};'>#{spot}</span>"
+
+    # Stat coloring
+    brl_pct   = min(100, int(barrel / 18.0 * 100))
+    ev_col_   = "#4ade80" if ev >= 0 else "#f87171"
+    edge_col_ = _edge_col(edge)
+    brl_col   = ("#FF4500" if barrel >= 15 else "#FFD700" if barrel >= 12
+                 else "#4ade80" if barrel >= 10 else "#86efac")
+    hh_col    = "#4ade80" if hh >= 44 else "#86efac" if hh >= 40 else "#888"
+    xslg_col  = "#4ade80" if xslg >= 0.500 else "#86efac" if xslg >= 0.450 else "#888"
+    pull_col  = "#4ade80" if pull >= 42 else "#f0f0f0" if pull >= 35 else "#888"
+    fb_col    = "#4ade80" if fb >= 32 else "#f0f0f0" if fb >= 26 else "#888"
+    xslg_lbl  = "xSLG" if _pf(player.get("xslg"), 0.0) > 0.0 else "SLG"
+
+    # Environment
+    _env_score, env_col_, env_lbl = _hr_env_score(player)
+
+    # HVY matchup
+    hvy_mod = float((ctx.get("hvy_modifier") if ctx else None) or 1.0)
+    if hvy_mod >= 1.20:   hvy_lbl, hvy_col = "ELITE",  "#4ade80"
+    elif hvy_mod >= 1.08: hvy_lbl, hvy_col = "FAVOR",  "#86efac"
+    elif hvy_mod >= 1.03: hvy_lbl, hvy_col = "SLIGHT", "#facc15"
+    elif hvy_mod >= 0.97: hvy_lbl, hvy_col = "EVEN",   "#888888"
+    elif hvy_mod >= 0.85: hvy_lbl, hvy_col = "TOUGH",  "#fb923c"
+    else:                  hvy_lbl, hvy_col = "AVOID",  "#f87171"
+    hvy_bar = min(100, max(0, int((hvy_mod - 0.75) / 0.60 * 100)))
+
+    # Weather
+    wf = float(player.get("weather_factor", 1.0) or 1.0)
+    wsum = _weather_summary(player)
+    if wsum and abs(wf - 1.0) >= 0.04:
+        wc = "#4ade80" if wf >= 1.08 else "#f87171" if wf <= 0.93 else "#888"
+        weather_frag = f" <span style='font-size:9px;color:{wc};'>🌤 {wsum}</span>"
+    else:
+        weather_frag = ""
+
+    # Pitch tags
+    pitch_html = ""
+    if pitch_tags:
+        tag_items = "".join(
+            f"<span class='tac-pitch-tag {css}'>{lbl}</span>"
+            for lbl, css in pitch_tags
+        )
+        pitch_html = f"<div style='margin:4px 0 2px;line-height:1.6;'>{tag_items}</div>"
+
+    # Optimizer badge
+    opt_badge = (
+        "<span style='background:#0a3a0a;color:#4ade80;font-size:7px;"
+        "padding:1px 3px;border-radius:2px;margin-left:3px;'>🎯 OPT</span>"
+        if opt_active and opt_selected else ""
+    )
+    odds_fmt = _fmt_american(odds) if odds else "--"
+
+    return (
+        f"<div style='background:{bg};border:1px solid {border_s};border-radius:10px;"
+        f"padding:10px 12px;margin-bottom:3px;position:relative;overflow:hidden;'>"
+
+        # Top accent hairline
+        f"<div style='position:absolute;top:0;left:0;right:0;height:2px;"
+        f"background:linear-gradient(90deg,transparent,{grade_col},transparent);opacity:0.7;'></div>"
+
+        # ── Row 1: Photo · Name/matchup | Grade + BRL% ──
+        f"<div style='display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px;'>"
+        f"<div style='display:flex;align-items:center;gap:6px;flex:1;min-width:0;'>"
+        f"{photo}"
+        f"<div style='min-width:0;'>"
+        f"<div style='font-size:11px;font-weight:800;color:#f0f0f0;"
+        f"white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.2;'>"
+        f"{conf_badge} {name}</div>"
+        f"<div style='font-size:9px;color:#666;line-height:1.2;'>{team} vs {opp}{spot_html}</div>"
+        f"</div></div>"
+        f"<div style='text-align:right;flex-shrink:0;margin-left:6px;'>"
+        f"<div style='font-size:20px;font-weight:900;color:{grade_col};line-height:1;'>{barrel:.1f}%</div>"
+        f"<div style='font-size:8px;font-weight:700;color:{grade_col};letter-spacing:0.5px;'>"
+        f"{grade}{opt_badge}</div>"
+        f"</div></div>"
+
+        # ── Barrel power meter ──
+        f"<div style='background:#111;border-radius:3px;height:4px;margin:0 0 6px;'>"
+        f"<div style='background:{grade_col};width:{brl_pct}%;height:4px;border-radius:3px;"
+        f"box-shadow:0 0 6px {grade_col}44;'></div></div>"
+
+        # ── Row 2: Statcast power cluster ──
+        f"<div style='display:flex;gap:2px;margin-bottom:5px;'>"
+        f"<div style='flex:1;text-align:center;background:#0e0e0e;border-radius:4px;padding:3px 1px;'>"
+        f"<div style='font-size:11px;font-weight:800;color:{brl_col};line-height:1.1;'>{barrel:.1f}%</div>"
+        f"<div style='font-size:7px;color:#3a3a3a;letter-spacing:0.3px;'>BRL</div></div>"
+
+        f"<div style='flex:1;text-align:center;background:#0e0e0e;border-radius:4px;padding:3px 1px;'>"
+        f"<div style='font-size:11px;font-weight:700;color:{hh_col};line-height:1.1;'>{hh:.0f}%</div>"
+        f"<div style='font-size:7px;color:#3a3a3a;'>HH%</div></div>"
+
+        f"<div style='flex:1;text-align:center;background:#0e0e0e;border-radius:4px;padding:3px 1px;'>"
+        f"<div style='font-size:11px;font-weight:700;color:{xslg_col};line-height:1.1;'>{xslg:.3f}</div>"
+        f"<div style='font-size:7px;color:#3a3a3a;'>{xslg_lbl}</div></div>"
+
+        f"<div style='flex:1;text-align:center;background:#0e0e0e;border-radius:4px;padding:3px 1px;'>"
+        f"<div style='font-size:11px;font-weight:700;color:{pull_col};line-height:1.1;'>{pull:.0f}%</div>"
+        f"<div style='font-size:7px;color:#3a3a3a;'>PULL</div></div>"
+
+        f"<div style='flex:1;text-align:center;background:#0e0e0e;border-radius:4px;padding:3px 1px;'>"
+        f"<div style='font-size:11px;font-weight:700;color:{fb_col};line-height:1.1;'>{fb:.0f}%</div>"
+        f"<div style='font-size:7px;color:#3a3a3a;'>FB%</div></div>"
+        f"</div>"
+
+        # ── Row 3: Market signals ──
+        f"<div style='display:flex;gap:2px;margin-bottom:4px;'>"
+        f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:4px;padding:3px 1px;'>"
+        f"<div style='font-size:11px;font-weight:700;color:#a78bfa;line-height:1.1;'>{model_p:.0f}%</div>"
+        f"<div style='font-size:7px;color:#2a2a40;'>MDL</div></div>"
+
+        f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:4px;padding:3px 1px;'>"
+        f"<div style='font-size:11px;font-weight:700;color:{ev_col_};line-height:1.1;'>{ev:+.1f}%</div>"
+        f"<div style='font-size:7px;color:#2a2a40;'>EV</div></div>"
+
+        f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:4px;padding:3px 1px;'>"
+        f"<div style='font-size:11px;font-weight:700;color:{edge_col_};line-height:1.1;'>{edge:+.1f}%</div>"
+        f"<div style='font-size:7px;color:#2a2a40;'>EDGE</div></div>"
+
+        f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:4px;padding:3px 1px;'>"
+        f"<div style='font-size:11px;font-weight:700;color:#FF6666;line-height:1.1;'>{odds_fmt}</div>"
+        f"<div style='font-size:7px;color:#2a2a40;'>ODDS</div></div>"
+
+        f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:4px;padding:3px 1px;'>"
+        f"<div style='font-size:11px;font-weight:700;color:{env_col_};line-height:1.1;'>{env_lbl}</div>"
+        f"<div style='font-size:7px;color:#2a2a40;'>ENV</div></div>"
+        f"</div>"
+
+        # ── Pitcher row ──
+        f"<div style='font-size:9px;color:#555;margin-bottom:4px;'>"
+        f"<span style='color:{pit_col};'>{pit_display}</span>"
+        + (f" · <span style='color:#444;'>{status_html}</span>" if status_html else "")
+        + f"</div>"
+
+        # ── Pitch attack tags ──
+        + pitch_html
+
+        # ── HVY matchup bar + weather ──
+        f"<div style='display:flex;align-items:center;gap:5px;margin-top:3px;'>"
+        f"<div style='font-size:7px;color:#333;letter-spacing:0.5px;white-space:nowrap;'>MTCH</div>"
+        f"<div style='flex:1;background:#111;border-radius:2px;height:3px;'>"
+        f"<div style='background:{hvy_col};width:{hvy_bar}%;height:3px;border-radius:2px;'></div></div>"
+        f"<div style='font-size:8px;font-weight:700;color:{hvy_col};'>{hvy_lbl}</div>"
+        + weather_frag
+        + f"</div>"
+
+        f"</div>"  # end card shell
     )
 
 
@@ -2619,6 +3126,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                             })
                         st.dataframe(_pd.DataFrame(_diag_rows), use_container_width=True, hide_index=True)
         else:
+            # ── Tactical scan status bar ──────────────────────────────────────
             _qv_steam_n = len(_steam_names & {p.get("player_name") for p in _display_pool})
             _qv_live_n  = sum(
                 1 for p in _display_pool
@@ -2626,239 +3134,77 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
             )
             _qv_conf_n  = sum(1 for p in _display_pool if p.get("lineup_spot") is not None)
             st.markdown(
-                f"<div style='display:flex;gap:16px;align-items:center;padding:8px 0 12px;"
-                f"border-bottom:1px solid #1e1e40;margin-bottom:14px;flex-wrap:wrap;'>"
-                f"<span style='color:#a78bfa;font-size:13px;font-weight:700;letter-spacing:1px;'>TACTICAL SCAN</span>"
-                f"<span style='color:#4ade80;font-size:12px;'>✅ {_qv_conf_n} confirmed</span>"
-                + (f"<span style='color:#f87171;font-size:12px;'>🔴 {_qv_live_n} LIVE</span>" if _qv_live_n else "")
-                + (f"<span style='color:#FFD700;font-size:12px;'>📈 {_qv_steam_n} steam</span>" if _qv_steam_n else "")
-                + (f"<span style='color:#4ade80;font-size:12px;'>🎯 OPT active · {len(_display_pool)} selected</span>" if _optimizer_on else "")
+                f"<div style='display:flex;gap:14px;align-items:center;padding:6px 0 10px;"
+                f"border-bottom:1px solid #1e1e40;margin-bottom:10px;flex-wrap:wrap;'>"
+                f"<span style='color:#a78bfa;font-size:12px;font-weight:700;letter-spacing:2px;"
+                f"text-transform:uppercase;'>⚡ Tactical Intel Feed</span>"
+                f"<span style='color:#4ade80;font-size:11px;'>✅ {_qv_conf_n} confirmed</span>"
+                + (f"<span style='color:#f87171;font-size:11px;'>🔴 {_qv_live_n} LIVE</span>" if _qv_live_n else "")
+                + (f"<span style='color:#FFD700;font-size:11px;'>📈 {_qv_steam_n} steam</span>"  if _qv_steam_n else "")
+                + (f"<span style='color:#4ade80;font-size:11px;'>🎯 OPT · {len(_display_pool)} selected</span>" if _optimizer_on else "")
+                + f"<span style='color:#444;font-size:10px;margin-left:auto;'>"
+                f"showing top {len(_qv_pool)} of {len(_display_pool)}</span>"
                 + f"</div>",
                 unsafe_allow_html=True,
             )
-            # ── ALPHA SLATE: top 3 picks, full-width ──────────────────────────
-            _qv_top  = _qv_pool[:3]
-            _qv_rest = _qv_pool[3:]
-            if _qv_top:
-                st.markdown(
-                    "<div style='font-size:10px;color:#a78bfa;font-weight:700;letter-spacing:2px;"
-                    "margin:0 0 6px;'>ALPHA SLATE</div>",
-                    unsafe_allow_html=True,
-                )
-            for _qi, _qp in enumerate(_qv_top):
-                _qev       = _qp.get("ev_pct", 0)
-                _qedge     = _qp.get("edge_pct", 0)
-                _qodds     = _qp.get("best_american")
-                _qmodel    = _qp.get("model_prob", 0) * 100
-                _qteam     = _qp.get("team", "")
-                _qopp      = _qp.get("opponent", "")
-                _qspot     = _qp.get("lineup_spot")
-                _qbarrel   = _pf(_qp.get("barrel_pct"), 0.0)
-                _qev_col   = "#4ade80" if _qev >= 0 else "#f87171"
-                _qedge_col = _edge_col(_qedge)
-                _qtier     = _qp.get("confidence_tier", "C")
-                _qtier_col = {"S": "#FFD700", "A": "#4ade80", "B": "#facc15", "C": "#f87171"}.get(_qtier, "#888")
-                _qurl      = _fanduel_url(_qp["player_name"])
-                _qpid      = _qp.get("player_id") or _qp.get("player_name", "")
-                _qis_steam = _qp.get("player_name") in _steam_names
-                _qstatus_html, _qis_live = _status_cache.get(_qpid, ("", False))
-                _qgt_str, _urgency_col, _urgency_lbl = _urgency_cache.get(_qpid, ("TBD", "#555", ""))
-                _steam_border = "#f87171" if _qis_live else ("#666600" if _qis_steam else "#2a2a50")
-                _steam_bg     = "#1a0000" if _qis_live else ("#1a1a00" if _qis_steam else "#0e0e24")
-                _qopt_badge = (
-                    "<span style='background:#0a3a0a;color:#4ade80;font-size:9px;"
-                    "padding:1px 5px;border-radius:3px;'>🎯 OPT</span>"
-                    if (_optimizer_on and _qp.get("player_name") in _optimizer_selected_names) else ""
-                )
-                _qsteam_badge = (
-                    "<span style='background:#444400;color:#FFD700;font-size:9px;"
-                    "padding:1px 5px;border-radius:3px;'>📈 STEAM</span>"
-                    if _qis_steam else ""
-                )
-                _rank_col  = ["#FFD700", "#C0C0C0", "#CD7F32"][_qi]
-                _rank_badge = (
-                    f"<span style='background:#1e1e40;color:{_rank_col};font-size:13px;"
-                    f"font-weight:900;padding:3px 8px;border-radius:5px;min-width:28px;"
-                    f"display:inline-block;text-align:center;'>#{_qi+1}</span>"
-                )
-                _brl_badge = (
-                    f"<span style='background:#0a2a0a;color:#4ade80;font-size:9px;"
-                    f"padding:1px 5px;border-radius:3px;'>🛢 {_qbarrel:.1f}%</span>"
-                    if _qbarrel >= 6 else ""
-                )
-                _qphoto   = _player_photo_html(_qp.get("player_id"), size=48)
-                _qhand    = _qp.get("pitcher_hand", "")
-                _qpit_n   = _qp.get("pitcher_name", "")
-                _qhand_lbl = f" ({'RHP' if _qhand == 'R' else 'LHP'})" if _qhand else ""
-                _qpit_lbl  = _pitcher_label(_qpit_n, _qp.get("pitcher_factor", 1.0), _qp.get("platoon_factor", 1.0)) if _qpit_n else "TBD"
-                _qbet      = _qp.get("bet_size") or _qp.get("bet_dollars")
-                _qbrl_meter_pct = min(100, int(_qbarrel / 18.0 * 100))
-                _qbrl_col  = "#4ade80" if _qbarrel >= 10 else "#86efac" if _qbarrel >= 8 else "#f0f0f0" if _qbarrel >= 6 else "#555"
 
-                if st.button(
-                    f"{'✅' if _qspot is not None else '⏳'} {_qp['player_name']}",
-                    key=f"oi_qv_{_qi}",
-                    use_container_width=True,
-                ):
-                    st.session_state["show_modal"] = _qp
-                    st.session_state["modal_source_tab"] = "Quick View"
-                    st.rerun()
+            # ── Pre-compute pitch attack tags for all visible cards ───────────
+            _qv_pitch_tags: dict = {}
+            for _ptag_p in _qv_pool:
+                _ptag_pid = _ptag_p.get("player_id")
+                _ptag_ctx = _pm_ctxs.get(_ptag_pid, {})
+                _qv_pitch_tags[_ptag_pid] = _pitch_attack_tags(_ptag_ctx, _ptag_p, max_tags=2)
 
-                st.markdown(
-                    f"<div style='background:{_steam_bg};border:1px solid {_steam_border};"
-                    f"border-radius:10px;padding:12px 16px;margin-bottom:6px;'>"
-                    # Row 1: rank + photo + identity + odds
-                    f"<div style='display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px;'>"
-                    f"<div style='display:flex;align-items:center;gap:8px;'>"
-                    f"{_rank_badge}{_qphoto}"
-                    f"<div>"
-                    f"<div style='font-size:12px;color:#888;margin-top:2px;'>"
-                    f"{_qteam} vs {_qopp} · {_qpit_lbl}{_qhand_lbl}"
-                    + (f"  <span style='font-size:10px;color:#555;'>Bat #{_qspot}</span>" if _qspot else "")
-                    + f"</div></div></div>"
-                    f"<div style='text-align:right;'>"
-                    f"<a href='{_qurl}' target='_blank' style='text-decoration:none;'>"
-                    f"<div style='font-size:22px;font-weight:700;color:#FF6666;'>{_fmt_american(_qodds)}</div>"
-                    f"<div style='font-size:10px;color:#888;'>best odds ↗</div></a>"
-                    + (f"<div style='font-size:10px;color:#555;margin-top:2px;'>Bet ${float(_qbet):.0f}</div>" if _qbet else "")
-                    + f"</div></div>"
-                    # Row 2: game time + badges
-                    f"<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;'>"
-                    f"<div style='font-size:11px;'>"
-                    + (_qstatus_html if _qstatus_html else
-                       f"<span style='color:#888;'>🕐 {_qgt_str}</span>"
-                       + (f"  <span style='font-weight:700;color:{_urgency_col};'>· {_urgency_lbl}</span>" if _urgency_lbl else ""))
-                    + f"</div>"
-                    f"<div style='display:flex;gap:4px;'>{_brl_badge}{_qsteam_badge}{_qopt_badge}</div>"
-                    f"</div>"
-                    # Barrel meter (if barrel >= 6%)
-                    + (
-                        f"<div style='background:#111;border-radius:3px;height:3px;margin-bottom:8px;'>"
-                        f"<div style='background:{_qbrl_col};width:{_qbrl_meter_pct}%;height:3px;border-radius:3px;'>"
-                        f"</div></div>"
-                        if _qbarrel >= 6 else ""
-                    )
-                    # Row 3: stat pills — MODEL / EV / EDGE / TIER / BARREL
-                    + f"<div style='display:flex;gap:4px;'>"
-                    f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:5px;padding:5px 2px;'>"
-                    f"<div style='font-size:15px;font-weight:700;color:#a78bfa;'>{_qmodel:.0f}%</div>"
-                    f"<div style='font-size:9px;color:#555;'>MODEL</div></div>"
-                    f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:5px;padding:5px 2px;'>"
-                    f"<div style='font-size:15px;font-weight:700;color:{_qev_col};'>{_qev:+.1f}%</div>"
-                    f"<div style='font-size:9px;color:#555;'>EV</div></div>"
-                    f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:5px;padding:5px 2px;'>"
-                    f"<div style='font-size:15px;font-weight:700;color:{_qedge_col};'>{_qedge:+.1f}%</div>"
-                    f"<div style='font-size:9px;color:#555;'>EDGE</div></div>"
-                    f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:5px;padding:5px 2px;'>"
-                    f"<div style='font-size:15px;font-weight:700;color:{_qtier_col};'>{_qtier}</div>"
-                    f"<div style='font-size:9px;color:#555;'>TIER</div></div>"
-                    f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:5px;padding:5px 2px;'>"
-                    f"<div style='font-size:15px;font-weight:700;color:{_qbrl_col};'>{_qbarrel:.1f}%</div>"
-                    f"<div style='font-size:9px;color:#555;'>BARREL</div></div>"
-                    f"</div></div>",
-                    unsafe_allow_html=True,
-                )
-                _render_pitch_mix_expander(_pm_ctxs.get(_qp.get("player_id"), {}), _qp, f"qv_top_{_qi}")
+            # ── 3-column tactical intelligence grid ───────────────────────────
+            # All 12 picks in a uniform grid — rank badge distinguishes alpha picks.
+            # Desktop: 3 cards per row. Mobile: columns wrap to 1 via CSS flex.
+            _QV_COLS   = 3
+            _qv_ranked = list(enumerate(_qv_pool, start=1))  # [(rank, player), ...]
+            _qv_rows   = [_qv_ranked[i:i + _QV_COLS] for i in range(0, len(_qv_ranked), _QV_COLS)]
 
-            # ── EXTENDED SLATE: picks 4–12, 2-col grid ─────────────────────────
-            if _qv_rest:
-                st.markdown(
-                    "<div style='font-size:10px;color:#444;font-weight:700;letter-spacing:2px;"
-                    "margin:10px 0 6px;'>EXTENDED SLATE</div>",
-                    unsafe_allow_html=True,
-                )
-            _qv_pairs = [_qv_rest[i:i+2] for i in range(0, len(_qv_rest), 2)]
-            for _pair_idx, _pair in enumerate(_qv_pairs):
-                _cols = st.columns(2)
-                for _col_idx, _qp in enumerate(_pair):
-                    _qi = 3 + _pair_idx * 2 + _col_idx
-                    with _cols[_col_idx]:
-                        _qev       = _qp.get("ev_pct", 0)
-                        _qedge     = _qp.get("edge_pct", 0)
-                        _qodds     = _qp.get("best_american")
-                        _qmodel    = _qp.get("model_prob", 0) * 100
-                        _qteam     = _qp.get("team", "")
-                        _qspot     = _qp.get("lineup_spot")
-                        _qbarrel   = _pf(_qp.get("barrel_pct"), 0.0)
-                        _qev_col   = "#4ade80" if _qev >= 0 else "#f87171"
-                        _qedge_col = _edge_col(_qedge)
-                        _qtier     = _qp.get("confidence_tier", "C")
-                        _qtier_col = {"S": "#FFD700", "A": "#4ade80", "B": "#facc15", "C": "#f87171"}.get(_qtier, "#888")
-                        _qurl      = _fanduel_url(_qp["player_name"])
-                        _qpid2     = _qp.get("player_id") or _qp.get("player_name", "")
-                        _qis_steam = _qp.get("player_name") in _steam_names
-                        _qstatus_html, _qis_live = _status_cache.get(_qpid2, ("", False))
-                        _qgt_str, _urgency_col, _urgency_lbl = _urgency_cache.get(_qpid2, ("TBD", "#555", ""))
-                        _steam_border = "#f87171" if _qis_live else ("#666600" if _qis_steam else "#252540")
-                        _steam_bg     = "#1a0000" if _qis_live else ("#1a1a00" if _qis_steam else "#0d0d20")
-                        _qopt_badge = (
-                            "<span style='background:#0a3a0a;color:#4ade80;font-size:9px;"
-                            "padding:1px 5px;border-radius:3px;'>🎯 OPT</span>"
-                            if (_optimizer_on and _qp.get("player_name") in _optimizer_selected_names) else ""
-                        )
-                        _qsteam_badge = (
-                            "<span style='background:#444400;color:#FFD700;font-size:9px;"
-                            "padding:1px 5px;border-radius:3px;'>📈 STEAM</span>"
-                            if _qis_steam else ""
-                        )
-                        _rank_badge = (
-                            f"<span style='background:#1e1e40;color:#a78bfa;font-size:10px;"
-                            f"font-weight:700;padding:2px 6px;border-radius:4px;'>#{_qi+1}</span>"
-                        )
-                        _brl_badge = (
-                            f"<span style='background:#0a2a0a;color:#4ade80;font-size:9px;"
-                            f"padding:1px 5px;border-radius:3px;'>🛢 {_qbarrel:.0f}%</span>"
-                            if _qbarrel >= 8 else ""
-                        )
-                        _qphoto   = _player_photo_html(_qp.get("player_id"), size=36)
-                        _qhand    = _qp.get("pitcher_hand", "")
-                        _qhand_lbl = f" ({'RHP' if _qhand == 'R' else 'LHP'})" if _qhand else ""
+            for _row_data in _qv_rows:
+                _row_cols = st.columns(len(_row_data))
+                for _ci, (_rank, _qp) in enumerate(_row_data):
+                    with _row_cols[_ci]:
+                        _qpid     = _qp.get("player_id") or _qp.get("player_name", "")
+                        _ctx      = _pm_ctxs.get(_qp.get("player_id"), {})
+                        _qstatus_html, _qis_live = _status_cache.get(_qpid, ("", False))
+                        _qgt_str, _urgency_col, _urgency_lbl = _urgency_cache.get(_qpid, ("TBD", "#555", ""))
+                        _qis_steam   = _qp.get("player_name") in _steam_names
+                        _pitch_tags  = _qv_pitch_tags.get(_qp.get("player_id"), [])
+                        _qspot       = _qp.get("lineup_spot")
+                        _qis_opt_sel = _qp.get("player_name") in _optimizer_selected_names
 
+                        # Modal trigger button
                         if st.button(
                             f"{'✅' if _qspot is not None else '⏳'} {_qp['player_name']}",
-                            key=f"oi_qv_{_qi}",
+                            key=f"tac_btn_{_rank}",
                             use_container_width=True,
                         ):
                             st.session_state["show_modal"] = _qp
                             st.session_state["modal_source_tab"] = "Quick View"
+                            st.session_state["modal_source_section"] = f"Rank #{_rank}"
                             st.rerun()
 
+                        # Level 1 — Tactical Intelligence Card
                         st.markdown(
-                            f"<div style='background:{_steam_bg};border:1px solid {_steam_border};"
-                            f"border-radius:8px;padding:10px 12px;margin-bottom:2px;'>"
-                            f"<div style='display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;'>"
-                            f"<div style='display:flex;align-items:center;gap:6px;'>"
-                            f"{_rank_badge}{_qphoto}"
-                            f"<div style='font-size:11px;color:#888;'>{_qteam}</div>"
-                            f"</div>"
-                            f"<div style='display:flex;gap:4px;align-items:center;'>"
-                            f"{_brl_badge}{_qsteam_badge}{_qopt_badge}"
-                            f"<a href='{_qurl}' target='_blank' style='text-decoration:none;"
-                            f"font-size:16px;font-weight:700;color:#FF6666;'>{_fmt_american(_qodds)}</a>"
-                            f"</div></div>"
-                            f"<div style='font-size:11px;margin-bottom:6px;'>"
-                            + (_qstatus_html if _qstatus_html else
-                               f"<span style='color:#888;'>🕐 {_qgt_str}</span>"
-                               + (f"  <span style='font-weight:700;color:{_urgency_col};'>"
-                                  f"· {_urgency_lbl}</span>" if _urgency_lbl else ""))
-                            + f"</div>"
-                            f"<div style='display:flex;gap:4px;'>"
-                            f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:5px;padding:4px 2px;'>"
-                            f"<div style='font-size:14px;font-weight:700;color:#a78bfa;'>{_qmodel:.0f}%</div>"
-                            f"<div style='font-size:9px;color:#555;'>MODEL</div></div>"
-                            f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:5px;padding:4px 2px;'>"
-                            f"<div style='font-size:14px;font-weight:700;color:{_qev_col};'>{_qev:+.1f}%</div>"
-                            f"<div style='font-size:9px;color:#555;'>EV</div></div>"
-                            f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:5px;padding:4px 2px;'>"
-                            f"<div style='font-size:14px;font-weight:700;color:{_qedge_col};'>{_qedge:+.1f}%</div>"
-                            f"<div style='font-size:9px;color:#555;'>EDGE</div></div>"
-                            f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:5px;padding:4px 2px;'>"
-                            f"<div style='font-size:14px;font-weight:700;color:{_qtier_col};'>{_qtier}</div>"
-                            f"<div style='font-size:9px;color:#555;'>TIER</div></div>"
-                            f"</div></div>",
+                            _intelligence_card_html(
+                                _qp, _rank, _ctx,
+                                pitch_tags=_pitch_tags,
+                                is_steam=_qis_steam,
+                                is_live=_qis_live,
+                                status_html=_qstatus_html,
+                                gt_str=_qgt_str,
+                                urgency_col=_urgency_col,
+                                urgency_lbl=_urgency_lbl,
+                                opt_active=_optimizer_on,
+                                opt_selected=_qis_opt_sel,
+                            ),
                             unsafe_allow_html=True,
                         )
-                        _render_pitch_mix_expander(_pm_ctxs.get(_qp.get("player_id"), {}), _qp, f"qv_ext_{_qi}")
+
+                        # Level 2 — Inline Pitch Intelligence Expansion
+                        _render_pitch_mix_expander(_ctx, _qp, f"qv_tac_{_rank}")
 
         if _display_pool:
             with st.expander(
@@ -2887,123 +3233,71 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                 unsafe_allow_html=True,
             )
         else:
+            # Pre-compute pitch tags for all elite players before the render loop
+            _elite_pitch_tags: dict = {}
+            for _ep_pt in _elite_pool:
+                _ep_pid_pt = _ep_pt.get("player_id")
+                _ep_ctx_pt = _pm_ctxs.get(_ep_pid_pt, {})
+                _elite_pitch_tags[_ep_pid_pt] = _pitch_attack_tags(_ep_ctx_pt, _ep_pt, max_tags=2)
+
             _el_goat  = sum(1 for p in _elite_pool if _pf(p.get("barrel_pct"), 0) >= 15)
             _el_elite = sum(1 for p in _elite_pool if 12 <= _pf(p.get("barrel_pct"), 0) < 15)
             _el_power = sum(1 for p in _elite_pool if 10 <= _pf(p.get("barrel_pct"), 0) < 12)
             _el_solid = sum(1 for p in _elite_pool if 8  <= _pf(p.get("barrel_pct"), 0) < 10)
             st.markdown(
-                f"<div style='display:flex;gap:16px;padding:8px 0 14px;"
-                f"border-bottom:1px solid #1e1e40;margin-bottom:14px;flex-wrap:wrap;'>"
+                f"<div style='display:flex;gap:16px;padding:8px 0 12px;"
+                f"border-bottom:1px solid #1e1e40;margin-bottom:12px;flex-wrap:wrap;align-items:center;'>"
                 f"<span style='color:#FF4500;font-weight:700;font-size:12px;'>🐐 GOAT {_el_goat}</span>"
                 f"<span style='color:#FFD700;font-weight:700;font-size:12px;'>💎 ELITE {_el_elite}</span>"
                 f"<span style='color:#4ade80;font-weight:700;font-size:12px;'>⚡ POWER {_el_power}</span>"
                 f"<span style='color:#86efac;font-weight:700;font-size:12px;'>✅ SOLID {_el_solid}</span>"
-                f"<span style='color:#555;font-size:12px;'>· barrel ≥ 8% · sorted descending</span>"
+                f"<span style='color:#444;font-size:11px;'>· barrel ≥ 8% · BRL / HH% / xSLG / Pull / FB%</span>"
                 f"</div>",
                 unsafe_allow_html=True,
             )
-            for _ei, _ep in enumerate(_elite_pool):
-                _ep_brl   = _pf(_ep.get("barrel_pct"), 0.0)
-                _ep_ev    = _ep.get("ev_pct", 0)
-                _ep_edge  = _ep.get("edge_pct", 0)
-                _ep_model = _ep.get("model_prob", 0) * 100
-                _ep_odds  = _ep.get("best_american")
-                _ep_team  = _ep.get("team", "")
-                _ep_opp   = _ep.get("opponent", "")
-                _ep_pit   = _ep.get("pitcher_name", "TBD")
-                _ep_spot  = _ep.get("lineup_spot")
-                _ep_hh    = _pf(_ep.get("hard_hit"), 0.0)
-                _ep_xslg  = _pf(_ep.get("xslg") or _ep.get("actual_slg"), 0.0)
-                _ep_pull  = _pf(_ep.get("pull_pct"), 0.0)
-                _ep_fb    = _pf(_ep.get("fb_pct"), 0.0)
-                _ep_url   = _fanduel_url(_ep["player_name"])
-                _ep_photo = _player_photo_html(_ep.get("player_id"), size=44)
-                _ep_pid   = _ep.get("player_id") or _ep.get("player_name", "")
-                _ep_status_html, _ep_is_live = _status_cache.get(_ep_pid, ("", False))
-                _ep_opt   = _optimizer_on and _ep.get("player_name") in _optimizer_selected_names
 
-                if _ep_brl >= 15:
-                    _ep_grade = "GOAT"; _ep_grade_col = "#FF4500"; _ep_bg = "#1a0a00"
-                elif _ep_brl >= 12:
-                    _ep_grade = "ELITE"; _ep_grade_col = "#FFD700"; _ep_bg = "#1a1500"
-                elif _ep_brl >= 10:
-                    _ep_grade = "POWER"; _ep_grade_col = "#4ade80"; _ep_bg = "#0a1a0a"
-                else:
-                    _ep_grade = "SOLID"; _ep_grade_col = "#86efac"; _ep_bg = "#0a150a"
+            # ── 2-column tactical intelligence grid ──────────────────────────
+            _ELITE_COLS  = 2
+            _el_ranked   = list(enumerate(_elite_pool, start=1))
+            _el_grid_rows = [_el_ranked[i:i + _ELITE_COLS]
+                             for i in range(0, len(_el_ranked), _ELITE_COLS)]
 
-                _ep_brl_meter_pct = min(100, int(_ep_brl / 18.0 * 100))
-                _ep_brl_meter = (
-                    f"<div style='background:#1a1a1a;border-radius:3px;height:4px;margin:6px 0 4px;'>"
-                    f"<div style='background:{_ep_grade_col};width:{_ep_brl_meter_pct}%;"
-                    f"height:4px;border-radius:3px;'></div></div>"
-                )
-                _ep_border   = "#f87171" if _ep_is_live else (_ep_grade_col + "55")
-                _ep_ev_col   = "#4ade80" if _ep_ev >= 0 else "#f87171"
-                _ep_pit_lbl  = _pitcher_label(_ep_pit, _ep.get("pitcher_factor", 1.0), _ep.get("platoon_factor", 1.0))
-                _ep_hand     = _ep.get("pitcher_hand", "")
-                _ep_hand_lbl = f" ({'RHP' if _ep_hand == 'R' else 'LHP'})" if _ep_hand else ""
-                _ep_conf     = "✅" if _ep_spot is not None else "⏳"
-                _ep_opt_badge = (
-                    "<span style='background:#0a3a0a;color:#4ade80;font-size:9px;"
-                    "padding:1px 5px;border-radius:3px;margin-left:4px;'>🎯 OPT</span>"
-                    if _ep_opt else ""
-                )
-                _ep_xslg_lbl = "xSLG" if _pf(_ep.get("xslg"), 0.0) > 0.0 else "SLG"
-                _ep_xslg_col = "#4ade80" if _ep_xslg >= 0.450 else "#f0f0f0"
+            for _el_row_data in _el_grid_rows:
+                _el_row_cols = st.columns(len(_el_row_data))
+                for _el_ci, (_el_rank, _ep) in enumerate(_el_row_data):
+                    with _el_row_cols[_el_ci]:
+                        _ep_pid   = _ep.get("player_id") or _ep.get("player_name", "")
+                        _ep_ctx   = _pm_ctxs.get(_ep_pid, {})
+                        _ep_ptags = _elite_pitch_tags.get(_ep_pid, [])
+                        _ep_status_html, _ep_is_live = _status_cache.get(_ep_pid, ("", False))
+                        _ep_brl   = _pf(_ep.get("barrel_pct"), 0.0)
+                        _ep_conf  = "✅" if _ep.get("lineup_spot") is not None else "⏳"
+                        if _ep_brl >= 15:   _ep_grade = "GOAT"
+                        elif _ep_brl >= 12: _ep_grade = "ELITE"
+                        elif _ep_brl >= 10: _ep_grade = "POWER"
+                        else:               _ep_grade = "SOLID"
 
-                if st.button(
-                    f"{_ep_conf} {_ep['player_name']} — {_ep_grade}",
-                    key=f"oi_elite_{_ei}",
-                    use_container_width=True,
-                ):
-                    st.session_state["show_modal"] = _ep
-                    st.session_state["modal_source_tab"] = "Elite"
-                    st.rerun()
+                        if st.button(
+                            f"{_ep_conf} {_ep['player_name']} — {_ep_grade}",
+                            key=f"oi_elite_{_el_rank}",
+                            use_container_width=True,
+                        ):
+                            st.session_state["show_modal"] = _ep
+                            st.session_state["modal_source_tab"] = "Elite"
+                            st.rerun()
 
-                st.markdown(
-                    f"<div style='background:{_ep_bg};border:1px solid {_ep_border};border-radius:10px;"
-                    f"padding:12px 16px;margin-bottom:2px;'>"
-                    f"<div style='display:flex;justify-content:space-between;align-items:flex-start;'>"
-                    f"<div style='display:flex;align-items:center;gap:10px;'>{_ep_photo}"
-                    f"<div><div style='font-size:12px;color:#888;'>"
-                    f"{_ep_team} vs {_ep_opp} · {_ep_pit_lbl}{_ep_hand_lbl}</div>"
-                    f"<div style='font-size:11px;color:#555;margin-top:2px;'>"
-                    f"{'Bat #' + str(_ep_spot) if _ep_spot else 'Lineup TBD'}</div>"
-                    f"</div></div>"
-                    f"<div style='text-align:right;'>"
-                    f"<span style='font-size:22px;font-weight:900;color:{_ep_grade_col};'>{_ep_brl:.1f}%</span>"
-                    f"<span style='font-size:11px;color:#555;margin-left:4px;'>BRL</span>"
-                    f"<div style='font-size:11px;color:{_ep_grade_col};font-weight:700;'>"
-                    f"{_ep_grade}{_ep_opt_badge}</div>"
-                    f"</div></div>"
-                    + _ep_brl_meter
-                    + f"<div style='display:flex;gap:4px;margin-top:6px;'>"
-                    f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:5px;padding:4px 2px;'>"
-                    f"<div style='font-size:13px;font-weight:700;color:#a78bfa;'>{_ep_model:.0f}%</div>"
-                    f"<div style='font-size:9px;color:#555;'>MODEL</div></div>"
-                    f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:5px;padding:4px 2px;'>"
-                    f"<div style='font-size:13px;font-weight:700;color:{_ep_ev_col};'>{_ep_ev:+.1f}%</div>"
-                    f"<div style='font-size:9px;color:#555;'>EV</div></div>"
-                    f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:5px;padding:4px 2px;'>"
-                    f"<div style='font-size:13px;font-weight:700;color:{_edge_col(_ep_edge)};'>{_ep_edge:+.1f}%</div>"
-                    f"<div style='font-size:9px;color:#555;'>EDGE</div></div>"
-                    f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:5px;padding:4px 2px;'>"
-                    f"<div style='font-size:13px;font-weight:700;color:#86efac;'>{_ep_hh:.0f}%</div>"
-                    f"<div style='font-size:9px;color:#555;'>HH%</div></div>"
-                    f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:5px;padding:4px 2px;'>"
-                    f"<a href='{_ep_url}' target='_blank' style='text-decoration:none;'>"
-                    f"<div style='font-size:13px;font-weight:700;color:#FF6666;'>{_fmt_american(_ep_odds)}</div>"
-                    f"<div style='font-size:9px;color:#555;'>ODDS ↗</div></a></div>"
-                    f"</div>"
-                    f"<div style='display:flex;gap:10px;margin-top:6px;font-size:10px;color:#666;'>"
-                    f"<span>{_ep_xslg_lbl}: <b style='color:{_ep_xslg_col};'>{_ep_xslg:.3f}</b></span>"
-                    f"<span>Pull: <b style='color:#f0f0f0;'>{_ep_pull:.0f}%</b></span>"
-                    f"<span>FB: <b style='color:#f0f0f0;'>{_ep_fb:.0f}%</b></span>"
-                    f"</div>"
-                    f"</div>",
-                    unsafe_allow_html=True,
-                )
-                _render_pitch_mix_expander(_pm_ctxs.get(_ep_pid, {}), _ep, f"elite_{_ei}")
+                        st.markdown(
+                            _elite_card_html(
+                                _ep, _ep_ctx,
+                                pitch_tags=_ep_ptags,
+                                is_live=_ep_is_live,
+                                status_html=_ep_status_html,
+                                opt_active=_optimizer_on,
+                                opt_selected=_ep.get("player_name") in _optimizer_selected_names,
+                            ),
+                            unsafe_allow_html=True,
+                        )
+                        _render_pitch_mix_expander(_ep_ctx, _ep, f"elite_{_el_rank}")
 
     # ── TAB 3: MATCHUP EDGE ───────────────────────────────────────────────────
     with tab_edge:
