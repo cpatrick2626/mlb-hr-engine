@@ -80,7 +80,10 @@ def _cached_power_parlays(player_ids: tuple, _all_players: list):
             max(0.0, (pf - 1.0) / 0.5) * 0.10
         )
 
-    candidates = [p for p in _all_players if p.get("model_prob", 0) >= 0.08 and p.get("best_american")]
+    candidates = [p for p in _all_players
+                  if p.get("model_prob", 0) >= 0.08
+                  and p.get("best_american")
+                  and (p.get("ev_pct") or -999) > 0]
     if not candidates:
         return []
     scored = sorted(candidates, key=_power_score, reverse=True)[:20]
@@ -155,6 +158,8 @@ def _cached_pitcher_targets(player_ids: tuple, _all_players: list):
     by_pitcher = defaultdict(list)
     for p in _all_players:
         if p.get("model_prob", 0) < 0.07 or not p.get("best_american"):
+            continue
+        if (p.get("ev_pct") or -999) <= 0:
             continue
         pid_name = p.get("pitcher_name", "TBD")
         if pid_name and pid_name != "TBD":

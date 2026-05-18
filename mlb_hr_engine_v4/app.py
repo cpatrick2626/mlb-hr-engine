@@ -3433,7 +3433,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
 
     # ── OPERATIONAL INTELLIGENCE LAYER ──────────────────────────────────────────
     _now_et = _dt.datetime.now(_EDT)
-    _n_elite = len([p for p in _tac_ranked if _pf(p.get("barrel_pct"), 0) >= 8.0])
+    _n_elite = len([p for p in ranked if _pf(p.get("barrel_pct"), 0) >= 8.0])
     _display_pool = (
         [p for p in _tac_ranked if p.get("player_name") in _optimizer_selected_names]
         if _optimizer_on and _optimizer_selected_names else _tac_ranked
@@ -3634,7 +3634,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
     with tab_elite:
         _elite_pool = sorted(
             [p for p in ranked if _pf(p.get("barrel_pct"), 0) >= 8.0],
-            key=lambda p: (_pf(p.get("barrel_pct"), 0), p.get("model_prob") or 0),
+            key=lambda p: (_pf(p.get("barrel_pct"), 0), p.get("score") or 0),
             reverse=True,
         )
         if not _elite_pool:
@@ -3760,7 +3760,9 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                     st.rerun()
 
             def _me_hvy_key(p):
-                return _me_ctxs.get(p.get("player_id"), {}).get("hvy_modifier", 1.0)
+                # Default 0.0: players with no pitch context loaded sink to the bottom
+                # instead of appearing as false-NEUTRAL (1.0) in the sort order.
+                return _me_ctxs.get(p.get("player_id"), {}).get("hvy_modifier", 0.0)
 
             # Apply HVY modifier filter from Tactical Command Center
             _me_mod_min = st.session_state.get("tac_min_matchup_pct", 75) / 100.0
