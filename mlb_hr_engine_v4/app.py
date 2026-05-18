@@ -2242,35 +2242,44 @@ def _render_pitch_mix_expander(ctx: dict, p: dict, key_prefix: str) -> None:
                         f"text-align:center;{_td2}'>< 3 PA</td></tr>"
                     )
                     continue
-                bslg   = bpt.get("slg", 0.0)
-                bba    = bpt.get("ba", 0.0)
-                biso   = bpt.get("iso", round(max(0.0, bslg - bba), 3))
+                bslg   = bpt.get("slg")   # None when < 3 AB
+                bba    = bpt.get("ba")    # None when < 3 AB
+                biso   = bpt.get("iso")   # None when ba or slg is None
                 bkpct  = bpt.get("k_pct", 0.0)
                 bhr    = bpt.get("hr", 0)
                 bpa    = bpa or 0
-                bhrpct = bpt.get("hr_rate", 0.0)
-                _b_fav = (bslg - 0.380) * 2.0 - (bkpct - 0.22) * 1.5 + (bhr * 0.08)
+                bhrpct = bpt.get("hr_rate")  # None when < 10 PA
+                # Use neutral value for colour-score when data is absent
+                _b_slg = bslg if bslg is not None else 0.380
+                _b_fav = (_b_slg - 0.380) * 2.0 - (bkpct - 0.22) * 1.5 + (bhr * 0.08)
                 pc     = ("#4ade80" if _b_fav >= 0.15 else "#f87171" if _b_fav <= -0.15 else "#facc15")
-                slg_bg = ("#14532d" if bslg >= 0.550 else "#166534" if bslg >= 0.450
-                          else "#7f1d1d" if bslg < 0.280 else "#450a0a" if bslg < 0.200 else "#0f172a")
-                ba_bg  = ("#14532d" if bba  >= 0.350 else "#166534" if bba  >= 0.280
-                          else "#7f1d1d" if bba  < 0.200 else "#0f172a")
-                iso_bg = ("#14532d" if biso >= 0.250 else "#166534" if biso >= 0.175
-                          else "#7f1d1d" if biso < 0.080 else "#0f172a")
+                slg_bg = ("#14532d" if (bslg or 0) >= 0.550 else "#166534" if (bslg or 0) >= 0.450
+                          else "#7f1d1d" if bslg is not None and (bslg or 0) < 0.280
+                          else "#450a0a" if bslg is not None and (bslg or 0) < 0.200 else "#0f172a")
+                ba_bg  = ("#14532d" if (bba or 0) >= 0.350 else "#166534" if (bba or 0) >= 0.280
+                          else "#7f1d1d" if bba is not None and (bba or 0) < 0.200 else "#0f172a")
+                iso_bg = ("#14532d" if (biso or 0) >= 0.250 else "#166534" if (biso or 0) >= 0.175
+                          else "#7f1d1d" if biso is not None and (biso or 0) < 0.080 else "#0f172a")
                 k_bg   = ("#7f1d1d" if bkpct >= 0.35 else "#450a0a" if bkpct >= 0.45
                           else "#166534" if bkpct < 0.18 else "#0f172a")
                 hr_bg  = "#14532d" if bhr >= 2 else "#166534" if bhr >= 1 else "#0f172a"
-                hrp_bg = ("#14532d" if bhrpct >= 0.05 else "#166534" if bhrpct >= 0.03
-                          else "#7f1d1d" if bhrpct < 0.01 and bpa >= 10 else "#0f172a")
+                hrp_bg = ("#14532d" if (bhrpct or 0) >= 0.05 else "#166534" if (bhrpct or 0) >= 0.03
+                          else "#7f1d1d" if bhrpct is not None and (bhrpct or 0) < 0.01 and bpa >= 10
+                          else "#0f172a")
+                # Format display strings — "—" when stat is absent due to small sample
+                _bba_s  = f"{bba:.3f}"         if bba    is not None else "—"
+                _bslg_s = f"{bslg:.3f}"        if bslg   is not None else "—"
+                _biso_s = f"{biso:.3f}"        if biso   is not None else "—"
+                _bhrp_s = f"{bhrpct*100:.1f}%" if bhrpct is not None else "—"
                 brows += (
                     f"<tr>"
                     f"<td style='padding:4px 6px;'><b style='color:{pc};font-size:11px;'>{lbl}</b></td>"
                     f"<td style='background:#0f172a;color:#94a3b8;{_td2}'>{bpa}</td>"
                     f"<td style='background:{hr_bg};color:#e2e8f0;{_td2}'>{bhr}</td>"
-                    f"<td style='background:{hrp_bg};color:#e2e8f0;{_td2}'>{bhrpct*100:.1f}%</td>"
-                    f"<td style='background:{ba_bg};color:#e2e8f0;{_td2}'>{bba:.3f}</td>"
-                    f"<td style='background:{slg_bg};color:#e2e8f0;{_td2}'>{bslg:.3f}</td>"
-                    f"<td style='background:{iso_bg};color:#e2e8f0;{_td2}'>{biso:.3f}</td>"
+                    f"<td style='background:{hrp_bg};color:#e2e8f0;{_td2}'>{_bhrp_s}</td>"
+                    f"<td style='background:{ba_bg};color:#e2e8f0;{_td2}'>{_bba_s}</td>"
+                    f"<td style='background:{slg_bg};color:#e2e8f0;{_td2}'>{_bslg_s}</td>"
+                    f"<td style='background:{iso_bg};color:#e2e8f0;{_td2}'>{_biso_s}</td>"
                     f"<td style='background:{k_bg};color:#e2e8f0;{_td2}'>{bkpct*100:.0f}%</td>"
                     f"</tr>"
                 )
@@ -3221,7 +3230,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
     with tab_elite:
         _elite_pool = sorted(
             [p for p in ranked if _pf(p.get("barrel_pct"), 0) >= 8.0],
-            key=lambda p: _pf(p.get("barrel_pct"), 0),
+            key=lambda p: (_pf(p.get("barrel_pct"), 0), p.get("model_prob") or 0),
             reverse=True,
         )
         if not _elite_pool:
@@ -3677,7 +3686,8 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
             )
             st.caption(
                 f"{len(_fs_sorted)} players · composite score: EV×0.40 + Edge×0.35 + Conf×0.25 · "
-                "TCC filters applied · use sidebar EV/Edge thresholds to narrow further"
+                "TCC filters applied · use sidebar EV/Edge thresholds to narrow further · "
+                "📊 Pitch Mix intelligence available in QUICK VIEW / ELITE / MATCHUP EDGE tabs"
             )
             _render_qualified_table(_fs_sorted, scale, min_ev, min_edge, _steam_names, "fs_main")
 

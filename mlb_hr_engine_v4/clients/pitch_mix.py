@@ -561,15 +561,21 @@ def _fetch_all_batter_pitch_splits(batter_id: int) -> None:
     def _finalize(totals: dict) -> dict:
         out = {}
         for pt, t in totals.items():
-            ab = t["ab"] or 1
+            _ab = t["ab"]
+            _pa = t["pa"]
+            # Require ≥3 AB for BA/SLG — prevents fake 0.000 from pure-walk or tiny samples
+            _ba  = round(t["h"]  / _ab, 3) if _ab >= 3 else None
+            _slg = round(t["tb"] / _ab, 3) if _ab >= 3 else None
+            # Require ≥10 PA for HR rate — prevents extreme small-sample values (e.g. 1 HR / 1 PA)
+            _hr_rate = round(t["hr"] / _pa, 3) if _pa >= 10 else None
             out[pt] = {
-                "pa":      t["pa"],
+                "pa":      _pa,
                 "hr":      t["hr"],
                 "k":       t["k"],
-                "ba":      round(t["h"] / ab, 3),
-                "slg":     round(t["tb"] / ab, 3),
-                "k_pct":   round(t["k"] / t["pa"], 3) if t["pa"] else 0.0,
-                "hr_rate": round(t["hr"] / t["pa"], 3) if t["pa"] else 0.0,
+                "ba":      _ba,
+                "slg":     _slg,
+                "k_pct":   round(t["k"] / _pa, 3) if _pa else 0.0,
+                "hr_rate": _hr_rate,
             }
         return out
 
@@ -1018,7 +1024,7 @@ def _compute_modifier(
             if b_pa < 3:
                 continue
             reliability = min(1.0, b_pa / 15.0)
-            bslg  = bpt.get("slg", _LG_SLG)
+            bslg  = bpt.get("slg") or _LG_SLG  # None when < 3 AB → fall back to league avg
             delta = (bslg - _LG_SLG) / _LG_SLG
             weighted_d += pct * delta * reliability
             total_w    += pct * reliability
