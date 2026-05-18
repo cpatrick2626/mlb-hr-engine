@@ -2054,7 +2054,7 @@ def _render_qualified_table(
         )
 
 
-def _render_pitch_mix_expander(ctx: dict, p: dict, key_prefix: str) -> None:
+def _render_pitch_mix_expander(ctx: dict, p: dict, key_prefix: str, expanded: bool = False) -> None:
     """Shared pitch mix expander — identical depth on every tab."""
     from clients.pitch_mix import pitch_label, pitch_color
     import config as _cfg
@@ -2084,7 +2084,7 @@ def _render_pitch_mix_expander(ctx: dict, p: dict, key_prefix: str) -> None:
 
     pitches = []
 
-    with st.expander("📊 Pitch Mix Analysis", expanded=False):
+    with st.expander("📊 Pitch Mix Analysis", expanded=expanded):
         if _prior_note:
             st.caption(_prior_note)
 
@@ -2592,12 +2592,17 @@ def _render_full_slate_all_players(
     n_elite = sum(1 for p in all_players if _pf(p.get("barrel_pct"), 0) >= 8.0)
     n_odds  = sum(1 for p in all_players if p.get("ev_pct") is not None)
     st.markdown(
-        f"<div style='font-size:11px;color:#888;margin-bottom:8px;'>"
+        f"<div style='font-size:11px;color:#888;margin-bottom:4px;'>"
         f"<b style='color:#eee;'>{len(all_players)}</b> players &nbsp;&middot;&nbsp; "
         f"<b style='color:#eee;'>{len(games)}</b> games &nbsp;&middot;&nbsp; "
         f"<span style='color:#4ade80;'>{n_qual}</span> sidebar-qualified &nbsp;&middot;&nbsp; "
         f"<span style='color:#FFD700;'>{n_elite}</span> elite barrel "
         f"&nbsp;&middot;&nbsp; <span style='color:#555;'>{len(all_players)-n_odds}</span> no market line"
+        f"</div>"
+        f"<div style='font-size:9px;color:#333;padding:2px 8px;margin-bottom:4px;"
+        f"font-family:monospace;letter-spacing:0.5px;'>"
+        f"BRL = Barrel%  &nbsp;·&nbsp;  MDL = Model Prob  &nbsp;·&nbsp;  "
+        f"EV = Expected Value  &nbsp;·&nbsp;  EDG = Edge vs Market  &nbsp;·&nbsp;  CNF = Confidence"
         f"</div>",
         unsafe_allow_html=True,
     )
@@ -3123,10 +3128,14 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
         f"  ·  {_tac_n_active} active" if _tac_n_active else "")
 
     with st.expander(_tac_panel_lbl, expanded=False):
-        # ── Engine Preset Bar ───────────────────────────────────────────────
+        # ── Engine Identity + Preset Bar ────────────────────────────────────
         st.markdown(
-            "<div style='font-size:9px;color:#888;letter-spacing:1px;"
-            "margin-bottom:4px;'>MAIN ENGINE PRESET</div>",
+            "<div style='display:flex;justify-content:space-between;align-items:baseline;"
+            "margin-bottom:2px;'>"
+            "<div style='font-size:9px;color:#888;letter-spacing:1px;'>MAIN ENGINE PRESET</div>"
+            "<div style='font-size:9px;color:#4ade80;letter-spacing:1px;'>"
+            "Quantitative · Market-Aware · Selective</div>"
+            "</div>",
             unsafe_allow_html=True,
         )
         def _main_tcc_reset():
@@ -3253,6 +3262,33 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                 "HVY composite matchup score gate (0–100) for Matchup Edge tab only. "
                 "Does NOT remove picks from Quick View, Elite, or Full Slate.",
             )
+
+        # ── PITCH MIX DISPLAY CONTROL ────────────────────────────────────────
+        st.markdown(
+            "<div style='border-top:1px solid #1a1a1a;margin:8px 0 4px;"
+            "padding-top:6px;font-size:9px;color:#888;letter-spacing:1px;'>"
+            "PITCH MIX DISPLAY — Quick View / Elite / Matchup Edge cards</div>",
+            unsafe_allow_html=True,
+        )
+        _pm1, _pm2 = st.columns(2)
+        with _pm1:
+            if st.button(
+                "Open All Pitch Mix",
+                key="_main_pm_open",
+                use_container_width=True,
+                help="Expand pitch mix analysis on all visible Main cards",
+            ):
+                st.session_state["main_pitch_mix_expanded"] = True
+                st.rerun()
+        with _pm2:
+            if st.button(
+                "Close All Pitch Mix",
+                key="_main_pm_close",
+                use_container_width=True,
+                help="Collapse pitch mix analysis on all visible Main cards",
+            ):
+                st.session_state["main_pitch_mix_expanded"] = False
+                st.rerun()
 
     # Apply tactical batter-profile filters to narrow eligible universe
     _tac_params = {
@@ -3456,7 +3492,8 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                         )
 
                         # Level 2 — Inline Pitch Intelligence Expansion
-                        _render_pitch_mix_expander(_ctx, _qp, f"qv_tac_{_rank}")
+                        _render_pitch_mix_expander(_ctx, _qp, f"qv_tac_{_rank}",
+                                                   expanded=st.session_state.get("main_pitch_mix_expanded", False))
 
         if _display_pool:
             with st.expander(
@@ -3549,7 +3586,8 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                             ),
                             unsafe_allow_html=True,
                         )
-                        _render_pitch_mix_expander(_ep_ctx, _ep, f"elite_{_el_rank}")
+                        _render_pitch_mix_expander(_ep_ctx, _ep, f"elite_{_el_rank}",
+                                                   expanded=st.session_state.get("main_pitch_mix_expanded", False))
 
     # ── TAB 3: MATCHUP EDGE ───────────────────────────────────────────────────
     with tab_edge:
@@ -3728,7 +3766,8 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                     + f"</div>",
                     unsafe_allow_html=True,
                 )
-                _render_pitch_mix_expander(_me_ctxs.get(_mp_pid, {}), _mp, f"me_{_mi}")
+                _render_pitch_mix_expander(_me_ctxs.get(_mp_pid, {}), _mp, f"me_{_mi}",
+                                           expanded=st.session_state.get("main_pitch_mix_expanded", False))
 
     # ── TAB 4: PORTFOLIO BUILDER ──────────────────────────────────────────────
     with tab_port:
@@ -4600,7 +4639,8 @@ def tab_jig(data: dict):
         bat_side        = p.get("batter_side", "")
         bat_side_lbl    = f" {'RHB' if bat_side == 'R' else 'LHB' if bat_side == 'L' else ''}"
 
-        _render_pitch_mix_expander(ctx, p, key_prefix)
+        _render_pitch_mix_expander(ctx, p, key_prefix,
+                                   expanded=st.session_state.get("jig_pitch_mix_expanded", False))
 
         _fb, _fc = st.columns([1, 1])
         with _fb:
@@ -4923,10 +4963,14 @@ def tab_jig(data: dict):
         "jig_tac_include_live": False,
     }
     with st.expander("⚙️ JIG Tactical Command Center", expanded=False):
-        # ── JIG Engine Preset Bar ───────────────────────────────────────────
+        # ── JIG Engine Identity + Preset Bar ────────────────────────────────
         st.markdown(
-            "<div style='font-size:9px;color:#888;letter-spacing:1px;"
-            "margin-bottom:4px;'>JIG ENGINE PRESET</div>",
+            "<div style='display:flex;justify-content:space-between;align-items:baseline;"
+            "margin-bottom:2px;'>"
+            "<div style='font-size:9px;color:#888;letter-spacing:1px;'>JIG ENGINE PRESET</div>"
+            "<div style='font-size:9px;color:#f97316;letter-spacing:1px;'>"
+            "Tactical · Matchup-Driven · Arsenal-Focused</div>"
+            "</div>",
             unsafe_allow_html=True,
         )
         def _jig_tcc_reset():
@@ -5027,6 +5071,33 @@ def tab_jig(data: dict):
             st.toggle("Exclude Started Games", value=False, key="jig_tac_exclude_started")
         with _jte2:
             st.toggle("Include Live Games",    value=False, key="jig_tac_include_live")
+
+        # ── PITCH MIX DISPLAY CONTROL ────────────────────────────────────────
+        st.markdown(
+            "<div style='border-top:1px solid #1a1a1a;margin:8px 0 4px;"
+            "padding-top:6px;font-size:9px;color:#888;letter-spacing:1px;'>"
+            "PITCH MIX DISPLAY — JIG matchup cards</div>",
+            unsafe_allow_html=True,
+        )
+        _jpm1, _jpm2 = st.columns(2)
+        with _jpm1:
+            if st.button(
+                "Open All Pitch Mix",
+                key="_jig_pm_open",
+                use_container_width=True,
+                help="Expand pitch mix analysis on all visible JIG cards",
+            ):
+                st.session_state["jig_pitch_mix_expanded"] = True
+                st.rerun()
+        with _jpm2:
+            if st.button(
+                "Close All Pitch Mix",
+                key="_jig_pm_close",
+                use_container_width=True,
+                help="Collapse pitch mix analysis on all visible JIG cards",
+            ):
+                st.session_state["jig_pitch_mix_expanded"] = False
+                st.rerun()
 
     # Build JIG-TCC-filtered player list
     _jig_tac_params = {
