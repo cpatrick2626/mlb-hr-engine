@@ -3486,12 +3486,12 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
     _me_ck   = _pm_ck
     _me_ctxs = _pm_ctxs
 
-    tab_qv, tab_elite, tab_edge, tab_port, tab_fs = st.tabs([
+    tab_qv, tab_elite, tab_edge, tab_fs, tab_port = st.tabs([
         f"⚡  COMMAND CENTER  ({len(_display_pool)})",
         f"💎  TOP TARGETS  ({_n_elite})",
         "🎯  MATCHUP EDGE",
-        "📊  PORTFOLIO",
         f"🗂️  FULL SLATE  ({len(all_players)})",
+        "📊  PORTFOLIO",
     ])
 
     # ── TAB 1: COMMAND CENTER ────────────────────────────────────────────────
@@ -3962,6 +3962,43 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
 
     # ── TAB 4: PORTFOLIO BUILDER ──────────────────────────────────────────────
     with tab_port:
+        # ── MAIN Portfolio control bar (Phase 2C) ─────────────────────────────
+        _port_preset_opts = [
+            ("Moderate",       "moderate",       "Balanced deployment · stable EV distribution · moderate volatility"),
+            ("Conservative",   "conservative",   "Exposure-controlled · 15 picks · 3/team cap · barrel ≥ 6%"),
+            ("Barrel-Focused", "barrel_focused", "Barrel-weighted aggression · elite-heavy slate · high-upside targeting"),
+            ("Relaxed",        "relaxed",        "Wide-net deployment · 30 picks · broad coverage · maximum slate"),
+        ]
+        _port_active_preset = st.session_state.get("optimizer_preset", "moderate")
+        _port_active_entry  = next(
+            (e for e in _port_preset_opts if e[1] == _port_active_preset),
+            _port_preset_opts[0],
+        )
+        st.markdown(
+            "<div style='font-size:10px;font-weight:700;letter-spacing:1.5px;"
+            "color:#555;margin-bottom:6px;'>PORTFOLIO MODE</div>",
+            unsafe_allow_html=True,
+        )
+        _pctl_cols = st.columns(4)
+        for _pctl_col, (_pctl_lbl, _pctl_key, _pctl_summ) in zip(_pctl_cols, _port_preset_opts):
+            with _pctl_col:
+                if st.button(
+                    _pctl_lbl,
+                    key=f"port_ctrl_preset_{_pctl_key}",
+                    type="primary" if _port_active_preset == _pctl_key else "secondary",
+                    use_container_width=True,
+                ):
+                    st.session_state["optimizer_preset"]        = _pctl_key
+                    st.session_state["optimizer_preset_select"] = _pctl_key
+                    st.rerun()
+        st.markdown(
+            f"<div style='padding:5px 0 10px;font-size:11px;color:#888;'>"
+            f"<span style='color:#a78bfa;font-weight:700;'>Operational Intelligence</span>"
+            f" &nbsp;·&nbsp; {_port_active_entry[2]}"
+            f"{'&nbsp; · &nbsp;<span style=\"color:#f97316;\">Optimizer off — enable in sidebar</span>' if not _optimizer_on else ''}"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
         st.markdown(
             "<span style='color:#a78bfa;font-size:13px;font-weight:700;letter-spacing:1px;'>"
             "EXPOSURE INTELLIGENCE</span>",
@@ -4024,6 +4061,56 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                     st.markdown(
                         "<div style='margin:14px 0 6px;font-size:12px;font-weight:700;"
                         "color:#4ade80;letter-spacing:1px;'>SELECTED SLATE</div>",
+                        unsafe_allow_html=True,
+                    )
+                    # ── Phase 2D: Reason tag summary (lightweight, no new compute) ──
+                    _rt_strong_brl  = sum(1 for _rp in _opt_sel if _pf(_rp.get("barrel_pct"), 0.0) >= 10)
+                    _rt_brl_upside  = sum(1 for _rp in _opt_sel if 8 <= _pf(_rp.get("barrel_pct"), 0.0) < 10)
+                    _rt_elite_ev    = sum(1 for _rp in _opt_sel if (_rp.get("ev_pct") or 0) >= 5)
+                    _rt_tact_up     = sum(1 for _rp in _opt_sel if (
+                        _rp.get("hvy_modifier") and _pf(_rp.get("hvy_modifier"), 1.0) >= 1.10
+                    ))
+                    _rt_steam       = sum(1 for _rp in _opt_sel if _rp.get("player_name", "") in _steam_names)
+                    _rt_chips = []
+                    if _rt_strong_brl:
+                        _rt_chips.append(
+                            f"<span style='background:#14532d;color:#4ade80;font-size:10px;"
+                            f"font-weight:700;padding:2px 7px;border-radius:4px;'>"
+                            f"Strong Barrel &nbsp;×{_rt_strong_brl}</span>"
+                        )
+                    if _rt_brl_upside:
+                        _rt_chips.append(
+                            f"<span style='background:#052e16;color:#86efac;font-size:10px;"
+                            f"font-weight:700;padding:2px 7px;border-radius:4px;'>"
+                            f"Barrel Upside &nbsp;×{_rt_brl_upside}</span>"
+                        )
+                    if _rt_elite_ev:
+                        _rt_chips.append(
+                            f"<span style='background:#1e3a5f;color:#60a5fa;font-size:10px;"
+                            f"font-weight:700;padding:2px 7px;border-radius:4px;'>"
+                            f"Elite EV &nbsp;×{_rt_elite_ev}</span>"
+                        )
+                    if _rt_tact_up:
+                        _rt_chips.append(
+                            f"<span style='background:#431407;color:#fb923c;font-size:10px;"
+                            f"font-weight:700;padding:2px 7px;border-radius:4px;'>"
+                            f"Tactical Upside &nbsp;×{_rt_tact_up}</span>"
+                        )
+                    if _rt_steam:
+                        _rt_chips.append(
+                            f"<span style='background:#1a1a00;color:#facc15;font-size:10px;"
+                            f"font-weight:700;padding:2px 7px;border-radius:4px;'>"
+                            f"Steam Move &nbsp;×{_rt_steam}</span>"
+                        )
+                    if not _rt_chips:
+                        _rt_chips.append(
+                            f"<span style='background:#1e1e30;color:#a78bfa;font-size:10px;"
+                            f"font-weight:700;padding:2px 7px;border-radius:4px;'>"
+                            f"Stable Deployment</span>"
+                        )
+                    st.markdown(
+                        f"<div style='display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px;'>"
+                        f"{''.join(_rt_chips)}</div>",
                         unsafe_allow_html=True,
                     )
                     _render_qualified_table(_opt_sel, scale, min_ev, min_edge, _steam_names, "port_sel")
@@ -4121,15 +4208,23 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                         for _rr in (_opt_rej + _opt_qf)[:30]:
                             _rr_name   = _rr.get("player_name", "")
                             _rr_team   = _rr.get("team", "")
-                            _rr_reason = _rr.get("_reject_reason", "")
+                            _rr_reason = _rr.get("_reject_reason", "") or "—"
                             _rr_brl    = _pf(_rr.get("barrel_pct"), 0.0)
                             _rr_ev     = _rr.get("ev_pct", 0)
+                            # Reason badge color — capacity vs quality rejection
+                            _rr_is_cap = any(
+                                kw in _rr_reason for kw in ("cap", "tier")
+                            )
+                            _rr_bg  = "#1e1040" if _rr_is_cap else "#2d1200"
+                            _rr_clr = "#818cf8" if _rr_is_cap else "#f97316"
+                            _rr_lbl = _rr_reason.split("(")[0].strip().title()
                             st.markdown(
                                 f"<div style='display:flex;justify-content:space-between;"
-                                f"padding:3px 0;border-bottom:1px solid #1a1a1a;'>"
-                                f"<span style='font-size:11px;color:#888;'>{_rr_team} · {_rr_name}</span>"
-                                f"<span style='font-size:11px;color:#555;'>{_rr_reason}</span>"
-                                f"<span style='font-size:11px;color:#666;'>"
+                                f"align-items:center;padding:4px 0;border-bottom:1px solid #1a1a1a;'>"
+                                f"<span style='font-size:11px;color:#888;min-width:140px;'>{_rr_team} · {_rr_name}</span>"
+                                f"<span style='font-size:10px;font-weight:700;padding:2px 6px;"
+                                f"border-radius:3px;background:{_rr_bg};color:{_rr_clr};'>{_rr_lbl}</span>"
+                                f"<span style='font-size:11px;color:#555;'>"
                                 f"BRL {_rr_brl:.1f}% · EV {_rr_ev:+.1f}%</span>"
                                 f"</div>",
                                 unsafe_allow_html=True,
@@ -5084,12 +5179,12 @@ def tab_jig(data: dict):
                 st.write(f"**Savant data:** {_ctx_with_data} / {len(hvy_contexts)} contexts have pitch data "
                          f"({_cand_n} candidates loaded)")
 
-        _hq, _hp, _ha, _hpr, _hfts = st.tabs([
+        _hq, _hp, _ha, _hfts, _hpr = st.tabs([
             f"🎯 Command Center ({len(qualified)})",
             "⚡ Top Targets",
             "💪 Matchup Edge",
-            "🔗 Portfolio",
             f"🗂️ Full Slate ({len(scored_all)})",
+            "🔗 Portfolio",
         ])
 
         with _hq:
@@ -5194,12 +5289,103 @@ def tab_jig(data: dict):
                 st.caption("Full HVY cards with pitch mix breakdown → see Full Slate tab.")
 
         with _hpr:
+            # ── JIG Portfolio control bar (Phase 2C) ──────────────────────────
+            _jport_modes = [
+                ("All Prime",       "all",     "High-upside tactical deployment · all qualified JIG plays"),
+                ("Barrel-Focused",  "barrel",  "Barrel-weighted aggression · barrel ≥ 8% · exploit-focused construction"),
+                ("HVY Targets",     "top",     "High-conviction HVY score · top 10 by tactical matchup score"),
+            ]
+            _jport_mode = st.session_state.get("jig_port_mode_sel", "barrel")
+            _jport_entry = next(
+                (e for e in _jport_modes if e[1] == _jport_mode), _jport_modes[1]
+            )
+            st.markdown(
+                "<div style='font-size:10px;font-weight:700;letter-spacing:1.5px;"
+                "color:#555;margin-bottom:6px;'>TACTICAL DEPLOYMENT</div>",
+                unsafe_allow_html=True,
+            )
+            _jp_cols = st.columns(3)
+            for _jp_col, (_jp_lbl, _jp_key, _jp_summ) in zip(_jp_cols, _jport_modes):
+                with _jp_col:
+                    if st.button(
+                        _jp_lbl,
+                        key=f"jig_port_mode_{_jp_key}",
+                        type="primary" if _jport_mode == _jp_key else "secondary",
+                        use_container_width=True,
+                    ):
+                        st.session_state["jig_port_mode_sel"] = _jp_key
+                        st.rerun()
+            st.markdown(
+                f"<div style='padding:5px 0 10px;font-size:11px;color:#888;'>"
+                f"<span style='color:#f97316;font-weight:700;'>Tactical Intelligence</span>"
+                f" &nbsp;·&nbsp; {_jport_entry[2]}</div>",
+                unsafe_allow_html=True,
+            )
+            # ── Pool routing — display filter only, no scoring changes ─────────
             if not prime:
                 st.info("No prime JIG plays — need qualified players with positive-EV odds.")
             else:
-                st.caption(f"{len(prime)} prime JIG picks with positive EV · qualified for portfolio deployment.")
-                for entry in prime:
-                    _hvy_card(entry, key_prefix="hvypr")
+                if _jport_mode == "barrel":
+                    _jport_pool = [e for e in prime if _pf(e["player"].get("barrel_pct"), 0.0) >= 8.0]
+                    _jport_empty = "No barrel ≥ 8% prime plays — switch to All Prime or lower JIG thresholds."
+                elif _jport_mode == "top":
+                    _jport_pool = sorted(
+                        prime, key=lambda e: e["jig"], reverse=True
+                    )[:10]
+                    _jport_empty = "No prime plays available."
+                else:
+                    _jport_pool = prime
+                    _jport_empty = "No prime JIG plays — need qualified players with positive-EV odds."
+
+                # ── Phase 2D: reason chip summary ───────────────────────────────
+                _jrt_brl12  = sum(1 for e in _jport_pool if _pf(e["player"].get("barrel_pct"), 0.0) >= 12)
+                _jrt_brl10  = sum(1 for e in _jport_pool if 10 <= _pf(e["player"].get("barrel_pct"), 0.0) < 12)
+                _jrt_elite  = sum(1 for e in _jport_pool if e["jig"] >= 75)
+                _jrt_match  = sum(1 for e in _jport_pool if _pf(e["ctx"].get("hvy_modifier", 1.0), 1.0) >= 1.15)
+                _jrt_chips  = []
+                if _jrt_brl12:
+                    _jrt_chips.append(
+                        f"<span style='background:#14532d;color:#4ade80;font-size:10px;"
+                        f"font-weight:700;padding:2px 7px;border-radius:4px;'>"
+                        f"Elite Barrel &nbsp;×{_jrt_brl12}</span>"
+                    )
+                if _jrt_brl10:
+                    _jrt_chips.append(
+                        f"<span style='background:#052e16;color:#86efac;font-size:10px;"
+                        f"font-weight:700;padding:2px 7px;border-radius:4px;'>"
+                        f"Strong Barrel &nbsp;×{_jrt_brl10}</span>"
+                    )
+                if _jrt_elite:
+                    _jrt_chips.append(
+                        f"<span style='background:#431407;color:#fb923c;font-size:10px;"
+                        f"font-weight:700;padding:2px 7px;border-radius:4px;'>"
+                        f"HVY Elite &nbsp;×{_jrt_elite}</span>"
+                    )
+                if _jrt_match:
+                    _jrt_chips.append(
+                        f"<span style='background:#1a1040;color:#c084fc;font-size:10px;"
+                        f"font-weight:700;padding:2px 7px;border-radius:4px;'>"
+                        f"Favorable Matchup &nbsp;×{_jrt_match}</span>"
+                    )
+                if not _jrt_chips:
+                    _jrt_chips.append(
+                        f"<span style='background:#1e1e30;color:#a78bfa;font-size:10px;"
+                        f"font-weight:700;padding:2px 7px;border-radius:4px;'>"
+                        f"Longshot Value</span>"
+                    )
+                if _jport_pool:
+                    st.markdown(
+                        f"<div style='display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px;'>"
+                        f"{''.join(_jrt_chips)}</div>",
+                        unsafe_allow_html=True,
+                    )
+                    st.caption(
+                        f"{len(_jport_pool)} prime JIG picks · {_jport_entry[0].lower()} mode"
+                    )
+                    for entry in _jport_pool:
+                        _hvy_card(entry, key_prefix="hvypr")
+                else:
+                    st.info(_jport_empty)
 
         with _hfts:
             # Phase 2A — JIG Full Slate tactical universe visibility expansion
