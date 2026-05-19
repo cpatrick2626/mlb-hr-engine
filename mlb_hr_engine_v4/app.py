@@ -5196,6 +5196,11 @@ def tab_jig(data: dict):
             hash(status_row) if status_row else 0,
         )
         _hvy_border_w = 4 if hvy >= 70 else 3
+        _hvy_card_bg = (
+            "linear-gradient(145deg,#1a0e06,#0d0804)" if hvy >= 70 else
+            "linear-gradient(145deg,#130d0a,#0a0806)" if hvy >= 50 else
+            "#111827"
+        )
         _hvy_conv_html = (
             f"<span style='font-size:8px;font-weight:700;color:#fb923c;"
             f"background:#1c0a00;border:1px solid #5a2000;"
@@ -5205,7 +5210,7 @@ def tab_jig(data: dict):
         )
         if _hvy_html_fp not in _hvy_html_cache:
             _hvy_html_cache[_hvy_html_fp] = (
-                f"<div style='background:#111827;border:1px solid {border};"
+                f"<div style='background:{_hvy_card_bg};border:1px solid {border};"
                 f"border-left:{_hvy_border_w}px solid {_mt_c};border-radius:10px;"
                 f"padding:14px 16px;margin-bottom:14px;position:relative;overflow:hidden;'>"
                 # Top accent hairline — matchup grade color, shared skeleton with Command Center / Top Targets
@@ -5972,20 +5977,21 @@ def tab_jig(data: dict):
                                 if _je_has_ctx else ""
                             )
 
-                            # Row background — keyed to threat tier
+                            # Row background + border — keyed to threat tier
                             _je_row_bg = (
-                                "#160600" if _je_tl == "ELITE OPP" else
-                                "#130303" if _je_tl == "TARGET LOCK" else
-                                "#0d0400" if _je_tl == "DANGER" else
-                                "#0a0800" if _je_tl == "ACTIVE" else
-                                "#060606"
+                                "#220a00" if _je_tl == "ELITE OPP" else
+                                "#1c0404" if _je_tl == "TARGET LOCK" else
+                                "#100400" if _je_tl == "DANGER" else
+                                "#0c0900" if _je_tl == "ACTIVE" else
+                                "#070707"
                             )
+                            _je_bl_w = 4 if _je_tl in ("ELITE OPP", "TARGET LOCK") else 3
 
                             _jfts_rows.append(
                                 f"<div style='display:flex;align-items:center;"
                                 f"padding:2px 8px 2px 9px;background:{_je_row_bg};"
                                 f"border-bottom:1px solid #0c0803;"
-                                f"border-left:3px solid {_je_tbc};"
+                                f"border-left:{_je_bl_w}px solid {_je_tbc};"
                                 f"gap:4px;flex-wrap:nowrap;overflow:hidden;'>"
                                 # LEFT ZONE
                                 f"<span style='color:#3a2a00;font-size:9px;min-width:14px;"

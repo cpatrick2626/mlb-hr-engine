@@ -1,5 +1,6 @@
 # Python
 __pycache__/
+**/__pycache__/
 *.pyc
 *.pyo
 *.pyd
@@ -49,10 +50,16 @@ New Text Document.txt
 # Streamlit runtime/cache
 .streamlit/
 !.streamlit/config.toml
+.streamlit/secrets.toml
+
 # Runtime learning state
 tracking/*.json
+mlb_hr_engine_v4/tracking/*.json
 
 # Generated reports/outputs
 reports/
+**/reports/
 portfolio_analysis_output.txt
-tracking/*.json
+temp/
+tmp/
+cache/temp/
