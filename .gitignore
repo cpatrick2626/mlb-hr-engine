@@ -38,4 +38,21 @@ codex_hr_engine_v2/manual_odds.csv
 .DS_Store
 Thumbs.db
 desktop.ini
+# Local temp / runtime junk
+.pycache_tmp/
+logs/
+*.log
 
+# Local notes / scratch files
+New Text Document.txt
+
+# Streamlit runtime/cache
+.streamlit/
+!.streamlit/config.toml
+# Runtime learning state
+tracking/*.json
+
+# Generated reports/outputs
+reports/
+portfolio_analysis_output.txt
+tracking/*.json

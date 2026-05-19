@@ -1079,6 +1079,30 @@ def _intelligence_card_html(
 
     odds_fmt = _fmt_american(odds) if odds else "--"
 
+    # Convergence detection — presentation only, no formula changes
+    _conv_items = []
+    if barrel >= 8.0 and edge is not None and edge >= 2.0:
+        _conv_items.append(
+            "<span style='background:#051a0d;border:1px solid #186a3b;color:#22c55e;"
+            "font-size:7px;font-weight:700;padding:1px 5px;border-radius:2px;"
+            "letter-spacing:0.8px;'>BRL+EDGE</span>")
+    elif barrel >= 8.0 and model_p >= 15.0:
+        _conv_items.append(
+            "<span style='background:#04102a;border:1px solid #1e3a6a;color:#60a5fa;"
+            "font-size:7px;font-weight:700;padding:1px 5px;border-radius:2px;"
+            "letter-spacing:0.8px;'>BRL+MDL</span>")
+    if is_steam and hvy_mod >= 1.08:
+        _conv_items.append(
+            "<span style='background:#180b00;border:1px solid #5a3000;color:#f59e0b;"
+            "font-size:7px;font-weight:700;padding:1px 5px;border-radius:2px;"
+            "letter-spacing:0.8px;'>STM+HVY</span>")
+    _conv_html = (
+        "<div style='display:flex;gap:5px;align-items:center;padding:3px 6px;"
+        "background:#080812;border-top:1px solid #16162a;margin-top:2px;'>"
+        + " ".join(_conv_items)
+        + "</div>"
+    ) if _conv_items else ""
+
     return (
         # ── Card shell ──
         f"<div style='background:{bg};border:1px solid {border_s};border-radius:10px;"
@@ -1147,15 +1171,19 @@ def _intelligence_card_html(
         f"<div style='font-size:7px;color:#3a3a55;'>ENV</div></div>"
         f"</div>"
 
+        # Convergence signal — compact, below stat row
+        + _conv_html
+
         # ── Row 4: Pitch attack intelligence tags ──
         + pitch_html
 
         # ── Row 5: HVY matchup bar + weather ──
         + f"<div style='display:flex;align-items:center;gap:5px;margin-top:4px;'>"
-        f"<div style='font-size:8px;color:#555;letter-spacing:0.5px;white-space:nowrap;'>HVY</div>"
-        f"<div style='flex:1;background:#111;border-radius:2px;height:3px;'>"
+        f"<div style='font-size:7px;color:#444;letter-spacing:1px;white-space:nowrap;"
+        f"font-family:monospace;'>HVY</div>"
+        f"<div style='flex:1;background:#0d0d18;border-radius:2px;height:3px;'>"
         f"<div style='background:{hvy_col};width:{hvy_bar}%;height:3px;border-radius:2px;'></div></div>"
-        f"<div style='font-size:8px;font-weight:700;color:{hvy_col};'>{hvy_lbl}</div>"
+        f"<div style='font-size:8px;font-weight:600;color:{hvy_col};letter-spacing:0.3px;'>{hvy_lbl}</div>"
         + weather_frag
         + f"</div>"
 
@@ -1275,6 +1303,25 @@ def _elite_card_html(
     )
     odds_fmt = _fmt_american(odds) if odds else "--"
 
+    # Elite convergence — Statcast power cluster + market edge confirmation
+    _econv_items = []
+    if barrel >= 10.0 and xslg >= 0.500:
+        _econv_items.append(
+            "<span style='background:#051a0d;border:1px solid #186a3b;color:#22c55e;"
+            "font-size:7px;font-weight:700;padding:1px 5px;border-radius:2px;"
+            "letter-spacing:0.8px;'>BRL+xSLG</span>")
+    if ev is not None and ev > 3.0 and edge is not None and edge > 2.0:
+        _econv_items.append(
+            "<span style='background:#04102a;border:1px solid #1e3a6a;color:#60a5fa;"
+            "font-size:7px;font-weight:700;padding:1px 5px;border-radius:2px;"
+            "letter-spacing:0.8px;'>EV+EDGE</span>")
+    _econv_html = (
+        "<div style='display:flex;gap:5px;align-items:center;padding:3px 6px;"
+        "background:#080810;border-top:1px solid #14142a;margin:0 0 3px;'>"
+        + " ".join(_econv_items)
+        + "</div>"
+    ) if _econv_items else ""
+
     return (
         f"<div style='background:{bg};border:1px solid {border_s};border-radius:10px;"
         f"padding:10px 12px;margin-bottom:3px;position:relative;overflow:hidden;'>"
@@ -1350,11 +1397,14 @@ def _elite_card_html(
         f"<div style='font-size:7px;color:#3a3a55;'>ENV</div></div>"
         f"</div>"
 
+        # Elite convergence signal
+        + _econv_html
+
         # ── Pitcher row ──
-        f"<div style='font-size:9px;color:#555;margin-bottom:4px;'>"
-        f"<span style='color:{pit_col};'>{pit_display}</span>"
-        + (f" · <span style='color:#444;'>{status_html}</span>" if status_html else "")
-        + f"</div>"
+        + (f"<div style='font-size:9px;color:#555;margin-bottom:4px;'>"
+           f"<span style='color:{pit_col};'>{pit_display}</span>"
+           + (f" · <span style='color:#444;'>{status_html}</span>" if status_html else "")
+           + f"</div>")
 
         # ── Pitch attack tags ──
         + pitch_html
@@ -2634,11 +2684,11 @@ def _main_threat_level(p: dict, hvy_mod: float | None = None) -> tuple:
     if hvy_mod is not None:
         if hvy_mod >= 1.15:    sig += 2
         elif hvy_mod >= 1.05:  sig += 1
-    if sig >= 7: return "ELITE OPP", "#FFD700", "#0c0a00", "#443300"
-    if sig >= 5: return "TGT LOCK",  "#4ade80", "#060e06", "#1a3a1a"
-    if sig >= 3: return "DANGER",    "#60a5fa", "#06080e", "#1a2a3a"
-    if ev > 0:   return "ACTIVE",            "#3a3a66", "#080810", "#111122"
-    return               "LOW",             "#222230", "#050508", "#0a0a10"
+    if sig >= 7: return "ELITE OPP", "#fbbf24", "#180e00", "#503800"
+    if sig >= 5: return "TGT LOCK",  "#34d399", "#081610", "#163228"
+    if sig >= 3: return "DANGER",    "#60a5fa", "#0a1028", "#1a2850"
+    if ev > 0:   return "ACTIVE",    "#4a6fa5", "#0c1220", "#1e2e48"
+    return               "LOW",      "#2d3a4a", "#0c0e14", "#1e2530"
 
 
 def _jig_threat_level(entry: dict) -> tuple:
@@ -2653,14 +2703,14 @@ def _jig_threat_level(entry: dict) -> tuple:
         or entry["ctx"].get("hand_splits")
     )
     if hvy >= 78 and (brl >= 8 or mod >= 1.15):
-        return "ELITE OPP", "#FFD700", "#120500", "#f97316"
+        return "ELITE OPP",   "#FFD700", "#160600", "#f97316"
     if hvy >= 65 and (brl >= 6 or mod >= 1.10):
-        return "TGT LOCK",  "#ef4444", "#0f0202", "#7f1d1d"
+        return "TARGET LOCK", "#f87171", "#120303", "#991b1b"
     if hvy >= 50 or mod >= 1.06:
-        return "DANGER",    "#f97316", "#0a0300", "#431407"
+        return "DANGER",      "#fb923c", "#0d0400", "#5a2000"
     if has_ctx or hvy > 20:
-        return "ACTIVE",            "#facc15", "#080600", "#3a2a00"
-    return                          "LOW",     "#374151", "#050505", "#1a1a1a"
+        return "ACTIVE",      "#fde047", "#0a0800", "#4a3800"
+    return                    "LOW",     "#4b5563", "#060606", "#1e1e20"
 
 
 # ─── Full Slate "All Players" game-organized renderer ─────────────────────────
@@ -2994,9 +3044,9 @@ def _render_full_slate_all_players(
             _thr_badge = (
                 f"<span style='margin-left:auto;background:{_thr_bg};"
                 f"border:1px solid {_thr_bc};color:{_thr_tc};font-size:7px;"
-                f"font-weight:800;letter-spacing:0.8px;padding:2px 5px;"
-                f"border-radius:2px;white-space:nowrap;font-family:monospace;"
-                f"'>{_thr_lbl}</span>"
+                f"font-weight:700;letter-spacing:1.5px;padding:2px 6px;"
+                f"border-radius:1px;white-space:nowrap;font-family:monospace;"
+                f"text-transform:uppercase;'>{_thr_lbl}</span>"
             )
 
             _row_parts.append(
@@ -3007,16 +3057,15 @@ def _render_full_slate_all_players(
                 f"<span style='color:#eee;font-size:11px;font-weight:700;min-width:145px;"
                 f"overflow:hidden;white-space:nowrap;text-overflow:ellipsis'>{pname}</span>"
                 f"<span style='color:#666;font-size:10px;min-width:30px'>{pteam}</span>"
-                f"<span style='color:#555;font-size:9px'>BRL</span>"
+                f"<span style='color:#444;font-size:9px'>BRL</span>"
                 f"<span style='color:{brl_col};font-size:11px;font-weight:600;min-width:36px'>{brl_s}</span>"
-                f"<span style='color:#555;font-size:9px'>MDL</span>"
+                f"<span style='color:#444;font-size:9px'>MDL</span>"
                 f"<span style='color:{model_col};font-size:11px;min-width:36px'>{model_s}</span>"
-                f"<span style='color:#4a4a70;font-size:9px'>EV</span>"
-                f"<span style='color:{ev_col};font-size:11px;min-width:38px'>{ev_s}</span>"
-                f"<span style='color:#4a4a70;font-size:9px'>EDG</span>"
-                f"<span style='color:{edge_col};font-size:11px;min-width:38px'>{edge_s}</span>"
-                f"<span style='color:#555;font-size:9px'>CNF</span>"
-                f"<span style='color:#888;font-size:11px;min-width:24px'>{conf_s}</span>"
+                f"<span style='color:#1e1e2e;font-size:9px;margin:0 1px;'>·</span>"
+                f"<span style='color:#5a5a88;font-size:9px;font-weight:600;'>EV</span>"
+                f"<span style='color:{ev_col};font-size:11px;font-weight:700;min-width:38px'>{ev_s}</span>"
+                f"<span style='color:#5a5a88;font-size:9px;font-weight:600;'>EDG</span>"
+                f"<span style='color:{edge_col};font-size:11px;font-weight:700;min-width:38px'>{edge_s}</span>"
                 f"{badges}"
                 f"{_thr_badge}"
                 f"</div>"
@@ -4088,7 +4137,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                 ))
                 _me_fp = (
                     "me", _slate_ts, _mp_pid, _mp_is_live,
-                    round(_mp_mod, 2), _me_pitch_fp,
+                    round(_mp_mod, 2), round(_mp_brl, 1), _me_pitch_fp,
                     hash(_mp_status_html) if _mp_status_html else 0,
                 )
                 def _build_me_card_html(
@@ -4103,6 +4152,13 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                     _edge_col_val=_mp_edge_col, _edge_disp=_mp_edge_display,
                     _url=_mp_url, _odds=_mp_odds, _pitch_rows=_mp_pitch_rows,
                 ):
+                    _me_conv = (
+                        "<div style='margin-top:5px;padding-top:3px;"
+                        "border-top:1px solid #1e1e2a;'>"
+                        "<span style='font-size:8px;font-weight:700;color:#166534;"
+                        "letter-spacing:0.5px;'>◈ HVY+BRL</span></div>"
+                        if _mod >= 1.15 and _brl >= 8.0 else ""
+                    )
                     return (
                         f"<div style='background:{_bg};border:1px solid {_border};"
                         f"border-left:3px solid {_lbl_col};border-radius:10px;"
@@ -4155,6 +4211,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                             "<div style='font-size:10px;color:#555;margin-top:6px;'>"
                             "Pitch data loading…</div>"
                         )
+                        + _me_conv
                         + f"</div>"
                     )
                 st.markdown(_card_html(_me_fp, _build_me_card_html), unsafe_allow_html=True)
@@ -5138,10 +5195,18 @@ def tab_jig(data: dict):
             _hvy_ck, _hvy_pid, round(hvy, 1), round(mod, 2), is_live, _hvy_ctx_known,
             hash(status_row) if status_row else 0,
         )
+        _hvy_border_w = 4 if hvy >= 70 else 3
+        _hvy_conv_html = (
+            f"<span style='font-size:8px;font-weight:700;color:#fb923c;"
+            f"background:#1c0a00;border:1px solid #5a2000;"
+            f"border-radius:2px;padding:1px 5px;margin-left:4px;"
+            f"letter-spacing:0.5px;'>⚡ HVY+MATCH</span>"
+            if hvy >= 60 and mod >= 1.10 else ""
+        )
         if _hvy_html_fp not in _hvy_html_cache:
             _hvy_html_cache[_hvy_html_fp] = (
                 f"<div style='background:#111827;border:1px solid {border};"
-                f"border-left:3px solid {_mt_c};border-radius:10px;"
+                f"border-left:{_hvy_border_w}px solid {_mt_c};border-radius:10px;"
                 f"padding:14px 16px;margin-bottom:14px;position:relative;overflow:hidden;'>"
                 # Top accent hairline — matchup grade color, shared skeleton with Command Center / Top Targets
                 f"<div style='position:absolute;top:0;left:0;right:0;height:2px;"
@@ -5159,6 +5224,7 @@ def tab_jig(data: dict):
                 f"<span style='font-size:9px;font-weight:700;color:{_hvy_tc};"
                 f"background:#0f172a;border:1px solid {_hvy_tc}44;border-radius:4px;padding:2px 6px;"
                 f"letter-spacing:0.5px;'>MODEL: {_mg_label}</span>"
+                f"{_hvy_conv_html}"
                 f"</div></div>"
                 f"</div>"
                 f"<div style='background:#0d1117;border-radius:2px;height:3px;margin:6px 0 4px;'>"
@@ -5169,17 +5235,17 @@ def tab_jig(data: dict):
                 f"{status_row}"
                 f"<div style='display:grid;grid-template-columns:repeat(3,1fr);gap:4px;"
                 f"font-size:11px;margin:6px 0;'>"
-                f"<div class='stat-box'><div style='color:#888;'>{slg_lbl}</div>"
+                f"<div class='stat-box'><div style='color:#9ca3af;'>{slg_lbl}</div>"
                 f"<div style='color:{slg_c};font-weight:700;'>{slg:.3f}</div></div>"
-                f"<div class='stat-box'><div style='color:#888;'>Barrel</div>"
+                f"<div class='stat-box'><div style='color:#9ca3af;'>Barrel</div>"
                 f"<div style='color:{brl_c};font-weight:700;'>{brl:.1f}%</div></div>"
-                f"<div class='stat-box'><div style='color:#888;'>Hard Hit</div>"
+                f"<div class='stat-box'><div style='color:#9ca3af;'>Hard Hit</div>"
                 f"<div style='color:{hh_c};font-weight:700;'>{hh:.1f}%</div></div>"
-                f"<div class='stat-box'><div style='color:#888;'>HR Window</div>"
+                f"<div class='stat-box'><div style='color:#9ca3af;'>HR Window</div>"
                 f"<div style='color:{ss_c};font-weight:700;'>{ss:.1f}%</div></div>"
-                f"<div class='stat-box'><div style='color:#888;'>Pull AIR</div>"
+                f"<div class='stat-box'><div style='color:#9ca3af;'>Pull AIR</div>"
                 f"<div style='color:{pa_c};font-weight:700;'>{pa_str}</div></div>"
-                f"<div class='stat-box'><div style='color:#888;'>ISO</div>"
+                f"<div class='stat-box'><div style='color:#9ca3af;'>ISO</div>"
                 f"<div style='color:{iso_c};font-weight:700;'>{iso:.3f}</div></div>"
                 f"</div>"
                 f"<div style='display:flex;gap:2px;margin-bottom:2px;'>"
@@ -5908,11 +5974,11 @@ def tab_jig(data: dict):
 
                             # Row background — keyed to threat tier
                             _je_row_bg = (
-                                "#120500" if _je_tl == "ELITE OPP" else
-                                "#0f0202" if _je_tl == "TGT LOCK" else
-                                "#0a0300" if _je_tl == "DANGER" else
-                                "#060400" if _je_tl == "ACTIVE" else
-                                "#050508"
+                                "#160600" if _je_tl == "ELITE OPP" else
+                                "#130303" if _je_tl == "TARGET LOCK" else
+                                "#0d0400" if _je_tl == "DANGER" else
+                                "#0a0800" if _je_tl == "ACTIVE" else
+                                "#060606"
                             )
 
                             _jfts_rows.append(
@@ -5930,37 +5996,38 @@ def tab_jig(data: dict):
                                 f"{_je_name}{_je_ctx_dot}</span>"
                                 f"<span style='color:#4a3a2a;font-size:8px;"
                                 f"min-width:10px;flex-shrink:0;'>{_je_hand}</span>"
-                                f"<span style='color:#554433;font-size:9px;"
+                                f"<span style='color:#6b5033;font-size:9px;"
                                 f"min-width:26px;flex-shrink:0;'>{_je_team}</span>"
-                                # CENTER ZONE
-                                f"<span style='color:#2a1a00;font-size:8px;"
-                                f"letter-spacing:0.5px;'>HVY</span>"
-                                f"<span style='color:{_je_hvy_col};font-size:12px;"
-                                f"font-weight:800;min-width:24px;"
+                                # CENTER ZONE — HVY is the hero signal
+                                f"<span style='color:#6b4c1a;font-size:8px;"
+                                f"letter-spacing:0.5px;font-weight:600;'>HVY</span>"
+                                f"<span style='color:{_je_hvy_col};font-size:13px;"
+                                f"font-weight:900;min-width:24px;"
                                 f"flex-shrink:0;'>{_je_hvy_s}</span>"
-                                f"<span style='color:#1a1000;font-size:8px;'>MOD</span>"
+                                f"<span style='color:#4a3a1a;font-size:8px;'>MOD</span>"
                                 f"<span style='color:{_je_mod_col};font-size:10px;"
                                 f"min-width:32px;flex-shrink:0;'>{_je_mod_s}</span>"
-                                f"<span style='color:#2a2a3a;font-size:8px;'>BRL</span>"
+                                f"<span style='color:#4a4050;font-size:8px;'>BRL</span>"
                                 f"<span style='color:{_je_brl_col};font-size:10px;"
                                 f"font-weight:600;min-width:30px;flex-shrink:0;'>{_je_brl_s}</span>"
-                                f"<span style='color:#2a3a2a;font-size:8px;'>EV</span>"
+                                f"<span style='color:#3a5a3a;font-size:8px;font-weight:600;'>EV</span>"
                                 f"<span style='color:{_je_ev_col};font-size:10px;"
                                 f"min-width:28px;flex-shrink:0;'>{_je_ev_s}</span>"
-                                f"<span style='color:#2a3040;font-size:8px;'>EDG</span>"
+                                f"<span style='color:#3a4a60;font-size:8px;font-weight:600;'>EDG</span>"
                                 f"<span style='color:{_je_edge_col};font-size:10px;"
                                 f"min-width:28px;flex-shrink:0;'>{_je_edge_s}</span>"
-                                f"<span style='color:#2a1a2a;font-size:8px;'>xSLG</span>"
+                                f"<span style='color:#4a2a4a;font-size:8px;'>xSLG</span>"
                                 f"<span style='color:{_je_xslg_col};font-size:10px;"
                                 f"min-width:36px;flex-shrink:0;'>{_je_xslg_s}</span>"
-                                f"<span style='color:#2a1a00;font-size:8px;'>ODDS</span>"
+                                f"<span style='color:#5a4010;font-size:8px;'>ODDS</span>"
                                 f"<span style='color:#e0d0a0;font-size:10px;"
                                 f"min-width:36px;flex-shrink:0;'>{_je_odds_s}</span>"
-                                # RIGHT ZONE — threat badge
+                                # RIGHT ZONE — aggressive threat badge (razor edges, asymmetric border)
                                 f"<span style='margin-left:auto;background:{_je_tbg};"
-                                f"border:1px solid {_je_tbc};color:{_je_tc};"
-                                f"font-size:7px;font-weight:800;letter-spacing:0.8px;"
-                                f"padding:2px 5px;border-radius:2px;white-space:nowrap;"
+                                f"border:1px solid {_je_tbc};border-left:3px solid {_je_tbc};"
+                                f"color:{_je_tc};"
+                                f"font-size:7px;font-weight:900;letter-spacing:0.5px;"
+                                f"padding:2px 6px;border-radius:0px;white-space:nowrap;"
                                 f"font-family:monospace;flex-shrink:0;'>{_je_tl}</span>"
                                 f"</div>"
                             )
