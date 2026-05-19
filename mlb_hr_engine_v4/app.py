@@ -1695,12 +1695,22 @@ def _show_player_modal(player: dict):
 
     st.divider()
     if st.button("✕ Close", use_container_width=True, key="modal_close"):
+        _clear_player_modal()
         st.rerun()
+
+
+def _clear_player_modal():
+    """Clear persistent modal state only when the user explicitly closes it."""
+    st.session_state.pop("show_modal", None)
+    st.session_state.pop("selected_player_modal", None)
+    st.session_state.pop("modal_source_tab", None)
+    st.session_state.pop("modal_source_section", None)
 
 
 def _open_player_modal(player: dict):
     """Store player in session_state so the modal fires on the next rerun."""
-    st.session_state["show_modal"] = player
+    st.session_state["selected_player_modal"] = player
+    st.session_state["show_modal"] = True
     st.rerun()
 
 
@@ -5518,7 +5528,7 @@ def tab_jig(data: dict):
 
         _hvy_ctx_fp = hash(tuple(sorted(
             (
-                pid,
+                str(pid),
                 round((ctx or {}).get("hvy_modifier", 1.0), 4),
                 int(bool((ctx or {}).get("pitcher_arsenal"))),
                 int(bool((ctx or {}).get("batter_vs"))),
@@ -7309,9 +7319,14 @@ def tab_performance():
 # MAIN
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 def main():
-    # Fire player detail modal if one was queued (pop so it only shows once)
-    if "show_modal" in st.session_state:
-        _show_player_modal(st.session_state.pop("show_modal"))
+    # Keep modal state alive across reruns until the user explicitly closes it.
+    _queued_modal = st.session_state.get("show_modal")
+    if isinstance(_queued_modal, dict):
+        st.session_state["selected_player_modal"] = _queued_modal
+        st.session_state["show_modal"] = True
+    _selected_modal_player = st.session_state.get("selected_player_modal")
+    if st.session_state.get("show_modal") and isinstance(_selected_modal_player, dict):
+        _show_player_modal(_selected_modal_player)
 
     # Read filter thresholds from session state first (sidebar sets them on each rerun)
     _min_ev   = float(st.session_state.get("min_ev",   config.MIN_EV_PCT))
