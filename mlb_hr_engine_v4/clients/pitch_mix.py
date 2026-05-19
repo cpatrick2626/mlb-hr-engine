@@ -32,7 +32,7 @@ MLB_API = "https://statsapi.mlb.com/api/v1"
 SAVANT  = "https://baseballsavant.mlb.com"
 
 # Bump this whenever the context schema changes — forces Streamlit session-state cache to refresh.
-HVY_CACHE_VERSION = "11"
+HVY_CACHE_VERSION = "12"
 
 # {pitcher_id: {"hand_splits": {...}, "pitch_stats": {...}, "data_year": int}}
 _PITCHER_SAVANT_CACHE: dict[int, dict] = {}
@@ -238,7 +238,7 @@ def _build_pitch_rows(pitcher_arsenal: list[dict]) -> list[dict]:
     rows = []
     for entry in pitcher_arsenal:
         pct = entry.get("pitch_pct") or 0.0
-        if pct <= 0:
+        if pct < 0.01:  # suppress sub-1% noise pitches that display as "0%"
             continue
         whiff = entry.get("display_whiff")
         hh    = entry.get("display_hh")

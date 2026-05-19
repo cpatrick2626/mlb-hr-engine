@@ -2088,16 +2088,17 @@ def _render_qualified_table(
         )
 
 
-def _render_pitch_mix_expander(ctx: dict, p: dict, key_prefix: str, expanded: bool = False) -> None:
+def _render_pitch_mix_expander(ctx: dict, p: dict, key_prefix: str, expanded: bool = False,
+                               slate_ts: str = "") -> None:
     """Shared pitch mix expander — lazy-loaded to reduce render pressure on long slates."""
     if not ctx:
         return
 
     # Lazy load gate: collapsed sections only render a cheap 2-widget placeholder.
     # Full analysis (3 HTML tables, multiple loops) only builds after the user clicks Load.
-    # State persists for the session so each player loads once.
+    # State anchored to slate_ts so a new date/slate resets the gate (prevents stale auto-expand).
     _uid = str(p.get("player_id") or p.get("player_name", "unk"))
-    _pm_loaded_key = f"_pm_loaded_{key_prefix}_{_uid}"
+    _pm_loaded_key = f"_pm_loaded_{key_prefix}_{_uid}_{slate_ts}"
     _is_loaded = st.session_state.get(_pm_loaded_key, False)
 
     # When caller passes expanded=True (e.g. global expand-all setting), auto-mark as loaded
@@ -2118,7 +2119,7 @@ def _render_pitch_mix_expander(ctx: dict, p: dict, key_prefix: str, expanded: bo
             )
             if st.button(
                 "▶ Load Full Analysis",
-                key=f"pm_load_{key_prefix}_{_uid}",
+                key=f"pm_load_{key_prefix}_{_uid}_{slate_ts}",
                 use_container_width=True,
             ):
                 st.session_state[_pm_loaded_key] = True
@@ -2314,7 +2315,7 @@ def _render_pitch_mix_expander(ctx: dict, p: dict, key_prefix: str, expanded: bo
             _th2_l = _th2 + "text-align:left;"
             _td2   = "padding:4px 6px;text-align:center;font-size:11px;"
 
-            _show_all_k = f"pm_showall_{p.get('player_id', '')}"
+            _show_all_k = f"pm_showall_{key_prefix}_{p.get('player_id', '')}"
             _show_all   = st.session_state.get(_show_all_k, False)
             _active_bvp = batter_rows if _show_all else batter_rows[:5]
 
@@ -3473,7 +3474,8 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
         HVY_CACHE_VERSION as _PM_VER,
     )
     from clients import arsenal as _pm_ar_client
-    _pm_ck = f"picks_pm_ctx_{data.get('date', '')}_{_PM_VER}"
+    _pm_pitcher_fp = hash(frozenset((p.get("player_id"), p.get("pitcher_id")) for p in ranked))
+    _pm_ck = f"picks_pm_ctx_{data.get('date', '')}_{_PM_VER}_{_pm_pitcher_fp}"
     if _pm_ck not in st.session_state:
         with st.spinner("Loading pitch intelligence…"):
             try:
@@ -3621,7 +3623,8 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
 
                         # Level 2 — Inline Pitch Intelligence Expansion
                         _render_pitch_mix_expander(_ctx, _qp, f"qv_tac_{_rank}",
-                                                   expanded=st.session_state.get("main_pitch_mix_expanded", False))
+                                                   expanded=st.session_state.get("main_pitch_mix_expanded", False),
+                                                   slate_ts=_slate_ts)
 
         if _display_pool:
             with st.expander(
@@ -3721,7 +3724,8 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                             unsafe_allow_html=True,
                         )
                         _render_pitch_mix_expander(_ep_ctx, _ep, f"elite_{_el_rank}",
-                                                   expanded=st.session_state.get("main_pitch_mix_expanded", False))
+                                                   expanded=st.session_state.get("main_pitch_mix_expanded", False),
+                                                   slate_ts=_slate_ts)
 
     # ── TAB 3: MATCHUP EDGE ───────────────────────────────────────────────────
     with tab_edge:
@@ -3884,10 +3888,16 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                 else:
                     _mp_weather_frag = ""
 
-                # Fingerprint-cached card HTML — cache miss only on live status, mod, or pitch data change
+                # Fingerprint-cached card HTML — cache miss on live status, mod, or pitch content change.
+                # Hash pitch badge content (type + usage + whiff) so any stat change triggers rebuild.
+                _me_pitch_fp = hash(tuple(
+                    (pr.get("pitch_type", ""), round(pr.get("pitch_usage") or 0, 1),
+                     round(pr.get("whiff_pct") or -1, 1))
+                    for pr in _mp_pitch_rows
+                ))
                 _me_fp = (
                     "me", _slate_ts, _mp_pid, _mp_is_live,
-                    round(_mp_mod, 2), len(_mp_pitch_rows),
+                    round(_mp_mod, 2), _me_pitch_fp,
                     hash(_mp_status_html) if _mp_status_html else 0,
                 )
                 def _build_me_card_html(
@@ -3958,7 +3968,8 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                     )
                 st.markdown(_card_html(_me_fp, _build_me_card_html), unsafe_allow_html=True)
                 _render_pitch_mix_expander(_me_ctxs.get(_mp_pid, {}), _mp, f"me_{_mi}",
-                                           expanded=st.session_state.get("main_pitch_mix_expanded", False))
+                                           expanded=st.session_state.get("main_pitch_mix_expanded", False),
+                                           slate_ts=_slate_ts)
 
     # ── TAB 4: PORTFOLIO BUILDER ──────────────────────────────────────────────
     with tab_port:
@@ -4924,11 +4935,12 @@ def tab_jig(data: dict):
         else:
             _hvy_weather_frag = ""
 
-        # Session-state HTML cache keyed by (hvy_ck, player_id, hvy_score, is_live)
-        # Invalidates when pitch data refreshes (_hvy_ck changes) or game goes live.
+        # Session-state HTML cache keyed by (hvy_ck, player_id, hvy_score, mod, is_live).
+        # mod included so a modifier change (1.12→1.08) always rebuilds the modifier bar + text,
+        # even when hvy score rounds to the same value (<0.05 change in base_jig×mod).
         _hvy_html_cache = st.session_state.setdefault("_hvy_html_cache", {})
         _hvy_html_fp = (
-            _hvy_ck, _hvy_pid, round(hvy, 1), is_live, _hvy_ctx_known,
+            _hvy_ck, _hvy_pid, round(hvy, 1), round(mod, 2), is_live, _hvy_ctx_known,
             hash(status_row) if status_row else 0,
         )
         if _hvy_html_fp not in _hvy_html_cache:
@@ -5013,7 +5025,8 @@ def tab_jig(data: dict):
         bat_side_lbl    = f" {'RHB' if bat_side == 'R' else 'LHB' if bat_side == 'L' else ''}"
 
         _render_pitch_mix_expander(ctx, p, key_prefix,
-                                   expanded=st.session_state.get("jig_pitch_mix_expanded", False))
+                                   expanded=st.session_state.get("jig_pitch_mix_expanded", False),
+                                   slate_ts=_jig_slate_ts)
 
         _fb, _fc = st.columns([1, 1])
         with _fb:
@@ -5524,7 +5537,8 @@ def tab_jig(data: dict):
         "JIG Tactical Command Center controls apply only within JIG."
     )
     from clients.pitch_mix import HVY_CACHE_VERSION as _HVY_VER
-    _hvy_ck = f"hvy_ctx_{data.get('date', '')}_{_HVY_VER}"
+    _hvy_pitcher_fp = hash(frozenset((p.get("player_id"), p.get("pitcher_id")) for p in all_players_raw))
+    _hvy_ck = f"hvy_ctx_{data.get('date', '')}_{_HVY_VER}_{_hvy_pitcher_fp}"
     if _hvy_ck not in st.session_state:
         _hvy_candidates = [p for p in all_players_raw if p.get("player_id")]
         _unique_pitchers = len({p.get("pitcher_id") for p in _hvy_candidates if p.get("pitcher_id")})
@@ -5565,6 +5579,10 @@ def tab_jig(data: dict):
             _pm_clear.clear_caches()
             _ar_clear.clear_caches()
             st.session_state.pop(_hvy_ck, None)
+            # Also clear MAIN picks pitch mix cache — module caches were just wiped,
+            # so MAIN must re-fetch too (not just JIG) to avoid serving stale contexts.
+            for _jig_stale_k in [k for k in st.session_state if k.startswith("picks_pm_ctx_")]:
+                st.session_state.pop(_jig_stale_k, None)
             st.rerun()
 
     # ── JIG Tactical Command Center ───────────────────────────────────────────
