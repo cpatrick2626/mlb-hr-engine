@@ -55,6 +55,72 @@ def _card_html(fp: tuple, builder) -> str:
     return cached
 
 
+def _session_fp_value(fp_key: str, value_key: str, fp: tuple, builder):
+    """Reuse a session-state value until its fingerprint changes."""
+    if st.session_state.get(fp_key) == fp and value_key in st.session_state:
+        return st.session_state[value_key]
+    value = builder()
+    st.session_state[fp_key] = fp
+    st.session_state[value_key] = value
+    return value
+
+
+def _pitch_mix_context_cache_key(players: list[dict], slate_date: str, prefix: str = "picks_pm_ctx") -> str:
+    """Stable cache key for a player/pitcher subset."""
+    from clients.pitch_mix import HVY_CACHE_VERSION as _PM_VER
+    _player_pitcher_fp = hash(frozenset(
+        (p.get("player_id"), p.get("pitcher_id"))
+        for p in players
+        if p.get("player_id")
+    ))
+    return f"{prefix}_{slate_date}_{_PM_VER}_{_player_pitcher_fp}"
+
+
+def _ensure_pitch_mix_contexts(players: list[dict], slate_date: str,
+                               spinner_label: str = "Loading pitch intelligence…",
+                               prefix: str = "picks_pm_ctx") -> dict:
+    """Load pitch-mix contexts only for the requested player subset."""
+    if not players:
+        return {}
+    _ctx_key = _pitch_mix_context_cache_key(players, slate_date, prefix=prefix)
+    if _ctx_key not in st.session_state:
+        from clients.pitch_mix import load_hvy_contexts_batch as _pm_load_batch
+        from clients import arsenal as _pm_ar_client
+        with st.spinner(spinner_label):
+            try:
+                _pm_ar = _pm_ar_client.get_pitcher_arsenal(config.CURRENT_SEASON)
+            except Exception:
+                _pm_ar = {}
+            st.session_state[_ctx_key] = _pm_load_batch(players, _pm_ar)
+    return st.session_state.get(_ctx_key, {})
+
+
+def _build_status_urgency_bundle(players: list[dict], now_et: _dt.datetime) -> dict:
+    """Build status and urgency maps once per player list / minute bucket."""
+    status_cache: dict = {}
+    urgency_cache: dict = {}
+    for p in players:
+        pid = p.get("player_id") or p.get("player_name", "")
+        status_cache[pid] = _game_status_badge(p)
+        gt = _game_time_et(p.get("game_time_utc", ""))
+        if gt:
+            gt_str = gt.strftime('%I:%M %p ET').lstrip('0')
+            gt_dt  = _dt.datetime.combine(now_et.date(), gt, tzinfo=_EDT)
+            mins   = int((gt_dt - now_et).total_seconds() / 60)
+            if mins < 0:
+                uc = "#555"; ul = ""
+            elif mins < 60:
+                uc = "#f87171"; ul = f"BET NOW · {mins}m"
+            elif mins < 120:
+                uc = "#FFD700"; ul = f"{mins}m"
+            else:
+                uc = "#4ade80"; ul = f"{mins // 60}h {mins % 60}m"
+        else:
+            gt_str = "TBD"; uc = "#555"; ul = ""
+        urgency_cache[pid] = (gt_str, uc, ul)
+    return {"status": status_cache, "urgency": urgency_cache}
+
+
 st.set_page_config(
     page_title="Codex HR Engine",
     page_icon="⚾",
@@ -3092,12 +3158,12 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
         cutoff_utc_hour if cutoff_utc_hour is not None else -1,
         min_confidence,
     )
-    if st.session_state.get("_uif_ranked_fp") == _uif_fp:
-        ranked = st.session_state["_uif_ranked"]
-    else:
-        ranked = _apply_ui_filters(all_players, min_ev, min_edge, cutoff_utc_hour, min_confidence)
-        st.session_state["_uif_ranked"] = ranked
-        st.session_state["_uif_ranked_fp"] = _uif_fp
+    ranked = _session_fp_value(
+        "_uif_ranked_fp",
+        "_uif_ranked",
+        _uif_fp,
+        lambda: _apply_ui_filters(all_players, min_ev, min_edge, cutoff_utc_hour, min_confidence),
+    )
     stats     = data.get("stats", {})
     source    = data.get("odds_source", "none")
     quota     = data.get("odds_quota", {})
@@ -3668,10 +3734,14 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
     )
     # Fingerprint-cache the tactical filter result — avoids re-filtering on every rerender
     # when TCC params and ranked list are unchanged.
-    _tac_filter_fp = (_slate_ts, id(ranked), tuple(_tac_params.values()))
+    # Content hash (not id()) prevents false cache hits when Python GC reuses a freed address.
+    _ranked_content_fp = hash(tuple(p.get("player_id") or p.get("player_name", "") for p in ranked))
+    _tac_filter_fp = (_slate_ts, _ranked_content_fp, tuple(_tac_params.values()))
     if st.session_state.get("_tac_filter_fp") == _tac_filter_fp:
         _tac_ranked = st.session_state["_tac_ranked"]
     else:
+        # Explicit eviction on ranked-list change prevents stale carry-over.
+        st.session_state.pop("_tac_ranked", None)
         _tac_ranked = _apply_tactical_filters(ranked, _tac_params) if _any_tac_active else ranked
         st.session_state["_tac_ranked"] = _tac_ranked
         st.session_state["_tac_filter_fp"] = _tac_filter_fp
@@ -3684,49 +3754,20 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
         if _optimizer_on and _optimizer_selected_names else _tac_ranked
     )
 
-    # ── Pre-compute status + urgency once for all players (avoids O(N) re-calls per render pass)
-    # Use ranked (full universe) so Top Targets tab cache-hits for players filtered out of TCC view
-    _status_cache: dict = {}   # player_id → (html, is_live)
-    _urgency_cache: dict = {}  # player_id → (gt_str, urgency_col, urgency_lbl)
-    for _pc_p in ranked:
-        _pc_pid = _pc_p.get("player_id") or _pc_p.get("player_name", "")
-        _status_cache[_pc_pid] = _game_status_badge(_pc_p)
-        _pc_gt = _game_time_et(_pc_p.get("game_time_utc", ""))
-        if _pc_gt:
-            _pc_gt_str = _pc_gt.strftime('%I:%M %p ET').lstrip('0')
-            _pc_gt_dt  = _dt.datetime.combine(_now_et.date(), _pc_gt, tzinfo=_EDT)
-            _pc_mins   = int((_pc_gt_dt - _now_et).total_seconds() / 60)
-            if _pc_mins < 0:
-                _pc_uc = "#555"; _pc_ul = ""
-            elif _pc_mins < 60:
-                _pc_uc = "#f87171"; _pc_ul = f"BET NOW · {_pc_mins}m"
-            elif _pc_mins < 120:
-                _pc_uc = "#FFD700"; _pc_ul = f"{_pc_mins}m"
-            else:
-                _pc_uc = "#4ade80"; _pc_ul = f"{_pc_mins // 60}h {_pc_mins % 60}m"
-        else:
-            _pc_gt_str = "TBD"; _pc_uc = "#555"; _pc_ul = ""
-        _urgency_cache[_pc_pid] = (_pc_gt_str, _pc_uc, _pc_ul)
-
-    # ── Pre-load pitch mix contexts (shared across Command Center / Top Targets / Matchup Edge / Full Slate)
-    from clients.pitch_mix import (
-        load_hvy_contexts_batch as _pm_load_batch,
-        HVY_CACHE_VERSION as _PM_VER,
+    # Reuse status/urgency across slider reruns; refresh once per minute so live labels stay current.
+    _status_fp = (
+        _slate_ts,
+        tuple(p.get("player_id") or p.get("player_name", "") for p in ranked),
+        _now_et.strftime("%Y%m%d%H%M"),
     )
-    from clients import arsenal as _pm_ar_client
-    _pm_pitcher_fp = hash(frozenset((p.get("player_id"), p.get("pitcher_id")) for p in ranked))
-    _pm_ck = f"picks_pm_ctx_{data.get('date', '')}_{_PM_VER}_{_pm_pitcher_fp}"
-    if _pm_ck not in st.session_state:
-        with st.spinner("Loading pitch intelligence…"):
-            try:
-                _pm_ar = _pm_ar_client.get_pitcher_arsenal(config.CURRENT_SEASON)
-            except Exception:
-                _pm_ar = {}
-            st.session_state[_pm_ck] = _pm_load_batch(ranked, _pm_ar)
-    _pm_ctxs: dict = st.session_state.get(_pm_ck, {})
-    # Alias used by Matchup Edge tab internals
-    _me_ck   = _pm_ck
-    _me_ctxs = _pm_ctxs
+    _status_bundle = _session_fp_value(
+        "_main_status_fp",
+        "_main_status_bundle",
+        _status_fp,
+        lambda: _build_status_urgency_bundle(ranked, _now_et),
+    )
+    _status_cache = _status_bundle["status"]
+    _urgency_cache = _status_bundle["urgency"]
 
     tab_qv, tab_elite, tab_edge, tab_fs, tab_port = st.tabs([
         f"⚡  COMMAND CENTER  ({len(_display_pool)})",
@@ -3777,6 +3818,11 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                             })
                         st.dataframe(_pd.DataFrame(_diag_rows), use_container_width=True, hide_index=True)
         else:
+            _qv_pm_ctxs = _ensure_pitch_mix_contexts(
+                _qv_pool,
+                data.get("date", ""),
+                spinner_label="Loading Command Center pitch intelligence…",
+            )
             # ── Tactical scan status bar ──────────────────────────────────────
             _qv_steam_n = len(_steam_names & {p.get("player_name") for p in _display_pool})
             _qv_live_n  = sum(
@@ -3803,7 +3849,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
             _qv_pitch_tags: dict = {}
             for _ptag_p in _qv_pool:
                 _ptag_pid = _ptag_p.get("player_id")
-                _ptag_ctx = _pm_ctxs.get(_ptag_pid, {})
+                _ptag_ctx = _qv_pm_ctxs.get(_ptag_pid, {})
                 _qv_pitch_tags[_ptag_pid] = _pitch_attack_tags(_ptag_ctx, _ptag_p, max_tags=2)
 
             # ── 3-column tactical intelligence grid ───────────────────────────
@@ -3818,7 +3864,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                 for _ci, (_rank, _qp) in enumerate(_row_data):
                     with _row_cols[_ci]:
                         _qpid     = _qp.get("player_id") or _qp.get("player_name", "")
-                        _ctx      = _pm_ctxs.get(_qp.get("player_id"), {})
+                        _ctx      = _qv_pm_ctxs.get(_qp.get("player_id"), {})
                         _qstatus_html, _qis_live = _status_cache.get(_qpid, ("", False))
                         _qgt_str, _urgency_col, _urgency_lbl = _urgency_cache.get(_qpid, ("TBD", "#555", ""))
                         _qis_steam   = _qp.get("player_name") in _steam_names
@@ -3893,331 +3939,362 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                 unsafe_allow_html=True,
             )
         else:
+            _elite_loaded_key = f"_main_elite_loaded_{_slate_ts}"
+            if not st.session_state.get(_elite_loaded_key):
+                st.markdown(
+                    f"<div style='padding:18px 0;color:#888;font-size:12px;'>"
+                    f"<b style='color:#f97316;'>{len(_elite_pool)} elite barrel bats</b>"
+                    f" &nbsp;·&nbsp; pitch-mix cards build on demand to reduce hidden tab pressure"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
+                if st.button("▶ Load Top Targets", key="load_main_elite", type="primary"):
+                    st.session_state[_elite_loaded_key] = True
+                    st.rerun()
+            else:
+                _elite_pm_ctxs = _ensure_pitch_mix_contexts(
+                    _elite_pool,
+                    data.get("date", ""),
+                    spinner_label="Loading Top Targets pitch intelligence…",
+                )
             # Pre-compute pitch tags for all elite players before the render loop
-            _elite_pitch_tags: dict = {}
-            for _ep_pt in _elite_pool:
-                _ep_pid_pt = _ep_pt.get("player_id")
-                _ep_ctx_pt = _pm_ctxs.get(_ep_pid_pt, {})
-                _elite_pitch_tags[_ep_pid_pt] = _pitch_attack_tags(_ep_ctx_pt, _ep_pt, max_tags=2)
+                _elite_pitch_tags: dict = {}
+                for _ep_pt in _elite_pool:
+                    _ep_pid_pt = _ep_pt.get("player_id")
+                    _ep_ctx_pt = _elite_pm_ctxs.get(_ep_pid_pt, {})
+                    _elite_pitch_tags[_ep_pid_pt] = _pitch_attack_tags(_ep_ctx_pt, _ep_pt, max_tags=2)
 
-            _el_goat  = sum(1 for p in _elite_pool if _pf(p.get("barrel_pct"), 0) >= 15)
-            _el_elite = sum(1 for p in _elite_pool if 12 <= _pf(p.get("barrel_pct"), 0) < 15)
-            _el_power = sum(1 for p in _elite_pool if 10 <= _pf(p.get("barrel_pct"), 0) < 12)
-            _el_solid = sum(1 for p in _elite_pool if 8  <= _pf(p.get("barrel_pct"), 0) < 10)
-            st.markdown(
-                f"<div style='display:flex;gap:16px;padding:8px 0 12px;"
-                f"border-bottom:1px solid #1e1e40;margin-bottom:12px;flex-wrap:wrap;align-items:center;'>"
-                f"<span style='color:#FF4500;font-weight:700;font-size:12px;'>🐐 GOAT {_el_goat}</span>"
-                f"<span style='color:#FFD700;font-weight:700;font-size:12px;'>💎 ELITE {_el_elite}</span>"
-                f"<span style='color:#4ade80;font-weight:700;font-size:12px;'>⚡ POWER {_el_power}</span>"
-                f"<span style='color:#86efac;font-weight:700;font-size:12px;'>✅ SOLID {_el_solid}</span>"
-                f"<span style='color:#444;font-size:11px;'>· barrel ≥ 8% · BRL / HH% / xSLG / Pull / FB%</span>"
-                f"</div>",
-                unsafe_allow_html=True,
-            )
+                _el_goat  = sum(1 for p in _elite_pool if _pf(p.get("barrel_pct"), 0) >= 15)
+                _el_elite = sum(1 for p in _elite_pool if 12 <= _pf(p.get("barrel_pct"), 0) < 15)
+                _el_power = sum(1 for p in _elite_pool if 10 <= _pf(p.get("barrel_pct"), 0) < 12)
+                _el_solid = sum(1 for p in _elite_pool if 8  <= _pf(p.get("barrel_pct"), 0) < 10)
+                st.markdown(
+                    f"<div style='display:flex;gap:16px;padding:8px 0 12px;"
+                    f"border-bottom:1px solid #1e1e40;margin-bottom:12px;flex-wrap:wrap;align-items:center;'>"
+                    f"<span style='color:#FF4500;font-weight:700;font-size:12px;'>🐐 GOAT {_el_goat}</span>"
+                    f"<span style='color:#FFD700;font-weight:700;font-size:12px;'>💎 ELITE {_el_elite}</span>"
+                    f"<span style='color:#4ade80;font-weight:700;font-size:12px;'>⚡ POWER {_el_power}</span>"
+                    f"<span style='color:#86efac;font-weight:700;font-size:12px;'>✅ SOLID {_el_solid}</span>"
+                    f"<span style='color:#444;font-size:11px;'>· barrel ≥ 8% · BRL / HH% / xSLG / Pull / FB%</span>"
+                    f"</div>",
+                    unsafe_allow_html=True,
+                )
 
-            # ── 2-column tactical intelligence grid ──────────────────────────
-            _ELITE_COLS  = 2
-            _el_ranked   = list(enumerate(_elite_pool, start=1))
-            _el_grid_rows = [_el_ranked[i:i + _ELITE_COLS]
-                             for i in range(0, len(_el_ranked), _ELITE_COLS)]
+                # ── 2-column tactical intelligence grid ──────────────────────────
+                _ELITE_COLS  = 2
+                _el_ranked   = list(enumerate(_elite_pool, start=1))
+                _el_grid_rows = [_el_ranked[i:i + _ELITE_COLS]
+                                 for i in range(0, len(_el_ranked), _ELITE_COLS)]
 
-            for _el_row_data in _el_grid_rows:
-                _el_row_cols = st.columns(len(_el_row_data))
-                for _el_ci, (_el_rank, _ep) in enumerate(_el_row_data):
-                    with _el_row_cols[_el_ci]:
-                        _ep_pid   = _ep.get("player_id") or _ep.get("player_name", "")
-                        _ep_ctx   = _pm_ctxs.get(_ep_pid, {})
-                        _ep_ptags = _elite_pitch_tags.get(_ep_pid, [])
-                        _ep_status_html, _ep_is_live = _status_cache.get(_ep_pid, ("", False))
-                        _ep_brl   = _pf(_ep.get("barrel_pct"), 0.0)
-                        _ep_conf  = "✅" if _ep.get("lineup_spot") is not None else "⏳"
-                        if _ep_brl >= 15:   _ep_grade = "GOAT"
-                        elif _ep_brl >= 12: _ep_grade = "ELITE"
-                        elif _ep_brl >= 10: _ep_grade = "POWER"
-                        else:               _ep_grade = "SOLID"
+                for _el_row_data in _el_grid_rows:
+                    _el_row_cols = st.columns(len(_el_row_data))
+                    for _el_ci, (_el_rank, _ep) in enumerate(_el_row_data):
+                        with _el_row_cols[_el_ci]:
+                            _ep_pid   = _ep.get("player_id") or _ep.get("player_name", "")
+                            _ep_ctx   = _elite_pm_ctxs.get(_ep_pid, {})
+                            _ep_ptags = _elite_pitch_tags.get(_ep_pid, [])
+                            _ep_status_html, _ep_is_live = _status_cache.get(_ep_pid, ("", False))
+                            _ep_brl   = _pf(_ep.get("barrel_pct"), 0.0)
+                            _ep_conf  = "✅" if _ep.get("lineup_spot") is not None else "⏳"
+                            if _ep_brl >= 15:   _ep_grade = "GOAT"
+                            elif _ep_brl >= 12: _ep_grade = "ELITE"
+                            elif _ep_brl >= 10: _ep_grade = "POWER"
+                            else:               _ep_grade = "SOLID"
 
-                        if st.button(
-                            f"{_ep_conf} {_ep['player_name']} — {_ep_grade}",
-                            key=f"oi_elite_{_el_rank}",
-                            use_container_width=True,
-                        ):
-                            st.session_state["show_modal"] = _ep
-                            st.session_state["modal_source_tab"] = "Top Targets"
-                            st.rerun()
+                            if st.button(
+                                f"{_ep_conf} {_ep['player_name']} — {_ep_grade}",
+                                key=f"oi_elite_{_el_rank}",
+                                use_container_width=True,
+                            ):
+                                st.session_state["show_modal"] = _ep
+                                st.session_state["modal_source_tab"] = "Top Targets"
+                                st.rerun()
 
-                        _ep_opt_sel = _ep.get("player_name") in _optimizer_selected_names
-                        _ec_fp = (
-                            "ec", _slate_ts, _ep_pid,
-                            _ep_is_live, _optimizer_on, _ep_opt_sel,
-                            hash(_ep_status_html) if _ep_status_html else 0,
-                        )
-                        st.markdown(
-                            _card_html(_ec_fp, lambda: _elite_card_html(
-                                _ep, _ep_ctx,
-                                pitch_tags=_ep_ptags,
-                                is_live=_ep_is_live,
-                                status_html=_ep_status_html,
-                                opt_active=_optimizer_on,
-                                opt_selected=_ep_opt_sel,
-                            )),
-                            unsafe_allow_html=True,
-                        )
-                        _render_pitch_mix_expander(_ep_ctx, _ep, f"elite_{_el_rank}",
-                                                   expanded=st.session_state.get("main_pitch_mix_expanded", False),
-                                                   slate_ts=_slate_ts)
+                            _ep_opt_sel = _ep.get("player_name") in _optimizer_selected_names
+                            _ec_fp = (
+                                "ec", _slate_ts, _ep_pid,
+                                _ep_is_live, _optimizer_on, _ep_opt_sel,
+                                hash(_ep_status_html) if _ep_status_html else 0,
+                            )
+                            st.markdown(
+                                _card_html(_ec_fp, lambda: _elite_card_html(
+                                    _ep, _ep_ctx,
+                                    pitch_tags=_ep_ptags,
+                                    is_live=_ep_is_live,
+                                    status_html=_ep_status_html,
+                                    opt_active=_optimizer_on,
+                                    opt_selected=_ep_opt_sel,
+                                )),
+                                unsafe_allow_html=True,
+                            )
+                            _render_pitch_mix_expander(_ep_ctx, _ep, f"elite_{_el_rank}",
+                                                       expanded=st.session_state.get("main_pitch_mix_expanded", False),
+                                                       slate_ts=_slate_ts)
 
     # ── TAB 3: MATCHUP EDGE ───────────────────────────────────────────────────
     with tab_edge:
         if not ranked:
             st.info("No qualified picks — load data first.")
         else:
-            from clients.pitch_mix import (
-                pitch_label as _me_pitch_label,
-                pitch_color as _me_pitch_color,
-            )
-            # _me_ctxs and _me_ck are pre-loaded before st.tabs() above
-
-            _me_mod_active = st.session_state.get("tac_min_matchup_pct", 75) > 75
-            _me_hvy_active = st.session_state.get("tac_min_hvy_score", 0) > 0
-            _me_filter_note = ""
-            if _me_mod_active or _me_hvy_active:
-                _me_filter_parts = []
-                if _me_mod_active:
-                    _me_filter_parts.append(f"Modifier ≥ {st.session_state.get('tac_min_matchup_pct', 75)}%")
-                if _me_hvy_active:
-                    _me_filter_parts.append(f"HVY ≥ {st.session_state.get('tac_min_hvy_score', 0)}")
-                _me_filter_note = (
-                    f" <span style='background:#1a0d00;color:#f97316;font-size:10px;"
-                    f"padding:1px 6px;border-radius:3px;border:1px solid #3a1a00;'>"
-                    f"🎯 {' · '.join(_me_filter_parts)} active</span>"
-                )
-            _me_hdr_col, _me_ref_col = st.columns([4, 1])
-            with _me_hdr_col:
+            _me_loaded_key = f"_main_me_loaded_{_slate_ts}"
+            if not st.session_state.get(_me_loaded_key):
                 st.markdown(
-                    "<span style='color:#a78bfa;font-size:13px;font-weight:700;letter-spacing:1px;'>"
-                    "PITCH MATCHUP INTELLIGENCE</span>"
-                    "<span style='color:#555;font-size:11px;margin-left:12px;'>"
-                    "sorted by HVY modifier · tactical exploration · ranked picks only</span>"
-                    + _me_filter_note,
+                    "<div style='padding:18px 0;color:#888;font-size:12px;'>"
+                    "<b style='color:#a78bfa;'>Matchup Edge</b>"
+                    " &nbsp;·&nbsp; heavy pitch-matchup cards stay isolated until explicitly loaded"
+                    "</div>",
                     unsafe_allow_html=True,
                 )
-            with _me_ref_col:
-                if st.button("🔄 Refresh", key="me_refresh"):
-                    st.session_state.pop(_me_ck, None)
+                if st.button("▶ Load Matchup Edge", key="load_main_me", type="primary"):
+                    st.session_state[_me_loaded_key] = True
                     st.rerun()
-
-            def _me_hvy_key(p):
-                # Default 0.0: players with no pitch context loaded sink to the bottom
-                # instead of appearing as false-NEUTRAL (1.0) in the sort order.
-                return _me_ctxs.get(p.get("player_id"), {}).get("hvy_modifier", 0.0)
-
-            # Apply HVY modifier filter from Tactical Command Center
-            _me_mod_min = st.session_state.get("tac_min_matchup_pct", 75) / 100.0
-
-            def _me_pitch_badge(pr, label_fn, color_fn):
-                """Render one pitch pill with usage%, optional whiff%, optional velo."""
-                pt    = pr.get("pitch_type", "")
-                usage = pr.get("pitch_usage") or 0.0
-                whiff = pr.get("whiff_pct")
-                speed = pr.get("avg_speed")
-                stats = f"{usage:.0f}%"
-                if whiff is not None:
-                    stats += f" · whiff {whiff:.0f}%"
-                if speed is not None:
-                    stats += f" · {speed:.1f}mph"
-                return (
-                    "<span style='background:#1a1a2e;border:1px solid #333;border-radius:4px;"
-                    f"padding:2px 6px;font-size:10px;color:{color_fn(pt)};'>"
-                    f"{label_fn(pt)} {stats}</span>"
+            else:
+                _me_ck = _pitch_mix_context_cache_key(_tac_ranked, data.get("date", ""))
+                _me_ctxs = _ensure_pitch_mix_contexts(
+                    _tac_ranked,
+                    data.get("date", ""),
+                    spinner_label="Loading Matchup Edge pitch intelligence…",
+                )
+                from clients.pitch_mix import (
+                    pitch_label as _me_pitch_label,
+                    pitch_color as _me_pitch_color,
                 )
 
-            _me_sorted = sorted(_tac_ranked, key=_me_hvy_key, reverse=True)
-            if _me_mod_min > 0.75:
-                _me_sorted = [
-                    _mp for _mp in _me_sorted
-                    if _me_ctxs.get(_mp.get("player_id"), {}).get("hvy_modifier", 1.0) >= _me_mod_min
-                ]
-
-            # Page size — default 25 to prevent large DOM on mobile
-            _me_n_total = len(_me_sorted)
-            _me_pg_opts = [25, 50, _me_n_total] if _me_n_total > 50 else ([25, _me_n_total] if _me_n_total > 25 else [_me_n_total])
-            _me_pg_opts = sorted(set(_me_pg_opts))
-            _me_pg_raw  = st.session_state.get("me_page_size", _me_pg_opts[0])
-            _me_pg_idx  = _me_pg_opts.index(_me_pg_raw) if _me_pg_raw in _me_pg_opts else 0
-            _me_pg_cols = st.columns([3, 1])
-            with _me_pg_cols[0]:
-                if _me_n_total > _me_pg_opts[0]:
-                    st.caption(f"Showing top {min(st.session_state.get('me_page_size', _me_pg_opts[0]), _me_n_total)} of {_me_n_total} picks")
-            with _me_pg_cols[1]:
-                _me_page_size = st.selectbox(
-                    "Show", options=_me_pg_opts,
-                    index=_me_pg_idx,
-                    format_func=lambda x: "All" if x == _me_n_total else str(x),
-                    key="me_page_size",
-                    label_visibility="collapsed",
-                )
-            _me_sorted_page = _me_sorted[:_me_page_size]
-
-            for _mi, _mp in enumerate(_me_sorted_page):
-                _mp_pid   = _mp.get("player_id")
-                _mp_ctx   = _me_ctxs.get(_mp_pid, {})
-                _mp_mod   = _mp_ctx.get("hvy_modifier", 1.0)
-                _mp_name  = _mp.get("player_name", "")
-                _mp_team  = _mp.get("team", "")
-                _mp_opp   = _mp.get("opponent", "")
-                _mp_pit   = _mp.get("pitcher_name", "TBD")
-                _mp_ev    = _mp.get("ev_pct")
-                _mp_edge  = _mp.get("edge_pct")
-                _mp_model = _mp.get("model_prob", 0) * 100
-                _mp_odds  = _mp.get("best_american")
-                _mp_brl   = _pf(_mp.get("barrel_pct"), 0.0)
-                _mp_url   = _fanduel_url(_mp_name)
-                _mp_photo = _player_photo_html(_mp_pid, size=40)
-                _mp_status_html, _mp_is_live = _status_cache.get(
-                    _mp_pid or _mp.get("player_name", ""), ("", False))
-                _mp_hand  = _mp.get("pitcher_hand", "")
-                _mp_hand_lbl = f" ({'RHP' if _mp_hand == 'R' else 'LHP'})" if _mp_hand else ""
-                _mp_pitch_mix = _mp_ctx.get("pitch_mix", {})
-                _mp_pitch_rows = _mp_pitch_mix.get("pitch_rows", _mp_ctx.get("pitch_rows", []))
-                _mp_data_year  = _mp_ctx.get("data_year", config.CURRENT_SEASON)
-                _mp_prior_note = (f" <span style='color:#888;font-size:9px;'>({_mp_data_year} data)</span>"
-                                  if _mp_data_year != config.CURRENT_SEASON else "")
-                _mp_pit_lbl = _pitcher_label(_mp_pit, _mp.get("pitcher_factor", 1.0), _mp.get("platoon_factor", 1.0))
-
-                if _mp_mod >= 1.20:
-                    _mp_lbl = "ELITE MISMATCH"; _mp_lbl_col = "#FFD700"; _mp_bg = "#1a1500"; _mp_border = "#665500"
-                elif _mp_mod >= 1.05:
-                    _mp_lbl = "FAVORABLE"; _mp_lbl_col = "#4ade80"; _mp_bg = "#0a150a"; _mp_border = "#224422"
-                elif _mp_mod >= 0.95:
-                    _mp_lbl = "NEUTRAL"; _mp_lbl_col = "#888"; _mp_bg = "#0d0d18"; _mp_border = "#252540"
-                elif _mp_mod >= 0.80:
-                    _mp_lbl = "UNFAVORABLE"; _mp_lbl_col = "#f87171"; _mp_bg = "#1a0a0a"; _mp_border = "#442222"
-                else:
-                    _mp_lbl = "AVOID"; _mp_lbl_col = "#dc2626"; _mp_bg = "#1f0505"; _mp_border = "#660000"
-
-                _mp_mod_bar_pct = int(min(100, max(0, (_mp_mod - 0.70) / 0.70 * 100)))
-                _mp_mod_bar = (
-                    f"<div style='background:#1a1a1a;border-radius:3px;height:3px;margin:5px 0 3px;'>"
-                    f"<div style='background:{_mp_lbl_col};width:{_mp_mod_bar_pct}%;"
-                    f"height:3px;border-radius:3px;'></div></div>"
-                )
-                _mp_ev_col      = "#4ade80" if (_mp_ev is not None and _mp_ev >= 0) else "#f87171" if _mp_ev is not None else "#64748b"
-                _mp_ev_display  = f"{_mp_ev:+.1f}%" if _mp_ev is not None else "—"
-                _mp_edge_display = f"{_mp_edge:+.1f}%" if _mp_edge is not None else "—"
-                _mp_edge_col    = _edge_col(_mp_edge) if _mp_edge is not None else "#64748b"
-                _mp_brl_col  = "#4ade80" if _mp_brl >= 8 else "#f0f0f0"
-                _mp_tier     = _mp.get("confidence_tier", "C")
-                _mp_tier_col = {"S": "#FFD700", "A": "#4ade80", "B": "#facc15", "C": "#f87171"}.get(_mp_tier, "#888")
-
-                if st.button(
-                    f"{_mp_name} — {_mp_lbl}",
-                    key=f"oi_edge_{_mi}",
-                    use_container_width=True,
-                ):
-                    st.session_state["show_modal"] = _mp
-                    st.session_state["modal_source_tab"] = "Matchup Edge"
-                    st.rerun()
-
-                _mp_wf   = float(_mp.get("weather_factor", 1.0) or 1.0)
-                _mp_wsum = _weather_summary(_mp)
-                if _mp_wsum and abs(_mp_wf - 1.0) >= 0.04:
-                    _mp_wc = "#4ade80" if _mp_wf >= 1.08 else "#f87171" if _mp_wf <= 0.93 else "#888"
-                    _mp_weather_frag = (
-                        f"<span style='font-size:9px;color:{_mp_wc};margin-left:5px;'>🌤 {_mp_wsum}</span>")
-                else:
-                    _mp_weather_frag = ""
-
-                # Fingerprint-cached card HTML — cache miss on live status, mod, or pitch content change.
-                # Hash pitch badge content (type + usage + whiff) so any stat change triggers rebuild.
-                _me_pitch_fp = hash(tuple(
-                    (pr.get("pitch_type", ""), round(pr.get("pitch_usage") or 0, 1),
-                     round(pr.get("whiff_pct") or -1, 1))
-                    for pr in _mp_pitch_rows
-                ))
-                _me_fp = (
-                    "me", _slate_ts, _mp_pid, _mp_is_live,
-                    round(_mp_mod, 2), round(_mp_brl, 1), _me_pitch_fp,
-                    hash(_mp_status_html) if _mp_status_html else 0,
-                )
-                def _build_me_card_html(
-                    _bg=_mp_bg, _border=_mp_border, _lbl_col=_mp_lbl_col,
-                    _photo=_mp_photo, _team=_mp_team, _opp=_mp_opp,
-                    _pit_lbl=_mp_pit_lbl, _hand_lbl=_mp_hand_lbl,
-                    _prior=_mp_prior_note, _wfrag=_mp_weather_frag,
-                    _shtml=_mp_status_html, _mod=_mp_mod, _lbl=_mp_lbl,
-                    _mbar=_mp_mod_bar, _model=_mp_model, _brl_col=_mp_brl_col,
-                    _brl=_mp_brl, _tier_col=_mp_tier_col, _tier=_mp_tier,
-                    _ev_col=_mp_ev_col, _ev_disp=_mp_ev_display,
-                    _edge_col_val=_mp_edge_col, _edge_disp=_mp_edge_display,
-                    _url=_mp_url, _odds=_mp_odds, _pitch_rows=_mp_pitch_rows,
-                ):
-                    _me_conv = (
-                        "<div style='margin-top:5px;padding-top:3px;"
-                        "border-top:1px solid #1e1e2a;'>"
-                        "<span style='font-size:8px;font-weight:700;color:#166534;"
-                        "letter-spacing:0.5px;'>◈ HVY+BRL</span></div>"
-                        if _mod >= 1.15 and _brl >= 8.0 else ""
+                _me_mod_active = st.session_state.get("tac_min_matchup_pct", 75) > 75
+                _me_hvy_active = st.session_state.get("tac_min_hvy_score", 0) > 0
+                _me_filter_note = ""
+                if _me_mod_active or _me_hvy_active:
+                    _me_filter_parts = []
+                    if _me_mod_active:
+                        _me_filter_parts.append(f"Modifier ≥ {st.session_state.get('tac_min_matchup_pct', 75)}%")
+                    if _me_hvy_active:
+                        _me_filter_parts.append(f"HVY ≥ {st.session_state.get('tac_min_hvy_score', 0)}")
+                    _me_filter_note = (
+                        f" <span style='background:#1a0d00;color:#f97316;font-size:10px;"
+                        f"padding:1px 6px;border-radius:3px;border:1px solid #3a1a00;'>"
+                        f"🎯 {' · '.join(_me_filter_parts)} active</span>"
                     )
+                _me_hdr_col, _me_ref_col = st.columns([4, 1])
+                with _me_hdr_col:
+                    st.markdown(
+                        "<span style='color:#a78bfa;font-size:13px;font-weight:700;letter-spacing:1px;'>"
+                        "PITCH MATCHUP INTELLIGENCE</span>"
+                        "<span style='color:#555;font-size:11px;margin-left:12px;'>"
+                        "sorted by HVY modifier · tactical exploration · ranked picks only</span>"
+                        + _me_filter_note,
+                        unsafe_allow_html=True,
+                    )
+                with _me_ref_col:
+                    if st.button("🔄 Refresh", key="me_refresh"):
+                        st.session_state.pop(_me_ck, None)
+                        st.rerun()
+
+                def _me_hvy_key(p):
+                    return _me_ctxs.get(p.get("player_id"), {}).get("hvy_modifier", 0.0)
+
+                _me_mod_min = st.session_state.get("tac_min_matchup_pct", 75) / 100.0
+
+                def _me_pitch_badge(pr, label_fn, color_fn):
+                    pt    = pr.get("pitch_type", "")
+                    usage = pr.get("pitch_usage") or 0.0
+                    whiff = pr.get("whiff_pct")
+                    speed = pr.get("avg_speed")
+                    stats = f"{usage:.0f}%"
+                    if whiff is not None:
+                        stats += f" · whiff {whiff:.0f}%"
+                    if speed is not None:
+                        stats += f" · {speed:.1f}mph"
                     return (
-                        f"<div style='background:{_bg};border:1px solid {_border};"
-                        f"border-left:3px solid {_lbl_col};border-radius:10px;"
-                        f"padding:12px 16px;margin-bottom:12px;position:relative;overflow:hidden;'>"
-                        f"<div style='position:absolute;top:0;left:0;right:0;height:2px;"
-                        f"background:linear-gradient(90deg,transparent,{_lbl_col},transparent);opacity:0.55;'></div>"
-                        f"<div style='display:flex;justify-content:space-between;align-items:center;'>"
-                        f"<div style='display:flex;align-items:center;gap:8px;'>{_photo}"
-                        f"<div><div style='font-size:12px;color:#888;'>"
-                        f"{_team} vs {_opp} · {_pit_lbl}{_hand_lbl}{_prior}{_wfrag}</div>"
-                        + (f"<div style='font-size:11px;margin-top:2px;'>{_shtml}</div>" if _shtml else "")
-                        + f"</div></div>"
-                        f"<div style='text-align:right;'>"
-                        f"<div style='font-size:20px;font-weight:900;color:{_lbl_col};'>{_mod:.2f}×</div>"
-                        f"<div style='font-size:10px;color:{_lbl_col};font-weight:700;'>MATCHUP: {_lbl}</div>"
-                        f"</div></div>"
-                        + _mbar
-                        + f"<div style='display:flex;gap:2px;margin-top:6px;'>"
-                        f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:5px;padding:4px 2px;'>"
-                        f"<div style='font-size:12px;font-weight:700;color:#a78bfa;'>{_model:.0f}%</div>"
-                        f"<div style='font-size:8px;color:#4a4a6a;'>MODEL</div></div>"
-                        f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:5px;padding:4px 2px;'>"
-                        f"<div style='font-size:12px;font-weight:700;color:{_brl_col};'>{_brl:.1f}%</div>"
-                        f"<div style='font-size:8px;color:#4a4a6a;'>BARREL</div></div>"
-                        f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:5px;padding:4px 2px;"
-                        f"border-right:1px solid #1e1e35;'>"
-                        f"<div style='font-size:12px;font-weight:700;color:{_tier_col};'>{_tier}</div>"
-                        f"<div style='font-size:8px;color:#4a4a6a;'>QUANT</div></div>"
-                        f"<div style='flex:1;text-align:center;background:#0c0c1e;border-radius:5px;padding:4px 2px;'>"
-                        f"<div style='font-size:14px;font-weight:700;color:{_ev_col};'>{_ev_disp}</div>"
-                        f"<div style='font-size:8px;color:#55558a;'>EV</div></div>"
-                        f"<div style='flex:1;text-align:center;background:#0c0c1e;border-radius:5px;padding:4px 2px;'>"
-                        f"<div style='font-size:14px;font-weight:700;color:{_edge_col_val};'>{_edge_disp}</div>"
-                        f"<div style='font-size:8px;color:#55558a;'>EDGE</div></div>"
-                        f"<div style='flex:1;text-align:center;background:#0c0c1e;border-radius:5px;padding:4px 2px;'>"
-                        f"<a href='{_url}' target='_blank' style='text-decoration:none;'>"
-                        f"<div style='font-size:14px;font-weight:700;color:#FF6666;'>{_fmt_american(_odds)}</div>"
-                        f"<div style='font-size:8px;color:#55558a;'>ODDS ↗</div></a></div>"
-                        f"</div>"
-                        + (
-                            "<div style='font-size:8px;color:#444;letter-spacing:1px;"
-                            "margin-top:8px;margin-bottom:3px;'>ARSENAL</div>"
-                            "<div style='display:flex;flex-wrap:wrap;gap:4px;'>"
-                            + "".join(
-                                _me_pitch_badge(pr, _me_pitch_label, _me_pitch_color)
-                                for pr in _pitch_rows[:6]
-                            )
-                            + "</div>"
-                            if _pitch_rows else
-                            "<div style='font-size:10px;color:#555;margin-top:6px;'>"
-                            "Pitch data loading…</div>"
-                        )
-                        + _me_conv
-                        + f"</div>"
+                        "<span style='background:#1a1a2e;border:1px solid #333;border-radius:4px;"
+                        f"padding:2px 6px;font-size:10px;color:{color_fn(pt)};'>"
+                        f"{label_fn(pt)} {stats}</span>"
                     )
-                st.markdown(_card_html(_me_fp, _build_me_card_html), unsafe_allow_html=True)
-                _render_pitch_mix_expander(_me_ctxs.get(_mp_pid, {}), _mp, f"me_{_mi}",
-                                           expanded=st.session_state.get("main_pitch_mix_expanded", False),
-                                           slate_ts=_slate_ts)
+
+                _me_sorted = sorted(_tac_ranked, key=_me_hvy_key, reverse=True)
+                if _me_mod_min > 0.75:
+                    _me_sorted = [
+                        _mp for _mp in _me_sorted
+                        if _me_ctxs.get(_mp.get("player_id"), {}).get("hvy_modifier", 1.0) >= _me_mod_min
+                    ]
+
+                _me_n_total = len(_me_sorted)
+                _me_pg_opts = [25, 50, _me_n_total] if _me_n_total > 50 else ([25, _me_n_total] if _me_n_total > 25 else [_me_n_total])
+                _me_pg_opts = sorted(set(_me_pg_opts))
+                _me_pg_raw  = st.session_state.get("me_page_size", _me_pg_opts[0])
+                _me_pg_idx  = _me_pg_opts.index(_me_pg_raw) if _me_pg_raw in _me_pg_opts else 0
+                _me_pg_cols = st.columns([3, 1])
+                with _me_pg_cols[0]:
+                    if _me_n_total > _me_pg_opts[0]:
+                        st.caption(f"Showing top {min(st.session_state.get('me_page_size', _me_pg_opts[0]), _me_n_total)} of {_me_n_total} picks")
+                with _me_pg_cols[1]:
+                    _me_page_size = st.selectbox(
+                        "Show", options=_me_pg_opts,
+                        index=_me_pg_idx,
+                        format_func=lambda x: "All" if x == _me_n_total else str(x),
+                        key="me_page_size",
+                        label_visibility="collapsed",
+                    )
+                _me_sorted_page = _me_sorted[:_me_page_size]
+
+                for _mi, _mp in enumerate(_me_sorted_page):
+                    _mp_pid   = _mp.get("player_id")
+                    _mp_ctx   = _me_ctxs.get(_mp_pid, {})
+                    _mp_mod   = _mp_ctx.get("hvy_modifier", 1.0)
+                    _mp_name  = _mp.get("player_name", "")
+                    _mp_team  = _mp.get("team", "")
+                    _mp_opp   = _mp.get("opponent", "")
+                    _mp_pit   = _mp.get("pitcher_name", "TBD")
+                    _mp_ev    = _mp.get("ev_pct")
+                    _mp_edge  = _mp.get("edge_pct")
+                    _mp_model = _mp.get("model_prob", 0) * 100
+                    _mp_odds  = _mp.get("best_american")
+                    _mp_brl   = _pf(_mp.get("barrel_pct"), 0.0)
+                    _mp_url   = _fanduel_url(_mp_name)
+                    _mp_photo = _player_photo_html(_mp_pid, size=40)
+                    _mp_status_html, _mp_is_live = _status_cache.get(
+                        _mp_pid or _mp.get("player_name", ""), ("", False))
+                    _mp_hand  = _mp.get("pitcher_hand", "")
+                    _mp_hand_lbl = f" ({'RHP' if _mp_hand == 'R' else 'LHP'})" if _mp_hand else ""
+                    _mp_pitch_mix = _mp_ctx.get("pitch_mix", {})
+                    _mp_pitch_rows = _mp_pitch_mix.get("pitch_rows", _mp_ctx.get("pitch_rows", []))
+                    _mp_data_year  = _mp_ctx.get("data_year", config.CURRENT_SEASON)
+                    _mp_prior_note = (f" <span style='color:#888;font-size:9px;'>({_mp_data_year} data)</span>"
+                                      if _mp_data_year != config.CURRENT_SEASON else "")
+                    _mp_pit_lbl = _pitcher_label(_mp_pit, _mp.get("pitcher_factor", 1.0), _mp.get("platoon_factor", 1.0))
+
+                    if _mp_mod >= 1.20:
+                        _mp_lbl = "ELITE MISMATCH"; _mp_lbl_col = "#FFD700"; _mp_bg = "#1a1500"; _mp_border = "#665500"
+                    elif _mp_mod >= 1.05:
+                        _mp_lbl = "FAVORABLE"; _mp_lbl_col = "#4ade80"; _mp_bg = "#0a150a"; _mp_border = "#224422"
+                    elif _mp_mod >= 0.95:
+                        _mp_lbl = "NEUTRAL"; _mp_lbl_col = "#888"; _mp_bg = "#0d0d18"; _mp_border = "#252540"
+                    elif _mp_mod >= 0.80:
+                        _mp_lbl = "UNFAVORABLE"; _mp_lbl_col = "#f87171"; _mp_bg = "#1a0a0a"; _mp_border = "#442222"
+                    else:
+                        _mp_lbl = "AVOID"; _mp_lbl_col = "#dc2626"; _mp_bg = "#1f0505"; _mp_border = "#660000"
+
+                    _mp_mod_bar_pct = int(min(100, max(0, (_mp_mod - 0.70) / 0.70 * 100)))
+                    _mp_mod_bar = (
+                        f"<div style='background:#1a1a1a;border-radius:3px;height:3px;margin:5px 0 3px;'>"
+                        f"<div style='background:{_mp_lbl_col};width:{_mp_mod_bar_pct}%;"
+                        f"height:3px;border-radius:3px;'></div></div>"
+                    )
+                    _mp_ev_col      = "#4ade80" if (_mp_ev is not None and _mp_ev >= 0) else "#f87171" if _mp_ev is not None else "#64748b"
+                    _mp_ev_display  = f"{_mp_ev:+.1f}%" if _mp_ev is not None else "—"
+                    _mp_edge_display = f"{_mp_edge:+.1f}%" if _mp_edge is not None else "—"
+                    _mp_edge_col    = _edge_col(_mp_edge) if _mp_edge is not None else "#64748b"
+                    _mp_brl_col  = "#4ade80" if _mp_brl >= 8 else "#f0f0f0"
+                    _mp_tier     = _mp.get("confidence_tier", "C")
+                    _mp_tier_col = {"S": "#FFD700", "A": "#4ade80", "B": "#facc15", "C": "#f87171"}.get(_mp_tier, "#888")
+
+                    if st.button(
+                        f"{_mp_name} — {_mp_lbl}",
+                        key=f"oi_edge_{_mi}",
+                        use_container_width=True,
+                    ):
+                        st.session_state["show_modal"] = _mp
+                        st.session_state["modal_source_tab"] = "Matchup Edge"
+                        st.rerun()
+
+                    _mp_wf   = float(_mp.get("weather_factor", 1.0) or 1.0)
+                    _mp_wsum = _weather_summary(_mp)
+                    if _mp_wsum and abs(_mp_wf - 1.0) >= 0.04:
+                        _mp_wc = "#4ade80" if _mp_wf >= 1.08 else "#f87171" if _mp_wf <= 0.93 else "#888"
+                        _mp_weather_frag = (
+                            f"<span style='font-size:9px;color:{_mp_wc};margin-left:5px;'>🌤 {_mp_wsum}</span>")
+                    else:
+                        _mp_weather_frag = ""
+
+                    _me_pitch_fp = hash(tuple(
+                        (pr.get("pitch_type", ""), round(pr.get("pitch_usage") or 0, 1),
+                         round(pr.get("whiff_pct") or -1, 1))
+                        for pr in _mp_pitch_rows
+                    ))
+                    _me_fp = (
+                        "me", _slate_ts, _mp_pid, _mp_is_live,
+                        round(_mp_mod, 2), round(_mp_brl, 1), _me_pitch_fp,
+                        hash(_mp_status_html) if _mp_status_html else 0,
+                    )
+
+                    def _build_me_card_html(
+                        _bg=_mp_bg, _border=_mp_border, _lbl_col=_mp_lbl_col,
+                        _photo=_mp_photo, _team=_mp_team, _opp=_mp_opp,
+                        _pit_lbl=_mp_pit_lbl, _hand_lbl=_mp_hand_lbl,
+                        _prior=_mp_prior_note, _wfrag=_mp_weather_frag,
+                        _shtml=_mp_status_html, _mod=_mp_mod, _lbl=_mp_lbl,
+                        _mbar=_mp_mod_bar, _model=_mp_model, _brl_col=_mp_brl_col,
+                        _brl=_mp_brl, _tier_col=_mp_tier_col, _tier=_mp_tier,
+                        _ev_col=_mp_ev_col, _ev_disp=_mp_ev_display,
+                        _edge_col_val=_mp_edge_col, _edge_disp=_mp_edge_display,
+                        _url=_mp_url, _odds=_mp_odds, _pitch_rows=_mp_pitch_rows,
+                    ):
+                        _me_conv = (
+                            "<div style='margin-top:5px;padding-top:3px;"
+                            "border-top:1px solid #1e1e2a;'>"
+                            "<span style='font-size:8px;font-weight:700;color:#166534;"
+                            "letter-spacing:0.5px;'>◈ HVY+BRL</span></div>"
+                            if _mod >= 1.15 and _brl >= 8.0 else ""
+                        )
+                        return (
+                            f"<div style='background:{_bg};border:1px solid {_border};"
+                            f"border-left:3px solid {_lbl_col};border-radius:10px;"
+                            f"padding:12px 16px;margin-bottom:12px;position:relative;overflow:hidden;'>"
+                            f"<div style='position:absolute;top:0;left:0;right:0;height:2px;"
+                            f"background:linear-gradient(90deg,transparent,{_lbl_col},transparent);opacity:0.55;'></div>"
+                            f"<div style='display:flex;justify-content:space-between;align-items:center;'>"
+                            f"<div style='display:flex;align-items:center;gap:8px;'>{_photo}"
+                            f"<div><div style='font-size:12px;color:#888;'>"
+                            f"{_team} vs {_opp} · {_pit_lbl}{_hand_lbl}{_prior}{_wfrag}</div>"
+                            + (f"<div style='font-size:11px;margin-top:2px;'>{_shtml}</div>" if _shtml else "")
+                            + f"</div></div>"
+                            f"<div style='text-align:right;'>"
+                            f"<div style='font-size:20px;font-weight:900;color:{_lbl_col};'>{_mod:.2f}×</div>"
+                            f"<div style='font-size:10px;color:{_lbl_col};font-weight:700;'>MATCHUP: {_lbl}</div>"
+                            f"</div></div>"
+                            + _mbar
+                            + f"<div style='display:flex;gap:2px;margin-top:6px;'>"
+                            f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:5px;padding:4px 2px;'>"
+                            f"<div style='font-size:12px;font-weight:700;color:#a78bfa;'>{_model:.0f}%</div>"
+                            f"<div style='font-size:8px;color:#4a4a6a;'>MODEL</div></div>"
+                            f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:5px;padding:4px 2px;'>"
+                            f"<div style='font-size:12px;font-weight:700;color:{_brl_col};'>{_brl:.1f}%</div>"
+                            f"<div style='font-size:8px;color:#4a4a6a;'>BARREL</div></div>"
+                            f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:5px;padding:4px 2px;"
+                            f"border-right:1px solid #1e1e35;'>"
+                            f"<div style='font-size:12px;font-weight:700;color:{_tier_col};'>{_tier}</div>"
+                            f"<div style='font-size:8px;color:#4a4a6a;'>QUANT</div></div>"
+                            f"<div style='flex:1;text-align:center;background:#0c0c1e;border-radius:5px;padding:4px 2px;'>"
+                            f"<div style='font-size:14px;font-weight:700;color:{_ev_col};'>{_ev_disp}</div>"
+                            f"<div style='font-size:8px;color:#55558a;'>EV</div></div>"
+                            f"<div style='flex:1;text-align:center;background:#0c0c1e;border-radius:5px;padding:4px 2px;'>"
+                            f"<div style='font-size:14px;font-weight:700;color:{_edge_col_val};'>{_edge_disp}</div>"
+                            f"<div style='font-size:8px;color:#55558a;'>EDGE</div></div>"
+                            f"<div style='flex:1;text-align:center;background:#0c0c1e;border-radius:5px;padding:4px 2px;'>"
+                            f"<a href='{_url}' target='_blank' style='text-decoration:none;'>"
+                            f"<div style='font-size:14px;font-weight:700;color:#FF6666;'>{_fmt_american(_odds)}</div>"
+                            f"<div style='font-size:8px;color:#55558a;'>ODDS ↗</div></a></div>"
+                            f"</div>"
+                            + (
+                                "<div style='font-size:8px;color:#444;letter-spacing:1px;"
+                                "margin-top:8px;margin-bottom:3px;'>ARSENAL</div>"
+                                "<div style='display:flex;flex-wrap:wrap;gap:4px;'>"
+                                + "".join(
+                                    _me_pitch_badge(pr, _me_pitch_label, _me_pitch_color)
+                                    for pr in _pitch_rows[:6]
+                                )
+                                + "</div>"
+                                if _pitch_rows else
+                                "<div style='font-size:10px;color:#555;margin-top:6px;'>"
+                                "Pitch data loading…</div>"
+                            )
+                            + _me_conv
+                            + f"</div>"
+                        )
+
+                    st.markdown(_card_html(_me_fp, _build_me_card_html), unsafe_allow_html=True)
+                    _render_pitch_mix_expander(_me_ctxs.get(_mp_pid, {}), _mp, f"me_{_mi}",
+                                               expanded=st.session_state.get("main_pitch_mix_expanded", False),
+                                               slate_ts=_slate_ts)
 
     # ── TAB 4: PORTFOLIO BUILDER ──────────────────────────────────────────────
     with tab_port:
@@ -4517,6 +4594,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
 
         _fs_qual_names     = {p.get("player_name") for p in ranked}
         _fs_tac_qual_names = {p.get("player_name") for p in _tac_ranked}
+        _fs_loaded_key = f"_main_fs_loaded_{_slate_ts}_{_fs_mode.replace(' ', '_')}"
 
         if _fs_mode == "All Players":
             st.caption(
@@ -4524,16 +4602,26 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                 "Filters highlight (✓ QUAL, ★ ELITE) but do not remove players.  "
                 "📊 Pitch Mix intelligence available in COMMAND CENTER / TOP TARGETS / MATCHUP EDGE tabs."
             )
-            _render_full_slate_all_players(
-                all_players,
-                _fs_qual_names,
-                _fs_tac_qual_names,
-                _steam_names,
-                _status_cache,
-                _urgency_cache,
-                slate_ts=_slate_ts,
-                pm_ctxs=_pm_ctxs,
-            )
+            if not st.session_state.get(_fs_loaded_key):
+                if st.button("▶ Load Full Slate", key=f"load_main_fs_{_fs_mode}", type="primary"):
+                    st.session_state[_fs_loaded_key] = True
+                    st.rerun()
+            else:
+                _fs_pm_ctxs = _ensure_pitch_mix_contexts(
+                    all_players,
+                    data.get("date", ""),
+                    spinner_label="Loading Full Slate pitch intelligence…",
+                )
+                _render_full_slate_all_players(
+                    all_players,
+                    _fs_qual_names,
+                    _fs_tac_qual_names,
+                    _steam_names,
+                    _status_cache,
+                    _urgency_cache,
+                    slate_ts=_slate_ts,
+                    pm_ctxs=_fs_pm_ctxs,
+                )
 
         elif _fs_mode == "Qualified":
             if not _tac_ranked:
@@ -4542,6 +4630,10 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                     "Try loosening the Tactical Command Center thresholds above, "
                     f"or slide sidebar EV/Edge below current EV ≥ {min_ev:.1f}% / Edge ≥ {min_edge:.1f}%."
                 )
+            elif not st.session_state.get(_fs_loaded_key):
+                if st.button("▶ Load Full Slate", key=f"load_main_fs_{_fs_mode}", type="primary"):
+                    st.session_state[_fs_loaded_key] = True
+                    st.rerun()
             else:
                 _fs_sorted = sorted(
                     _tac_ranked,
@@ -4567,7 +4659,16 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
             )
             if not _fs_elite:
                 st.info("No elite barrel (≥ 8%) batters in today's slate.")
+            elif not st.session_state.get(_fs_loaded_key):
+                if st.button("▶ Load Full Slate", key=f"load_main_fs_{_fs_mode}", type="primary"):
+                    st.session_state[_fs_loaded_key] = True
+                    st.rerun()
             else:
+                _fs_elite_pm_ctxs = _ensure_pitch_mix_contexts(
+                    _fs_elite,
+                    data.get("date", ""),
+                    spinner_label="Loading Full Slate pitch intelligence…",
+                )
                 st.caption(
                     f"{len(_fs_elite)} elite barrel players (≥ 8%) · all playable regardless of market · "
                     "sorted by barrel rate descending"
@@ -4580,7 +4681,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                     _status_cache,
                     _urgency_cache,
                     slate_ts=_slate_ts,
-                    pm_ctxs=_pm_ctxs,
+                    pm_ctxs=_fs_elite_pm_ctxs,
                 )
 
 
@@ -5372,11 +5473,23 @@ def tab_jig(data: dict):
                 gated = [x for x in gated if _passes_pitcher_vulnerability(x)]
             return gated
 
+        _hvy_ctx_fp = hash(tuple(sorted(
+            (
+                pid,
+                round((ctx or {}).get("hvy_modifier", 1.0), 4),
+                int(bool((ctx or {}).get("pitcher_arsenal"))),
+                int(bool((ctx or {}).get("batter_vs"))),
+                int(bool((ctx or {}).get("hand_splits"))),
+            )
+            for pid, ctx in hvy_contexts.items()
+        )))
+
         # ── Build scored entries ───────────────────────────────────────────────
         # Fingerprint: data identity + pitch context identity + JIG TCC player-set params
         _jig_scored_fp = (
             str(st.session_state.get("data_loaded_at", "")),
-            id(hvy_contexts), len(hvy_contexts),
+            _hvy_ctx_fp, len(hvy_contexts),
+            tuple(sorted(_filtered_ids)),
             st.session_state.get("jig_tac_min_barrel",    0.0),
             st.session_state.get("jig_tac_min_hh",        0.0),
             st.session_state.get("jig_tac_min_xslg",      0.0),
@@ -5399,7 +5512,18 @@ def tab_jig(data: dict):
         _pit_hr_min_lhb   = st.session_state.get("jig_tac_min_pit_hr_lhb", 0)
         _pit_hr_min_rhb   = st.session_state.get("jig_tac_min_pit_hr_rhb", 0)
 
-        scored_all = sorted(_score_jig_players(all_players), key=lambda x: x["jig"], reverse=True)
+        _jig_scored_all_fp = (
+            str(st.session_state.get("data_loaded_at", "")),
+            _hvy_ctx_fp,
+            len(all_players),
+            hvy_score_min,
+        )
+        scored_all = _session_fp_value(
+            "_jig_scored_all_fp",
+            "_jig_scored_all",
+            _jig_scored_all_fp,
+            lambda: sorted(_score_jig_players(all_players), key=lambda x: x["jig"], reverse=True),
+        )
         scored     = _apply_jig_visibility_gates(sorted(_entries, key=lambda x: x["jig"], reverse=True))
         fs_filtered = _apply_jig_visibility_gates([
             x for x in scored_all
@@ -5410,12 +5534,22 @@ def tab_jig(data: dict):
         prime     = [x for x in qualified
                      if x["player"].get("best_american") and x["player"].get("ev_pct", 0) > 0]
 
-        # Populate JIG status cache once for the full JIG universe (avoids per-card badge calls)
+        # Populate JIG status cache once per slate/player universe instead of every rerun.
+        _jig_status_fp = (
+            str(st.session_state.get("data_loaded_at", "")),
+            tuple(e["player"].get("player_id") or e["player"].get("player_name", "") for e in scored_all),
+        )
+        _cached_jig_status = _session_fp_value(
+            "_jig_status_fp",
+            "_jig_status_cache_store",
+            _jig_status_fp,
+            lambda: {
+                (e["player"].get("player_id") or e["player"].get("player_name", "")): _game_status_badge(e["player"])
+                for e in scored_all
+            },
+        )
         _jig_status_cache.clear()
-        for _jsc_e in scored_all:
-            _jsc_p = _jsc_e["player"]
-            _jsc_pid = _jsc_p.get("player_id") or _jsc_p.get("player_name", "")
-            _jig_status_cache[_jsc_pid] = _game_status_badge(_jsc_p)
+        _jig_status_cache.update(_cached_jig_status)
 
         if _cutoff is not None and all_players_raw is not all_players:
             _raw = []
