@@ -2614,6 +2614,55 @@ def _render_pitch_mix_expander(ctx: dict, p: dict, key_prefix: str, expanded: bo
 
 # TAB 1 — TODAY'S PICKS
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
+# ─── Threat escalation helpers (presentation layer only — no formula changes) ──
+
+def _main_threat_level(p: dict, hvy_mod: float | None = None) -> tuple:
+    """MAIN threat classification — operational, confident, disciplined.
+    Returns (label, text_color, bg_color, border_color)."""
+    brl   = _pf(p.get("barrel_pct"), 0)
+    model = (p.get("model_prob") or 0) * 100
+    ev    = p.get("ev_pct") or 0
+    edge  = p.get("edge_pct") or 0
+    sig = 0
+    if brl >= 12:              sig += 3
+    elif brl >= 8:             sig += 2
+    elif brl >= 5:             sig += 1
+    if model >= 15:            sig += 2
+    elif model >= 10:          sig += 1
+    if ev >= 3 and edge >= 2:  sig += 2
+    elif ev > 0 and edge > 0:  sig += 1
+    if hvy_mod is not None:
+        if hvy_mod >= 1.15:    sig += 2
+        elif hvy_mod >= 1.05:  sig += 1
+    if sig >= 7: return "ELITE OPP", "#FFD700", "#0c0a00", "#443300"
+    if sig >= 5: return "TGT LOCK",  "#4ade80", "#060e06", "#1a3a1a"
+    if sig >= 3: return "DANGER",    "#60a5fa", "#06080e", "#1a2a3a"
+    if ev > 0:   return "ACTIVE",            "#3a3a66", "#080810", "#111122"
+    return               "LOW",             "#222230", "#050508", "#0a0a10"
+
+
+def _jig_threat_level(entry: dict) -> tuple:
+    """JIG threat classification — aggressive, dangerous, explosive.
+    Returns (label, text_color, bg_color, border_color). JIG escalates harder."""
+    p   = entry["player"]
+    hvy = entry["jig"]
+    mod = float(entry["ctx"].get("hvy_modifier") or 1.0)
+    brl = _pf(p.get("barrel_pct"), 0)
+    has_ctx = bool(
+        entry["ctx"].get("pitcher_arsenal") or entry["ctx"].get("batter_vs")
+        or entry["ctx"].get("hand_splits")
+    )
+    if hvy >= 78 and (brl >= 8 or mod >= 1.15):
+        return "ELITE OPP", "#FFD700", "#120500", "#f97316"
+    if hvy >= 65 and (brl >= 6 or mod >= 1.10):
+        return "TGT LOCK",  "#ef4444", "#0f0202", "#7f1d1d"
+    if hvy >= 50 or mod >= 1.06:
+        return "DANGER",    "#f97316", "#0a0300", "#431407"
+    if has_ctx or hvy > 20:
+        return "ACTIVE",            "#facc15", "#080600", "#3a2a00"
+    return                          "LOW",     "#374151", "#050505", "#1a1a1a"
+
+
 # ─── Full Slate "All Players" game-organized renderer ─────────────────────────
 
 def _render_full_slate_all_players(
@@ -2624,6 +2673,7 @@ def _render_full_slate_all_players(
     status_cache: dict,
     urgency_cache: dict,
     slate_ts: str = "",
+    pm_ctxs: dict | None = None,
 ) -> None:
     """
     True operational full slate: all playable batters organized by game.
@@ -2936,8 +2986,21 @@ def _render_full_slate_all_players(
             row_bg  = "#0f0f1e" if is_tac_qual else "#0a0a14" if is_qual else _alt_bg
             _row_lc = "#FFD700" if brl >= 12 else "#4ade80" if is_tac_qual else "#60a5fa" if is_qual else "#1a1a28"
 
+            # Threat escalation — presentation layer, no formula changes
+            _fs_pid   = p.get("player_id")
+            _fs_pctx  = (pm_ctxs or {}).get(_fs_pid, {}) if _fs_pid else {}
+            _fs_hmod  = _fs_pctx.get("hvy_modifier") if _fs_pctx else None
+            _thr_lbl, _thr_tc, _thr_bg, _thr_bc = _main_threat_level(p, _fs_hmod)
+            _thr_badge = (
+                f"<span style='margin-left:auto;background:{_thr_bg};"
+                f"border:1px solid {_thr_bc};color:{_thr_tc};font-size:7px;"
+                f"font-weight:800;letter-spacing:0.8px;padding:2px 5px;"
+                f"border-radius:2px;white-space:nowrap;font-family:monospace;"
+                f"'>{_thr_lbl}</span>"
+            )
+
             _row_parts.append(
-                f"<div style='display:flex;align-items:center;padding:3px 8px 3px 9px;"
+                f"<div style='display:flex;align-items:center;padding:2px 6px 2px 9px;"
                 f"background:{row_bg};border-bottom:1px solid #0c0c12;"
                 f"border-left:2px solid {_row_lc};gap:5px;flex-wrap:nowrap;'>"
                 f"<span style='color:#555;font-size:9px;min-width:14px;text-align:right'>{spot_s}</span>"
@@ -2955,6 +3018,7 @@ def _render_full_slate_all_players(
                 f"<span style='color:#555;font-size:9px'>CNF</span>"
                 f"<span style='color:#888;font-size:11px;min-width:24px'>{conf_s}</span>"
                 f"{badges}"
+                f"{_thr_badge}"
                 f"</div>"
             )
         _row_parts.append("</div>")
@@ -4411,6 +4475,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                 _status_cache,
                 _urgency_cache,
                 slate_ts=_slate_ts,
+                pm_ctxs=_pm_ctxs,
             )
 
         elif _fs_mode == "Qualified":
@@ -4458,6 +4523,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                     _status_cache,
                     _urgency_cache,
                     slate_ts=_slate_ts,
+                    pm_ctxs=_pm_ctxs,
                 )
 
 
@@ -5755,26 +5821,173 @@ def tab_jig(data: dict):
                             unsafe_allow_html=True,
                         )
 
-                        for entry in _jg_entries:
-                            # All Players mode: ctx separator crosses game boundaries
-                            if _jig_fts_mode == "All Players" and not _ctx_sep_shown:
-                                _has_ctx = bool(
-                                    entry["ctx"].get("pitcher_arsenal") or
-                                    entry["ctx"].get("batter_vs") or
-                                    entry["ctx"].get("hand_splits")
+                        # All Players mode: ctx separator before first no-context game
+                        if _jig_fts_mode == "All Players" and not _ctx_sep_shown:
+                            _jg_has_ctx = any(
+                                bool(e["ctx"].get("pitcher_arsenal") or
+                                     e["ctx"].get("batter_vs") or
+                                     e["ctx"].get("hand_splits"))
+                                for e in _jg_entries
+                            )
+                            if not _jg_has_ctx:
+                                _ctx_sep_shown = True
+                                st.markdown(
+                                    "<div style='border-top:1px solid #1e293b;"
+                                    "margin:10px 0 14px;font-size:10px;color:#475569;"
+                                    "padding-top:6px;letter-spacing:1px;'>"
+                                    "▼ &nbsp;NO PITCH CONTEXT — base HVY only · "
+                                    "matchup modifier unknown · Statcast profile strength only"
+                                    "</div>",
+                                    unsafe_allow_html=True,
                                 )
-                                if not _has_ctx:
-                                    _ctx_sep_shown = True
-                                    st.markdown(
-                                        "<div style='border-top:1px solid #1e293b;"
-                                        "margin:10px 0 14px;font-size:10px;color:#475569;"
-                                        "padding-top:6px;letter-spacing:1px;'>"
-                                        "▼ &nbsp;NO PITCH CONTEXT — base HVY only · "
-                                        "matchup modifier unknown · Statcast profile strength only"
-                                        "</div>",
-                                        unsafe_allow_html=True,
-                                    )
-                            _hvy_card(entry, key_prefix="hvyfts")
+
+                        # Compressed tactical target rows — single markdown per game
+                        _jfts_rows = ["<div style='margin-bottom:3px;'>"]
+                        for _je in _jg_entries:
+                            _je_p    = _je["player"]
+                            _je_hvy  = _je["jig"]
+                            _je_ctx  = _je["ctx"]
+                            _je_mod  = float(_je_ctx.get("hvy_modifier") or 1.0)
+                            _je_brl  = _pf(_je_p.get("barrel_pct"), 0)
+                            _je_ev   = _je_p.get("ev_pct")
+                            _je_edge = _je_p.get("edge_pct")
+                            _je_xslg = _pf(_je_p.get("xslg") or _je_p.get("actual_slg"), 0.0)
+                            _je_odds = _je_p.get("best_american")
+                            _je_name = html.escape(_je_p.get("player_name", "?"))
+                            _je_team = _je_p.get("team", "?")
+                            _je_hand = _je_p.get("batter_side", "")
+                            _je_spot = (str(_je_p.get("lineup_spot"))
+                                        if _je_p.get("lineup_spot") else "?")
+                            _je_has_ctx = bool(
+                                _je_ctx.get("pitcher_arsenal") or _je_ctx.get("batter_vs")
+                                or _je_ctx.get("hand_splits")
+                            )
+
+                            # Threat escalation — presentation layer only
+                            _je_tl, _je_tc, _je_tbg, _je_tbc = _jig_threat_level(_je)
+
+                            # Signal colors
+                            _je_hvy_col = (
+                                "#f97316" if _je_hvy >= 75 else
+                                "#facc15" if _je_hvy >= 60 else
+                                "#60a5fa" if _je_hvy >= 45 else "#555"
+                            )
+                            _je_mod_col = (
+                                "#4ade80" if _je_mod >= 1.10 else
+                                "#86efac" if _je_mod >= 1.04 else
+                                "#f87171" if _je_mod < 0.95 else "#888"
+                            )
+                            _je_brl_col = (
+                                "#FFD700" if _je_brl >= 12 else
+                                "#4ade80" if _je_brl >= 8 else
+                                "#60a5fa" if _je_brl >= 5 else "#888"
+                            )
+                            _je_ev_col   = "#4ade80" if (_je_ev or 0) > 0 else "#888"
+                            _je_edge_col = "#4ade80" if (_je_edge or 0) > 0 else "#888"
+                            _je_xslg_col = (
+                                "#4ade80" if _je_xslg >= 0.500 else
+                                "#86efac" if _je_xslg >= 0.450 else "#888"
+                            )
+
+                            # Formatted values
+                            _je_hvy_s  = f"{_je_hvy:.0f}"
+                            _je_mod_s  = f"{_je_mod:.2f}×"
+                            _je_brl_s  = f"{_je_brl:.1f}%" if _je_brl else "—"
+                            _je_ev_s   = f"{_je_ev:+.1f}%" if _je_ev is not None else "—"
+                            _je_edge_s = (f"{_je_edge:+.1f}%"
+                                          if _je_edge is not None else "—")
+                            _je_xslg_s = f"{_je_xslg:.3f}" if _je_xslg else "—"
+                            _je_odds_s = _fmt_american(_je_odds) if _je_odds else "—"
+
+                            # Pitch context dot — signals pitch mix is available
+                            _je_ctx_dot = (
+                                "<span style='color:#a78bfa;font-size:7px;margin-left:3px;"
+                                "vertical-align:middle;'>⬤</span>"
+                                if _je_has_ctx else ""
+                            )
+
+                            # Row background — keyed to threat tier
+                            _je_row_bg = (
+                                "#120500" if _je_tl == "ELITE OPP" else
+                                "#0f0202" if _je_tl == "TGT LOCK" else
+                                "#0a0300" if _je_tl == "DANGER" else
+                                "#060400" if _je_tl == "ACTIVE" else
+                                "#050508"
+                            )
+
+                            _jfts_rows.append(
+                                f"<div style='display:flex;align-items:center;"
+                                f"padding:2px 8px 2px 9px;background:{_je_row_bg};"
+                                f"border-bottom:1px solid #0c0803;"
+                                f"border-left:3px solid {_je_tbc};"
+                                f"gap:4px;flex-wrap:nowrap;overflow:hidden;'>"
+                                # LEFT ZONE
+                                f"<span style='color:#3a2a00;font-size:9px;min-width:14px;"
+                                f"text-align:right;flex-shrink:0;'>{_je_spot}</span>"
+                                f"<span style='color:#e0d8c8;font-size:11px;font-weight:700;"
+                                f"min-width:120px;overflow:hidden;white-space:nowrap;"
+                                f"text-overflow:ellipsis;flex-shrink:0;'>"
+                                f"{_je_name}{_je_ctx_dot}</span>"
+                                f"<span style='color:#4a3a2a;font-size:8px;"
+                                f"min-width:10px;flex-shrink:0;'>{_je_hand}</span>"
+                                f"<span style='color:#554433;font-size:9px;"
+                                f"min-width:26px;flex-shrink:0;'>{_je_team}</span>"
+                                # CENTER ZONE
+                                f"<span style='color:#2a1a00;font-size:8px;"
+                                f"letter-spacing:0.5px;'>HVY</span>"
+                                f"<span style='color:{_je_hvy_col};font-size:12px;"
+                                f"font-weight:800;min-width:24px;"
+                                f"flex-shrink:0;'>{_je_hvy_s}</span>"
+                                f"<span style='color:#1a1000;font-size:8px;'>MOD</span>"
+                                f"<span style='color:{_je_mod_col};font-size:10px;"
+                                f"min-width:32px;flex-shrink:0;'>{_je_mod_s}</span>"
+                                f"<span style='color:#2a2a3a;font-size:8px;'>BRL</span>"
+                                f"<span style='color:{_je_brl_col};font-size:10px;"
+                                f"font-weight:600;min-width:30px;flex-shrink:0;'>{_je_brl_s}</span>"
+                                f"<span style='color:#2a3a2a;font-size:8px;'>EV</span>"
+                                f"<span style='color:{_je_ev_col};font-size:10px;"
+                                f"min-width:28px;flex-shrink:0;'>{_je_ev_s}</span>"
+                                f"<span style='color:#2a3040;font-size:8px;'>EDG</span>"
+                                f"<span style='color:{_je_edge_col};font-size:10px;"
+                                f"min-width:28px;flex-shrink:0;'>{_je_edge_s}</span>"
+                                f"<span style='color:#2a1a2a;font-size:8px;'>xSLG</span>"
+                                f"<span style='color:{_je_xslg_col};font-size:10px;"
+                                f"min-width:36px;flex-shrink:0;'>{_je_xslg_s}</span>"
+                                f"<span style='color:#2a1a00;font-size:8px;'>ODDS</span>"
+                                f"<span style='color:#e0d0a0;font-size:10px;"
+                                f"min-width:36px;flex-shrink:0;'>{_je_odds_s}</span>"
+                                # RIGHT ZONE — threat badge
+                                f"<span style='margin-left:auto;background:{_je_tbg};"
+                                f"border:1px solid {_je_tbc};color:{_je_tc};"
+                                f"font-size:7px;font-weight:800;letter-spacing:0.8px;"
+                                f"padding:2px 5px;border-radius:2px;white-space:nowrap;"
+                                f"font-family:monospace;flex-shrink:0;'>{_je_tl}</span>"
+                                f"</div>"
+                            )
+                        _jfts_rows.append("</div>")
+                        st.markdown("".join(_jfts_rows), unsafe_allow_html=True)
+
+                        # Pitch mix expanders — lazy gated, one per player with ctx data
+                        for _je in _jg_entries:
+                            if (_je["ctx"].get("pitcher_arsenal") or
+                                    _je["ctx"].get("batter_vs") or
+                                    _je["ctx"].get("hand_splits")):
+                                _jpm_pn = html.escape(_je["player"].get("player_name", "?"))
+                                _jpm_pt = _je["player"].get("team", "")
+                                st.markdown(
+                                    f"<div style='padding:2px 6px 0;font-size:9px;'>"
+                                    f"<span style='font-weight:700;color:#8a7060;'>{_jpm_pn}</span>"
+                                    f"<span style='margin-left:5px;color:#3a2a00;'>{_jpm_pt}</span>"
+                                    f"</div>",
+                                    unsafe_allow_html=True,
+                                )
+                                _render_pitch_mix_expander(
+                                    ctx=_je["ctx"],
+                                    p=_je["player"],
+                                    key_prefix="jfts",
+                                    expanded=False,
+                                    slate_ts=_jig_slate_ts,
+                                )
 
                     # Return-to-top stub
                     st.markdown(
@@ -7034,16 +7247,16 @@ def main():
                 _fd_cutoff if _fd_cutoff is not None else -1,
                 _fd_min_conf,
             )
-            if st.session_state.get("_uif_ranked_fp") == _fd_uif_fp:
-                _odds_players = st.session_state["_uif_ranked"]
+            if st.session_state.get("_fd_uif_ranked_fp") == _fd_uif_fp:
+                _odds_players = st.session_state["_fd_uif_ranked"]
             else:
                 _odds_players = _apply_ui_filters(
                     _slip_data.get("all_players", []), _fd_min_ev, _fd_min_edge,
                     cutoff_utc_hour=_fd_cutoff,
                     min_confidence=_fd_min_conf,
                 )
-                st.session_state["_uif_ranked"] = _odds_players
-                st.session_state["_uif_ranked_fp"] = _fd_uif_fp
+                st.session_state["_fd_uif_ranked"] = _odds_players
+                st.session_state["_fd_uif_ranked_fp"] = _fd_uif_fp
             if not _odds_players:
                 _odds_players = sorted(
                     [p for p in _slip_data.get("all_players", []) if p.get("best_american")],
