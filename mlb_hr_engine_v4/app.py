@@ -2623,16 +2623,15 @@ def _render_full_slate_all_players(
     steam_names: set,
     status_cache: dict,
     urgency_cache: dict,
+    slate_ts: str = "",
 ) -> None:
     """
     True operational full slate: all playable batters organized by game.
+    Phase 3A: game command modules — pitcher target zone + live conditions strip.
     Filters highlight/badge rather than remove players.
-
-    qualified_names     — players in ranked (sidebar EV/Edge qualified, have odds)
-    tac_qualified_names — also pass TCC batter-profile filters
-    steam_names         — players with line movement since opening
     """
     from collections import defaultdict
+    from data.park_factors import PARK_FACTORS as _PF
 
     if not all_players:
         st.info("No players in today's slate.")
@@ -2682,21 +2681,17 @@ def _render_full_slate_all_players(
         )
     sorted_gks_shown = sorted_gks[:_fs_game_limit]
 
-    st.markdown(
-        f"<div style='font-size:11px;color:#888;margin-bottom:4px;'>"
-        f"<b style='color:#eee;'>{len(all_players)}</b> players &nbsp;&middot;&nbsp; "
-        f"<b style='color:#eee;'>{len(games)}</b> games &nbsp;&middot;&nbsp; "
-        f"<span style='color:#4ade80;'>{n_qual}</span> qualified &nbsp;&middot;&nbsp; "
-        f"<span style='color:#FFD700;'>{n_elite}</span> elite barrel "
-        f"&nbsp;&middot;&nbsp; <span style='color:#555;'>{len(all_players)-n_odds}</span> no odds"
-        f"</div>"
-        f"<div style='font-size:9px;color:#333;padding:2px 8px;margin-bottom:4px;"
-        f"font-family:monospace;letter-spacing:0.5px;'>"
-        f"BRL = Barrel%  &nbsp;·&nbsp;  MDL = Model Prob  &nbsp;·&nbsp;  "
-        f"EV = Expected Value  &nbsp;·&nbsp;  EDG = Edge vs Market  &nbsp;·&nbsp;  CNF = Confidence"
-        f"</div>",
-        unsafe_allow_html=True,
-    )
+    with _fs_cols[0]:
+        st.markdown(
+            f"<div style='font-size:11px;color:#888;padding-top:5px;'>"
+            f"<b style='color:#eee;'>{len(all_players)}</b> players"
+            f" &nbsp;·&nbsp; <b style='color:#eee;'>{len(games)}</b> games"
+            f" &nbsp;·&nbsp; <span style='color:#4ade80;'>{n_qual}</span> qualified"
+            f" &nbsp;·&nbsp; <span style='color:#FFD700;'>{n_elite}</span> elite"
+            f" &nbsp;·&nbsp; <span style='color:#555;'>{len(all_players)-n_odds}</span> no odds"
+            f"</div>",
+            unsafe_allow_html=True,
+        )
 
     if len(sorted_gks_shown) < _n_total_games:
         st.caption(
@@ -2704,7 +2699,66 @@ def _render_full_slate_all_players(
             "select 'All games' above to expand."
         )
 
-    for gk in sorted_gks_shown:
+    # ── Game navigation strip ────────────────────────────────────────────────
+    _nav_parts = []
+    for _ni, gk in enumerate(sorted_gks_shown):
+        _gp  = games[gk]
+        _p0n = _gp[0]
+        _ht  = _p0n.get("home_team", "")
+        _aw  = next(
+            (p.get("team", "") for p in _gp if p.get("team") != _ht),
+            _p0n.get("opponent", "?"),
+        )
+        _gq  = sum(1 for p in _gp if p.get("player_name") in qualified_names)
+        _pk0 = float(_p0n.get("park_factor", 1.0) or 1.0)
+        _nav_pk_col = "#4ade80" if _pk0 >= 1.05 else "#f87171" if _pk0 <= 0.95 else "#777"
+        _nav_bg = "#0e1a0e" if _gq >= 3 else "#0e0e1a" if _gq >= 1 else "#0a0a12"
+        _nav_bd = "#253a25" if _gq >= 3 else "#222240" if _gq >= 1 else "#161622"
+        _dot = (
+            f"<span style='color:{_nav_pk_col};font-size:8px;margin-left:3px;'>●</span>"
+            if abs(_pk0 - 1.0) >= 0.03 else ""
+        )
+        _qtag = (
+            f"<span style='color:#4ade80;font-size:8px;margin-left:3px;'>{_gq}Q</span>"
+            if _gq > 0 else ""
+        )
+        _nav_parts.append(
+            f"<a href='#gm{_ni}_{slate_ts}' style='display:inline-block;"
+            f"background:{_nav_bg};border:1px solid {_nav_bd};border-radius:4px;"
+            f"padding:2px 8px;margin:2px 2px;font-size:10px;font-weight:700;"
+            f"color:#aaa;text-decoration:none;white-space:nowrap;'>"
+            f"<span style='color:#60a5fa;'>{_aw}</span>"
+            f"<span style='color:#444;'>@</span>"
+            f"<span style='color:#dde;'>{_ht}</span>"
+            f"{_dot}{_qtag}"
+            f"</a>"
+        )
+    if _nav_parts:
+        st.markdown(
+            "<div id='fs_top' style='display:flex;flex-wrap:wrap;gap:0;"
+            "padding:4px 0 8px;border-bottom:1px solid #1a1a2e;margin-bottom:4px;'>"
+            + "".join(_nav_parts) + "</div>",
+            unsafe_allow_html=True,
+        )
+
+    st.markdown(
+        "<div style='font-size:9px;color:#333;padding:2px 4px;margin-bottom:4px;"
+        "font-family:monospace;letter-spacing:0.5px;'>"
+        "BRL=Barrel% &nbsp;·&nbsp; MDL=Model &nbsp;·&nbsp; "
+        "EV=Expected Value &nbsp;·&nbsp; EDG=Edge &nbsp;·&nbsp; CNF=Confidence"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
+    def _pit_vuln(factor: float) -> tuple:
+        """(label, color) for pitcher vulnerability display in Full Slate."""
+        if factor >= 1.20: return "ELITE TARGET", "#4ade80"
+        if factor >= 1.08: return "FAVORABLE",    "#86efac"
+        if factor >= 0.92: return "NEUTRAL",       "#3a3a3a"
+        if factor >= 0.80: return "TOUGH",         "#f97316"
+        return "SUPPRESSOR", "#f87171"
+
+    for _ni, gk in enumerate(sorted_gks_shown):
         game_players = sorted(
             games[gk],
             key=lambda p: (p.get("team", ""), int(p.get("lineup_spot") or 99)),
@@ -2718,8 +2772,14 @@ def _render_full_slate_all_players(
                         else p0.get("opponent", "?"))
 
         # home batters face the away pitcher; away batters face the home pitcher
-        away_pitcher = home_batters[0].get("pitcher_name", "TBD") if home_batters else "TBD"
-        home_pitcher = away_batters[0].get("pitcher_name", "TBD") if away_batters else "TBD"
+        away_pitcher    = home_batters[0].get("pitcher_name", "TBD") if home_batters else "TBD"
+        home_pitcher    = away_batters[0].get("pitcher_name", "TBD") if away_batters else "TBD"
+        away_pit_factor = float(home_batters[0].get("pitcher_factor", 1.0)) if home_batters else 1.0
+        home_pit_factor = float(away_batters[0].get("pitcher_factor", 1.0)) if away_batters else 1.0
+        away_pit_hand   = home_batters[0].get("pitcher_hand", "") if home_batters else ""
+        home_pit_hand   = away_batters[0].get("pitcher_hand", "") if away_batters else ""
+        away_vuln_lbl, away_vuln_col = _pit_vuln(away_pit_factor)
+        home_vuln_lbl, home_vuln_col = _pit_vuln(home_pit_factor)
 
         gt     = _game_time_et(p0.get("game_time_utc", ""))
         gt_str = gt.strftime("%I:%M %p ET").lstrip("0") if gt else "TBD"
@@ -2730,40 +2790,98 @@ def _render_full_slate_all_players(
         pk     = float(p0.get("park_factor", 1.0) or 1.0)
         wf     = float(p0.get("weather_factor", 1.0) or 1.0)
         pk_col = "#4ade80" if pk >= 1.05 else "#f87171" if pk <= 0.95 else "#888"
-        wf_col = "#4ade80" if wf >= 1.05 else "#f87171" if wf <= 0.95 else "#888"
-        wsum   = _weather_summary(p0)
-        weather_part = (
-            f" &nbsp;&middot;&nbsp; <span style='color:{wf_col}'>{wsum}</span>"
-            if wsum else ""
+
+        # Venue name from park factors lookup
+        _venue = _PF.get(home_team, {}).get("name", "")
+
+        # HR environment score
+        _, _env_col, _env_lbl = _hr_env_score(p0)
+
+        # Live conditions strip
+        _w_dict  = p0.get("weather") or {}
+        _temp_f  = _w_dict.get("temp_f")
+        _wind_m  = _w_dict.get("wind_mph")
+        _wind_d  = _w_dict.get("wind_deg")
+        _hum_pct = _w_dict.get("humidity_pct")
+        _is_dome = p0.get("is_dome", False)
+        _cond_parts: list = []
+        if _temp_f is not None:
+            _tc = "#f87171" if _temp_f < 50 else "#86efac" if _temp_f > 80 else "#888"
+            _cond_parts.append(f"<span style='color:{_tc};'>{_temp_f:.0f}°F</span>")
+        if _is_dome:
+            _cond_parts.append("<span style='color:#475569;'>DOME</span>")
+        elif _wind_m is not None and _wind_d is not None:
+            _wdir  = _deg_to_compass(_wind_d)
+            _wc    = "#4ade80" if wf >= 1.04 else "#f87171" if wf <= 0.96 else "#666"
+            _cond_parts.append(
+                f"<span style='color:{_wc};'>{_wind_m:.0f}mph {_wdir}</span>"
+            )
+        if _hum_pct is not None and not _is_dome:
+            _hc = "#86efac" if _hum_pct > 70 else "#888"
+            _cond_parts.append(f"<span style='color:{_hc};'>{_hum_pct:.0f}%RH</span>")
+        _cond_parts.append(
+            f"<span style='color:{_env_col};font-weight:700;"
+            f"letter-spacing:0.5px;'>{_env_lbl}</span>"
         )
+        _sep     = "<span style='color:#1e1e2e;margin:0 5px;'>·</span>"
+        _cond_html = _sep.join(_cond_parts)
+
         n_game_qual = sum(1 for p in game_players if p.get("player_name") in qualified_names)
 
-        # Game header — left border uses park factor color for instant ballpark context read
-        # urg_col drives time urgency; pk_col drives park environment signal
         _gh_border_col = pk_col if pk_col != "#888" else urg_col
         header_html = (
-            f"<div style='background:#0b0b17;border-left:3px solid {_gh_border_col};"
-            f"margin:20px 0 0;padding:6px 12px;border-radius:4px;"
-            f"border-top:1px solid #16162a;'>"
+            # Game command module — anchor ID for nav strip
+            f"<div id='gm{_ni}_{slate_ts}' style='background:#09090f;"
+            f"border-left:3px solid {_gh_border_col};"
+            f"border-top:1px solid #18182a;border-radius:4px;"
+            f"margin:18px 0 0;overflow:hidden;'>"
+
+            # Row 1 — matchup · time · park · env · qual count
             f"<div style='display:flex;justify-content:space-between;align-items:center;"
-            f"flex-wrap:wrap;gap:6px;'>"
-            f"<span style='font-size:13px;font-weight:700;color:#60a5fa;'>"
-            f"{away_team} @ {home_team}</span>"
+            f"flex-wrap:wrap;gap:4px;padding:6px 12px 3px;'>"
+            f"<span style='font-size:14px;font-weight:800;color:#60a5fa;"
+            f"letter-spacing:0.3px;'>{away_team} @ {home_team}</span>"
             f"<span style='font-size:11px;color:{urg_col};font-weight:600;'>{gt_str}</span>"
-            f"<span style='font-size:10px;color:#888;'>"
-            f"Park <span style='color:{pk_col};font-weight:600;'>{pk:.2f}×</span>{weather_part}</span>"
-            f"<span style='font-size:10px;color:{('#4ade80' if n_game_qual >= 3 else '#aaa')};'>"
+            f"<span style='font-size:10px;color:#888;'>Park "
+            f"<span style='color:{pk_col};font-weight:700;'>{pk:.2f}×</span></span>"
+            f"<span style='background:#0d0d1c;border:1px solid #1e1e30;border-radius:3px;"
+            f"padding:1px 7px;font-size:10px;color:{_env_col};font-weight:700;"
+            f"letter-spacing:1px;'>{_env_lbl}</span>"
+            f"<span style='font-size:10px;color:{('#4ade80' if n_game_qual >= 3 else '#555')};'>"
             f"{n_game_qual} qual</span>"
             f"</div>"
-            f"<div style='font-size:10px;color:#555;margin-top:2px;"
-            f"border-top:1px solid #13131f;padding-top:2px;'>"
-            f"<span style='color:#7c7caa'>{away_team}</span>"
-            f"<span style='color:#333;font-size:9px;'> vs </span>"
-            f"<span style='color:#888'>{home_pitcher}</span>"
-            f" <span style='color:#252535;'>·</span> "
-            f"<span style='color:#7c7caa'>{home_team}</span>"
-            f"<span style='color:#333;font-size:9px;'> vs </span>"
-            f"<span style='color:#888'>{away_pitcher}</span>"
+
+            # Row 2 — venue + conditions strip
+            f"<div style='display:flex;align-items:center;flex-wrap:wrap;gap:6px;"
+            f"padding:2px 12px 4px;border-top:1px solid #101018;'>"
+            f"<span style='font-size:9px;color:#2e2e42;letter-spacing:0.5px;"
+            f"font-family:monospace;'>{_venue}</span>"
+            + (f"<span style='color:#181828;'>·</span>"
+               f"<span style='font-size:10px;'>{_cond_html}</span>" if _cond_parts else "")
+            + f"</div>"
+
+            # Row 3 — pitcher target zone
+            f"<div style='display:flex;align-items:center;flex-wrap:wrap;gap:0;"
+            f"padding:4px 12px 5px;border-top:1px solid #0e0e16;background:#06060c;'>"
+            f"<span style='font-size:8px;color:#2e2e45;letter-spacing:1.5px;"
+            f"text-transform:uppercase;margin-right:8px;font-family:monospace;'>TARGET</span>"
+            # Home batters vs away pitcher
+            f"<span style='font-size:10px;color:#a78bfa;font-weight:700;"
+            f"margin-right:4px;'>{home_team}</span>"
+            f"<span style='font-size:9px;color:#222233;margin-right:3px;'>vs</span>"
+            f"<span style='font-size:10px;color:#c8c8e0;margin-right:3px;'>{away_pitcher}</span>"
+            f"<span style='font-size:9px;color:#3a3a55;margin-right:5px;'>{away_pit_hand}</span>"
+            f"<span style='font-size:9px;color:{away_vuln_col};font-weight:700;"
+            f"letter-spacing:0.3px;'>{away_vuln_lbl}</span>"
+            f"<span style='color:#181828;margin:0 10px;'>│</span>"
+            # Away batters vs home pitcher
+            f"<span style='font-size:10px;color:#60a5fa;font-weight:700;"
+            f"margin-right:4px;'>{away_team}</span>"
+            f"<span style='font-size:9px;color:#222233;margin-right:3px;'>vs</span>"
+            f"<span style='font-size:10px;color:#c8c8e0;margin-right:3px;'>{home_pitcher}</span>"
+            f"<span style='font-size:9px;color:#3a3a55;margin-right:5px;'>{home_pit_hand}</span>"
+            f"<span style='font-size:9px;color:{home_vuln_col};font-weight:700;"
+            f"letter-spacing:0.3px;'>{home_vuln_lbl}</span>"
             f"</div></div>"
         )
 
@@ -2841,6 +2959,15 @@ def _render_full_slate_all_players(
             )
         _row_parts.append("</div>")
         st.markdown(header_html + "".join(_row_parts), unsafe_allow_html=True)
+
+    # Return-to-top
+    st.markdown(
+        "<div style='text-align:center;padding:14px 0 6px;"
+        "border-top:1px solid #16162a;margin-top:8px;'>"
+        "<a href='#fs_top' style='font-size:9px;color:#333;text-decoration:none;"
+        "letter-spacing:1.5px;font-family:monospace;'>▲ &nbsp;TOP</a></div>",
+        unsafe_allow_html=True,
+    )
 
 
 def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int | None = None, min_confidence: float = 0):
@@ -4283,6 +4410,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                 _steam_names,
                 _status_cache,
                 _urgency_cache,
+                slate_ts=_slate_ts,
             )
 
         elif _fs_mode == "Qualified":
@@ -4329,6 +4457,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                     _steam_names,
                     _status_cache,
                     _urgency_cache,
+                    slate_ts=_slate_ts,
                 )
 
 
@@ -5464,6 +5593,7 @@ def tab_jig(data: dict):
             if not _fts_pool:
                 st.info(_fts_empty_msg)
             else:
+                from collections import defaultdict as _dd
                 # Mode-specific lazy gate key — switching mode requires explicit load click
                 _fts_loaded_key = f"_jig_fts_loaded_{_jig_slate_ts}_{_jig_fts_mode}"
                 if not st.session_state.get(_fts_loaded_key):
@@ -5505,30 +5635,156 @@ def tab_jig(data: dict):
                             label_visibility="collapsed",
                         )
 
-                    # All Players — insert tactical separator at no-context boundary
-                    if _jig_fts_mode == "All Players":
-                        _ctx_sep_shown = False
-                        for entry in _fts_pool[:_fts_page_size]:
-                            _has_ctx = bool(
-                                entry["ctx"].get("pitcher_arsenal") or
-                                entry["ctx"].get("batter_vs") or
-                                entry["ctx"].get("hand_splits")
-                            )
-                            if not _ctx_sep_shown and not _has_ctx:
-                                _ctx_sep_shown = True
-                                st.markdown(
-                                    "<div style='border-top:1px solid #1e293b;"
-                                    "margin:10px 0 14px;font-size:10px;color:#475569;"
-                                    "padding-top:6px;letter-spacing:1px;'>"
-                                    "▼ &nbsp;NO PITCH CONTEXT — base HVY only · "
-                                    "matchup modifier unknown · Statcast profile strength only"
-                                    "</div>",
-                                    unsafe_allow_html=True,
+                    # ── JIG game command modules ──────────────────────────────
+                    # Group paginated entries by game_pk, order by top HVY score
+                    _jfts_slice  = _fts_pool[:_fts_page_size]
+                    _jfts_groups: dict = _dd(list)
+                    for _je in _jfts_slice:
+                        _jgk = (
+                            _je["player"].get("game_pk") or
+                            f"{_je['player'].get('team','?')}-{_je['player'].get('opponent','?')}"
+                        )
+                        _jfts_groups[_jgk].append(_je)
+                    # Sort game groups by highest HVY score (most dangerous game first)
+                    _jfts_order = sorted(
+                        _jfts_groups.keys(),
+                        key=lambda gk: -_jfts_groups[gk][0]["jig"],
+                    )
+
+                    _ctx_sep_shown = False  # for All Players mode cross-game ctx separator
+
+                    def _jvuln(f):
+                        if f >= 1.20: return "ELITE TARGET", "#4ade80"
+                        if f >= 1.08: return "FAVORABLE",    "#86efac"
+                        if f >= 0.92: return "NEUTRAL",       "#3a3a3a"
+                        if f >= 0.80: return "TOUGH",         "#f97316"
+                        return "SUPPRESSOR", "#f87171"
+
+                    for _jgi, _jgk in enumerate(_jfts_order):
+                        _jg_entries = _jfts_groups[_jgk]
+                        _jp0        = _jg_entries[0]["player"]
+                        _jg_home    = _jp0.get("home_team", "")
+                        _jg_away    = next(
+                            (e["player"].get("team", "") for e in _jg_entries
+                             if e["player"].get("team") != _jg_home),
+                            _jp0.get("opponent", "?"),
+                        )
+                        _jg_top_hvy = _jg_entries[0]["jig"]
+                        _jg_gt      = _game_time_et(_jp0.get("game_time_utc", ""))
+                        _jg_gt_str  = _jg_gt.strftime("%I:%M %p ET").lstrip("0") if _jg_gt else "TBD"
+                        _jg_pid0    = _jp0.get("player_id") or _jp0.get("player_name", "")
+                        _jg_urg_col = urgency_cache.get(_jg_pid0, (_jg_gt_str, "#555", ""))[1]
+
+                        # Pitcher vulnerability (from home/away batters' pitcher_factor)
+                        _jg_home_batters = [
+                            e for e in _jg_entries if e["player"].get("team") == _jg_home
+                        ]
+                        _jg_away_batters = [
+                            e for e in _jg_entries if e["player"].get("team") != _jg_home
+                        ]
+                        _jg_away_pit  = (
+                            _jg_home_batters[0]["player"].get("pitcher_name", "TBD")
+                            if _jg_home_batters else "TBD"
+                        )
+                        _jg_away_pf   = float(
+                            _jg_home_batters[0]["player"].get("pitcher_factor", 1.0)
+                            if _jg_home_batters else 1.0
+                        )
+                        _jg_home_pit  = (
+                            _jg_away_batters[0]["player"].get("pitcher_name", "TBD")
+                            if _jg_away_batters else "TBD"
+                        )
+                        _jg_home_pf   = float(
+                            _jg_away_batters[0]["player"].get("pitcher_factor", 1.0)
+                            if _jg_away_batters else 1.0
+                        )
+                        _jg_av_lbl, _jg_av_col = _jvuln(_jg_away_pf)
+                        _jg_hv_lbl, _jg_hv_col = _jvuln(_jg_home_pf)
+
+                        # HVY score color
+                        _jg_hvy_col = (
+                            "#f97316" if _jg_top_hvy >= 75 else
+                            "#facc15" if _jg_top_hvy >= 60 else
+                            "#888"
+                        )
+                        _jg_border_col = (
+                            "#f97316" if _jg_top_hvy >= 75 else
+                            "#facc15" if _jg_top_hvy >= 60 else
+                            "#444"
+                        )
+                        _jg_n = len(_jg_entries)
+
+                        st.markdown(
+                            f"<div id='jgm{_jgi}_{_jig_slate_ts}' style='"
+                            f"background:#08060a;border-left:3px solid {_jg_border_col};"
+                            f"border-top:1px solid #180e00;border-radius:3px;"
+                            f"margin:14px 0 6px;padding:5px 10px 5px;overflow:hidden;'>"
+                            f"<div style='display:flex;align-items:center;"
+                            f"flex-wrap:wrap;gap:5px;'>"
+                            # Matchup
+                            f"<span style='font-size:12px;font-weight:800;color:#f97316;"
+                            f"letter-spacing:0.3px;'>{_jg_away} @ {_jg_home}</span>"
+                            f"<span style='color:#2a1a00;'>·</span>"
+                            f"<span style='font-size:10px;color:{_jg_urg_col};'>{_jg_gt_str}</span>"
+                            f"<span style='color:#2a1a00;'>·</span>"
+                            # Top HVY in game
+                            f"<span style='font-size:9px;color:#3a2a00;"
+                            f"letter-spacing:1px;font-family:monospace;'>HVY</span>"
+                            f"<span style='font-size:12px;color:{_jg_hvy_col};"
+                            f"font-weight:800;'>{_jg_top_hvy:.0f}</span>"
+                            f"<span style='color:#2a1a00;'>·</span>"
+                            f"<span style='font-size:9px;color:#555;'>{_jg_n} players</span>"
+                            f"</div>"
+                            # Pitcher target strip
+                            f"<div style='margin-top:3px;font-size:9px;color:#555;"
+                            f"display:flex;align-items:center;flex-wrap:wrap;gap:0;'>"
+                            f"<span style='color:#3a2a00;letter-spacing:1px;"
+                            f"font-family:monospace;margin-right:6px;'>TARGET</span>"
+                            f"<span style='color:#a78bfa;font-weight:700;margin-right:3px;'>{_jg_home}</span>"
+                            f"<span style='color:#2a1a00;margin-right:3px;'>vs</span>"
+                            f"<span style='color:#9a8a9a;margin-right:4px;'>{_jg_away_pit}</span>"
+                            f"<span style='color:{_jg_av_col};font-weight:700;"
+                            f"letter-spacing:0.3px;'>{_jg_av_lbl}</span>"
+                            f"<span style='color:#1a0a00;margin:0 8px;'>│</span>"
+                            f"<span style='color:#60a5fa;font-weight:700;margin-right:3px;'>{_jg_away}</span>"
+                            f"<span style='color:#2a1a00;margin-right:3px;'>vs</span>"
+                            f"<span style='color:#9a8a9a;margin-right:4px;'>{_jg_home_pit}</span>"
+                            f"<span style='color:{_jg_hv_col};font-weight:700;"
+                            f"letter-spacing:0.3px;'>{_jg_hv_lbl}</span>"
+                            f"</div></div>",
+                            unsafe_allow_html=True,
+                        )
+
+                        for entry in _jg_entries:
+                            # All Players mode: ctx separator crosses game boundaries
+                            if _jig_fts_mode == "All Players" and not _ctx_sep_shown:
+                                _has_ctx = bool(
+                                    entry["ctx"].get("pitcher_arsenal") or
+                                    entry["ctx"].get("batter_vs") or
+                                    entry["ctx"].get("hand_splits")
                                 )
+                                if not _has_ctx:
+                                    _ctx_sep_shown = True
+                                    st.markdown(
+                                        "<div style='border-top:1px solid #1e293b;"
+                                        "margin:10px 0 14px;font-size:10px;color:#475569;"
+                                        "padding-top:6px;letter-spacing:1px;'>"
+                                        "▼ &nbsp;NO PITCH CONTEXT — base HVY only · "
+                                        "matchup modifier unknown · Statcast profile strength only"
+                                        "</div>",
+                                        unsafe_allow_html=True,
+                                    )
                             _hvy_card(entry, key_prefix="hvyfts")
-                    else:
-                        for entry in _fts_pool[:_fts_page_size]:
-                            _hvy_card(entry, key_prefix="hvyfts")
+
+                    # Return-to-top stub
+                    st.markdown(
+                        "<div style='text-align:center;padding:12px 0 4px;"
+                        "border-top:1px solid #18100a;margin-top:6px;'>"
+                        "<span style='font-size:9px;color:#2a1a00;letter-spacing:1.5px;"
+                        "font-family:monospace;'>▲ &nbsp;SCROLL UP TO CHANGE MODE / FILTER</span>"
+                        "</div>",
+                        unsafe_allow_html=True,
+                    )
 
     # ── JIG — Pitch Mix Intelligence ──────────────────────────────────────────
     st.caption(
