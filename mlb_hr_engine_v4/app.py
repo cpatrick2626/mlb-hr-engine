@@ -2790,6 +2790,7 @@ def _render_full_slate_all_players(
     urgency_cache: dict,
     slate_ts: str = "",
     pm_ctxs: dict | None = None,
+    source_section: str = "Full Slate",
 ) -> None:
     """
     True operational full slate: all playable batters organized by game.
@@ -3138,6 +3139,30 @@ def _render_full_slate_all_players(
             )
         _row_parts.append("</div>")
         st.markdown(header_html + "".join(_row_parts), unsafe_allow_html=True)
+
+        st.caption("Player controls: open a player to view details and manage the FanDuel slip.")
+        _action_cols = 4
+        for _btn_i in range(0, len(game_players), _action_cols):
+            _btn_slice = game_players[_btn_i:_btn_i + _action_cols]
+            _btn_cols = st.columns(len(_btn_slice))
+            for _btn_col, _btn_player in zip(_btn_cols, _btn_slice):
+                with _btn_col:
+                    _btn_name = _btn_player.get("player_name", "?")
+                    _btn_spot = _btn_player.get("lineup_spot")
+                    _btn_team = _btn_player.get("team", "")
+                    _btn_pid = _btn_player.get("player_id") or _btn_name
+                    _btn_label = f"{_btn_spot or '?'} · {_btn_name}"
+                    if _btn_team:
+                        _btn_label = f"{_btn_label} ({_btn_team})"
+                    if st.button(
+                        _btn_label,
+                        key=f"fs_open_{slate_ts}_{gk}_{_btn_pid}",
+                        use_container_width=True,
+                    ):
+                        st.session_state["show_modal"] = _btn_player
+                        st.session_state["modal_source_tab"] = "Full Slate"
+                        st.session_state["modal_source_section"] = source_section
+                        st.rerun()
 
     # Return-to-top
     st.markdown(
@@ -3737,7 +3762,10 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
     # Content hash (not id()) prevents false cache hits when Python GC reuses a freed address.
     _ranked_content_fp = hash(tuple(p.get("player_id") or p.get("player_name", "") for p in ranked))
     _tac_filter_fp = (_slate_ts, _ranked_content_fp, tuple(_tac_params.values()))
-    if st.session_state.get("_tac_filter_fp") == _tac_filter_fp:
+    if (
+        st.session_state.get("_tac_filter_fp") == _tac_filter_fp
+        and "_tac_ranked" in st.session_state
+    ):
         _tac_ranked = st.session_state["_tac_ranked"]
     else:
         # Explicit eviction on ranked-list change prevents stale carry-over.
@@ -4602,7 +4630,15 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                 "Filters highlight (✓ QUAL, ★ ELITE) but do not remove players.  "
                 "📊 Pitch Mix intelligence available in COMMAND CENTER / TOP TARGETS / MATCHUP EDGE tabs."
             )
+            _fs_pm_ctxs = {}
             if not st.session_state.get(_fs_loaded_key):
+                st.markdown(
+                    "<div style='padding:8px 0 10px;color:#666;font-size:11px;'>"
+                    "Player rows and detail controls stay live immediately. "
+                    "Load only enables Full Slate pitch intelligence overlays."
+                    "</div>",
+                    unsafe_allow_html=True,
+                )
                 if st.button("▶ Load Full Slate", key=f"load_main_fs_{_fs_mode}", type="primary"):
                     st.session_state[_fs_loaded_key] = True
                     st.rerun()
@@ -4612,16 +4648,17 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                     data.get("date", ""),
                     spinner_label="Loading Full Slate pitch intelligence…",
                 )
-                _render_full_slate_all_players(
-                    all_players,
-                    _fs_qual_names,
-                    _fs_tac_qual_names,
-                    _steam_names,
-                    _status_cache,
-                    _urgency_cache,
-                    slate_ts=_slate_ts,
-                    pm_ctxs=_fs_pm_ctxs,
-                )
+            _render_full_slate_all_players(
+                all_players,
+                _fs_qual_names,
+                _fs_tac_qual_names,
+                _steam_names,
+                _status_cache,
+                _urgency_cache,
+                slate_ts=_slate_ts,
+                pm_ctxs=_fs_pm_ctxs,
+                source_section="Main Full Slate · All Players",
+            )
 
         elif _fs_mode == "Qualified":
             if not _tac_ranked:
@@ -4630,10 +4667,6 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                     "Try loosening the Tactical Command Center thresholds above, "
                     f"or slide sidebar EV/Edge below current EV ≥ {min_ev:.1f}% / Edge ≥ {min_edge:.1f}%."
                 )
-            elif not st.session_state.get(_fs_loaded_key):
-                if st.button("▶ Load Full Slate", key=f"load_main_fs_{_fs_mode}", type="primary"):
-                    st.session_state[_fs_loaded_key] = True
-                    st.rerun()
             else:
                 _fs_sorted = sorted(
                     _tac_ranked,
@@ -4657,9 +4690,17 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                 key=lambda p: _pf(p.get("barrel_pct"), 0),
                 reverse=True,
             )
+            _fs_elite_pm_ctxs = {}
             if not _fs_elite:
                 st.info("No elite barrel (≥ 8%) batters in today's slate.")
             elif not st.session_state.get(_fs_loaded_key):
+                st.markdown(
+                    "<div style='padding:8px 0 10px;color:#666;font-size:11px;'>"
+                    "Elite player cards remain selectable now. "
+                    "Load adds Full Slate pitch intelligence overlays."
+                    "</div>",
+                    unsafe_allow_html=True,
+                )
                 if st.button("▶ Load Full Slate", key=f"load_main_fs_{_fs_mode}", type="primary"):
                     st.session_state[_fs_loaded_key] = True
                     st.rerun()
@@ -4673,6 +4714,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                     f"{len(_fs_elite)} elite barrel players (≥ 8%) · all playable regardless of market · "
                     "sorted by barrel rate descending"
                 )
+            if _fs_elite:
                 _render_full_slate_all_players(
                     _fs_elite,
                     _fs_qual_names,
@@ -4682,6 +4724,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                     _urgency_cache,
                     slate_ts=_slate_ts,
                     pm_ctxs=_fs_elite_pm_ctxs,
+                    source_section="Main Full Slate · Elite Targets",
                 )
 
 
@@ -5500,7 +5543,10 @@ def tab_jig(data: dict):
             st.session_state.get("jig_tac_include_live",    False),
             hvy_score_min,
         )
-        if st.session_state.get("_jig_scored_fp") == _jig_scored_fp:
+        if (
+            st.session_state.get("_jig_scored_fp") == _jig_scored_fp
+            and "_jig_scored" in st.session_state
+        ):
             _entries = st.session_state["_jig_scored"]
         else:
             _entries = _score_jig_players(_players)
@@ -5516,7 +5562,6 @@ def tab_jig(data: dict):
             str(st.session_state.get("data_loaded_at", "")),
             _hvy_ctx_fp,
             len(all_players),
-            hvy_score_min,
         )
         scored_all = _session_fp_value(
             "_jig_scored_all_fp",
@@ -5534,22 +5579,21 @@ def tab_jig(data: dict):
         prime     = [x for x in qualified
                      if x["player"].get("best_american") and x["player"].get("ev_pct", 0) > 0]
 
-        # Populate JIG status cache once per slate/player universe instead of every rerun.
+        _jig_now_et = _dt.datetime.now(_EDT)
         _jig_status_fp = (
             str(st.session_state.get("data_loaded_at", "")),
             tuple(e["player"].get("player_id") or e["player"].get("player_name", "") for e in scored_all),
+            _jig_now_et.strftime("%Y%m%d%H%M"),
         )
-        _cached_jig_status = _session_fp_value(
+        _jig_status_bundle = _session_fp_value(
             "_jig_status_fp",
-            "_jig_status_cache_store",
+            "_jig_status_bundle",
             _jig_status_fp,
-            lambda: {
-                (e["player"].get("player_id") or e["player"].get("player_name", "")): _game_status_badge(e["player"])
-                for e in scored_all
-            },
+            lambda: _build_status_urgency_bundle([e["player"] for e in scored_all], _jig_now_et),
         )
         _jig_status_cache.clear()
-        _jig_status_cache.update(_cached_jig_status)
+        _jig_status_cache.update(_jig_status_bundle["status"])
+        _jig_urgency_cache = _jig_status_bundle["urgency"]
 
         if _cutoff is not None and all_players_raw is not all_players:
             _raw = []
@@ -5944,7 +5988,7 @@ def tab_jig(data: dict):
                         _jg_gt      = _game_time_et(_jp0.get("game_time_utc", ""))
                         _jg_gt_str  = _jg_gt.strftime("%I:%M %p ET").lstrip("0") if _jg_gt else "TBD"
                         _jg_pid0    = _jp0.get("player_id") or _jp0.get("player_name", "")
-                        _jg_urg_col = urgency_cache.get(_jg_pid0, (_jg_gt_str, "#555", ""))[1]
+                        _jg_urg_col = _jig_urgency_cache.get(_jg_pid0, (_jg_gt_str, "#555", ""))[1]
 
                         # Pitcher vulnerability (from home/away batters' pitcher_factor)
                         _jg_home_batters = [
@@ -7454,7 +7498,10 @@ def main():
                 _fd_cutoff if _fd_cutoff is not None else -1,
                 _fd_min_conf,
             )
-            if st.session_state.get("_fd_uif_ranked_fp") == _fd_uif_fp:
+            if (
+                st.session_state.get("_fd_uif_ranked_fp") == _fd_uif_fp
+                and "_fd_uif_ranked" in st.session_state
+            ):
                 _odds_players = st.session_state["_fd_uif_ranked"]
             else:
                 _odds_players = _apply_ui_filters(
@@ -7981,4 +8028,3 @@ if __name__ == "__main__":
         st.error(f"App crash: {_top_e}")
         if __import__("os").getenv("DEBUG") == "true":
                     st.code(_tb.format_exc())
-
