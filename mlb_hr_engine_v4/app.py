@@ -7332,6 +7332,16 @@ def main():
     _min_ev   = float(st.session_state.get("min_ev",   config.MIN_EV_PCT))
     _min_edge = float(st.session_state.get("min_edge", config.MIN_EDGE_PCT))
     _min_conf = int(st.session_state.get("min_confidence", 0))
+    _route_labels = {
+        "MAIN": "Main Workspace",
+        "JIG": "JIG Workspace",
+        "ADVANCED_STRATEGIES": "Advanced Strategies",
+        "HITS": "Hits",
+        "PERFORMANCE": "Performance",
+    }
+    _route_order = list(_route_labels.keys())
+    st.session_state.setdefault("active_route", "MAIN")
+    st.session_state.setdefault("active_workspace", st.session_state["active_route"])
 
 
     # â"€â"€ Sidebar â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
@@ -7346,6 +7356,21 @@ def main():
             text-transform:uppercase; margin-top:5px;'>PROP BETTING ENGINE</div>
         </div>
         """, unsafe_allow_html=True)
+
+        st.markdown("#### 🧭 Active Workspace")
+        _workspace_sel = st.selectbox(
+            "Active workspace",
+            options=_route_order,
+            index=_route_order.index(
+                st.session_state.get("active_workspace", st.session_state["active_route"])
+                if st.session_state.get("active_workspace", st.session_state["active_route"]) in _route_order
+                else "MAIN"
+            ),
+            format_func=lambda x: _route_labels.get(x, x),
+            label_visibility="collapsed",
+            key="active_workspace",
+        )
+        st.session_state["active_route"] = _workspace_sel
 
         # Bankroll input
         st.markdown("#### 💰 Bankroll")
@@ -7963,52 +7988,34 @@ The app will open full-screen like a native app.
     if _banner.exists():
         st.image(str(_banner), use_container_width=True)
     st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-        "⚾  MAIN",
-        "⚡  JIG",
-        "🔥  26",
-        "🧩  ADVANCED STRATEGIES",
-        "🏃  HITS",
-        "📊  PERFORMANCE",
-    ])
+    _active_route = st.session_state.get("active_route", "MAIN")
+    if _active_route not in _route_order:
+        _active_route = "MAIN"
+        st.session_state["active_route"] = _active_route
+        st.session_state["active_workspace"] = _active_route
 
-    with tab1:
+    if _active_route == "MAIN":
         try:
             data = get_data()
-            tab_picks(data, _min_ev, _min_edge,
-                      cutoff_utc_hour=st.session_state.get("cutoff_utc_hour"),
-                      min_confidence=_min_conf)
+            tab_picks(
+                data,
+                _min_ev,
+                _min_edge,
+                cutoff_utc_hour=st.session_state.get("cutoff_utc_hour"),
+                min_confidence=_min_conf,
+            )
         except Exception as _e:
             st.error(f"Picks tab error: {_e}")
             if __import__("os").getenv("DEBUG") == "true":
                     st.code(_tb.format_exc())
-
-    with tab2:
+    elif _active_route == "JIG":
         try:
             tab_jig(get_data())
         except Exception as _e:
             st.error(f"JIG tab error: {_e}")
             if __import__("os").getenv("DEBUG") == "true":
                     st.code(_tb.format_exc())
-
-    with tab3:
-        st.markdown(
-            "<div style='padding:40px 20px;text-align:center;'>"
-            "<div style='font-size:32px;font-weight:900;color:#FF6666;"
-            "letter-spacing:4px;text-shadow:0 0 30px rgba(255,100,50,0.6);'>"
-            "🔥 26</div>"
-            "<div style='font-size:14px;color:#666;margin-top:12px;letter-spacing:2px;'>"
-            "ALTERNATIVE POWER-PROFILE METHODOLOGY</div>"
-            "<div style='font-size:12px;color:#444;margin-top:24px;max-width:480px;"
-            "margin-left:auto;margin-right:auto;line-height:1.8;'>"
-            "A simplified explosive-bat philosophy.<br>"
-            "Separate from the Main quantitative engine.<br>"
-            "Coming in a future session."
-            "</div></div>",
-            unsafe_allow_html=True,
-        )
-
-    with tab4:
+    elif _active_route == "ADVANCED_STRATEGIES":
         try:
             tab_advanced_strategies(
                 _gate_data(get_data(), st.session_state.get("cutoff_utc_hour")),
@@ -8018,16 +8025,14 @@ The app will open full-screen like a native app.
             st.error(f"Advanced strategies tab error: {_e}")
             if __import__("os").getenv("DEBUG") == "true":
                     st.code(_tb.format_exc())
-
-    with tab5:
+    elif _active_route == "HITS":
         try:
             tab_hits(_gate_data(get_data(), st.session_state.get("cutoff_utc_hour")))
         except Exception as _e:
             st.error(f"Hits tab error: {_e}")
             if __import__("os").getenv("DEBUG") == "true":
                     st.code(_tb.format_exc())
-
-    with tab6:
+    elif _active_route == "PERFORMANCE":
         try:
             tab_performance()
         except Exception as _e:
