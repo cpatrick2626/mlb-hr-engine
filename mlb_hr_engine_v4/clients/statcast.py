@@ -33,8 +33,9 @@ from typing import Optional
 from concurrent.futures import ThreadPoolExecutor
 
 import config
+from clients.session_utils import configure_session
 
-_SESSION = requests.Session()
+_SESSION = configure_session(requests.Session())
 _SESSION.headers.update({
     "User-Agent": (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "

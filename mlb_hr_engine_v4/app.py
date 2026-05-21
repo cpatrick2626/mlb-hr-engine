@@ -4,16 +4,82 @@ Codex HR Engine — Streamlit Dashboard
 
 import sys
 import html
+import hashlib
+import time as _time
 import traceback as _tb
 import urllib.parse
 import datetime as _dt
 from datetime import timezone as _tz, timedelta as _td
 from pathlib import Path
 
+_APP_ROOT = Path(__file__).resolve().parent
+_REPO_ROOT = _APP_ROOT.parent
+_REQUIRED_LOCAL_MODULES = (
+    "filter_controls.py",
+    "config.py",
+    "pipeline.py",
+    "strategies_ui.py",
+    "investigation_state.py",
+)
+
+
+def _build_startup_context() -> dict:
+    """
+    Normalize local import ownership before any repo-local imports execute.
+
+    Supported launch shapes:
+    - cwd = mlb_hr_engine_v4, entrypoint = app.py
+    - cwd = repo root, entrypoint = mlb_hr_engine_v4/app.py
+    """
+    startup_cwd = Path.cwd().resolve()
+    app_root_str = str(_APP_ROOT)
+    if app_root_str in sys.path:
+        import_mode = "preconfigured_path"
+    else:
+        sys.path.insert(0, app_root_str)
+        import_mode = "cwd_aligned" if startup_cwd == _APP_ROOT else "bootstrap_path_injected"
+
+    missing_modules = [name for name in _REQUIRED_LOCAL_MODULES if not (_APP_ROOT / name).exists()]
+    if missing_modules:
+        launch_validation_state = f"missing_local_modules:{','.join(missing_modules)}"
+    elif startup_cwd == _APP_ROOT:
+        launch_validation_state = "canonical_app_cwd"
+    elif startup_cwd == _REPO_ROOT:
+        launch_validation_state = "supported_repo_root_entrypoint"
+    else:
+        launch_validation_state = "noncanonical_cwd_supported_via_bootstrap"
+
+    return {
+        "startup_cwd": str(startup_cwd),
+        "app_root": str(_APP_ROOT),
+        "repo_root": str(_REPO_ROOT),
+        "import_mode": import_mode,
+        "launch_validation_state": launch_validation_state,
+    }
+
+
+def _format_startup_import_error(exc: Exception) -> str:
+    return (
+        "MLB HR ENGINE startup import failed.\n"
+        f"cwd={_STARTUP_CONTEXT['startup_cwd']}\n"
+        f"app_root={_STARTUP_CONTEXT['app_root']}\n"
+        f"repo_root={_STARTUP_CONTEXT['repo_root']}\n"
+        f"import_mode={_STARTUP_CONTEXT['import_mode']}\n"
+        f"launch_validation_state={_STARTUP_CONTEXT['launch_validation_state']}\n"
+        f"error={exc!r}\n"
+        "Supported launch paths:\n"
+        "  1. cd <repo>\\mlb_hr_engine_v4 && py -m streamlit run app.py\n"
+        "  2. cd <repo> && py -m streamlit run mlb_hr_engine_v4/app.py"
+    )
+
+
+_STARTUP_CONTEXT = _build_startup_context()
+
 import streamlit as st
 import pandas as pd
 import numpy as np
 import filter_controls as _fc
+import navigation_continuity as _nav
 
 
 def _pf(val, default=0.0):
@@ -41,6 +107,48 @@ _CARD_CACHE: dict = {}
 _CARD_CACHE_SLATE: str = ""
 
 
+_RUNTIME_DIAG_KEY = "_runtime_diagnostics"
+_REFRESH_DATA_KEYS = (
+    "data",
+    "cache_key",
+    "data_loaded_at",
+    "pitcher_map_at_load",
+    "pitcher_changes",
+    "scratched_ids",
+)
+_PITCH_CONTEXT_PREFIXES = (
+    "picks_pm_ctx_",
+    "hvy_ctx_",
+    "hvy_retry_",
+)
+_PITCH_CONTEXT_KEYS = (
+    "_hvy_savant_ok",
+    "_hvy_candidates_n",
+)
+_RENDER_CACHE_KEYS = (
+    "_hvy_html_cache",
+)
+_DATA_DERIVED_CACHE_KEYS = (
+    "_tac_ranked",
+    "_tac_filter_fp",
+    "_main_fs_view_model",
+    "_main_fs_view_model_fp",
+    "_main_fs_qual_sorted",
+    "_main_fs_qual_sorted_fp",
+    "_main_fs_elite_pool",
+    "_main_fs_elite_pool_fp",
+    "_jig_tac_filtered",
+    "_jig_tac_filtered_fp",
+    "_jig_scored",
+    "_jig_scored_fp",
+    "_jig_matchup_rows",
+    "_jig_matchup_rows_fp",
+    "_fd_uif_ranked",
+    "_fd_uif_ranked_fp",
+)
+_HYDRATION_SIDE_EFFECT_FP_KEY = "_hydration_side_effect_fp"
+
+
 def _card_html(fp: tuple, builder) -> str:
     """Return cached card HTML or build+cache it. builder is a zero-arg callable."""
     global _CARD_CACHE, _CARD_CACHE_SLATE
@@ -53,6 +161,413 @@ def _card_html(fp: tuple, builder) -> str:
         cached = builder()
         _CARD_CACHE[fp] = cached
     return cached
+
+
+def _runtime_diag() -> dict:
+    return st.session_state.setdefault(
+        _RUNTIME_DIAG_KEY,
+        {
+            "rerun_count": 0,
+            "last_refresh_reason": "initial load",
+            "cache_clear_ts": "",
+            "last_refresh_scope": "",
+            "startup_cwd": _STARTUP_CONTEXT["startup_cwd"],
+            "app_root": _STARTUP_CONTEXT["app_root"],
+            "import_mode": _STARTUP_CONTEXT["import_mode"],
+            "launch_validation_state": _STARTUP_CONTEXT["launch_validation_state"],
+            "active_route": "MAIN",
+            "active_workspace": "MAIN",
+            "active_main_subview": "command_center",
+            "active_jig_subview": "command_center",
+            "loaded_slate_date": "",
+            "last_hydration_ts": "",
+            "hydration_fingerprint": "",
+            "last_side_effect_ts": "",
+            "active_render_section": "",
+            "last_heavy_render_ms": 0.0,
+            "render_fingerprint": "",
+            "largest_rendered_dataset": 0,
+            "active_widget_zone": "",
+            "widget_count_estimate": 0,
+            "last_interaction_source": "",
+            "rerun_trigger_source": "",
+        },
+    )
+
+
+def _mark_runtime_rerun() -> None:
+    diag = _runtime_diag()
+    diag["rerun_count"] = int(diag.get("rerun_count", 0)) + 1
+
+
+def _update_runtime_route_diag() -> None:
+    diag = _runtime_diag()
+    diag["active_route"] = st.session_state.get("active_route", "MAIN")
+    diag["active_workspace"] = st.session_state.get("active_workspace", diag["active_route"])
+    diag["active_main_subview"] = st.session_state.get("active_main_subview", "command_center")
+    diag["active_jig_subview"] = st.session_state.get("active_jig_subview", "command_center")
+    data = st.session_state.get("data") or {}
+    diag["loaded_slate_date"] = data.get("date") or st.session_state.get("cache_key", "")
+
+
+def _ensure_navigation_continuity_state() -> None:
+    _nav.ensure_navigation_continuity_state(st.session_state)
+
+
+def _render_navigation_breadcrumbs(shell_ctx: dict) -> None:
+    breadcrumb = _nav.get_breadcrumb_view(st.session_state, shell_ctx=shell_ctx)
+    stages = breadcrumb.get("visible_stages", [])[:4]
+    if not stages:
+        return
+    stage_markup = " <span style='color:#374151;'>›</span> ".join(
+        f"<span style='color:#f3f4f6;font-size:11px;font-weight:800;'>{html.escape(stage)}</span>"
+        for stage in stages
+    )
+    st.markdown(
+        f"<div style='background:#05060a;border:1px solid #161623;border-radius:12px;"
+        f"padding:8px 12px;margin:0 0 10px;'>"
+        f"<div style='color:#6b7280;font-size:9px;letter-spacing:1.4px;text-transform:uppercase;'>Navigation Breadcrumb</div>"
+        f"<div style='margin-top:4px;display:flex;flex-wrap:wrap;align-items:center;gap:4px;'>{stage_markup}</div>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+
+def _render_interruption_indicators(shell_ctx: dict) -> None:
+    notices = _nav.get_interruption_notice_view(st.session_state)
+    if not notices:
+        return
+    st.markdown("#### ⚠️ Interruption Indicators")
+    for notice in notices[-4:]:
+        level = str(notice.get("level", "ADVISORY")).upper()
+        message = str(notice.get("message", ""))
+        source = str(notice.get("source", ""))
+        st.markdown(
+            _shell_badge_html(level, message[:52] or "NOTICE", source[:24]),
+            unsafe_allow_html=True,
+        )
+
+
+def _render_recovery_prompt_shell(shell_ctx: dict) -> None:
+    prompt = _nav.get_recovery_prompt_view(st.session_state)
+    if not prompt.get("visible"):
+        return
+    context_ref = prompt.get("context_ref", {}) or {}
+    title = html.escape(str(prompt.get("title", "Recovery Prompt")))
+    message = html.escape(str(prompt.get("message", "")))
+    context_label = html.escape(
+        str(
+            context_ref.get("player_display")
+            or context_ref.get("player_name")
+            or context_ref.get("game_display")
+            or context_ref.get("engine")
+            or ""
+        )
+    )
+    context_html = (
+        f"<div style='color:#6b7280;font-size:10px;margin-top:4px;'>{context_label}</div>"
+        if context_label
+        else ""
+    )
+    st.markdown(
+        f"<div style='background:linear-gradient(180deg,#100f16 0%,#08080d 100%);"
+        f"border:1px solid #2b2440;border-radius:14px;padding:12px 14px;margin:0 0 12px;'>"
+        f"<div style='color:#f3f4f6;font-size:13px;font-weight:800;'>{title}</div>"
+        f"<div style='color:#cbd5e1;font-size:11px;margin-top:4px;'>{message}</div>"
+        f"{context_html}"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+    cols = st.columns(2)
+    with cols[0]:
+        if st.button(
+            prompt.get("primary_action_label", "Resume"),
+            key="recovery_prompt_resume",
+            width="stretch",
+        ):
+            _nav.request_recovery_prompt_action(st.session_state, "resume")
+    with cols[1]:
+        if st.button(
+            prompt.get("secondary_action_label", "Cancel"),
+            key="recovery_prompt_cancel",
+            width="stretch",
+        ):
+            _nav.clear_recovery_prompt(st.session_state)
+
+
+def _iso_now_local() -> str:
+    return _dt.datetime.now().isoformat(timespec="seconds")
+
+
+def _player_hydration_token(player: dict) -> str:
+    """Fingerprint only stable hydration fields that govern downstream writes."""
+    return "|".join((
+        str(player.get("player_id") or ""),
+        str(player.get("player_name") or ""),
+        str(player.get("team") or ""),
+        str(player.get("best_american") or ""),
+        str(player.get("best_book") or player.get("sportsbook") or ""),
+        f"{float(player.get('model_prob', 0) or 0):.6f}",
+        f"{float(player.get('edge_pct', 0) or 0):.4f}",
+        f"{float(player.get('ev_pct', 0) or 0):.4f}",
+    ))
+
+
+def _build_hydration_fingerprint(data: dict, target_date: str) -> str:
+    """
+    Stable digest for one hydration payload.
+
+    Route switches and reruns should preserve this value; genuine data refreshes
+    that change player payloads or qualified sets should rotate it.
+    """
+    ranked = data.get("ranked", []) or []
+    all_players = data.get("all_players", []) or []
+    stats = data.get("stats", {}) or {}
+    digest = hashlib.sha1()
+    digest.update(str(target_date or "").encode("utf-8"))
+    digest.update(str(data.get("date") or "").encode("utf-8"))
+    digest.update(str(int(stats.get("players", 0) or 0)).encode("utf-8"))
+    digest.update(str(int(stats.get("qualified", 0) or 0)).encode("utf-8"))
+    for token in sorted(_player_hydration_token(player) for player in ranked):
+        digest.update(token.encode("utf-8"))
+    digest.update(b"::all_players::")
+    for token in sorted(
+        f"{player.get('player_id') or ''}|{player.get('player_name') or ''}|"
+        f"{float(player.get('model_prob', 0) or 0):.6f}|"
+        f"{player.get('best_american') or ''}"
+        for player in all_players
+    ):
+        digest.update(token.encode("utf-8"))
+    return digest.hexdigest()[:16]
+
+
+def _record_hydration_state(data: dict, target_date: str) -> str:
+    """Store the current pure-load hydration fingerprint for diagnostics and guards."""
+    fingerprint = _build_hydration_fingerprint(data, target_date)
+    st.session_state["hydration_fingerprint"] = fingerprint
+    diag = _runtime_diag()
+    diag["loaded_slate_date"] = data.get("date") or target_date
+    diag["last_hydration_ts"] = _iso_now_local()
+    diag["hydration_fingerprint"] = fingerprint
+    return fingerprint
+
+
+def _run_hydration_side_effects_once(data: dict) -> None:
+    """
+    Execute hydration-owned operational writes once per payload fingerprint.
+
+    Ownership boundary:
+    - `get_data()` remains pure hydration/cache population only.
+    - This helper owns post-hydration logging, snapshots, and settlement calls.
+    - Modal logging / FD slip logging stay in their UI event handlers.
+    """
+    fingerprint = st.session_state.get("hydration_fingerprint", "")
+    if not fingerprint or st.session_state.get(_HYDRATION_SIDE_EFFECT_FP_KEY) == fingerprint:
+        return
+
+    ranked = data.get("ranked", []) or []
+    all_players = data.get("all_players", []) or []
+
+    if ranked:
+        try:
+            logged = pnl_tracker.log_picks(ranked, model_version="v4")
+            if logged:
+                clv_tracker.log_opening_lines(ranked)
+        except Exception as e:
+            st.warning(f"Pick tracking error: {e}")
+        try:
+            lm_tracker.log_current_odds(ranked)
+        except Exception as e:
+            st.warning(f"Line movement tracking error: {e}")
+
+    try:
+        from tracking import pick_tracker as _pt
+        _pt.log_picks_bulk(ranked, source_tab="Engine", source_section="Qualified Picks")
+        _ranked_names = {p.get("player_name") for p in ranked}
+        non_ranked = [p for p in all_players if p.get("player_name") not in _ranked_names]
+        _pt.log_picks_bulk(non_ranked, source_tab="Engine", source_section="All Players")
+    except Exception:
+        pass
+
+    try:
+        pnl_tracker.settle_all_unsettled()
+    except Exception as e:
+        st.warning(f"Outcome settlement error: {e}")
+
+    st.session_state[_HYDRATION_SIDE_EFFECT_FP_KEY] = fingerprint
+    _runtime_diag()["last_side_effect_ts"] = _iso_now_local()
+
+
+def _clear_named_cache_data_functions(names: tuple[str, ...]) -> None:
+    """Clear specific st.cache_data functions without globally wiping every cache."""
+    for name in names:
+        fn = globals().get(name)
+        clear = getattr(fn, "clear", None)
+        if callable(clear):
+            try:
+                clear()
+            except Exception:
+                pass
+
+
+def _clear_runtime_refresh_state(reason: str, *, scope: str = "data") -> None:
+    """
+    Own refresh invalidation for MLB runtime state.
+
+    scope="data" clears slate data plus dependent pitch/render caches.
+    scope="pitch" clears pitch intelligence and render caches only.
+
+    Preserved intentionally: route/workspace selection, tactical controls,
+    modal continuity, FD slip state, deployment tracking state, and UI prefs.
+    """
+    global _CARD_CACHE, _CARD_CACHE_SLATE
+    scope = scope if scope in {"data", "pitch"} else "data"
+
+    if scope == "data":
+        try:
+            from clients import mlb_stats as _ms_clear, statcast as _sc_clear
+            _ms_clear.clear_all_caches()
+            _sc_clear.clear_all_caches()
+        except Exception:
+            pass
+        for key in _REFRESH_DATA_KEYS:
+            st.session_state.pop(key, None)
+        _clear_named_cache_data_functions((
+            "_fetch_live_status",
+            "_cached_steam_moves",
+            "_build_rqt_rows",
+            "_load_pipeline_cached",
+            "_cached_pitcher_map",
+        ))
+        for key in _DATA_DERIVED_CACHE_KEYS:
+            st.session_state.pop(key, None)
+
+    try:
+        from clients import pitch_mix as _pm_clear, arsenal as _ar_clear
+        _pm_clear.clear_caches()
+        _ar_clear.clear_caches()
+    except Exception:
+        pass
+
+    for key in list(st.session_state.keys()):
+        if key.startswith(_PITCH_CONTEXT_PREFIXES):
+            st.session_state.pop(key, None)
+    for key in _PITCH_CONTEXT_KEYS + _RENDER_CACHE_KEYS:
+        st.session_state.pop(key, None)
+
+    _CARD_CACHE.clear()
+    _CARD_CACHE_SLATE = ""
+
+    diag = _runtime_diag()
+    diag["last_refresh_reason"] = reason
+    diag["last_refresh_scope"] = scope
+    diag["cache_clear_ts"] = _dt.datetime.now().isoformat(timespec="seconds")
+    _update_runtime_route_diag()
+
+
+def _render_runtime_diagnostics() -> None:
+    """Collapsed runtime visibility; reads state only and never triggers refresh."""
+    _update_runtime_route_diag()
+    diag = _runtime_diag()
+    with st.expander("Runtime Diagnostics", expanded=False):
+        st.caption(f"Reruns: {diag.get('rerun_count', 0)}")
+        st.caption(f"Last refresh: {diag.get('last_refresh_reason', 'unknown')}")
+        st.caption(f"Refresh scope: {diag.get('last_refresh_scope', '') or 'none'}")
+        st.caption(f"Cache clear: {diag.get('cache_clear_ts', '') or 'not cleared'}")
+        st.caption(f"Startup cwd: {diag.get('startup_cwd', '') or 'unknown'}")
+        st.caption(f"App root: {diag.get('app_root', '') or 'unknown'}")
+        st.caption(f"Import mode: {diag.get('import_mode', '') or 'unknown'}")
+        st.caption(f"Launch validation: {diag.get('launch_validation_state', '') or 'unknown'}")
+        st.caption(f"Route: {diag.get('active_route', 'MAIN')}")
+        st.caption(f"Workspace: {diag.get('active_workspace', 'MAIN')}")
+        st.caption(f"MAIN sub-view: {diag.get('active_main_subview', 'command_center')}")
+        st.caption(f"JIG sub-view: {diag.get('active_jig_subview', 'command_center')}")
+        st.caption(f"Slate date: {diag.get('loaded_slate_date', '') or 'not loaded'}")
+        st.caption(f"Last hydration: {diag.get('last_hydration_ts', '') or 'not loaded'}")
+        st.caption(f"Hydration fingerprint: {diag.get('hydration_fingerprint', '') or 'not computed'}")
+        st.caption(f"Last side-effect run: {diag.get('last_side_effect_ts', '') or 'not executed'}")
+        st.caption(f"Active render: {diag.get('active_render_section', '') or 'not set'}")
+        st.caption(f"Last heavy render: {float(diag.get('last_heavy_render_ms', 0.0) or 0.0):.1f} ms")
+        st.caption(f"Render fingerprint: {diag.get('render_fingerprint', '') or 'not set'}")
+        st.caption(f"Largest dataset: {diag.get('largest_rendered_dataset', 0) or 0}")
+        st.caption(f"Widget zone: {diag.get('active_widget_zone', '') or 'not set'}")
+        st.caption(f"Widget count est.: {diag.get('widget_count_estimate', 0) or 0}")
+        st.caption(f"Last interaction: {diag.get('last_interaction_source', '') or 'not set'}")
+        st.caption(f"Rerun trigger: {diag.get('rerun_trigger_source', '') or 'not set'}")
+
+
+def _mark_render_section(section: str, *, fingerprint: str = "", dataset_size: int = 0) -> None:
+    """Read-only perf breadcrumb for active route/subview render ownership."""
+    diag = _runtime_diag()
+    diag["active_render_section"] = section
+    if fingerprint:
+        diag["render_fingerprint"] = fingerprint
+    if dataset_size:
+        diag["largest_rendered_dataset"] = max(
+            int(diag.get("largest_rendered_dataset", 0) or 0),
+            int(dataset_size),
+        )
+
+
+def _start_heavy_render(section: str, *, fingerprint: str = "", dataset_size: int = 0) -> float:
+    _mark_render_section(section, fingerprint=fingerprint, dataset_size=dataset_size)
+    return _time.perf_counter()
+
+
+def _finish_heavy_render(started_at: float) -> None:
+    _runtime_diag()["last_heavy_render_ms"] = round((_time.perf_counter() - started_at) * 1000.0, 1)
+
+
+def _record_widget_zone(zone: str, *, widget_count_estimate: int = 0) -> None:
+    """Read-only widget-pressure breadcrumb for the currently rendered interaction zone."""
+    diag = _runtime_diag()
+    diag["active_widget_zone"] = zone
+    diag["widget_count_estimate"] = max(0, int(widget_count_estimate or 0))
+
+
+def _record_interaction(source: str, *, rerun_source: str = "") -> None:
+    """Store the latest user interaction and the rerun cause it intentionally triggered."""
+    diag = _runtime_diag()
+    diag["last_interaction_source"] = source
+    if rerun_source:
+        diag["rerun_trigger_source"] = rerun_source
+
+
+def _stable_key_token(*parts) -> str:
+    raw = "|".join(str(part or "") for part in parts)
+    return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:12]
+
+
+def _normalize_subview_state(state_key: str, options: list[tuple[str, str]], default_id: str) -> str:
+    valid_ids = [option_id for option_id, _label in options]
+    if default_id not in valid_ids:
+        default_id = valid_ids[0]
+    active_id = st.session_state.get(state_key, default_id)
+    if active_id not in valid_ids:
+        active_id = default_id
+        st.session_state[state_key] = active_id
+    return active_id
+
+
+def _render_subview_selector(
+    state_key: str,
+    label: str,
+    options: list[tuple[str, str]],
+    default_id: str,
+) -> str:
+    """Render one active internal view; avoids Streamlit hidden-tab execution."""
+    active_id = _normalize_subview_state(state_key, options, default_id)
+    labels = {option_id: text for option_id, text in options}
+    option_ids = [option_id for option_id, _text in options]
+    return st.radio(
+        label,
+        options=option_ids,
+        index=option_ids.index(active_id),
+        format_func=lambda option_id: labels.get(option_id, option_id),
+        horizontal=True,
+        key=state_key,
+        label_visibility="collapsed",
+    )
 
 
 def _session_fp_value(fp_key: str, value_key: str, fp: tuple, builder):
@@ -93,6 +608,532 @@ def _ensure_pitch_mix_contexts(players: list[dict], slate_date: str,
                 _pm_ar = {}
             st.session_state[_ctx_key] = _pm_load_batch(players, _pm_ar)
     return st.session_state.get(_ctx_key, {})
+
+
+_SHELL_CONTEXT_STACK_KEY = "_runtime_shell_context_stack"
+_SHELL_CONTEXT_STACK_LIMIT = 8
+_SHELL_LAZY_GATE_PREFIX = "_runtime_shell_lazy_gate"
+_PENDING_WORKSPACE_ROUTE_KEY = "_pending_active_workspace"
+
+
+def _shell_token_palette(state: str) -> tuple[str, str, str]:
+    key = str(state or "").upper()
+    return {
+        "FULL": ("#4ade80", "#08150d", "#153826"),
+        "LIVE": ("#4ade80", "#08150d", "#153826"),
+        "CACHED": ("#facc15", "#161204", "#41390b"),
+        "DEGRADED": ("#f59e0b", "#1a1204", "#4a3208"),
+        "STALE": ("#f97316", "#1a0f05", "#4a2608"),
+        "RESTRICTED": ("#fb7185", "#1c0b11", "#4e1623"),
+        "BLOCKED": ("#f87171", "#1a0909", "#4a1515"),
+        "UNAVAILABLE": ("#94a3b8", "#0f1720", "#263241"),
+        "--": ("#94a3b8", "#0f1720", "#263241"),
+    }.get(key, ("#60a5fa", "#07111c", "#18314f"))
+
+
+def _shell_badge_html(label: str, state: str, detail: str = "") -> str:
+    fg, bg, border = _shell_token_palette(state)
+    detail_html = (
+        f"<span style='color:#6b7280;font-size:9px;margin-left:6px;'>{html.escape(detail)}</span>"
+        if detail else ""
+    )
+    return (
+        f"<span style='display:inline-flex;align-items:center;background:{bg};"
+        f"border:1px solid {border};border-radius:999px;padding:4px 8px 4px 9px;"
+        f"margin:2px 6px 2px 0;'>"
+        f"<span style='color:#9ca3af;font-size:9px;letter-spacing:1.2px;"
+        f"text-transform:uppercase;'>{html.escape(label)}</span>"
+        f"<span style='color:{fg};font-size:10px;font-weight:800;letter-spacing:0.8px;"
+        f"margin-left:6px;'>{html.escape(state)}</span>{detail_html}</span>"
+    )
+
+
+def _coerce_shell_route(value: str | None, fallback: str = "MAIN") -> str:
+    raw = str(value or "").strip().upper()
+    if not raw:
+        return fallback
+    aliases = {
+        "MAIN": "MAIN",
+        "JIG": "JIG",
+        "ADVANCED": "ADVANCED_STRATEGIES",
+        "ADVANCED_STRATEGIES": "ADVANCED_STRATEGIES",
+        "HITS": "HITS",
+        "PERFORMANCE": "PERFORMANCE",
+    }
+    for key, normalized in aliases.items():
+        if raw == key or raw.startswith(f"{key} "):
+            return normalized
+    if "ADVANCED" in raw:
+        return "ADVANCED_STRATEGIES"
+    return fallback
+
+
+def _snapshot_runtime_context(reason: str = "") -> dict:
+    state = _investigation.get_investigation_state()
+    return {
+        "route": st.session_state.get("active_route", "MAIN"),
+        "workspace": st.session_state.get("active_workspace", st.session_state.get("active_route", "MAIN")),
+        "selected_player_modal": st.session_state.get("selected_player_modal"),
+        "modal_source_tab": st.session_state.get("modal_source_tab"),
+        "modal_source_section": st.session_state.get("modal_source_section"),
+        "investigation_state": {
+            "active_player_id": state.get("active_player_id"),
+            "active_player_name": state.get("active_player_name"),
+            "origin_route": state.get("origin_route"),
+            "origin_engine": state.get("origin_engine"),
+        },
+        "reason": reason,
+        "saved_at": _iso_now_local(),
+    }
+
+
+def _push_runtime_context(reason: str = "") -> None:
+    stack = list(st.session_state.get(_SHELL_CONTEXT_STACK_KEY, []))
+    stack.append(_snapshot_runtime_context(reason))
+    st.session_state[_SHELL_CONTEXT_STACK_KEY] = stack[-_SHELL_CONTEXT_STACK_LIMIT:]
+
+
+def _restore_runtime_context() -> bool:
+    stack = list(st.session_state.get(_SHELL_CONTEXT_STACK_KEY, []))
+    if not stack:
+        return False
+    payload = stack.pop()
+    st.session_state[_SHELL_CONTEXT_STACK_KEY] = stack
+    restored_route = _coerce_shell_route(payload.get("route"), "MAIN")
+    restored_workspace = _coerce_shell_route(
+        payload.get("workspace"),
+        restored_route,
+    )
+    st.session_state["active_route"] = restored_workspace
+    st.session_state[_PENDING_WORKSPACE_ROUTE_KEY] = restored_workspace
+    if payload.get("selected_player_modal"):
+        st.session_state["selected_player_modal"] = payload.get("selected_player_modal")
+        st.session_state["show_modal"] = True
+    if payload.get("modal_source_tab"):
+        st.session_state["modal_source_tab"] = payload.get("modal_source_tab")
+    if payload.get("modal_source_section"):
+        st.session_state["modal_source_section"] = payload.get("modal_source_section")
+    return True
+
+
+def _find_player_in_data(data: dict | None, target: dict | None) -> dict | None:
+    if not isinstance(data, dict) or not isinstance(target, dict):
+        return None
+    target_id = target.get("active_player_id") or target.get("player_id")
+    target_name = str(target.get("active_player_name") or target.get("player_name") or "").strip().lower()
+    target_game = target.get("active_game_pk") or target.get("game_pk") or target.get("game_id")
+    for player in data.get("all_players", []) or []:
+        player_id = player.get("player_id")
+        player_name = str(player.get("player_name", "")).strip().lower()
+        player_game = player.get("game_pk") or player.get("game_id")
+        if target_id not in (None, "") and player_id == target_id:
+            return player
+        if target_name and player_name == target_name and target_game in (None, "", player_game):
+            return player
+    return None
+
+
+def _request_workspace_route(route: str) -> str:
+    next_route = _coerce_shell_route(
+        route,
+        st.session_state.get("active_route", "MAIN"),
+    )
+    st.session_state["active_route"] = next_route
+    st.session_state[_PENDING_WORKSPACE_ROUTE_KEY] = next_route
+    return next_route
+
+
+def _jump_to_investigation_target(target: dict, data: dict | None) -> bool:
+    if not isinstance(target, dict):
+        return False
+    _push_runtime_context("escalation_jump")
+    next_route = _coerce_shell_route(
+        target.get("origin_engine") or target.get("origin_route") or st.session_state.get("active_route", "MAIN"),
+        st.session_state.get("active_route", "MAIN"),
+    )
+    _request_workspace_route(next_route)
+    player = _find_player_in_data(data, target)
+    if player:
+        st.session_state["selected_player_modal"] = player
+        st.session_state["show_modal"] = True
+        st.session_state["modal_source_tab"] = target.get("origin_route") or next_route
+        st.session_state["modal_source_section"] = "Escalation Queue"
+    return True
+
+
+def _shell_source_state(data: dict, source_key: str) -> tuple[str, str]:
+    players = data.get("all_players", []) or []
+    stats = data.get("stats", {}) or {}
+    loaded_at = st.session_state.get("data_loaded_at")
+    age_min = int((_dt.datetime.now() - loaded_at).total_seconds() / 60) if loaded_at else None
+
+    if source_key == "weather":
+        outdoor = [p for p in players if not p.get("is_dome")]
+        with_weather = sum(1 for p in outdoor if p.get("weather"))
+        if not outdoor:
+            return "LIVE", "domes"
+        if with_weather == 0:
+            return "UNAVAILABLE", "no feed"
+        if with_weather < len(outdoor):
+            return "DEGRADED", f"{with_weather}/{len(outdoor)}"
+        if age_min is not None and age_min >= 180:
+            return "STALE", f"{age_min}m"
+        return "LIVE", f"{with_weather}/{len(outdoor)}"
+
+    if source_key == "savant":
+        sc_current = int(stats.get("sc_current", 0) or 0)
+        sc_blended = int(stats.get("sc_blended", 0) or 0)
+        sc_prior = int(stats.get("sc_prior", 0) or 0)
+        sc_none = int(stats.get("sc_none", 0) or 0)
+        total = max(1, int(stats.get("players", 0) or 0))
+        if sc_current == 0 and sc_blended == 0 and sc_prior == 0:
+            return "UNAVAILABLE", f"{sc_none}/{total}"
+        if sc_none > 0 or sc_prior > 0:
+            return "DEGRADED", f"{total - sc_none}/{total}"
+        if sc_blended > 0:
+            return "STALE", f"{sc_blended} blend"
+        return "LIVE", f"{sc_current}/{total}"
+
+    if source_key == "odds":
+        odds_source = str(data.get("odds_source", "none") or "none").lower()
+        n_with_odds = int(data.get("n_with_odds") or stats.get("n_with_odds", 0) or 0)
+        total = max(1, len(players))
+        if odds_source in {"none", "error"}:
+            return "UNAVAILABLE", "no book"
+        if "stale" in odds_source:
+            return "STALE", f"{n_with_odds}/{total}"
+        if "manual" in odds_source or "csv" in odds_source:
+            return "DEGRADED", "fallback"
+        if n_with_odds < total:
+            return "DEGRADED", f"{n_with_odds}/{total}"
+        return "LIVE", f"{n_with_odds}/{total}"
+
+    if source_key == "pitch_mix":
+        ctx_keys = [key for key in st.session_state.keys() if str(key).startswith(("picks_pm_ctx_", "hvy_ctx_"))]
+        if not ctx_keys:
+            return "UNAVAILABLE", "deferred"
+        loaded = 0
+        with_data = 0
+        for key in ctx_keys:
+            ctx_map = st.session_state.get(key, {}) or {}
+            for ctx in ctx_map.values():
+                loaded += 1
+                if ctx.get("pitcher_arsenal") or ctx.get("batter_vs") or ctx.get("hand_splits"):
+                    with_data += 1
+        if loaded == 0:
+            return "UNAVAILABLE", "deferred"
+        if with_data == 0:
+            return "DEGRADED", "empty"
+        if with_data < loaded:
+            return "DEGRADED", f"{with_data}/{loaded}"
+        return "LIVE", f"{with_data}/{loaded}"
+
+    if source_key == "lineup":
+        confirmed = sum(1 for p in players if p.get("lineup_spot"))
+        total = len(players)
+        if total == 0:
+            return "UNAVAILABLE", "0/0"
+        pct = confirmed / total
+        if pct == 0:
+            return "UNAVAILABLE", f"{confirmed}/{total}"
+        if pct < 0.45:
+            return "DEGRADED", f"{confirmed}/{total}"
+        if pct < 0.8:
+            return "STALE", f"{confirmed}/{total}"
+        return "LIVE", f"{confirmed}/{total}"
+
+    return "UNAVAILABLE", ""
+
+
+def _build_runtime_shell_context(data: dict | None) -> dict:
+    data = data or {}
+    trust_obj = _trust.get_engine_trust()
+    source_badges = []
+    degraded_badges = []
+    for source_key, label in (
+        ("weather", "WX"),
+        ("savant", "SC"),
+        ("odds", "ODDS"),
+        ("pitch_mix", "MIX"),
+        ("lineup", "LINEUP"),
+    ):
+        state, detail = _shell_source_state(data, source_key)
+        badge = {"key": source_key, "label": label, "state": state, "detail": detail}
+        source_badges.append(badge)
+        if state in {"STALE", "DEGRADED", "UNAVAILABLE"}:
+            degraded_badges.append(badge)
+    investigation_state = _investigation.get_investigation_state()
+    queue = _investigation.get_escalation_queue()
+    return {
+        "active_route": st.session_state.get("active_route", "MAIN"),
+        "trust_label": getattr(trust_obj.state, "value", "FULL"),
+        "source_badges": source_badges,
+        "degraded_badges": degraded_badges,
+        "suppressions": trust_obj.active_suppressions,
+        "queue_targets": list(queue.get("targets", [])),
+        "queue_count": len(queue.get("targets", [])),
+        "active_player_name": investigation_state.get("active_player_name") or "",
+        "origin_route": investigation_state.get("origin_route") or "",
+        "context_stack_depth": len(st.session_state.get(_SHELL_CONTEXT_STACK_KEY, [])),
+        "data": data,
+    }
+
+
+def _render_command_strip(shell_ctx: dict) -> None:
+    route_label = shell_ctx.get("active_route", "MAIN").replace("_", " ")
+    trust_label = shell_ctx.get("trust_label", "FULL")
+    trust_fg, trust_bg, trust_border = _shell_token_palette(trust_label)
+    degrade_html = "".join(
+        _shell_badge_html(item["label"], item["state"], item["detail"])
+        for item in shell_ctx.get("degraded_badges", [])[:5]
+    ) or "<span style='color:#4ade80;font-size:10px;'>No degraded feeds detected.</span>"
+    st.markdown(
+        f"<div style='background:linear-gradient(180deg,#09090f 0%,#050508 100%);"
+        f"border:1px solid #161623;border-radius:12px;padding:10px 12px;margin:0 0 12px;'>"
+        f"<div style='display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;'>"
+        f"<div><div style='color:#6b7280;font-size:9px;letter-spacing:1.4px;text-transform:uppercase;'>Command Strip</div>"
+        f"<div style='color:#f3f4f6;font-size:15px;font-weight:800;'>{html.escape(route_label)}</div></div>"
+        f"<div style='background:{trust_bg};border:1px solid {trust_border};border-radius:999px;padding:5px 10px;'>"
+        f"<span style='color:#9ca3af;font-size:9px;letter-spacing:1.2px;'>TRUST</span>"
+        f"<span style='color:{trust_fg};font-size:11px;font-weight:900;letter-spacing:1px;margin-left:7px;'>{html.escape(trust_label)}</span>"
+        f"</div></div><div style='margin-top:8px;display:flex;flex-wrap:wrap;'>{degrade_html}</div></div>",
+        unsafe_allow_html=True,
+    )
+    _cmd_cols = st.columns([1, 1, 1, 1])
+    with _cmd_cols[0]:
+        _active_name = shell_ctx.get("active_player_name")
+        if st.button(
+            "Open Active Context" if _active_name else "No Active Context",
+            key="shell_open_active_context",
+            width="stretch",
+            disabled=not _active_name,
+        ):
+            _record_interaction("shell.active_context_open", rerun_source="shell_context_jump")
+            target = {
+                "active_player_name": shell_ctx.get("active_player_name"),
+                "origin_route": shell_ctx.get("origin_route"),
+            }
+            if _jump_to_investigation_target(target, shell_ctx.get("data")):
+                st.rerun()
+    with _cmd_cols[1]:
+        if st.button(
+            f"Restore Context ({shell_ctx.get('context_stack_depth', 0)})",
+            key="shell_restore_context",
+            width="stretch",
+            disabled=shell_ctx.get("context_stack_depth", 0) == 0,
+        ):
+            _record_interaction("shell.context_restore", rerun_source="shell_context_restore")
+            if _restore_runtime_context():
+                st.rerun()
+    with _cmd_cols[2]:
+        if st.button(
+            f"Escalation Queue ({shell_ctx.get('queue_count', 0)})",
+            key="shell_focus_queue",
+            width="stretch",
+            disabled=shell_ctx.get("queue_count", 0) == 0,
+        ):
+            st.session_state["_shell_queue_open"] = not st.session_state.get("_shell_queue_open", False)
+    with _cmd_cols[3]:
+        if st.button("Toggle Deployment Tray", key="shell_toggle_deploy_tray", width="stretch"):
+            st.session_state["_shell_deploy_tray_open"] = not st.session_state.get("_shell_deploy_tray_open", False)
+
+
+def _render_sidebar_shell_zones(data: dict, shell_ctx: dict) -> None:
+    players = data.get("all_players", []) or []
+    ranked = data.get("ranked", []) or []
+    stats = data.get("stats", {}) or {}
+    queue_targets = shell_ctx.get("queue_targets", [])
+    suppressions = shell_ctx.get("suppressions", [])
+    st.markdown("#### 🛰️ Live Slate Summary")
+    st.caption(
+        f"{stats.get('games', 0)} games · {stats.get('players', 0)} players · "
+        f"{len(ranked)} qualified · {stats.get('n_with_odds', 0)} with odds"
+    )
+    st.markdown("#### 🔥 Top Escalations")
+    if queue_targets:
+        for idx, target in enumerate(queue_targets[:3]):
+            st.markdown(
+                _shell_badge_html(
+                    (target.get("active_player_name") or "Unknown target")[:18],
+                    str(target.get("escalation_level", "watch")).upper(),
+                    target.get("origin_route", ""),
+                ),
+                unsafe_allow_html=True,
+            )
+            if st.button(f"Jump {idx + 1}", key=f"sidebar_queue_jump_{idx}", width="stretch"):
+                _record_interaction("sidebar.queue_jump", rerun_source="shell_queue_jump")
+                if _jump_to_investigation_target(target, data):
+                    st.rerun()
+    else:
+        st.caption("No queued escalations.")
+    st.markdown("#### 🚚 Deployment Queue")
+    st.caption(f"{len(st.session_state.get('fd_slip', []))} deployment targets armed.")
+    st.markdown("#### ⚠️ Tactical Alerts")
+    if ranked:
+        top = ranked[0]
+        st.caption(
+            f"{top.get('player_name', 'Top target')} · EV {float(top.get('ev_pct', 0) or 0):+.1f}% · "
+            f"Edge {float(top.get('edge_pct', 0) or 0):+.1f}%"
+        )
+    else:
+        st.caption("No active qualified alerts.")
+    st.markdown("#### 🛡️ Suppression Warnings")
+    if suppressions:
+        for warning in suppressions[:3]:
+            st.caption(f"• {warning}")
+    else:
+        st.caption("No active suppressions.")
+    st.markdown("#### 🌤️ Live HR Environment")
+    if players:
+        for player in sorted(players, key=lambda p: float(p.get("weather_factor", 1.0) or 1.0), reverse=True)[:2]:
+            st.caption(
+                f"{player.get('team', '?')} · {player.get('player_name', '?')} · "
+                f"WX {float(player.get('weather_factor', 1.0) or 1.0):.2f}x"
+            )
+    else:
+        st.caption("No environment feed.")
+    st.markdown("#### 📡 Source Indicators")
+    st.markdown(
+        "".join(_shell_badge_html(item["label"], item["state"], item["detail"]) for item in shell_ctx.get("source_badges", [])),
+        unsafe_allow_html=True,
+    )
+    st.markdown("#### 🧭 Quick Navigation")
+    _nav_cols = st.columns(2)
+    for idx, route in enumerate(("MAIN", "JIG", "ADVANCED_STRATEGIES", "HITS")):
+        with _nav_cols[idx % 2]:
+            if st.button(route.replace("_", " "), key=f"sidebar_nav_{route}", width="stretch"):
+                _record_interaction("sidebar.quick_nav", rerun_source="shell_quick_nav")
+                _request_workspace_route(route)
+                st.rerun()
+    st.markdown("#### 🎯 Operator Shortlist")
+    shortlist = _nav.get_operator_shortlist_view(st.session_state)
+    if shortlist:
+        for player in shortlist[:3]:
+            line = player.get("player_name", "?")
+            game_display = player.get("game_display") or player.get("game_id") or ""
+            status = player.get("status", "PARKED")
+            updated_flag = " · DATA UPDATED" if player.get("data_updated_since_review") else ""
+            st.caption(
+                f"{line}"
+                f"{' · ' + str(game_display) if game_display else ''}"
+                f" · {status}{updated_flag}"
+            )
+    else:
+        st.caption("Shortlist empty.")
+
+
+def _render_live_feed_shell(data: dict, shell_ctx: dict) -> None:
+    players = data.get("all_players", []) or []
+    ranked = data.get("ranked", []) or []
+    top_name = ranked[0].get("player_name", "No qualified target") if ranked else "No qualified target"
+    top_ev = float(ranked[0].get("ev_pct", 0) or 0) if ranked else 0.0
+    n_confirmed = sum(1 for p in players if p.get("lineup_spot"))
+    st.markdown(
+        f"<div style='background:#06060b;border:1px solid #151523;border-radius:12px;padding:10px 12px;margin:0 0 12px;'>"
+        f"<div style='color:#6b7280;font-size:9px;letter-spacing:1.4px;text-transform:uppercase;'>Live Intelligence Feed</div>"
+        f"<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-top:8px;'>"
+        f"<div style='background:#090913;border:1px solid #171726;border-radius:8px;padding:8px;'><div style='color:#6b7280;font-size:9px;'>Top Target</div><div style='color:#f3f4f6;font-size:12px;font-weight:700;'>{html.escape(top_name)}</div><div style='color:#4ade80;font-size:11px;'>EV {top_ev:+.1f}%</div></div>"
+        f"<div style='background:#090913;border:1px solid #171726;border-radius:8px;padding:8px;'><div style='color:#6b7280;font-size:9px;'>Lineups Confirmed</div><div style='color:#f3f4f6;font-size:12px;font-weight:700;'>{n_confirmed}/{len(players)}</div></div>"
+        f"<div style='background:#090913;border:1px solid #171726;border-radius:8px;padding:8px;'><div style='color:#6b7280;font-size:9px;'>Queue Pressure</div><div style='color:#f3f4f6;font-size:12px;font-weight:700;'>{shell_ctx.get('queue_count', 0)} targets</div></div>"
+        f"<div style='background:#090913;border:1px solid #171726;border-radius:8px;padding:8px;'><div style='color:#6b7280;font-size:9px;'>Trust Window</div><div style='color:#f3f4f6;font-size:12px;font-weight:700;'>{html.escape(shell_ctx.get('trust_label', 'FULL'))}</div></div>"
+        f"</div></div>",
+        unsafe_allow_html=True,
+    )
+
+
+def _render_queue_shell(data: dict, shell_ctx: dict) -> None:
+    if not st.session_state.get("_shell_queue_open"):
+        return
+    queue_targets = shell_ctx.get("queue_targets", [])
+    st.markdown("#### Escalation Queue")
+    if not queue_targets:
+        st.caption("Queue empty.")
+        return
+    for idx, target in enumerate(queue_targets[:6]):
+        cols = st.columns([5, 1])
+        with cols[0]:
+            st.markdown(
+                _shell_badge_html(
+                    target.get("active_player_name", "Unknown target"),
+                    str(target.get("escalation_level", "watch")).upper(),
+                    target.get("origin_route", ""),
+                ),
+                unsafe_allow_html=True,
+            )
+        with cols[1]:
+            if st.button("Open", key=f"queue_open_{idx}", width="stretch"):
+                _record_interaction("queue.shell_open", rerun_source="shell_queue_jump")
+                if _jump_to_investigation_target(target, data):
+                    st.rerun()
+
+
+def _render_deployment_tray(shell_ctx: dict) -> None:
+    slip = list(st.session_state.get("fd_slip", []))
+    sources = dict(st.session_state.get("fd_slip_sources", {}))
+    expanded = st.session_state.get("_shell_deploy_tray_open", False)
+    st.markdown(
+        f"<div style='margin-top:16px;padding:10px 12px;border:1px solid #171726;border-radius:14px;background:linear-gradient(180deg,#07070c 0%,#040408 100%);'>"
+        f"<div style='display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;'>"
+        f"<div><div style='color:#6b7280;font-size:9px;letter-spacing:1.4px;text-transform:uppercase;'>Deployment Tray</div>"
+        f"<div style='color:#f3f4f6;font-size:14px;font-weight:800;'>QUALIFY → DEPLOY → TRACK → LEARN</div></div>"
+        f"<div>{_shell_badge_html('QUEUE', f'{len(slip)} LIVE', shell_ctx.get('trust_label', 'FULL'))}</div></div></div>",
+        unsafe_allow_html=True,
+    )
+    tray_cols = st.columns([1, 1, 1])
+    with tray_cols[0]:
+        if st.button("Expand Tray" if not expanded else "Collapse Tray", key="deploy_tray_toggle", width="stretch"):
+            st.session_state["_shell_deploy_tray_open"] = not expanded
+            st.rerun()
+    with tray_cols[1]:
+        if st.button("Open Queue", key="deploy_tray_open_queue", width="stretch", disabled=not shell_ctx.get("queue_count")):
+            st.session_state["_shell_queue_open"] = True
+            st.rerun()
+    with tray_cols[2]:
+        if st.button("Clear Tray", key="deploy_tray_clear", width="stretch", disabled=not slip):
+            _record_interaction("deploy_tray.clear", rerun_source="fd_slip_update")
+            st.session_state["fd_slip"] = []
+            st.session_state.pop("fd_slip_select", None)
+            st.session_state["fd_slip_sources"] = {}
+            st.rerun()
+    if not st.session_state.get("_shell_deploy_tray_open", False):
+        return
+    if not slip:
+        st.caption("No deployment targets staged.")
+        return
+    for idx, label in enumerate(slip[:8]):
+        cols = st.columns([5, 1])
+        with cols[0]:
+            st.markdown(
+                _shell_badge_html(label[:28], "DEPLOY", sources.get(label, {}).get("tab", "")),
+                unsafe_allow_html=True,
+            )
+        with cols[1]:
+            if st.button("Drop", key=f"deploy_drop_{idx}", width="stretch"):
+                _record_interaction("deploy_tray.drop", rerun_source="fd_slip_update")
+                st.session_state["fd_slip"] = [item for item in slip if item != label]
+                st.session_state.pop("fd_slip_select", None)
+                st.rerun()
+
+
+def _lazy_route_gate(route_id: str, route_label: str, data: dict, fingerprint: tuple, caption: str) -> bool:
+    gate_key = f"{_SHELL_LAZY_GATE_PREFIX}_{route_id.lower()}"
+    fp_key = f"{gate_key}_fp"
+    if st.session_state.get(fp_key) != fingerprint:
+        st.session_state[fp_key] = fingerprint
+        st.session_state[gate_key] = False
+    if st.session_state.get(gate_key):
+        return True
+    st.markdown(
+        f"<div style='background:#06060b;border:1px solid #161623;border-radius:12px;padding:14px 16px;margin-top:6px;'>"
+        f"<div style='color:#f3f4f6;font-size:15px;font-weight:800;'>{html.escape(route_label)}</div>"
+        f"<div style='color:#9ca3af;font-size:11px;margin-top:4px;'>{html.escape(caption)}</div></div>",
+        unsafe_allow_html=True,
+    )
+    if st.button(f"Load {route_label}", key=f"{gate_key}_load", type="primary"):
+        _record_interaction(f"lazy_gate.{route_id.lower()}", rerun_source=f"lazy_gate_{route_id.lower()}")
+        st.session_state[gate_key] = True
+        st.rerun()
+    return False
 
 
 def _build_status_urgency_bundle(players: list[dict], now_et: _dt.datetime) -> dict:
@@ -156,11 +1197,6 @@ st.markdown("""
 </head>
 """, unsafe_allow_html=True)
 
-# Fix path for both local and Streamlit Cloud
-current_dir = Path(__file__).parent
-sys.path.insert(0, str(current_dir))
-
-# Debug module loading for Streamlit Cloud
 try:
     import config
     from engine.market import american_to_decimal, decimal_to_american
@@ -172,33 +1208,17 @@ try:
     from strategies_ui import tab_advanced_strategies
     from clients.pull_air import resolve_pull_air_pct
 except ImportError as e:
-    print(f"Import error: {e}")
-    print(f"Current directory: {current_dir}")
-    print(f"Directory exists: {current_dir.exists()}")
-    print(f"sys.path: {sys.path[:3]}")
-    # Try alternative import method
-    import importlib.util
-    spec = importlib.util.spec_from_file_location("output.parlay", current_dir / "output" / "parlay.py")
-    if spec and spec.loader:
-        parlay_module = importlib.util.module_from_spec(spec)
-        sys.modules["output.parlay"] = parlay_module
-        spec.loader.exec_module(parlay_module)
-        _evaluate_parlay = parlay_module._evaluate_parlay
-        parlay_bet_size = parlay_module.parlay_bet_size
-    # Import the rest normally after fixing parlay
-    import config
-    from engine.market import american_to_decimal, decimal_to_american
-    from engine.ev import expected_value_pct
-    from output.ranker import rank_picks as _rank_picks
-    from tracking import pnl as pnl_tracker, clv as clv_tracker
-    from tracking import line_movement as lm_tracker
-    from clients.pull_air import resolve_pull_air_pct
-    # Try to import strategies UI
-    try:
-        from strategies_ui import tab_advanced_strategies
-    except ImportError:
-        def tab_advanced_strategies(data, parlays_callback=None):
-            st.info("Advanced strategies module is being loaded...")
+    raise RuntimeError(_format_startup_import_error(e)) from e
+
+try:
+    import investigation_state as _investigation
+except ImportError as e:
+    raise RuntimeError(_format_startup_import_error(e)) from e
+
+try:
+    from engine import trust as _trust
+except ImportError as e:
+    raise RuntimeError(_format_startup_import_error(e)) from e
 
 # â"€â"€ Styling â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 st.markdown("""
@@ -565,20 +1585,28 @@ def _auto_refresh_ticker():
     interval_min = int(st.session_state.get("auto_refresh_interval", 15))
     elapsed_min  = (_dt.datetime.now() - loaded_at).total_seconds() / 60
     if elapsed_min >= interval_min:
-        from clients import mlb_stats as _ms_ar, statcast as _sc_ar
-        _ms_ar.clear_all_caches()
-        _sc_ar.clear_all_caches()
-        st.cache_data.clear()
-        for k in ["data", "cache_key", "data_loaded_at"]:
-            st.session_state.pop(k, None)
+        _clear_runtime_refresh_state("auto-refresh interval", scope="data")
         st.toast("↻ Auto-refreshing data now — page will reload momentarily")
         st.rerun()
 
 
 # ── Data loading ──────────────────────────────────────────────────────────────
+@st.cache_data(ttl=3600, show_spinner=False)
+def _load_pipeline_cached(target_date: str) -> dict:
+    """Pipeline data cached 1 hour at process level — avoids re-fetching across Streamlit sessions."""
+    from pipeline import load_game_data
+    return load_game_data(target_date=target_date)
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def _cached_pitcher_map(target_date: str) -> dict:
+    """Pitcher map cached 5 min — avoids extra MLB API round-trip on each data load."""
+    from clients.mlb_stats import get_today_pitcher_map
+    return get_today_pitcher_map(target_date=target_date)
+
+
 def get_data():
     import gc
-    from pipeline import load_game_data
     # Always derive "today" in Eastern Time — MLB schedules run on ET and the
     # system clock may be UTC, which rolls to the next day at 8 PM ET.
     target_date = config.TARGET_DATE or _dt.datetime.now(_EDT).strftime("%Y-%m-%d")
@@ -586,56 +1614,22 @@ def get_data():
     if "data" not in st.session_state or st.session_state.get("cache_key") != target_date:
         with st.status("⚾ Loading MLB data — first load takes 2-4 min…", expanded=True) as _status:
             try:
-                def _cb(msg: str):
-                    _status.write(msg)
-                    print(f"[pipeline] {msg}")
-
-                data = load_game_data(target_date=target_date, progress_cb=_cb)
+                _status.write("Fetching schedule, odds, Statcast, and weather…")
+                data = _load_pipeline_cached(target_date)
                 gc.collect()  # free statcast/HTTP memory before rendering
                 st.session_state["data"]           = data
                 st.session_state["cache_key"]      = target_date
                 st.session_state["data_loaded_at"] = _dt.datetime.now()
+                _record_hydration_state(data, target_date)
                 _status.update(
                     label=(f"✅ Loaded — {data['stats'].get('players', 0)} players, "
                            f"{data['stats'].get('qualified', 0)} qualified"),
                     state="complete", expanded=False,
                 )
 
-                ranked      = data.get("ranked", [])
-                all_players = data.get("all_players", [])
-                if ranked:
-                    try:
-                        logged = pnl_tracker.log_picks(ranked, model_version="v4")
-                        if logged:
-                            clv_tracker.log_opening_lines(ranked)
-                    except Exception as e:
-                        st.warning(f"Pick tracking error: {e}")
-                    try:
-                        lm_tracker.log_current_odds(ranked)
-                    except Exception as e:
-                        st.warning(f"Line movement tracking error: {e}")
-
-                # Auto-log all formula picks to unified pick tracker (no FD slip needed)
-                try:
-                    from tracking import pick_tracker as _pt
-                    # Qualified picks — these passed all 7 filters
-                    _pt.log_picks_bulk(ranked, source_tab="Engine", source_section="Qualified Picks")
-                    # All players the engine scored (for calibration across the full prob range)
-                    _ranked_names = {p.get("player_name") for p in ranked}
-                    non_ranked = [p for p in all_players if p.get("player_name") not in _ranked_names]
-                    _pt.log_picks_bulk(non_ranked, source_tab="Engine", source_section="All Players")
-                except Exception as e:
-                    pass  # never block the UI for tracking errors
-
-                try:
-                    pnl_tracker.settle_all_unsettled()
-                except Exception as e:
-                    st.warning(f"Outcome settlement error: {e}")
-
                 # Store pitcher map for change detection
                 try:
-                    from clients.mlb_stats import get_today_pitcher_map
-                    pm = get_today_pitcher_map()
+                    pm = _cached_pitcher_map(target_date)
                     # session_start map is set once per session — never overwritten
                     if "pitcher_map_session_start" not in st.session_state:
                         st.session_state["pitcher_map_session_start"] = pm
@@ -673,6 +1667,16 @@ def get_data():
                     "team_players": {}, "auto_parlays": {}, "profile_parlays": [],
                 }
                 st.session_state["cache_key"] = target_date
+                _record_hydration_state(st.session_state["data"], target_date)
+    else:
+        data = st.session_state.get("data") or {}
+        if data:
+            if not st.session_state.get("hydration_fingerprint"):
+                _record_hydration_state(data, target_date)
+            else:
+                diag = _runtime_diag()
+                diag["loaded_slate_date"] = data.get("date") or target_date
+                diag["hydration_fingerprint"] = st.session_state.get("hydration_fingerprint", "")
 
     return st.session_state["data"]
 
@@ -1036,6 +2040,7 @@ def _intelligence_card_html(
     urgency_lbl: str = "",
     opt_active: bool = False,
     opt_selected: bool = False,
+    is_scratched: bool = False,
 ) -> str:
     """
     Render the Level 1 Tactical Intelligence Card HTML.
@@ -1110,7 +2115,12 @@ def _intelligence_card_html(
     if spot:
         sc = "#4ade80" if spot <= 4 else "#facc15" if spot <= 6 else "#888"
         spot_html = f" <span style='color:{sc};font-size:8px;'>#{spot}</span>"
-    conf_badge = "✅" if spot is not None else "⏳"
+    if is_scratched:
+        conf_badge = "❌"
+    elif spot is not None:
+        conf_badge = "✅"
+    else:
+        conf_badge = "⏳"
 
     # ── Environment score ──
     _env_score, env_col_, env_lbl = _hr_env_score(player)
@@ -1265,6 +2275,7 @@ def _elite_card_html(
     status_html: str = "",
     opt_active: bool = False,
     opt_selected: bool = False,
+    is_scratched: bool = False,
 ) -> str:
     """Dense analytical card for ELITE tab. Barrel-first, Statcast-rich, 2-col grid."""
     name     = player.get("player_name", "")
@@ -1310,7 +2321,12 @@ def _elite_card_html(
     pit_display = f"{pit_ico}{pit_short}({hand_s}){plat_edge}" if pit_n else "TBD"
 
     # Lineup spot
-    conf_badge = "✅" if spot is not None else "⏳"
+    if is_scratched:
+        conf_badge = "❌"
+    elif spot is not None:
+        conf_badge = "✅"
+    else:
+        conf_badge = "⏳"
     spot_html  = ""
     if spot:
         sc = "#4ade80" if spot <= 4 else "#facc15" if spot <= 6 else "#888"
@@ -1490,6 +2506,7 @@ def _elite_card_html(
 
 @st.dialog("⚾ Player Details", width="large")
 def _show_player_modal(player: dict):
+    _record_widget_zone("modal.player_details", widget_count_estimate=3)
     name  = player.get("player_name", "Unknown")
     team  = player.get("team", "")
     opp   = player.get("opponent", "")
@@ -1497,6 +2514,11 @@ def _show_player_modal(player: dict):
     spot  = player.get("lineup_spot")
     sc_src = player.get("statcast_source", "none")
     _pid  = player.get("player_id", "")
+    _investigation.record_active_player(
+        player,
+        origin_engine=st.session_state.get("active_route", ""),
+        origin_route=st.session_state.get("modal_source_tab", ""),
+    )
 
     _modal_photo = _player_photo_html(_pid, size=80, style="border:2px solid #1e3a5f;")
     st.markdown(
@@ -1625,7 +2647,7 @@ def _show_player_modal(player: dict):
                     st.link_button(
                         f"{_bk_label}{_best_badge}  {_bk_fmt}",
                         _fanduel_url(name),
-                        use_container_width=True,
+                        width="stretch",
                     )
                 else:
                     st.markdown(
@@ -1671,12 +2693,14 @@ def _show_player_modal(player: dict):
     btn_col, fd_col = st.columns(2)
     with btn_col:
         if _in_slip:
-            if st.button("✓ In Slip — Remove", type="secondary", use_container_width=True, key="modal_slip_rm"):
+            if st.button("✓ In Slip — Remove", type="secondary", width="stretch", key="modal_slip_rm"):
+                _record_interaction("fd_slip.modal_remove", rerun_source="fd_slip_update")
                 st.session_state["fd_slip"] = [x for x in _current if x != _label]
                 st.session_state.pop("fd_slip_select", None)
                 st.rerun()
         else:
-            if st.button("➕ Add to FD Slip", type="primary", use_container_width=True, key="modal_slip_add"):
+            if st.button("➕ Add to FD Slip", type="primary", width="stretch", key="modal_slip_add"):
+                _record_interaction("fd_slip.modal_add", rerun_source="fd_slip_update")
                 st.session_state["fd_slip"] = list(_current) + [_label]
                 st.session_state.pop("fd_slip_select", None)
                 _modal_src = st.session_state.get("modal_source_tab", "Player Modal")
@@ -1691,26 +2715,41 @@ def _show_player_modal(player: dict):
                     pass
                 st.rerun()
     with fd_col:
-        st.link_button("📲 Open on FanDuel", _fanduel_url(name), use_container_width=True)
+        st.link_button("📲 Open on FanDuel", _fanduel_url(name), width="stretch")
 
     st.divider()
-    if st.button("✕ Close", use_container_width=True, key="modal_close"):
+    if st.button("✕ Close", width="stretch", key="modal_close"):
         _clear_player_modal()
         st.rerun()
 
 
 def _clear_player_modal():
     """Clear persistent modal state only when the user explicitly closes it."""
+    _record_interaction("modal.close", rerun_source="modal_close")
     st.session_state.pop("show_modal", None)
     st.session_state.pop("selected_player_modal", None)
     st.session_state.pop("modal_source_tab", None)
     st.session_state.pop("modal_source_section", None)
 
 
-def _open_player_modal(player: dict):
+def _open_player_modal(
+    player: dict,
+    *,
+    source_tab: str = "Player Modal",
+    source_section: str = "",
+    interaction_source: str = "modal.open",
+):
     """Store player in session_state so the modal fires on the next rerun."""
     st.session_state["selected_player_modal"] = player
     st.session_state["show_modal"] = True
+    st.session_state["modal_source_tab"] = source_tab
+    st.session_state["modal_source_section"] = source_section
+    _record_interaction(interaction_source, rerun_source="modal_open")
+    _investigation.record_active_player(
+        player,
+        origin_engine=st.session_state.get("active_route", ""),
+        origin_route=source_tab,
+    )
     st.rerun()
 
 
@@ -1732,6 +2771,7 @@ def _add_legs_to_fd_slip(legs: list[dict], source_tab: str = "Parlays", source_s
     st.session_state["fd_slip_sources"] = sources
     st.session_state.pop("fd_slip_select", None)
     if added:
+        _record_interaction("fd_slip.bulk_add", rerun_source="fd_slip_update")
         try:
             from tracking import pick_tracker as _pt
             for p in logged:
@@ -2022,6 +3062,7 @@ def _build_rqt_rows(
             "Tier":    _tier_lbl,
             "Rating":  ("📈 " if is_steam else "") + _pick_rating(ev, edge, model_p, conf),
             "#":       str(p.get("rank", "")),
+            "Status":  "✅" if spot is not None else "⏳",
             "Player":  name,
             "Team":    team,
             "Opp":     p.get("opponent", ""),
@@ -2116,14 +3157,20 @@ def _render_qualified_table(
     df = df.replace([np.nan, np.inf, -np.inf, float('inf'), -float('inf')], "--")
     df = _apply_heatmap(df)
 
-    _tver = st.session_state.get("_table_ver", 0)
+    _table_scope = key_suffix or "default"
+    _tver_key = f"_table_ver_{_table_scope}"
+    _tver = st.session_state.get(_tver_key, 0)
+    _record_widget_zone(
+        f"table.qualified.{_table_scope}",
+        widget_count_estimate=1 + int(bool(rows)),
+    )
     _df_sel = st.dataframe(
         df,
         width='stretch',
         hide_index=True,
         on_select="rerun",
         selection_mode="single-row",
-        key=f"picks_df_{key_suffix}_{_tver}",
+        key=f"picks_df_{_table_scope}_{_tver}",
         column_config={
             "Tier":    st.column_config.TextColumn("Tier",
                 help=(
@@ -2192,11 +3239,13 @@ def _render_qualified_table(
     # Open player modal on row click; bump table version so selection resets after modal
     _sel_rows = getattr(getattr(_df_sel, "selection", None), "rows", [])
     if _sel_rows and 0 <= _sel_rows[0] < len(ranked):
-        st.session_state["_table_ver"] = _tver + 1
-        st.session_state["show_modal"] = ranked[_sel_rows[0]]
-        st.session_state["modal_source_tab"] = "Picks Table"
-        st.session_state["modal_source_section"] = key_suffix or "Picks Table"
-        st.rerun()
+        st.session_state[_tver_key] = _tver + 1
+        _open_player_modal(
+            ranked[_sel_rows[0]],
+            source_tab="Picks Table",
+            source_section=_table_scope,
+            interaction_source=f"table.select.{_table_scope}",
+        )
     st.caption("💡 Click any row to view full player details & add to FD Slip.")
 
     if rows:
@@ -2246,7 +3295,7 @@ def _render_pitch_mix_expander(ctx: dict, p: dict, key_prefix: str, expanded: bo
             if st.button(
                 "▶ Load Full Analysis",
                 key=f"pm_load_{key_prefix}_{_uid}_{slate_ts}",
-                use_container_width=True,
+                width="stretch",
             ):
                 st.session_state[_pm_loaded_key] = True
                 st.rerun()
@@ -2528,7 +3577,7 @@ def _render_pitch_mix_expander(ctx: dict, p: dict, key_prefix: str, expanded: bo
                 )
                 _sa_lbl = "▲ Fewer Pitches" if _show_all else "▼ Show All Pitches"
                 if st.button(_sa_lbl, key=f"{key_prefix}_pm_sa_{p.get('player_id', '')}",
-                             use_container_width=False):
+                             width="content"):
                     st.session_state[_show_all_k] = not _show_all
                     st.rerun()
             else:
@@ -2814,27 +3863,78 @@ def _render_full_slate_all_players(
         st.info("No players in today's slate.")
         return
 
-    # Group by game_pk (team-pair fallback for players missing game_pk)
-    games: dict = defaultdict(list)
-    for p in all_players:
-        gk = p.get("game_pk") or f"{p.get('team', '?')}-{p.get('opponent', '?')}"
-        games[gk].append(p)
+    # Hotspot containment: Full Slate regrouping/sorting used to rebuild on every rerun.
+    # Cache one compact view-model until the player subset/fingerprint rotates.
+    _fs_players_fp = (
+        slate_ts,
+        source_section,
+        tuple(
+            (
+                p.get("player_id") or p.get("player_name", ""),
+                p.get("game_pk") or "",
+                p.get("team") or "",
+                p.get("opponent") or "",
+                p.get("home_team") or "",
+                p.get("game_time_utc") or "",
+                p.get("lineup_spot"),
+                round(_pf(p.get("barrel_pct"), 0.0), 1),
+                round((_pf(p.get("model_prob"), 0.0) or 0.0) * 100, 1),
+                p.get("ev_pct"),
+                p.get("edge_pct"),
+                p.get("confidence"),
+                p.get("park_factor"),
+                p.get("weather_factor"),
+                p.get("pitcher_name") or "",
+                p.get("pitcher_factor"),
+                p.get("pitcher_hand") or "",
+            )
+            for p in all_players
+        ),
+        hash(tuple(sorted(qualified_names))),
+    )
 
-    # Sort games by start time
-    def _gsk(gk):
-        for p in games[gk]:
-            gt = _game_time_et(p.get("game_time_utc", ""))
-            if gt:
-                return gt.hour * 60 + gt.minute
-        return 9999
+    def _build_fs_view_model() -> dict:
+        games: dict = defaultdict(list)
+        for p in all_players:
+            gk = p.get("game_pk") or f"{p.get('team', '?')}-{p.get('opponent', '?')}"
+            games[gk].append(p)
 
-    sorted_gks = sorted(games.keys(), key=_gsk)
-    _n_total_games = len(sorted_gks)
+        def _gsk(gk):
+            for p in games[gk]:
+                gt = _game_time_et(p.get("game_time_utc", ""))
+                if gt:
+                    return gt.hour * 60 + gt.minute
+            return 9999
 
-    # Summary line
-    n_qual  = sum(1 for p in all_players if p.get("player_name") in qualified_names)
-    n_elite = sum(1 for p in all_players if _pf(p.get("barrel_pct"), 0) >= 8.0)
-    n_odds  = sum(1 for p in all_players if p.get("ev_pct") is not None)
+        sorted_gks = sorted(games.keys(), key=_gsk)
+        game_rows = []
+        for gk in sorted_gks:
+            sorted_players = sorted(
+                games[gk],
+                key=lambda p: (p.get("team", ""), int(p.get("lineup_spot") or 99)),
+            )
+            game_rows.append((gk, sorted_players))
+        return {
+            "games": game_rows,
+            "n_total_games": len(sorted_gks),
+            "n_qual": sum(1 for p in all_players if p.get("player_name") in qualified_names),
+            "n_elite": sum(1 for p in all_players if _pf(p.get("barrel_pct"), 0) >= 8.0),
+            "n_odds": sum(1 for p in all_players if p.get("ev_pct") is not None),
+        }
+
+    _fs_view = _session_fp_value(
+        "_main_fs_view_model_fp",
+        "_main_fs_view_model",
+        _fs_players_fp,
+        _build_fs_view_model,
+    )
+    _game_rows = _fs_view["games"]
+    _n_total_games = _fs_view["n_total_games"]
+    n_qual = _fs_view["n_qual"]
+    n_elite = _fs_view["n_elite"]
+    n_odds = _fs_view["n_odds"]
+
+    _fs_zone_scope = f"full_slate.{_stable_key_token(source_section)}"
 
     # Page size control — limit games rendered to reduce DOM size and mobile memory
     if _n_total_games > 10:
@@ -2843,7 +3943,8 @@ def _render_full_slate_all_players(
         _fs_game_opts = [5, _n_total_games]
     else:
         _fs_game_opts = [_n_total_games]
-    _fs_game_limit_raw = st.session_state.get("fs_game_limit", _fs_game_opts[0])
+    _fs_game_limit_key = f"{_fs_zone_scope}_game_limit"
+    _fs_game_limit_raw = st.session_state.get(_fs_game_limit_key, _fs_game_opts[0])
     _fs_cols = st.columns([3, 1])
     with _fs_cols[1]:
         _fs_game_limit = st.selectbox(
@@ -2853,16 +3954,20 @@ def _render_full_slate_all_players(
                       if _fs_game_limit_raw in _fs_game_opts else 0,
                       len(_fs_game_opts) - 1),
             format_func=lambda x: "All games" if x == _n_total_games else f"{x} games",
-            key="fs_game_limit",
+            key=_fs_game_limit_key,
             label_visibility="collapsed",
         )
-    sorted_gks_shown = sorted_gks[:_fs_game_limit]
+    _game_rows_shown = _game_rows[:_fs_game_limit]
+    _record_widget_zone(
+        f"MAIN.{_fs_zone_scope}",
+        widget_count_estimate=2 + len(_game_rows_shown) * 4,
+    )
 
     with _fs_cols[0]:
         st.markdown(
             f"<div style='font-size:11px;color:#888;padding-top:5px;'>"
             f"<b style='color:#eee;'>{len(all_players)}</b> players"
-            f" &nbsp;·&nbsp; <b style='color:#eee;'>{len(games)}</b> games"
+            f" &nbsp;·&nbsp; <b style='color:#eee;'>{_n_total_games}</b> games"
             f" &nbsp;·&nbsp; <span style='color:#4ade80;'>{n_qual}</span> qualified"
             f" &nbsp;·&nbsp; <span style='color:#FFD700;'>{n_elite}</span> elite"
             f" &nbsp;·&nbsp; <span style='color:#555;'>{len(all_players)-n_odds}</span> no odds"
@@ -2870,16 +3975,15 @@ def _render_full_slate_all_players(
             unsafe_allow_html=True,
         )
 
-    if len(sorted_gks_shown) < _n_total_games:
+    if len(_game_rows_shown) < _n_total_games:
         st.caption(
-            f"Showing {len(sorted_gks_shown)} of {_n_total_games} games — "
+            f"Showing {len(_game_rows_shown)} of {_n_total_games} games — "
             "select 'All games' above to expand."
         )
 
     # ── Game navigation strip ────────────────────────────────────────────────
     _nav_parts = []
-    for _ni, gk in enumerate(sorted_gks_shown):
-        _gp  = games[gk]
+    for _ni, (gk, _gp) in enumerate(_game_rows_shown):
         _p0n = _gp[0]
         _ht  = _p0n.get("home_team", "")
         _aw  = next(
@@ -2935,11 +4039,13 @@ def _render_full_slate_all_players(
         if factor >= 0.80: return "TOUGH",         "#f97316"
         return "SUPPRESSOR", "#f87171"
 
-    for _ni, gk in enumerate(sorted_gks_shown):
-        game_players = sorted(
-            games[gk],
-            key=lambda p: (p.get("team", ""), int(p.get("lineup_spot") or 99)),
-        )
+    _render_started = _start_heavy_render(
+        "MAIN.full_slate.render",
+        fingerprint=f"{source_section}|{slate_ts}|{len(all_players)}|{len(_game_rows_shown)}",
+        dataset_size=len(all_players),
+    )
+
+    for _ni, (gk, game_players) in enumerate(_game_rows_shown):
         p0        = game_players[0]
         home_team = p0.get("home_team", "")
 
@@ -3004,9 +4110,72 @@ def _render_full_slate_all_players(
         _cond_html = _sep.join(_cond_parts)
 
         n_game_qual = sum(1 for p in game_players if p.get("player_name") in qualified_names)
+        _group_open_key = f"{_fs_zone_scope}_group_{_stable_key_token(slate_ts, source_section, gk)}"
+        _group_is_open = bool(st.session_state.get(_group_open_key, False))
+        _summary_html = (
+            f"<div style='background:#09090f;border:1px solid #171726;border-left:3px solid {pk_col if pk_col != '#888' else urg_col};"
+            f"border-radius:8px;padding:10px 12px;'>"
+            f"<div style='display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;'>"
+            f"<div><div style='color:#f3f4f6;font-size:14px;font-weight:800;'>{away_team} @ {home_team}</div>"
+            f"<div style='color:#6b7280;font-size:10px;'>{gt_str} · Park {pk:.2f}x · {n_game_qual} qual</div></div>"
+            f"<div style='display:flex;flex-wrap:wrap;justify-content:flex-end;'>"
+            f"{_shell_badge_html('ENV', _env_lbl, _venue or 'park')}"
+            f"{_shell_badge_html(home_team[:3], away_vuln_lbl, away_pitcher[:18])}"
+            f"{_shell_badge_html(away_team[:3], home_vuln_lbl, home_pitcher[:18])}"
+            f"</div></div></div>"
+        )
+        _summary_cols = st.columns([6, 1])
+        with _summary_cols[0]:
+            st.markdown(_summary_html, unsafe_allow_html=True)
+        with _summary_cols[1]:
+            if st.button(
+                "Collapse" if _group_is_open else "Expand",
+                key=f"{_group_open_key}_btn",
+                width="stretch",
+            ):
+                _record_interaction("full_slate.group_toggle", rerun_source="full_slate_group_toggle")
+                st.session_state[_group_open_key] = not _group_is_open
+                st.rerun()
+        if not _group_is_open:
+            continue
 
         _gh_border_col = pk_col if pk_col != "#888" else urg_col
-        header_html = (
+        _pm_fp = tuple(
+            (
+                p.get("player_id") or p.get("player_name", ""),
+                round(float(((pm_ctxs or {}).get(p.get("player_id"), {}) or {}).get("hvy_modifier", 0.0) or 0.0), 2),
+                int(bool(((pm_ctxs or {}).get(p.get("player_id"), {}) or {}).get("pitcher_arsenal"))),
+                int(bool(((pm_ctxs or {}).get(p.get("player_id"), {}) or {}).get("batter_vs"))),
+                int(bool(((pm_ctxs or {}).get(p.get("player_id"), {}) or {}).get("hand_splits"))),
+            )
+            for p in game_players
+        )
+        _game_html_fp = (
+            "full_slate_game",
+            slate_ts,
+            source_section,
+            gk,
+            tuple(
+                (
+                    p.get("player_id") or p.get("player_name", ""),
+                    p.get("lineup_spot"),
+                    p.get("team") or "",
+                    round(_pf(p.get("barrel_pct"), 0.0), 1),
+                    round((_pf(p.get("model_prob"), 0.0) or 0.0) * 100, 1),
+                    p.get("ev_pct"),
+                    p.get("edge_pct"),
+                    p.get("confidence"),
+                    int((p.get("player_name") or "") in qualified_names),
+                    int((p.get("player_name") or "") in tac_qualified_names),
+                    int((p.get("player_name") or "") in steam_names),
+                )
+                for p in game_players
+            ),
+            _pm_fp,
+        )
+
+        def _build_game_html() -> str:
+            header_html = (
             # Game command module — anchor ID for nav strip
             f"<div id='gm{_ni}_{slate_ts}' style='background:#09090f;"
             f"border-left:3px solid {_gh_border_col};"
@@ -3060,119 +4229,192 @@ def _render_full_slate_all_players(
             f"<span style='font-size:9px;color:{home_vuln_col};font-weight:700;"
             f"letter-spacing:0.3px;'>{home_vuln_lbl}</span>"
             f"</div></div>"
-        )
-
-        # Batter rows for this game (list+join avoids O(n²) string copies)
-        _row_parts = ["<div style='margin-bottom:2px'>"]
-        for _ri, p in enumerate(game_players):
-            pname  = p.get("player_name", "?")
-            pteam  = p.get("team", "?")
-            spot_s = str(p.get("lineup_spot")) if p.get("lineup_spot") else "?"
-
-            brl   = _pf(p.get("barrel_pct"), 0)
-            model = (p.get("model_prob") or 0) * 100
-            ev    = p.get("ev_pct")
-            edge  = p.get("edge_pct")
-            conf  = p.get("confidence")
-
-            brl_col   = "#FFD700" if brl >= 12 else "#4ade80" if brl >= 8 else "#60a5fa" if brl >= 5 else "#888"
-            model_col = "#FFD700" if model >= 20 else "#4ade80" if model >= 15 else "#aaa"
-            ev_col    = "#4ade80" if (ev or 0) > 0 else "#888"
-            edge_col  = "#4ade80" if (edge or 0) > 0 else "#888"
-
-            brl_s   = f"{brl:.1f}%" if brl else "—"
-            model_s = f"{model:.1f}%"
-            ev_s    = f"{ev:+.1f}%" if ev is not None else "—"
-            edge_s  = f"{edge:+.1f}%" if edge is not None else "—"
-            conf_s  = str(int(conf)) if conf is not None else "—"
-
-            is_tac_qual = pname in tac_qualified_names
-            is_qual     = pname in qualified_names
-            is_elite    = brl >= 8.0
-            is_steam    = pname in steam_names
-
-            badges = ""
-            if is_steam:
-                badges += ("<span style='background:#1a0a00;border:1px solid #f97316;"
-                           "color:#f97316;font-size:8px;padding:1px 4px;"
-                           "border-radius:2px;margin-left:4px'>STEAM</span>")
-            if is_elite:
-                badges += ("<span style='background:#1a1200;border:1px solid #665500;"
-                           "color:#FFD700;font-size:8px;padding:1px 4px;"
-                           "border-radius:2px;margin-left:3px'>★ ELITE</span>")
-            if is_tac_qual:
-                badges += ("<span style='background:#0a1a0a;border:1px solid #2a6a2a;"
-                           "color:#4ade80;font-size:8px;padding:1px 4px;"
-                           "border-radius:2px;margin-left:3px'>✓ QUAL</span>")
-            elif is_qual:
-                badges += ("<span style='background:#0a0a1a;border:1px solid #2a2a5a;"
-                           "color:#60a5fa;font-size:8px;padding:1px 4px;"
-                           "border-radius:2px;margin-left:3px'>ODDS</span>")
-
-            _alt_bg = "#0d0d18" if _ri % 2 == 0 else "#090910"
-            row_bg  = "#0f0f1e" if is_tac_qual else "#0a0a14" if is_qual else _alt_bg
-            _row_lc = "#FFD700" if brl >= 12 else "#4ade80" if is_tac_qual else "#60a5fa" if is_qual else "#1a1a28"
-
-            # Threat escalation — presentation layer, no formula changes
-            _fs_pid   = p.get("player_id")
-            _fs_pctx  = (pm_ctxs or {}).get(_fs_pid, {}) if _fs_pid else {}
-            _fs_hmod  = _fs_pctx.get("hvy_modifier") if _fs_pctx else None
-            _thr_lbl, _thr_tc, _thr_bg, _thr_bc = _main_threat_level(p, _fs_hmod)
-            _thr_badge = (
-                f"<span style='margin-left:auto;background:{_thr_bg};"
-                f"border:1px solid {_thr_bc};color:{_thr_tc};font-size:7px;"
-                f"font-weight:700;letter-spacing:1.5px;padding:2px 6px;"
-                f"border-radius:1px;white-space:nowrap;font-family:monospace;"
-                f"text-transform:uppercase;'>{_thr_lbl}</span>"
             )
 
-            _row_parts.append(
-                f"<div style='display:flex;align-items:center;padding:2px 6px 2px 9px;"
-                f"background:{row_bg};border-bottom:1px solid #0c0c12;"
-                f"border-left:2px solid {_row_lc};gap:5px;flex-wrap:nowrap;'>"
-                f"<span style='color:#555;font-size:9px;min-width:14px;text-align:right'>{spot_s}</span>"
-                f"<span style='color:#eee;font-size:11px;font-weight:700;min-width:145px;"
-                f"overflow:hidden;white-space:nowrap;text-overflow:ellipsis'>{pname}</span>"
-                f"<span style='color:#666;font-size:10px;min-width:30px'>{pteam}</span>"
-                f"<span style='color:#444;font-size:9px'>BRL</span>"
-                f"<span style='color:{brl_col};font-size:11px;font-weight:600;min-width:36px'>{brl_s}</span>"
-                f"<span style='color:#444;font-size:9px'>MDL</span>"
-                f"<span style='color:{model_col};font-size:11px;min-width:36px'>{model_s}</span>"
-                f"<span style='color:#1e1e2e;font-size:9px;margin:0 1px;'>·</span>"
-                f"<span style='color:#5a5a88;font-size:9px;font-weight:600;'>EV</span>"
-                f"<span style='color:{ev_col};font-size:11px;font-weight:700;min-width:38px'>{ev_s}</span>"
-                f"<span style='color:#5a5a88;font-size:9px;font-weight:600;'>EDG</span>"
-                f"<span style='color:{edge_col};font-size:11px;font-weight:700;min-width:38px'>{edge_s}</span>"
-                f"{badges}"
-                f"{_thr_badge}"
-                f"</div>"
-            )
-        _row_parts.append("</div>")
-        st.markdown(header_html + "".join(_row_parts), unsafe_allow_html=True)
+            # Hotspot containment: row HTML is stable across control reruns unless
+            # slate/player badges or pitch-context fingerprint actually changes.
+            _row_parts = ["<div style='margin-bottom:2px'>"]
+            for _ri, p in enumerate(game_players):
+                pname  = p.get("player_name", "?")
+                pteam  = p.get("team", "?")
+                spot_s = str(p.get("lineup_spot")) if p.get("lineup_spot") else "?"
 
-        st.caption("Player controls: open a player to view details and manage the FanDuel slip.")
-        _action_cols = 4
-        for _btn_i in range(0, len(game_players), _action_cols):
-            _btn_slice = game_players[_btn_i:_btn_i + _action_cols]
-            _btn_cols = st.columns(len(_btn_slice))
-            for _btn_col, _btn_player in zip(_btn_cols, _btn_slice):
-                with _btn_col:
-                    _btn_name = _btn_player.get("player_name", "?")
-                    _btn_spot = _btn_player.get("lineup_spot")
-                    _btn_team = _btn_player.get("team", "")
-                    _btn_pid = _btn_player.get("player_id") or _btn_name
-                    _btn_label = f"{_btn_spot or '?'} · {_btn_name}"
-                    if _btn_team:
-                        _btn_label = f"{_btn_label} ({_btn_team})"
-                    if st.button(
-                        _btn_label,
-                        key=f"fs_open_{slate_ts}_{gk}_{_btn_pid}",
-                        use_container_width=True,
-                    ):
-                        st.session_state["show_modal"] = _btn_player
-                        st.session_state["modal_source_tab"] = "Full Slate"
-                        st.session_state["modal_source_section"] = source_section
-                        st.rerun()
+                brl   = _pf(p.get("barrel_pct"), 0)
+                model = (p.get("model_prob") or 0) * 100
+                ev    = p.get("ev_pct")
+                edge  = p.get("edge_pct")
+                conf  = p.get("confidence")
+
+                brl_col   = "#FFD700" if brl >= 12 else "#4ade80" if brl >= 8 else "#60a5fa" if brl >= 5 else "#888"
+                model_col = "#FFD700" if model >= 20 else "#4ade80" if model >= 15 else "#aaa"
+                ev_col    = "#4ade80" if (ev or 0) > 0 else "#888"
+                edge_col  = "#4ade80" if (edge or 0) > 0 else "#888"
+
+                brl_s   = f"{brl:.1f}%" if brl else "—"
+                model_s = f"{model:.1f}%"
+                ev_s    = f"{ev:+.1f}%" if ev is not None else "—"
+                edge_s  = f"{edge:+.1f}%" if edge is not None else "—"
+                conf_s  = str(int(conf)) if conf is not None else "—"
+
+                is_tac_qual = pname in tac_qualified_names
+                is_qual     = pname in qualified_names
+                is_elite    = brl >= 8.0
+                is_steam    = pname in steam_names
+
+                badges = ""
+                if is_steam:
+                    badges += ("<span style='background:#1a0a00;border:1px solid #f97316;"
+                               "color:#f97316;font-size:8px;padding:1px 4px;"
+                               "border-radius:2px;margin-left:4px'>STEAM</span>")
+                if is_elite:
+                    badges += ("<span style='background:#1a1200;border:1px solid #665500;"
+                               "color:#FFD700;font-size:8px;padding:1px 4px;"
+                               "border-radius:2px;margin-left:3px'>★ ELITE</span>")
+                if is_tac_qual:
+                    badges += ("<span style='background:#0a1a0a;border:1px solid #2a6a2a;"
+                               "color:#4ade80;font-size:8px;padding:1px 4px;"
+                               "border-radius:2px;margin-left:3px'>✓ QUAL</span>")
+                elif is_qual:
+                    badges += ("<span style='background:#0a0a1a;border:1px solid #2a2a5a;"
+                               "color:#60a5fa;font-size:8px;padding:1px 4px;"
+                               "border-radius:2px;margin-left:3px'>ODDS</span>")
+
+                _alt_bg = "#0d0d18" if _ri % 2 == 0 else "#090910"
+                row_bg  = "#0f0f1e" if is_tac_qual else "#0a0a14" if is_qual else _alt_bg
+                _row_lc = "#FFD700" if brl >= 12 else "#4ade80" if is_tac_qual else "#60a5fa" if is_qual else "#1a1a28"
+
+                _fs_pid   = p.get("player_id")
+                _fs_pctx  = (pm_ctxs or {}).get(_fs_pid, {}) if _fs_pid else {}
+                _fs_hmod  = _fs_pctx.get("hvy_modifier") if _fs_pctx else None
+                _thr_lbl, _thr_tc, _thr_bg, _thr_bc = _main_threat_level(p, _fs_hmod)
+                _thr_badge = (
+                    f"<span style='margin-left:auto;background:{_thr_bg};"
+                    f"border:1px solid {_thr_bc};color:{_thr_tc};font-size:7px;"
+                    f"font-weight:700;letter-spacing:1.5px;padding:2px 6px;"
+                    f"border-radius:1px;white-space:nowrap;font-family:monospace;"
+                    f"text-transform:uppercase;'>{_thr_lbl}</span>"
+                )
+
+                _row_parts.append(
+                    f"<div style='display:flex;align-items:center;padding:2px 6px 2px 9px;"
+                    f"background:{row_bg};border-bottom:1px solid #0c0c12;"
+                    f"border-left:2px solid {_row_lc};gap:5px;flex-wrap:nowrap;'>"
+                    f"<span style='color:#555;font-size:9px;min-width:14px;text-align:right'>{spot_s}</span>"
+                    f"<span style='color:#eee;font-size:11px;font-weight:700;min-width:145px;"
+                    f"overflow:hidden;white-space:nowrap;text-overflow:ellipsis'>{pname}</span>"
+                    f"<span style='color:#666;font-size:10px;min-width:30px'>{pteam}</span>"
+                    f"<span style='color:#444;font-size:9px'>BRL</span>"
+                    f"<span style='color:{brl_col};font-size:11px;font-weight:600;min-width:36px'>{brl_s}</span>"
+                    f"<span style='color:#444;font-size:9px'>MDL</span>"
+                    f"<span style='color:{model_col};font-size:11px;min-width:36px'>{model_s}</span>"
+                    f"<span style='color:#1e1e2e;font-size:9px;margin:0 1px;'>·</span>"
+                    f"<span style='color:#5a5a88;font-size:9px;font-weight:600;'>EV</span>"
+                    f"<span style='color:{ev_col};font-size:11px;font-weight:700;min-width:38px'>{ev_s}</span>"
+                    f"<span style='color:#5a5a88;font-size:9px;font-weight:600;'>EDG</span>"
+                    f"<span style='color:{edge_col};font-size:11px;font-weight:700;min-width:38px'>{edge_s}</span>"
+                    f"{badges}"
+                    f"{_thr_badge}"
+                    f"</div>"
+                )
+            _row_parts.append("</div>")
+            return header_html + "".join(_row_parts)
+
+        st.markdown(_card_html(_game_html_fp, _build_game_html), unsafe_allow_html=True)
+
+        st.caption("Player controls: tactical quick-open buttons stay visible; the roster launcher keeps the rest accessible with fewer widgets.")
+        _priority_players: list[dict] = []
+        _priority_seen: set[str] = set()
+        for _candidate in game_players:
+            _candidate_name = _candidate.get("player_name", "")
+            _candidate_pid = str(_candidate.get("player_id") or _candidate_name)
+            _candidate_brl = _pf(_candidate.get("barrel_pct"), 0.0)
+            if (
+                _candidate_name in tac_qualified_names
+                or _candidate_name in qualified_names
+                or _candidate_brl >= 8.0
+            ) and _candidate_pid not in _priority_seen:
+                _priority_players.append(_candidate)
+                _priority_seen.add(_candidate_pid)
+        if not _priority_players:
+            for _candidate in game_players[:3]:
+                _candidate_pid = str(_candidate.get("player_id") or _candidate.get("player_name", ""))
+                if _candidate_pid not in _priority_seen:
+                    _priority_players.append(_candidate)
+                    _priority_seen.add(_candidate_pid)
+
+        _quick_players = _priority_players[:4]
+        _quick_cols = st.columns(max(1, len(_quick_players)))
+        for _btn_col, _btn_player in zip(_quick_cols, _quick_players):
+            with _btn_col:
+                _btn_name = _btn_player.get("player_name", "?")
+                _btn_spot = _btn_player.get("lineup_spot")
+                _btn_team = _btn_player.get("team", "")
+                _btn_pid = _btn_player.get("player_id") or _btn_name
+                _btn_label = f"{_btn_spot or '?'} · {_btn_name}"
+                if _btn_team:
+                    _btn_label = f"{_btn_label} ({_btn_team})"
+                if st.button(
+                    _btn_label,
+                    key=f"fs_open_{slate_ts}_{gk}_{_btn_pid}",
+                    width="stretch",
+                ):
+                    _open_player_modal(
+                        _btn_player,
+                        source_tab="Full Slate",
+                        source_section=source_section,
+                        interaction_source="full_slate.quick_open",
+                    )
+
+        _remaining_players = [p for p in game_players if str(p.get("player_id") or p.get("player_name", "")) not in _priority_seen]
+        if _remaining_players:
+            _launcher_key = f"fs_launch_sel_{_stable_key_token(slate_ts, source_section, gk)}"
+            _launcher_players = _quick_players + _remaining_players
+            _launcher_map = {
+                str(p.get("player_id") or p.get("player_name", "")): p
+                for p in _launcher_players
+            }
+            _launcher_options = list(_launcher_map.keys())
+            _launcher_index = 0
+            _launcher_default = st.session_state.get(_launcher_key)
+            if _launcher_default not in _launcher_map and _launcher_options:
+                _launcher_default = _launcher_options[0]
+                st.session_state[_launcher_key] = _launcher_default
+            for _idx, _option_pid in enumerate(_launcher_options):
+                if _option_pid == _launcher_default:
+                    _launcher_index = _idx
+                    break
+
+            def _format_launcher_option(pid: str) -> str:
+                _launcher_player = _launcher_map.get(pid)
+                if not _launcher_player:
+                    return "Unavailable player"
+                _lineup_spot = _launcher_player.get("lineup_spot") or "?"
+                _player_name = _launcher_player.get("player_name", "?")
+                _team = _launcher_player.get("team", "")
+                return f"{_lineup_spot} · {_player_name}{f' ({_team})' if _team else ''}"
+
+            _launch_cols = st.columns([4, 1])
+            with _launch_cols[0]:
+                _launch_pid = st.selectbox(
+                    "Open player",
+                    options=_launcher_options,
+                    index=_launcher_index,
+                    format_func=_format_launcher_option,
+                    key=_launcher_key,
+                    label_visibility="collapsed",
+                )
+            with _launch_cols[1]:
+                if st.button(
+                    "Open",
+                    key=f"fs_launch_btn_{_stable_key_token(slate_ts, source_section, gk)}",
+                    width="stretch",
+                ):
+                    _open_player_modal(
+                        _launcher_map[_launch_pid],
+                        source_tab="Full Slate",
+                        source_section=source_section,
+                        interaction_source="full_slate.launcher_open",
+                    )
 
     # Return-to-top
     st.markdown(
@@ -3182,6 +4424,7 @@ def _render_full_slate_all_players(
         "letter-spacing:1.5px;font-family:monospace;'>▲ &nbsp;TOP</a></div>",
         unsafe_allow_html=True,
     )
+    _finish_heavy_render(_render_started)
 
 
 def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int | None = None, min_confidence: float = 0):
@@ -3347,12 +4590,14 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                 f"🏆  {_top_name}",
                 key="hero_modal_btn",
                 help=f"View full stats for {_top_name}",
-                use_container_width=True,
+                width="stretch",
             ):
-                st.session_state["show_modal"] = _top
-                st.session_state["modal_source_tab"] = "Command Center"
-                st.session_state["modal_source_section"] = "Top Pick"
-                st.rerun()
+                _open_player_modal(
+                    _top,
+                    source_tab="Command Center",
+                    source_section="Top Pick",
+                    interaction_source="command_center.hero_open",
+                )
             _top_sub = (
                 f"<div style='font-size:12px; color:#888; margin:-4px 0 2px 6px;'>"
                 f"{_top_team} &nbsp;·&nbsp; vs {_top_pit_lbl}{_top_hand_s} &nbsp;·&nbsp; {_top_conf}"
@@ -3386,7 +4631,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
 
         _hb1, _hb2 = st.columns([8, 2])
         with _hb2:
-            st.link_button("Open on FanDuel ↗", _top_url, use_container_width=True)
+            st.link_button("Open on FanDuel ↗", _top_url, width="stretch")
 
         st.markdown(
             "<div style='border-top:1px solid #2a1a2a; margin:10px 0 14px;'></div>",
@@ -3730,7 +4975,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
             if st.button(
                 "Open All Pitch Mix",
                 key="_main_pm_open",
-                use_container_width=True,
+                width="stretch",
                 help="Expand pitch mix analysis on all visible Main cards",
             ):
                 st.session_state["main_pitch_mix_expanded"] = True
@@ -3739,7 +4984,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
             if st.button(
                 "Close All Pitch Mix",
                 key="_main_pm_close",
-                use_container_width=True,
+                width="stretch",
                 help="Collapse pitch mix analysis on all visible Main cards",
             ):
                 st.session_state["main_pitch_mix_expanded"] = False
@@ -3807,16 +5052,26 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
     _status_cache = _status_bundle["status"]
     _urgency_cache = _status_bundle["urgency"]
 
-    tab_qv, tab_elite, tab_edge, tab_fs, tab_port = st.tabs([
-        f"⚡  COMMAND CENTER  ({len(_display_pool)})",
-        f"💎  TOP TARGETS  ({_n_elite})",
-        "🎯  MATCHUP EDGE",
-        f"🗂️  FULL SLATE  ({len(all_players)})",
-        "📊  PORTFOLIO",
-    ])
+    _main_subview = _render_subview_selector(
+        "active_main_subview",
+        "main_sub_view",
+        [
+            ("command_center", f"⚡  COMMAND CENTER  ({len(_display_pool)})"),
+            ("top_targets", f"💎  TOP TARGETS  ({_n_elite})"),
+            ("matchup_edge", "🎯  MATCHUP EDGE"),
+            ("full_slate", f"🗂️  FULL SLATE  ({len(all_players)})"),
+            ("portfolio", "📊  PORTFOLIO"),
+        ],
+        "command_center",
+    )
 
     # ── TAB 1: COMMAND CENTER ────────────────────────────────────────────────
-    with tab_qv:
+    if _main_subview == "command_center":
+        _mark_render_section(
+            "MAIN.command_center",
+            fingerprint=f"{_slate_ts}|{len(_display_pool)}",
+            dataset_size=len(_display_pool),
+        )
         _qv_pool = _display_pool[:12] if _display_pool else []
         if not _qv_pool:
             st.info(
@@ -3854,7 +5109,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                                 "EV%": f"{_dp.get('ev_pct',0):+.1f}%",
                                 "Fails": " | ".join(_dp.get("filter_reasons", [])),
                             })
-                        st.dataframe(_pd.DataFrame(_diag_rows), use_container_width=True, hide_index=True)
+                        st.dataframe(_pd.DataFrame(_diag_rows), width="stretch", hide_index=True)
         else:
             _qv_pm_ctxs = _ensure_pitch_mix_contexts(
                 _qv_pool,
@@ -3893,6 +5148,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
             # ── 3-column tactical intelligence grid ───────────────────────────
             # All 12 picks in a uniform grid — rank badge distinguishes alpha picks.
             # Desktop: 3 cards per row. Mobile: columns wrap to 1 via CSS flex.
+            _scratched_ids_qv = st.session_state.get("scratched_ids", set())
             _QV_COLS   = 3
             _qv_ranked = list(enumerate(_qv_pool, start=1))  # [(rank, player), ...]
             _qv_rows   = [_qv_ranked[i:i + _QV_COLS] for i in range(0, len(_qv_ranked), _QV_COLS)]
@@ -3909,17 +5165,20 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                         _pitch_tags  = _qv_pitch_tags.get(_qp.get("player_id"), [])
                         _qspot       = _qp.get("lineup_spot")
                         _qis_opt_sel = _qp.get("player_name") in _optimizer_selected_names
+                        _qis_scratched = _qpid in _scratched_ids_qv
 
                         # Modal trigger button
                         if st.button(
-                            f"{'✅' if _qspot is not None else '⏳'} {_qp['player_name']}",
+                            f"{'❌' if _qis_scratched else '✅' if _qspot is not None else '⏳'} {_qp['player_name']}",
                             key=f"tac_btn_{_rank}",
-                            use_container_width=True,
+                            width="stretch",
                         ):
-                            st.session_state["show_modal"] = _qp
-                            st.session_state["modal_source_tab"] = "Command Center"
-                            st.session_state["modal_source_section"] = f"Rank #{_rank}"
-                            st.rerun()
+                            _open_player_modal(
+                                _qp,
+                                source_tab="Command Center",
+                                source_section=f"Rank #{_rank}",
+                                interaction_source="command_center.rank_open",
+                            )
 
                         # Level 1 — Tactical Intelligence Card (fingerprint-cached)
                         _qv_fp = (
@@ -3928,6 +5187,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                             _urgency_lbl, _qgt_str,
                             hash(_qstatus_html) if _qstatus_html else 0,
                             tuple(_pitch_tags) if _pitch_tags else (),
+                            _qis_scratched,
                         )
                         st.markdown(
                             _card_html(_qv_fp, lambda: _intelligence_card_html(
@@ -3941,6 +5201,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                                 urgency_lbl=_urgency_lbl,
                                 opt_active=_optimizer_on,
                                 opt_selected=_qis_opt_sel,
+                                is_scratched=_qis_scratched,
                             )),
                             unsafe_allow_html=True,
                         )
@@ -3961,12 +5222,69 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
             with st.expander(f"🌐 Full Universe ({len(all_by_model)} players with odds)", expanded=False):
                 _render_qualified_table(all_by_model, scale, min_ev, min_edge, _steam_names, "qv_universe")
 
-    # ── TAB 2: TOP TARGETS (formerly Elite) ───────────────────────────────────
-    with tab_elite:
-        _elite_pool = sorted(
-            [p for p in ranked if _pf(p.get("barrel_pct"), 0) >= 8.0],
-            key=lambda p: (_pf(p.get("barrel_pct"), 0), p.get("score") or 0),
+        # ── ⏳ Pre-Lineup Pool — Unconfirmed Starters (Patch D) ───────────────
+        _pre_lineup_pool = sorted(
+            [p for p in all_players if p.get("lineup_spot") is None],
+            key=lambda p: p.get("model_prob") or 0,
             reverse=True,
+        )
+        if _pre_lineup_pool:
+            with st.expander(
+                f"⏳ Pre-Lineup Pool — Unconfirmed Starters ({len(_pre_lineup_pool)})",
+                expanded=False,
+            ):
+                st.markdown(
+                    "<div style='font-size:11px;color:#666;margin-bottom:8px;'>"
+                    "Exploratory visibility layer — scores and discounts unchanged. "
+                    "No confirmed lineup spot. Sorted by model probability descending."
+                    "</div>",
+                    unsafe_allow_html=True,
+                )
+                _pl_rows = []
+                for _plp in _pre_lineup_pool:
+                    _pl_rows.append({
+                        "Status":  "⏳",
+                        "Player":  _plp.get("player_name", ""),
+                        "Team":    _plp.get("team", ""),
+                        "Pitcher": _plp.get("pitcher_name", "") or "TBD",
+                        "Model%":  f"{(_plp.get('model_prob') or 0)*100:.1f}%",
+                        "Barrel%": f"{_plp.get('barrel_pct') or 0:.1f}%",
+                        "Odds":    _fmt_american(_plp.get("best_american")) if _plp.get("best_american") else "—",
+                    })
+                if _pl_rows:
+                    st.dataframe(
+                        pd.DataFrame(_pl_rows),
+                        hide_index=True,
+                        use_container_width=True,
+                    )
+
+    # ── TAB 2: TOP TARGETS (formerly Elite) ───────────────────────────────────
+    elif _main_subview == "top_targets":
+        _mark_render_section(
+            "MAIN.top_targets",
+            fingerprint=f"{_slate_ts}|{len(ranked)}",
+            dataset_size=len(ranked),
+        )
+        _elite_fp = (
+            _slate_ts,
+            tuple(
+                (
+                    p.get("player_id") or p.get("player_name", ""),
+                    round(_pf(p.get("barrel_pct"), 0.0), 1),
+                    p.get("score") or 0,
+                )
+                for p in ranked
+            ),
+        )
+        _elite_pool = _session_fp_value(
+            "_main_fs_elite_pool_fp",
+            "_main_fs_elite_pool",
+            _elite_fp,
+            lambda: sorted(
+                [p for p in ranked if _pf(p.get("barrel_pct"), 0) >= 8.0],
+                key=lambda p: (_pf(p.get("barrel_pct"), 0), p.get("score") or 0),
+                reverse=True,
+            ),
         )
         if not _elite_pool:
             st.markdown(
@@ -4019,6 +5337,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                 )
 
                 # ── 2-column tactical intelligence grid ──────────────────────────
+                _scratched_ids_el = st.session_state.get("scratched_ids", set())
                 _ELITE_COLS  = 2
                 _el_ranked   = list(enumerate(_elite_pool, start=1))
                 _el_grid_rows = [_el_ranked[i:i + _ELITE_COLS]
@@ -4033,7 +5352,8 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                             _ep_ptags = _elite_pitch_tags.get(_ep_pid, [])
                             _ep_status_html, _ep_is_live = _status_cache.get(_ep_pid, ("", False))
                             _ep_brl   = _pf(_ep.get("barrel_pct"), 0.0)
-                            _ep_conf  = "✅" if _ep.get("lineup_spot") is not None else "⏳"
+                            _ep_is_scratched = _ep_pid in _scratched_ids_el
+                            _ep_conf  = "❌" if _ep_is_scratched else "✅" if _ep.get("lineup_spot") is not None else "⏳"
                             if _ep_brl >= 15:   _ep_grade = "GOAT"
                             elif _ep_brl >= 12: _ep_grade = "ELITE"
                             elif _ep_brl >= 10: _ep_grade = "POWER"
@@ -4042,17 +5362,21 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                             if st.button(
                                 f"{_ep_conf} {_ep['player_name']} — {_ep_grade}",
                                 key=f"oi_elite_{_el_rank}",
-                                use_container_width=True,
+                                width="stretch",
                             ):
-                                st.session_state["show_modal"] = _ep
-                                st.session_state["modal_source_tab"] = "Top Targets"
-                                st.rerun()
+                                _open_player_modal(
+                                    _ep,
+                                    source_tab="Top Targets",
+                                    source_section=f"Elite #{_el_rank}",
+                                    interaction_source="top_targets.card_open",
+                                )
 
                             _ep_opt_sel = _ep.get("player_name") in _optimizer_selected_names
                             _ec_fp = (
                                 "ec", _slate_ts, _ep_pid,
                                 _ep_is_live, _optimizer_on, _ep_opt_sel,
                                 hash(_ep_status_html) if _ep_status_html else 0,
+                                _ep_is_scratched,
                             )
                             st.markdown(
                                 _card_html(_ec_fp, lambda: _elite_card_html(
@@ -4062,6 +5386,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                                     status_html=_ep_status_html,
                                     opt_active=_optimizer_on,
                                     opt_selected=_ep_opt_sel,
+                                    is_scratched=_ep_is_scratched,
                                 )),
                                 unsafe_allow_html=True,
                             )
@@ -4070,7 +5395,12 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                                                        slate_ts=_slate_ts)
 
     # ── TAB 3: MATCHUP EDGE ───────────────────────────────────────────────────
-    with tab_edge:
+    elif _main_subview == "matchup_edge":
+        _mark_render_section(
+            "MAIN.matchup_edge",
+            fingerprint=f"{_slate_ts}|{len(_tac_ranked)}",
+            dataset_size=len(_tac_ranked),
+        )
         if not ranked:
             st.info("No qualified picks — load data first.")
         else:
@@ -4228,11 +5558,14 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                     if st.button(
                         f"{_mp_name} — {_mp_lbl}",
                         key=f"oi_edge_{_mi}",
-                        use_container_width=True,
+                        width="stretch",
                     ):
-                        st.session_state["show_modal"] = _mp
-                        st.session_state["modal_source_tab"] = "Matchup Edge"
-                        st.rerun()
+                        _open_player_modal(
+                            _mp,
+                            source_tab="Matchup Edge",
+                            source_section=f"Rank #{_mi + 1}",
+                            interaction_source="matchup_edge.card_open",
+                        )
 
                     _mp_wf   = float(_mp.get("weather_factor", 1.0) or 1.0)
                     _mp_wsum = _weather_summary(_mp)
@@ -4335,7 +5668,12 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                                                slate_ts=_slate_ts)
 
     # ── TAB 4: PORTFOLIO BUILDER ──────────────────────────────────────────────
-    with tab_port:
+    elif _main_subview == "portfolio":
+        _mark_render_section(
+            "MAIN.portfolio",
+            fingerprint=f"{_slate_ts}|{len(ranked)}|{int(bool(_optimizer_on))}",
+            dataset_size=len(ranked),
+        )
         # ── MAIN Portfolio control bar (Phase 2C) ─────────────────────────────
         _port_preset_opts = [
             ("Moderate",       "moderate",       "Balanced deployment · stable EV distribution · moderate volatility"),
@@ -4360,7 +5698,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                     _pctl_lbl,
                     key=f"port_ctrl_preset_{_pctl_key}",
                     type="primary" if _port_active_preset == _pctl_key else "secondary",
-                    use_container_width=True,
+                    width="stretch",
                 ):
                     st.session_state["optimizer_preset"]        = _pctl_key
                     st.session_state["optimizer_preset_select"] = _pctl_key
@@ -4606,7 +5944,12 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
 
 
     # -- TAB 5: FULL SLATE --------------------------------------------------------
-    with tab_fs:
+    elif _main_subview == "full_slate":
+        _mark_render_section(
+            "MAIN.full_slate",
+            fingerprint=f"{_slate_ts}|{len(all_players)}",
+            dataset_size=len(all_players),
+        )
         # TODO Phase 2 Full Slate rebuild anchors:
         # - game command module
         # - target pitcher zone
@@ -4650,6 +5993,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                     unsafe_allow_html=True,
                 )
                 if st.button("▶ Load Full Slate", key=f"load_main_fs_{_fs_mode}", type="primary"):
+                    _record_interaction("main.full_slate_load", rerun_source="full_slate_pitch_load")
                     st.session_state[_fs_loaded_key] = True
                     st.rerun()
             else:
@@ -4678,14 +6022,33 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                     f"or slide sidebar EV/Edge below current EV ≥ {min_ev:.1f}% / Edge ≥ {min_edge:.1f}%."
                 )
             else:
-                _fs_sorted = sorted(
-                    _tac_ranked,
-                    key=lambda p: (
-                        (p.get("ev_pct",    0) or 0) * 0.40 +
-                        (p.get("edge_pct",  0) or 0) * 0.35 +
-                        (p.get("confidence",0) or 0) * 0.25
+                # Hotspot containment: qualified Full Slate sort is deterministic for one
+                # slate/filter fingerprint; reuse it instead of re-sorting on every rerun.
+                _fs_sorted_fp = (
+                    _slate_ts,
+                    tuple(
+                        (
+                            p.get("player_id") or p.get("player_name", ""),
+                            p.get("ev_pct", 0) or 0,
+                            p.get("edge_pct", 0) or 0,
+                            p.get("confidence", 0) or 0,
+                        )
+                        for p in _tac_ranked
                     ),
-                    reverse=True,
+                )
+                _fs_sorted = _session_fp_value(
+                    "_main_fs_qual_sorted_fp",
+                    "_main_fs_qual_sorted",
+                    _fs_sorted_fp,
+                    lambda: sorted(
+                        _tac_ranked,
+                        key=lambda p: (
+                            (p.get("ev_pct",    0) or 0) * 0.40 +
+                            (p.get("edge_pct",  0) or 0) * 0.35 +
+                            (p.get("confidence",0) or 0) * 0.25
+                        ),
+                        reverse=True,
+                    ),
                 )
                 st.caption(
                     f"{len(_fs_sorted)} qualified players · composite score EV×0.40 + "
@@ -4695,10 +6058,25 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                 _render_qualified_table(_fs_sorted, scale, min_ev, min_edge, _steam_names, "fs_qual")
 
         else:  # Elite Targets
-            _fs_elite = sorted(
-                [p for p in all_players if _pf(p.get("barrel_pct"), 0) >= 8.0],
-                key=lambda p: _pf(p.get("barrel_pct"), 0),
-                reverse=True,
+            _fs_elite_fp = (
+                _slate_ts,
+                tuple(
+                    (
+                        p.get("player_id") or p.get("player_name", ""),
+                        round(_pf(p.get("barrel_pct"), 0.0), 1),
+                    )
+                    for p in all_players
+                ),
+            )
+            _fs_elite = _session_fp_value(
+                "_main_fs_elite_pool_fp",
+                "_main_fs_elite_pool",
+                _fs_elite_fp,
+                lambda: sorted(
+                    [p for p in all_players if _pf(p.get("barrel_pct"), 0) >= 8.0],
+                    key=lambda p: _pf(p.get("barrel_pct"), 0),
+                    reverse=True,
+                ),
             )
             _fs_elite_pm_ctxs = {}
             if not _fs_elite:
@@ -4712,6 +6090,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                     unsafe_allow_html=True,
                 )
                 if st.button("▶ Load Full Slate", key=f"load_main_fs_{_fs_mode}", type="primary"):
+                    _record_interaction("main.full_slate_load", rerun_source="full_slate_pitch_load")
                     st.session_state[_fs_loaded_key] = True
                     st.rerun()
             else:
@@ -4863,13 +6242,15 @@ def tab_hits(data: dict):
         with _bc:
             if st.button("ℹ️ Player Info",
                          key=f"{key_prefix}_modal_{p.get('player_id','')}{name[:6]}",
-                         use_container_width=True, type="primary"):
-                st.session_state["show_modal"] = p
-                st.session_state["modal_source_tab"] = "Hits"
-                st.session_state["modal_source_section"] = "Hits"
-                st.rerun()
+                         width="stretch", type="primary"):
+                _open_player_modal(
+                    p,
+                    source_tab="Hits",
+                    source_section="Hits",
+                    interaction_source="hits.card_open",
+                )
         with _fc:
-            st.link_button("📲 Open on FanDuel", _fanduel_url(name), use_container_width=True)
+            st.link_button("📲 Open on FanDuel", _fanduel_url(name), width="stretch")
 
     # ── BTS hit-probability (pure contact likelihood, separate from HIT score) ──
     def _hit_prob(p):
@@ -4940,19 +6321,19 @@ def tab_hits(data: dict):
 
         _s1, _s2, _s3 = st.columns(3)
         with _s1:
-            if st.button("✅ Both Hit  +1", use_container_width=True,
+            if st.button("✅ Both Hit  +1", width="stretch",
                          type="primary", key="bts_win"):
                 st.session_state["bts_streak"] += 1
                 if st.session_state["bts_streak"] > st.session_state["bts_best"]:
                     st.session_state["bts_best"] = st.session_state["bts_streak"]
                 st.rerun()
         with _s2:
-            if st.button("❌ Missed — Reset", use_container_width=True,
+            if st.button("❌ Missed — Reset", width="stretch",
                          key="bts_lose"):
                 st.session_state["bts_streak"] = 0
                 st.rerun()
         with _s3:
-            if st.button("🔄 Reset All", use_container_width=True, key="bts_reset"):
+            if st.button("🔄 Reset All", width="stretch", key="bts_reset"):
                 st.session_state["bts_streak"] = 0
                 st.session_state["bts_best"]   = 0
                 st.rerun()
@@ -5012,14 +6393,16 @@ def tab_hits(data: dict):
             _pb1, _pb2 = st.columns(2)
             with _pb1:
                 if st.button("ℹ️ Player Info", key="bts_p1_info",
-                             use_container_width=True, type="primary"):
-                    st.session_state["show_modal"] = p1
-                    st.session_state["modal_source_tab"] = "Hits"
-                    st.session_state["modal_source_section"] = "Beat the Shift"
-                    st.rerun()
+                             width="stretch", type="primary"):
+                    _open_player_modal(
+                        p1,
+                        source_tab="Hits",
+                        source_section="Beat the Shift",
+                        interaction_source="hits.bts_player_one_open",
+                    )
             with _pb2:
                 st.link_button("📲 Open on FanDuel", _fanduel_url(p1.get("player_name", "")),
-                               use_container_width=True)
+                               width="stretch")
 
             # ── Pick 2 card ──────────────────────────────────────────────
             if pick2:
@@ -5069,14 +6452,16 @@ def tab_hits(data: dict):
                 _pb3, _pb4 = st.columns(2)
                 with _pb3:
                     if st.button("ℹ️ Player Info", key="bts_p2_info",
-                                 use_container_width=True, type="primary"):
-                        st.session_state["show_modal"] = p2
-                        st.session_state["modal_source_tab"] = "Hits"
-                        st.session_state["modal_source_section"] = "Beat the Shift"
-                        st.rerun()
+                                 width="stretch", type="primary"):
+                        _open_player_modal(
+                            p2,
+                            source_tab="Hits",
+                            source_section="Beat the Shift",
+                            interaction_source="hits.bts_player_two_open",
+                        )
                 with _pb4:
                     st.link_button("📲 Open on FanDuel", _fanduel_url(p2.get("player_name", "")),
-                                   use_container_width=True)
+                                   width="stretch")
 
                 # Combined probability banner
                 cc = "#4ade80" if combo >= 55 else "#f59e0b" if combo >= 40 else "#f87171"
@@ -5117,7 +6502,7 @@ def tab_hits(data: dict):
                 })
             _bts_ver = st.session_state.get("_bts_all_ver", 0)
             _bts_sel = st.dataframe(
-                pd.DataFrame(bts_rows), hide_index=True, use_container_width=True,
+                pd.DataFrame(bts_rows), hide_index=True, width="stretch",
                 on_select="rerun", selection_mode="single-row",
                 key=f"bts_df_{_bts_ver}",
                 column_config={
@@ -5128,10 +6513,12 @@ def tab_hits(data: dict):
             _bts_rows = getattr(getattr(_bts_sel, "selection", None), "rows", [])
             if _bts_rows and 0 <= _bts_rows[0] < len(bts_pool):
                 st.session_state["_bts_all_ver"] = _bts_ver + 1
-                st.session_state["show_modal"] = bts_pool[_bts_rows[0]]["player"]
-                st.session_state["modal_source_tab"] = "Hits"
-                st.session_state["modal_source_section"] = "Beat the Shift"
-                st.rerun()
+                _open_player_modal(
+                    bts_pool[_bts_rows[0]]["player"],
+                    source_tab="Hits",
+                    source_section="Beat the Shift",
+                    interaction_source="hits.bts_table_select",
+                )
 
     with _hq:
         if not qualified:
@@ -5193,7 +6580,7 @@ def tab_hits(data: dict):
             })
         if rows:
             _ha_sel = st.dataframe(
-                pd.DataFrame(rows), hide_index=True, use_container_width=True,
+                pd.DataFrame(rows), hide_index=True, width="stretch",
                 on_select="rerun", selection_mode="single-row",
                 key=f"hit_all_df_{_ha_ver}",
                 column_config={
@@ -5204,10 +6591,12 @@ def tab_hits(data: dict):
             _ha_rows = getattr(getattr(_ha_sel, "selection", None), "rows", [])
             if _ha_rows and 0 <= _ha_rows[0] < len(scored):
                 st.session_state["_hit_all_ver"] = _ha_ver + 1
-                st.session_state["show_modal"] = scored[_ha_rows[0]]["player"]
-                st.session_state["modal_source_tab"] = "Hits"
-                st.session_state["modal_source_section"] = "Hits All"
-                st.rerun()
+                _open_player_modal(
+                    scored[_ha_rows[0]]["player"],
+                    source_tab="Hits",
+                    source_section="Hits All",
+                    interaction_source="hits.all_table_select",
+                )
 
     with _hpr:
         if not prime:
@@ -5452,13 +6841,15 @@ def tab_jig(data: dict):
         with _fb:
             if st.button("ℹ️ Player Info",
                          key=f"{key_prefix}_modal_{p.get('player_id','')}{name[:6]}",
-                         use_container_width=True, type="primary"):
-                st.session_state["show_modal"] = p
-                st.session_state["modal_source_tab"] = "JIG"
-                st.session_state["modal_source_section"] = "JIG · Command Center"
-                st.rerun()
+                    width="stretch", type="primary"):
+                _open_player_modal(
+                    p,
+                    source_tab="JIG",
+                    source_section="JIG · Command Center",
+                    interaction_source="jig.card_open",
+                )
         with _fc:
-            st.link_button("📲 Open on FanDuel", _fanduel_url(name), use_container_width=True)
+            st.link_button("📲 Open on FanDuel", _fanduel_url(name), width="stretch")
 
     def _render_hvy_views(hvy_contexts: dict, src_players: list = None):
         """Render JIG Matchup Intelligence views."""
@@ -5568,56 +6959,151 @@ def tab_jig(data: dict):
         _pit_hr_min_lhb   = st.session_state.get("jig_tac_min_pit_hr_lhb", 0)
         _pit_hr_min_rhb   = st.session_state.get("jig_tac_min_pit_hr_rhb", 0)
 
-        _jig_scored_all_fp = (
-            str(st.session_state.get("data_loaded_at", "")),
-            _hvy_ctx_fp,
-            len(all_players),
-        )
-        scored_all = _session_fp_value(
-            "_jig_scored_all_fp",
-            "_jig_scored_all",
-            _jig_scored_all_fp,
-            lambda: sorted(_score_jig_players(all_players), key=lambda x: x["jig"], reverse=True),
-        )
+        # Hotspot containment: `scored_all` is expensive and only needed by JIG Full Slate.
+        # Keep filtered/qualified work hot; defer full-universe scoring until that subview is active.
         scored     = _apply_jig_visibility_gates(sorted(_entries, key=lambda x: x["jig"], reverse=True))
-        fs_filtered = _apply_jig_visibility_gates([
-            x for x in scored_all
-            if (x["player"].get("player_id") or x["player"].get("player_name", "")) in _filtered_ids
-        ])
-
         qualified = [x for x in scored if x["passes"]]
         prime     = [x for x in qualified
                      if x["player"].get("best_american") and x["player"].get("ev_pct", 0) > 0]
 
-        _jig_now_et = _dt.datetime.now(_EDT)
-        _jig_status_fp = (
-            str(st.session_state.get("data_loaded_at", "")),
-            tuple(e["player"].get("player_id") or e["player"].get("player_name", "") for e in scored_all),
-            _jig_now_et.strftime("%Y%m%d%H%M"),
-        )
-        _jig_status_bundle = _session_fp_value(
-            "_jig_status_fp",
-            "_jig_status_bundle",
-            _jig_status_fp,
-            lambda: _build_status_urgency_bundle([e["player"] for e in scored_all], _jig_now_et),
-        )
-        _jig_status_cache.clear()
-        _jig_status_cache.update(_jig_status_bundle["status"])
-        _jig_urgency_cache = _jig_status_bundle["urgency"]
+        def _load_status_bundle(players: list[dict], fp_key: str, value_key: str) -> dict:
+            _now_et = _dt.datetime.now(_EDT)
+            _bundle_fp = (
+                str(st.session_state.get("data_loaded_at", "")),
+                tuple(p.get("player_id") or p.get("player_name", "") for p in players),
+                _now_et.strftime("%Y%m%d%H%M"),
+            )
+            return _session_fp_value(
+                fp_key,
+                value_key,
+                _bundle_fp,
+                lambda: _build_status_urgency_bundle(players, _now_et),
+            )
 
-        if _cutoff is not None and all_players_raw is not all_players:
-            _raw = []
-            for p in all_players_raw:
-                m   = _hvy_metrics(p)
-                pid = p.get("player_id")
-                ctx = hvy_contexts.get(pid, {})
-                hvy = round(min(100.0, _hvy_base_score(m) * ctx.get("hvy_modifier", 1.0)), 1)
-                _raw.append({"player": p, "jig": hvy, "metrics": m, "ctx": ctx,
-                             "passes": hvy >= hvy_score_min})
-            prime = [x for x in _raw
-                     if x["passes"] and x["ctx"].get("hvy_modifier", 1.0) >= hvy_matchup_min
-                     and x["player"].get("best_american")
-                     and x["player"].get("ev_pct", 0) > 0]
+        def _render_jig_way_raw_filters(players: list[dict]) -> None:
+            """Raw-stat-only slate filter. No JIG formula, HVY, model, or composite scoring."""
+            def _raw_num(player: dict, key: str):
+                if key not in player:
+                    return None
+                value = player.get(key)
+                if value in (None, "", "--", "N/A"):
+                    return None
+                if isinstance(value, str):
+                    value = value.replace("%", "").strip()
+                try:
+                    parsed = float(value)
+                except (TypeError, ValueError):
+                    return None
+                return parsed if np.isfinite(parsed) else None
+
+            def _fmt_raw(value, fmt: str) -> str:
+                if value is None:
+                    return "UNAVAILABLE"
+                return format(value, fmt)
+
+            field_defs = [
+                ("ISO", "xiso", "jig_way_iso_min", ".3f", "Raw xISO/ISO from loaded slate data."),
+                ("xSLG", "xslg", "jig_way_xslg_min", ".3f", "Raw expected slugging from loaded slate data."),
+                ("Barrel %", "barrel_pct", "jig_way_barrel_min", ".1f", "Raw Statcast barrel rate."),
+                ("Hard Hit %", "hard_hit", "jig_way_hard_hit_min", ".1f", "Raw hard-hit rate."),
+                ("Pull Air %", "pull_air_pct", "jig_way_pull_air_min", ".1f", "Raw pipeline pull-air percentage."),
+                ("HR Window %", "sweet_spot_pct", "jig_way_hr_window_min", ".1f", "Raw sweet-spot percentage used as HR window."),
+                ("EV", "exit_velo", "jig_way_ev_min", ".1f", "Raw average exit velocity."),
+                ("Launch Angle", "avg_launch_angle", "jig_way_launch_angle_min", ".1f", "Raw average launch angle."),
+                ("Sweet Spot %", "sweet_spot_pct", "jig_way_sweet_spot_min", ".1f", "Raw sweet-spot percentage."),
+            ]
+
+            available_keys = {
+                key: any(_raw_num(player, key) is not None for player in players)
+                for _, key, _, _, _ in field_defs
+            }
+            active_filters = []
+            invalid_filters = []
+
+            with st.expander("JIG WAY", expanded=False):
+                st.markdown(
+                    "<div style='font-size:13px;font-weight:900;color:#f97316;"
+                    "letter-spacing:1.4px;'>JIG WAY</div>"
+                    "<div style='font-size:11px;color:#888;margin-bottom:8px;'>"
+                    "Raw-stat slate filter only. Blank thresholds are inactive; active "
+                    "thresholds stack with AND logic. No HVY, model probability, or "
+                    "weighted JIG formula is applied.</div>",
+                    unsafe_allow_html=True,
+                )
+                control_cols = st.columns(3)
+                for idx, (label, key, state_key, _fmt, help_text) in enumerate(field_defs):
+                    with control_cols[idx % 3]:
+                        if not available_keys[key]:
+                            st.text_input(
+                                label,
+                                value="UNAVAILABLE",
+                                key=f"{state_key}_unavailable",
+                                disabled=True,
+                                help=f"{help_text} Field not available in current loaded slate.",
+                            )
+                            continue
+                        raw_threshold = st.text_input(
+                            label,
+                            key=state_key,
+                            placeholder="blank = inactive",
+                            help=f"{help_text} Uses >= when active.",
+                        ).strip()
+                        if not raw_threshold:
+                            continue
+                        try:
+                            threshold = float(raw_threshold.replace("%", ""))
+                        except ValueError:
+                            invalid_filters.append(label)
+                            continue
+                        active_filters.append((label, key, threshold, _fmt))
+
+                if invalid_filters:
+                    st.warning(
+                        "Ignored non-numeric JIG WAY threshold(s): "
+                        + ", ".join(invalid_filters)
+                    )
+
+                filtered_players = []
+                for player in players:
+                    passes = True
+                    for _, key, threshold, _fmt in active_filters:
+                        raw_value = _raw_num(player, key)
+                        if raw_value is None or raw_value < threshold:
+                            passes = False
+                            break
+                    if passes:
+                        filtered_players.append(player)
+
+                if active_filters:
+                    active_text = " AND ".join(
+                        f"{label} >= {format(threshold, fmt)}"
+                        for label, _, threshold, fmt in active_filters
+                    )
+                    st.caption(f"{len(filtered_players)} of {len(players)} players match: {active_text}")
+                else:
+                    st.caption(f"{len(players)} players shown. No JIG WAY thresholds active.")
+
+                rows = []
+                for player in filtered_players:
+                    rows.append({
+                        "Player": player.get("player_name", "Unknown"),
+                        "Team": player.get("team", ""),
+                        "Opp": player.get("opponent", ""),
+                        "Pitcher": player.get("pitcher_name", "TBD"),
+                        "ISO": _fmt_raw(_raw_num(player, "xiso"), ".3f"),
+                        "xSLG": _fmt_raw(_raw_num(player, "xslg"), ".3f"),
+                        "Barrel %": _fmt_raw(_raw_num(player, "barrel_pct"), ".1f"),
+                        "Hard Hit %": _fmt_raw(_raw_num(player, "hard_hit"), ".1f"),
+                        "Pull Air %": _fmt_raw(_raw_num(player, "pull_air_pct"), ".1f"),
+                        "HR Window %": _fmt_raw(_raw_num(player, "sweet_spot_pct"), ".1f"),
+                        "EV": _fmt_raw(_raw_num(player, "exit_velo"), ".1f"),
+                        "Launch Angle": _fmt_raw(_raw_num(player, "avg_launch_angle"), ".1f"),
+                    })
+
+                if rows:
+                    st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
+                else:
+                    st.info("No players match the active JIG WAY raw thresholds.")
 
         with st.expander(f"🔍 Debug — {len(_players)} players, {len(qualified)} qualified HVY",
                          expanded=len(qualified) == 0):
@@ -5646,15 +7132,35 @@ def tab_jig(data: dict):
                 st.write(f"**Savant data:** {_ctx_with_data} / {len(hvy_contexts)} contexts have pitch data "
                          f"({_cand_n} candidates loaded)")
 
-        _hq, _hp, _ha, _hfts, _hpr = st.tabs([
-            f"🎯 Command Center ({len(qualified)})",
-            "⚡ Top Targets",
-            "💪 Matchup Edge",
-            f"🗂️ Full Slate ({len(scored_all)})",
-            "🔗 Portfolio",
-        ])
+        _render_jig_way_raw_filters(all_players_raw)
 
-        with _hq:
+        _jig_subview = _render_subview_selector(
+            "active_jig_subview",
+            "jig_sub_view",
+            [
+                ("command_center", f"🎯 Command Center ({len(qualified)})"),
+                ("top_targets", "⚡ Top Targets"),
+                ("matchup_edge", "💪 Matchup Edge"),
+                ("full_slate", f"🗂️ Full Slate ({len(all_players)})"),
+                ("portfolio", "🔗 Portfolio"),
+            ],
+            "command_center",
+        )
+
+        if _jig_subview == "command_center":
+            _mark_render_section(
+                "JIG.command_center",
+                fingerprint=f"{_jig_slate_ts}|{len(qualified)}",
+                dataset_size=len(qualified),
+            )
+            _jig_status_bundle = _load_status_bundle(
+                [e["player"] for e in scored],
+                "_jig_status_filtered_fp",
+                "_jig_status_filtered_bundle",
+            )
+            _jig_status_cache.clear()
+            _jig_status_cache.update(_jig_status_bundle["status"])
+            _jig_urgency_cache = _jig_status_bundle["urgency"]
             if not qualified:
                 st.info("No players meet HVY thresholds — lower thresholds above.")
             else:
@@ -5663,7 +7169,20 @@ def tab_jig(data: dict):
                 if len(qualified) > 3:
                     st.caption(f"Top 3 of {len(qualified)} qualified. See Top Targets tab for all.")
 
-        with _hp:
+        elif _jig_subview == "top_targets":
+            _mark_render_section(
+                "JIG.top_targets",
+                fingerprint=f"{_jig_slate_ts}|{len(qualified)}",
+                dataset_size=len(qualified),
+            )
+            _jig_status_bundle = _load_status_bundle(
+                [e["player"] for e in scored],
+                "_jig_status_filtered_fp",
+                "_jig_status_filtered_bundle",
+            )
+            _jig_status_cache.clear()
+            _jig_status_cache.update(_jig_status_bundle["status"])
+            _jig_urgency_cache = _jig_status_bundle["urgency"]
             if not qualified:
                 st.info("No players meet HVY thresholds.")
             else:
@@ -5699,9 +7218,25 @@ def tab_jig(data: dict):
                     for entry in qualified[:_hp_page_size]:
                         _hvy_card(entry, key_prefix="hvyp")
 
-        with _ha:
-            import pandas as pd
-            rows = []
+        elif _jig_subview == "matchup_edge":
+            _mark_render_section(
+                "JIG.matchup_edge",
+                fingerprint=f"{_jig_slate_ts}|{len(scored)}",
+                dataset_size=len(scored),
+            )
+            _matchup_rows_fp = (
+                _jig_scored_fp,
+                tuple(
+                    (
+                        entry["player"].get("player_id") or entry["player"].get("player_name", ""),
+                        entry["jig"],
+                        entry["base_jig"],
+                        round(float(entry["ctx"].get("hvy_modifier", 1.0) or 1.0), 2),
+                        int(entry["passes"]),
+                    )
+                    for entry in scored
+                ),
+            )
 
             def _fmt_market_pct(value):
                 if value is None:
@@ -5711,51 +7246,84 @@ def tab_jig(data: dict):
                     return "—"
                 return f"{parsed:+.1f}%"
 
-            for entry in scored:
-                p   = entry["player"]
-                slg, iso, hh, brl, ss, pull_air = entry["metrics"]
-                ctx = entry.get("ctx", {})
-                _ha_tier = p.get("confidence_tier", "C")
-                _ha_tier_lbl = {"S": "🌟 S", "A": "✅ A", "B": "🟡 B", "C": "🔴 C"}.get(_ha_tier, _ha_tier)
-                rows.append({
-                    "Player":    p.get("player_name", ""),
-                    "Team":      p.get("team", ""),
-                    "Tier":      _ha_tier_lbl,
-                    "HVY":       entry["jig"],
-                    "HVY Base":  entry["base_jig"],
-                    "Modifier":  f"{ctx.get('hvy_modifier', 1.0):.2f}×",
-                    "Pass":      "✅" if entry["passes"] else "",
-                    "MDL%":      f"{_pf(p.get('model_prob'), 0.0)*100:.1f}%",
-                    "EV%":       _fmt_market_pct(p.get("ev_pct")),
-                    "Edge%":     _fmt_market_pct(p.get("edge_pct")),
-                    "xSLG":      f"{slg:.3f}",
-                    "Barrel%":   f"{brl:.1f}",
-                    "Hard Hit":  f"{hh:.1f}",
-                    "HR Win%":   f"{ss:.1f}",
-                    "Pull AIR":  f"{pull_air:.1f}",
-                    "ISO":       f"{iso:.3f}" if iso else "--",
-                    "Pitcher":   p.get("pitcher_name", ""),
-                })
+            rows = _session_fp_value(
+                "_jig_matchup_rows_fp",
+                "_jig_matchup_rows",
+                _matchup_rows_fp,
+                lambda: [
+                    {
+                        "Player":    entry["player"].get("player_name", ""),
+                        "Team":      entry["player"].get("team", ""),
+                        "Tier":      {"S": "🌟 S", "A": "✅ A", "B": "🟡 B", "C": "🔴 C"}.get(
+                            entry["player"].get("confidence_tier", "C"),
+                            entry["player"].get("confidence_tier", "C"),
+                        ),
+                        "HVY":       entry["jig"],
+                        "HVY Base":  entry["base_jig"],
+                        "Modifier":  f"{entry.get('ctx', {}).get('hvy_modifier', 1.0):.2f}×",
+                        "Pass":      "✅" if entry["passes"] else "",
+                        "MDL%":      f"{_pf(entry['player'].get('model_prob'), 0.0)*100:.1f}%",
+                        "EV%":       _fmt_market_pct(entry["player"].get("ev_pct")),
+                        "Edge%":     _fmt_market_pct(entry["player"].get("edge_pct")),
+                        "xSLG":      f"{entry['metrics'][0]:.3f}",
+                        "Barrel%":   f"{entry['metrics'][3]:.1f}",
+                        "Hard Hit":  f"{entry['metrics'][2]:.1f}",
+                        "HR Win%":   f"{entry['metrics'][4]:.1f}",
+                        "Pull AIR":  f"{entry['metrics'][5]:.1f}",
+                        "ISO":       f"{entry['metrics'][1]:.3f}" if entry["metrics"][1] else "--",
+                        "Pitcher":   entry["player"].get("pitcher_name", ""),
+                    }
+                    for entry in scored
+                ],
+            )
             if rows:
                 _hvy_ver = st.session_state.get("_hvy_all_ver", 0)
                 _hvy_df = _apply_heatmap(pd.DataFrame(rows))
                 _sel = st.dataframe(
-                    _hvy_df, hide_index=True, use_container_width=True,
+                _hvy_df, hide_index=True, width="stretch",
                     on_select="rerun", selection_mode="single-row",
                     key=f"hvy_all_df_{_hvy_ver}",
                 )
                 _sel_rows = getattr(getattr(_sel, "selection", None), "rows", [])
                 if _sel_rows and 0 <= _sel_rows[0] < len(scored):
                     st.session_state["_hvy_all_ver"] = _hvy_ver + 1
-                    st.session_state["show_modal"] = scored[_sel_rows[0]]["player"]
-                    st.session_state["modal_source_tab"] = "JIG"
-                    st.session_state["modal_source_section"] = "JIG · Matchup Edge"
-                    st.rerun()
+                    _open_player_modal(
+                        scored[_sel_rows[0]]["player"],
+                        source_tab="JIG",
+                        source_section="JIG · Matchup Edge",
+                        interaction_source="jig.matchup_edge_table_select",
+                    )
 
             if rows:
                 st.caption("Full HVY cards with pitch mix breakdown → see Full Slate tab.")
 
-        with _hpr:
+        elif _jig_subview == "portfolio":
+            _mark_render_section(
+                "JIG.portfolio",
+                fingerprint=f"{_jig_slate_ts}|{len(prime)}",
+                dataset_size=len(prime),
+            )
+            _jig_status_bundle = _load_status_bundle(
+                [e["player"] for e in scored],
+                "_jig_status_filtered_fp",
+                "_jig_status_filtered_bundle",
+            )
+            _jig_status_cache.clear()
+            _jig_status_cache.update(_jig_status_bundle["status"])
+            _jig_urgency_cache = _jig_status_bundle["urgency"]
+            if _cutoff is not None and all_players_raw is not all_players:
+                _raw = []
+                for p in all_players_raw:
+                    m   = _hvy_metrics(p)
+                    pid = p.get("player_id")
+                    ctx = hvy_contexts.get(pid, {})
+                    hvy = round(min(100.0, _hvy_base_score(m) * ctx.get("hvy_modifier", 1.0)), 1)
+                    _raw.append({"player": p, "jig": hvy, "metrics": m, "ctx": ctx,
+                                 "passes": hvy >= hvy_score_min})
+                prime = [x for x in _raw
+                         if x["passes"] and x["ctx"].get("hvy_modifier", 1.0) >= hvy_matchup_min
+                         and x["player"].get("best_american")
+                         and x["player"].get("ev_pct", 0) > 0]
             # ── JIG Portfolio control bar (Phase 2C) ──────────────────────────
             _jport_modes = [
                 ("All Prime",       "all",     "High-upside tactical deployment · all qualified JIG plays"),
@@ -5778,7 +7346,7 @@ def tab_jig(data: dict):
                         _jp_lbl,
                         key=f"jig_port_mode_{_jp_key}",
                         type="primary" if _jport_mode == _jp_key else "secondary",
-                        use_container_width=True,
+                    width="stretch",
                     ):
                         st.session_state["jig_port_mode_sel"] = _jp_key
                         st.rerun()
@@ -5854,7 +7422,40 @@ def tab_jig(data: dict):
                 else:
                     st.info(_jport_empty)
 
-        with _hfts:
+        elif _jig_subview == "full_slate":
+            _mark_render_section(
+                "JIG.full_slate",
+                fingerprint=f"{_jig_slate_ts}|{len(all_players)}",
+                dataset_size=len(all_players),
+            )
+            _jig_scored_all_fp = (
+                str(st.session_state.get("data_loaded_at", "")),
+                _hvy_ctx_fp,
+                len(all_players),
+            )
+            scored_all = _session_fp_value(
+                "_jig_scored_all_fp",
+                "_jig_scored_all",
+                _jig_scored_all_fp,
+                lambda: sorted(_score_jig_players(all_players), key=lambda x: x["jig"], reverse=True),
+            )
+            fs_filtered = _apply_jig_visibility_gates([
+                x for x in scored_all
+                if (x["player"].get("player_id") or x["player"].get("player_name", "")) in _filtered_ids
+            ])
+            _jig_status_bundle = _load_status_bundle(
+                [e["player"] for e in scored_all],
+                "_jig_status_full_fp",
+                "_jig_status_full_bundle",
+            )
+            _jig_status_cache.clear()
+            _jig_status_cache.update(_jig_status_bundle["status"])
+            _jig_urgency_cache = _jig_status_bundle["urgency"]
+            _jig_full_started = _start_heavy_render(
+                "JIG.full_slate.render",
+                fingerprint=f"{_jig_slate_ts}|{len(scored_all)}",
+                dataset_size=len(scored_all),
+            )
             # Phase 2A — JIG Full Slate tactical universe visibility expansion
             st.markdown(
                 "<span style='color:#f97316;font-size:13px;font-weight:700;letter-spacing:1px;'>"
@@ -6259,6 +7860,7 @@ def tab_jig(data: dict):
                         "</div>",
                         unsafe_allow_html=True,
                     )
+            _finish_heavy_render(_jig_full_started)
 
     # ── JIG — Pitch Mix Intelligence ──────────────────────────────────────────
     st.caption(
@@ -6299,20 +7901,16 @@ def tab_jig(data: dict):
         _retry_count = st.session_state.get(_retry_key, 0)
         if _cand_count > 0 and _has_arsenal / max(_cand_count, 1) < 0.20 and _retry_count < 1:
             st.session_state[_retry_key] = _retry_count + 1
-            st.session_state.pop(_hvy_ck, None)
-            st.rerun()
+            st.warning(
+                f"⚠️ Pitch arsenal coverage low ({_has_arsenal}/{_cand_count} pitchers). "
+                "Click **🔄 Refresh Pitch Data** below to retry.",
+                icon=None,
+            )
 
     _col_refresh, _col_status = st.columns([1, 4])
     with _col_refresh:
         if st.button("🔄 Refresh Pitch Data", key="hvy_refresh"):
-            from clients import pitch_mix as _pm_clear, arsenal as _ar_clear
-            _pm_clear.clear_caches()
-            _ar_clear.clear_caches()
-            st.session_state.pop(_hvy_ck, None)
-            # Also clear MAIN picks pitch mix cache — module caches were just wiped,
-            # so MAIN must re-fetch too (not just JIG) to avoid serving stale contexts.
-            for _jig_stale_k in [k for k in st.session_state if k.startswith("picks_pm_ctx_")]:
-                st.session_state.pop(_jig_stale_k, None)
+            _clear_runtime_refresh_state("JIG pitch data refresh", scope="pitch")
             st.rerun()
 
     # ── JIG Tactical Command Center ───────────────────────────────────────────
@@ -6459,7 +8057,7 @@ def tab_jig(data: dict):
             if st.button(
                 "Open All Pitch Mix",
                 key="_jig_pm_open",
-                use_container_width=True,
+                    width="stretch",
                 help="Expand pitch mix analysis on all visible JIG cards",
             ):
                 st.session_state["jig_pitch_mix_expanded"] = True
@@ -6468,7 +8066,7 @@ def tab_jig(data: dict):
             if st.button(
                 "Close All Pitch Mix",
                 key="_jig_pm_close",
-                use_container_width=True,
+                width="stretch",
                 help="Collapse pitch mix analysis on all visible JIG cards",
             ):
                 st.session_state["jig_pitch_mix_expanded"] = False
@@ -6495,7 +8093,34 @@ def tab_jig(data: dict):
         ))
         or _jig_tac_params["exclude_started"]
     )
-    _jig_filtered = _apply_tactical_filters(all_players, _jig_tac_params) if _any_jig_tac else None
+    # Hotspot containment: JIG tactical filtering is deterministic for one slate/control state.
+    _jig_filtered_fp = (
+        _jig_slate_ts,
+        tuple(_jig_tac_params.values()),
+        tuple(
+            (
+                p.get("player_id") or p.get("player_name", ""),
+                p.get("lineup_spot"),
+                p.get("game_time_utc") or "",
+                round(_pf(p.get("barrel_pct"), 0.0), 1),
+                round(_pf(p.get("hard_hit"), 0.0), 1),
+                round(_pf(p.get("xslg"), 0.0), 3),
+                round(_pf(p.get("xiso"), 0.0), 3),
+                round(resolve_pull_air_pct(p), 1),
+                round(_pf(p.get("sweet_spot_pct"), 0.0), 1),
+            )
+            for p in all_players
+        ),
+    )
+    _jig_filtered = (
+        _session_fp_value(
+            "_jig_tac_filtered_fp",
+            "_jig_tac_filtered",
+            _jig_filtered_fp,
+            lambda: _apply_tactical_filters(all_players, _jig_tac_params),
+        )
+        if _any_jig_tac else None
+    )
 
     _render_hvy_views(st.session_state.get(_hvy_ck, {}), src_players=_jig_filtered)
 
@@ -6709,7 +8334,7 @@ def tab_performance():
         with _pw_cols[_wi]:
             _btn_type = "primary" if _wlabel == _cur_win else "secondary"
             if st.button(_wlabel, key=f"pw_{_wlabel}", type=_btn_type,
-                         use_container_width=True):
+                    width="stretch"):
                 st.session_state["perf_window"] = _wlabel
                 st.rerun()
     _win_days = _WINDOWS[_cur_win]
@@ -6913,7 +8538,7 @@ def tab_performance():
                         "ROI":     f"{roi:+.1f}%",
                     })
                 if tier_rows:
-                    st.dataframe(pd.DataFrame(tier_rows), hide_index=True, use_container_width=True)
+                    st.dataframe(pd.DataFrame(tier_rows), hide_index=True, width="stretch")
                     st.caption("Tier assigned at pick time using EV%, Edge%, and Confidence — same logic as the Rating column in Main.")
     except Exception as e:
         st.warning(f"Performance by tier unavailable: {e}")
@@ -7019,7 +8644,7 @@ def tab_performance():
                     "Consistent over-prediction means the model is too aggressive; under-prediction means it's conservative."
                 )
                 cal_df = pd.DataFrame(cal_rows)
-                st.dataframe(cal_df, hide_index=True, use_container_width=True)
+                st.dataframe(cal_df, hide_index=True, width="stretch")
                 st.bar_chart(cal_df.set_index("Bucket")[["Avg Model%", "Actual HR%"]], height=220)
     except Exception as e:
         st.warning(f"Calibration chart unavailable: {e}")
@@ -7071,12 +8696,12 @@ def tab_performance():
                 with _pc2:
                     st.write("")  # spacer
                 with _pc3:
-                    if st.button("✅ HR", key=f"res_win_{_pr_name}_{_pr_date}", use_container_width=True):
+                    if st.button("✅ HR", key=f"res_win_{_pr_name}_{_pr_date}", width="stretch"):
                         pnl_tracker.update_results(_pr_date, {_pr_name: True})
                         st.toast(f"Marked {_pr_name} ✅ HR on {_pr_date}")
                         st.rerun()
                 with _pc4:
-                    if st.button("❌ No", key=f"res_loss_{_pr_name}_{_pr_date}", use_container_width=True):
+                    if st.button("❌ No", key=f"res_loss_{_pr_name}_{_pr_date}", width="stretch"):
                         pnl_tracker.update_results(_pr_date, {_pr_name: False})
                         st.toast(f"Marked {_pr_name} ❌ No HR on {_pr_date}")
                         st.rerun()
@@ -7176,7 +8801,7 @@ def tab_performance():
 
             st.dataframe(
                 _log_df,
-                use_container_width=True,
+                    width="stretch",
                 hide_index=True,
                 column_config={
                     "Result": st.column_config.TextColumn("Result", width="small"),
@@ -7224,13 +8849,13 @@ def tab_performance():
             with st.expander(f"📊 Performance by Tab ({len(_pt_tab_perf)} sources)", expanded=_n_settled >= 5):
                 _tab_df = _pd_al.DataFrame(_pt_tab_perf).rename(columns={"source_tab": "Tab"})
                 _disp = ["Tab","Picks","Wins","Losses","Pending","Win%","Net P&L","ROI%","Last Pick"]
-                st.dataframe(_tab_df[_disp], hide_index=True, use_container_width=True)
+                st.dataframe(_tab_df[_disp], hide_index=True, width="stretch")
                 _sec_decided = [r for r in _pt_sec_perf if r["_decided"] >= 3]
                 if _sec_decided:
                     st.markdown("**By Section / Strategy** (≥3 settled picks)")
                     _sec_df = _pd_al.DataFrame(_sec_decided).rename(columns={"source_section": "Section"})
                     st.dataframe(_sec_df[["Section","Picks","Wins","Losses","Win%","Net P&L","ROI%"]],
-                                 hide_index=True, use_container_width=True)
+                                  hide_index=True, width="stretch")
 
         if _n_settled >= 15:
             @st.cache_data(ttl=300, show_spinner=False)
@@ -7257,7 +8882,7 @@ def tab_performance():
                             except (ValueError, TypeError):
                                 return ""
                         st.dataframe(_pd_al.DataFrame(_corr_rows).style.applymap(_cc, subset=["Correlation"]),
-                                     hide_index=True, use_container_width=True)
+                                      hide_index=True, width="stretch")
 
                     _calib = _analysis.get("calibration", [])
                     if _calib:
@@ -7274,7 +8899,7 @@ def tab_performance():
                             except (ValueError, TypeError):
                                 return ""
                         st.dataframe(_cal_df.style.applymap(_cb, subset=["Bias(pp)"]),
-                                     hide_index=True, use_container_width=True)
+                                      hide_index=True, width="stretch")
 
 
                 _suggestions = _analysis.get("suggestions", [])
@@ -7319,6 +8944,11 @@ def tab_performance():
 # MAIN
 # â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•â•
 def main():
+    _mark_runtime_rerun()
+    _data_backed_routes = {"MAIN", "JIG", "ADVANCED_STRATEGIES", "HITS"}
+    _sidebar_route_data = None
+    _shell_ctx = None
+    _diag_slot = None
     # Keep modal state alive across reruns until the user explicitly closes it.
     _queued_modal = st.session_state.get("show_modal")
     if isinstance(_queued_modal, dict):
@@ -7340,8 +8970,17 @@ def main():
         "PERFORMANCE": "Performance",
     }
     _route_order = list(_route_labels.keys())
-    st.session_state.setdefault("active_route", "MAIN")
-    st.session_state.setdefault("active_workspace", st.session_state["active_route"])
+    _pending_workspace_route = st.session_state.pop(_PENDING_WORKSPACE_ROUTE_KEY, None)
+    _initial_route = _pending_workspace_route or st.session_state.get("active_route", "MAIN")
+    if _initial_route not in _route_order:
+        _initial_route = "MAIN"
+    st.session_state["active_route"] = _initial_route
+    if _pending_workspace_route in _route_order or st.session_state.get("active_workspace") not in _route_order:
+        st.session_state["active_workspace"] = _initial_route
+    _investigation.init_investigation_state()
+    _ensure_navigation_continuity_state()
+    _investigation.record_route_context(_initial_route)
+    _update_runtime_route_diag()
 
 
     # â"€â"€ Sidebar â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
@@ -7362,15 +9001,17 @@ def main():
             "Active workspace",
             options=_route_order,
             index=_route_order.index(
-                st.session_state.get("active_workspace", st.session_state["active_route"])
-                if st.session_state.get("active_workspace", st.session_state["active_route"]) in _route_order
-                else "MAIN"
+                st.session_state.get("active_workspace", _initial_route)
+                if st.session_state.get("active_workspace", _initial_route) in _route_order
+                else _initial_route
             ),
             format_func=lambda x: _route_labels.get(x, x),
             label_visibility="collapsed",
             key="active_workspace",
         )
         st.session_state["active_route"] = _workspace_sel
+        _investigation.record_route_context(_workspace_sel)
+        _update_runtime_route_diag()
 
         # Bankroll input
         st.markdown("#### 💰 Bankroll")
@@ -7524,46 +9165,83 @@ def main():
 
         st.divider()
 
+        if _workspace_sel in _data_backed_routes:
+            _sidebar_route_data = get_data()
+            _run_hydration_side_effects_once(_sidebar_route_data)
+            _shell_ctx = _build_runtime_shell_context(_sidebar_route_data)
+            _render_sidebar_shell_zones(_sidebar_route_data, _shell_ctx)
+            st.divider()
+
         # ── FanDuel Slip ──────────────────────────────────────────────────────
         st.markdown("#### 🎰 FanDuel Slip")
-        _slip_data = st.session_state.get("data")
+        _slip_data = _sidebar_route_data or st.session_state.get("data")
         if _slip_data:
             _fd_min_ev   = float(st.session_state.get("min_ev",   config.MIN_EV_PCT))
             _fd_min_edge = float(st.session_state.get("min_edge", config.MIN_EDGE_PCT))
             _fd_min_conf = int(st.session_state.get("min_confidence", 0))
             _fd_cutoff   = st.session_state.get("cutoff_utc_hour")
+            _fd_player_fp = tuple(
+                (
+                    p.get("player_id") or p.get("player_name", ""),
+                    p.get("player_name", ""),
+                    p.get("team", ""),
+                    p.get("best_american"),
+                    p.get("fanduel_american"),
+                    p.get("score", 0),
+                    p.get("game_time_utc", ""),
+                )
+                for p in _slip_data.get("all_players", [])
+            )
             _fd_uif_fp   = (
                 str(st.session_state.get("data_loaded_at", "")),
                 _fd_min_ev, _fd_min_edge,
                 _fd_cutoff if _fd_cutoff is not None else -1,
                 _fd_min_conf,
+                _fd_player_fp,
             )
-            if (
-                st.session_state.get("_fd_uif_ranked_fp") == _fd_uif_fp
-                and "_fd_uif_ranked" in st.session_state
-            ):
-                _odds_players = st.session_state["_fd_uif_ranked"]
-            else:
-                _odds_players = _apply_ui_filters(
+            def _build_fd_slip_bundle() -> dict:
+                _odds_players_local = _apply_ui_filters(
                     _slip_data.get("all_players", []), _fd_min_ev, _fd_min_edge,
                     cutoff_utc_hour=_fd_cutoff,
                     min_confidence=_fd_min_conf,
                 )
-                st.session_state["_fd_uif_ranked"] = _odds_players
-                st.session_state["_fd_uif_ranked_fp"] = _fd_uif_fp
-            if not _odds_players:
-                _odds_players = sorted(
-                    [p for p in _slip_data.get("all_players", []) if p.get("best_american")],
-                    key=lambda x: x.get("score", 0), reverse=True,
-                )
+                if not _odds_players_local:
+                    _odds_players_local = sorted(
+                        [p for p in _slip_data.get("all_players", []) if p.get("best_american")],
+                        key=lambda x: x.get("score", 0), reverse=True,
+                    )
 
-            def _slip_label(p):
-                odds = p.get("fanduel_american") or p.get("best_american")
-                return f"{p['player_name']} ({p.get('team', '')}) {_fmt_american(odds)}"
+                def _slip_label(p):
+                    odds = p.get("fanduel_american") or p.get("best_american")
+                    return f"{p['player_name']} ({p.get('team', '')}) {_fmt_american(odds)}"
 
-            _slip_opts = [_slip_label(p) for p in _odds_players]
-            _slip_map  = {_slip_label(p): p for p in _odds_players}
+                options = [_slip_label(p) for p in _odds_players_local]
+                player_map = {_slip_label(p): p for p in _odds_players_local}
+                return {"players": _odds_players_local, "options": options, "map": player_map}
+
+            _slip_bundle = _session_fp_value(
+                "_fd_slip_option_fp",
+                "_fd_slip_option_bundle",
+                _fd_uif_fp,
+                _build_fd_slip_bundle,
+            )
+            _odds_players = _slip_bundle["players"]
+
+            _slip_opts = _slip_bundle["options"]
+            _slip_map  = _slip_bundle["map"]
             _current   = [s for s in st.session_state.get("fd_slip", []) if s in _slip_opts]
+            _valid_slip_labels = set(_slip_opts)
+            _slip_sources = {
+                k: v for k, v in dict(st.session_state.get("fd_slip_sources", {})).items()
+                if k in _valid_slip_labels
+            }
+            st.session_state["fd_slip_sources"] = _slip_sources
+            if not _current:
+                st.session_state.pop("clear_slip_confirm", None)
+            _record_widget_zone(
+                "sidebar.fd_slip",
+                widget_count_estimate=1 + len(_current) + (4 if _current else 1),
+            )
 
             _selected = st.multiselect(
                 "Add to slip",
@@ -7573,6 +9251,8 @@ def main():
                 label_visibility="collapsed",
                 key="fd_slip_select",
             )
+            if _selected != _current:
+                _record_interaction("sidebar.fd_slip_multiselect", rerun_source="fd_slip_selection")
             st.session_state["fd_slip"] = _selected
 
             if _selected:
@@ -7646,7 +9326,8 @@ def main():
                             unsafe_allow_html=True,
                         )
                     with _c_rm:
-                        if st.button("✕", key=f"slip_rm_{i}", help=f"Remove {p['player_name']}"):
+                        if st.button("✕", key=f"slip_rm_{_stable_key_token(s)}", help=f"Remove {p['player_name']}"):
+                            _record_interaction("sidebar.fd_slip_remove", rerun_source="fd_slip_update")
                             _new_slip = [x for x in _selected if x != s]
                             st.session_state["fd_slip"] = _new_slip
                             st.session_state.pop("fd_slip_select", None)
@@ -7704,6 +9385,7 @@ def main():
                         st.error(f"⚠️ {_p['player_name']} may be SCRATCHED")
                 if st.button("🔍 Check for Scratches", width='stretch',
                              key="check_scratches"):
+                    _record_interaction("sidebar.check_scratches", rerun_source="scratch_check")
                     with st.spinner("Checking lineups…"):
                         try:
                             from clients.mlb_stats import get_confirmed_lineup_player_ids
@@ -7727,6 +9409,7 @@ def main():
                 # ── Pitcher change check ───────────────────────────────────
                 if st.button("🔄 Check Pitcher Changes", width='stretch',
                              key="check_pitchers"):
+                    _record_interaction("sidebar.check_pitchers", rerun_source="pitcher_check")
                     with st.spinner("Checking starters…"):
                         try:
                             from clients.mlb_stats import get_today_pitcher_map
@@ -7748,6 +9431,7 @@ def main():
                 if st.button("📋 Save for Results Tracking", width='stretch',
                              key="log_fd_slip",
                              help="Log these picks before placing bets on FanDuel — required to track P&L and closing line value."):
+                    _record_interaction("sidebar.log_fd_slip", rerun_source="tracking_log")
                     slip_players = [_slip_map[s] for s in _selected]
                     try:
                         n = pnl_tracker.log_slip_picks(slip_players)
@@ -7776,19 +9460,22 @@ def main():
                 )
                 if not st.session_state.get("clear_slip_confirm"):
                     if st.button("🗑️ Clear Slip", width='stretch', key="clear_fd_slip"):
+                        _record_interaction("sidebar.clear_slip_request", rerun_source="clear_slip_confirm")
                         st.session_state["clear_slip_confirm"] = True
                         st.rerun()
                 else:
                     st.warning("Remove all picks from the slip?")
                     _cc1, _cc2 = st.columns(2)
                     with _cc1:
-                        if st.button("✅ Yes, clear", key="clear_slip_yes", use_container_width=True):
+                        if st.button("✅ Yes, clear", key="clear_slip_yes", width="stretch"):
+                            _record_interaction("sidebar.clear_slip_confirm", rerun_source="fd_slip_update")
                             st.session_state["fd_slip"] = []
                             st.session_state.pop("fd_slip_select", None)
                             st.session_state.pop("clear_slip_confirm", None)
                             st.rerun()
                     with _cc2:
-                        if st.button("❌ Cancel", key="clear_slip_no", use_container_width=True):
+                        if st.button("❌ Cancel", key="clear_slip_no", width="stretch"):
+                            _record_interaction("sidebar.clear_slip_cancel", rerun_source="clear_slip_cancel")
                             st.session_state.pop("clear_slip_confirm", None)
                             st.rerun()
             else:
@@ -7833,12 +9520,8 @@ def main():
                 )
 
         if st.button("🔄 Force Refresh Data", width='stretch'):
-            from clients import mlb_stats as _ms, statcast as _sc
-            _ms.clear_all_caches()
-            _sc.clear_all_caches()
-            st.cache_data.clear()
-            for k in ["data", "cache_key", "data_loaded_at"]:
-                st.session_state.pop(k, None)
+            _record_interaction("sidebar.force_refresh", rerun_source="force_refresh")
+            _clear_runtime_refresh_state("manual Force Refresh Data", scope="data")
             st.rerun()
 
         # ── Auto-refresh ──────────────────────────────────────────────────────
@@ -7866,6 +9549,7 @@ def main():
                     f"next in ~{_ar_remain} min"
                 )
         _auto_refresh_ticker()
+        _diag_slot = st.empty()
 
         st.divider()
 
@@ -7986,19 +9670,31 @@ The app will open full-screen like a native app.
     # ── Banner ────────────────────────────────────────────────────────────────
     _banner = Path(__file__).parent / "assets" / "banner.png"
     if _banner.exists():
-        st.image(str(_banner), use_container_width=True)
+        st.image(str(_banner), width="stretch")
     st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
     _active_route = st.session_state.get("active_route", "MAIN")
     if _active_route not in _route_order:
         _active_route = "MAIN"
         st.session_state["active_route"] = _active_route
-        st.session_state["active_workspace"] = _active_route
+    _investigation.record_route_context(_active_route)
+    _update_runtime_route_diag()
+    _route_data = _sidebar_route_data
+    if _active_route in _data_backed_routes and _route_data is None:
+        _route_data = get_data()
+        _run_hydration_side_effects_once(_route_data)
+    if _active_route in _data_backed_routes:
+        _shell_ctx = _build_runtime_shell_context(_route_data)
+        _render_navigation_breadcrumbs(_shell_ctx)
+        _render_interruption_indicators(_shell_ctx)
+        _render_recovery_prompt_shell(_shell_ctx)
+        _render_command_strip(_shell_ctx)
+        _render_live_feed_shell(_route_data, _shell_ctx)
+        _render_queue_shell(_route_data, _shell_ctx)
 
     if _active_route == "MAIN":
         try:
-            data = get_data()
             tab_picks(
-                data,
+                _route_data,
                 _min_ev,
                 _min_edge,
                 cutoff_utc_hour=st.session_state.get("cutoff_utc_hour"),
@@ -8010,24 +9706,57 @@ The app will open full-screen like a native app.
                     st.code(_tb.format_exc())
     elif _active_route == "JIG":
         try:
-            tab_jig(get_data())
+            tab_jig(_route_data)
         except Exception as _e:
             st.error(f"JIG tab error: {_e}")
             if __import__("os").getenv("DEBUG") == "true":
                     st.code(_tb.format_exc())
     elif _active_route == "ADVANCED_STRATEGIES":
         try:
-            tab_advanced_strategies(
-                _gate_data(get_data(), st.session_state.get("cutoff_utc_hour")),
-                parlays_callback=tab_parlays,
+            _adv_data = _gate_data(_route_data, st.session_state.get("cutoff_utc_hour"))
+            _adv_fp = (
+                str(st.session_state.get("data_loaded_at", "")),
+                st.session_state.get("cutoff_utc_hour"),
+                len((_adv_data or {}).get("ranked", []) or []),
+                len((_adv_data or {}).get("all_players", []) or []),
             )
+            if _lazy_route_gate(
+                "advanced_strategies",
+                "Advanced Strategies",
+                _adv_data,
+                _adv_fp,
+                "Collapsed-first shell. Load opens heavy tactical tables only when this route is active.",
+            ):
+                tab_advanced_strategies(
+                    _adv_data,
+                    parlays_callback=tab_parlays,
+                )
         except Exception as _e:
             st.error(f"Advanced strategies tab error: {_e}")
             if __import__("os").getenv("DEBUG") == "true":
                     st.code(_tb.format_exc())
     elif _active_route == "HITS":
         try:
-            tab_hits(_gate_data(get_data(), st.session_state.get("cutoff_utc_hour")))
+            _hits_data = _gate_data(_route_data, st.session_state.get("cutoff_utc_hour"))
+            _hits_fp = (
+                str(st.session_state.get("data_loaded_at", "")),
+                st.session_state.get("cutoff_utc_hour"),
+                st.session_state.get("hit_xba", 0.260),
+                st.session_state.get("hit_ld", 20.0),
+                st.session_state.get("hit_ss", 28.0),
+                st.session_state.get("hit_hh", 35.0),
+                st.session_state.get("hit_kf", 0.90),
+                st.session_state.get("hit_pa", 3.0),
+                len((_hits_data or {}).get("all_players", []) or []),
+            )
+            if _lazy_route_gate(
+                "hits",
+                "Hits",
+                _hits_data,
+                _hits_fp,
+                "Collapsed-first shell. Load defers hit tables and modal-heavy views until operator opens this route.",
+            ):
+                tab_hits(_hits_data)
         except Exception as _e:
             st.error(f"Hits tab error: {_e}")
             if __import__("os").getenv("DEBUG") == "true":
@@ -8039,6 +9768,12 @@ The app will open full-screen like a native app.
             st.error(f"Performance tab error: {_e}")
             if __import__("os").getenv("DEBUG") == "true":
                     st.code(_tb.format_exc())
+
+    if _diag_slot is not None:
+        with _diag_slot.container():
+            _render_runtime_diagnostics()
+    if _shell_ctx is not None:
+        _render_deployment_tray(_shell_ctx)
 
 
 if __name__ == "__main__":

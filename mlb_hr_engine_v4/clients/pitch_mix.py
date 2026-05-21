@@ -17,8 +17,9 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
 import config
 from clients.pull_air import parse_pct_display, resolve_pull_air_pct
+from clients.session_utils import configure_session
 
-_SESSION = requests.Session()
+_SESSION = configure_session(requests.Session())
 _SESSION.headers.update({
     "User-Agent": (
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "

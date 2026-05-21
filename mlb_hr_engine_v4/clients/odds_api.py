@@ -16,11 +16,12 @@ from datetime import datetime, timezone, timedelta
 from pathlib import Path
 
 import config
+from clients.session_utils import configure_session
 
 BASE = "https://api.the-odds-api.com/v4"
 _CACHE_PATH = Path(__file__).parent.parent / "data" / "odds_cache.json"
 CACHE_TTL_MINUTES = 45
-_SESSION = requests.Session()
+_SESSION = configure_session(requests.Session())
 
 
 # ──────────────────────────────────────────────────────────────────────────────

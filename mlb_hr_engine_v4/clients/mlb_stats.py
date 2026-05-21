@@ -10,9 +10,10 @@ from datetime import date, timedelta
 from typing import Optional
 
 import config
+from clients.session_utils import configure_session
 
 MLB_API = "https://statsapi.mlb.com/api/v1"
-_SESSION = requests.Session()
+_SESSION = configure_session(requests.Session())
 _SESSION.headers.update({"User-Agent": "Codex-HR-Engine/1.0"})
 
 # Session-level cache for game logs â€" avoids duplicate API calls when

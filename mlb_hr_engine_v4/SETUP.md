@@ -31,6 +31,20 @@ cd "codex_hr_engine_v4"
 python main.py
 ```
 
+Supported Streamlit launch paths:
+
+```bash
+cd "C:\Users\ChrisPatrick\OneDrive - Resilience\Desktop\MLB HR Engine\mlb-hr-engine-master\mlb_hr_engine_v4"
+py -m streamlit run app.py
+```
+
+```bash
+cd "C:\Users\ChrisPatrick\OneDrive - Resilience\Desktop\MLB HR Engine\mlb-hr-engine-master"
+py -m streamlit run mlb_hr_engine_v4/app.py
+```
+
+Avoid non-canonical launches that rely on implicit `PYTHONPATH` or unrelated cwd state.
+
 To run for a specific date:
 ```bash
 set TARGET_DATE=2025-04-20 && python main.py    # Windows
