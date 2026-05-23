@@ -371,9 +371,7 @@ def build_breadcrumb_context(
         "",
     )
     action_label = _as_str(
-        shell_ctx.get("active_jig_subview")
-        or shell_ctx.get("active_main_subview")
-        or investigation.get("current_route")
+        investigation.get("current_route")
         or active_route,
         active_route,
     )

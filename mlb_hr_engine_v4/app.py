@@ -80,6 +80,8 @@ import pandas as pd
 import numpy as np
 import filter_controls as _fc
 import navigation_continuity as _nav
+import nav_state as _navstate
+from components.sub_room_rail import render_sub_room_rail as _render_sub_room_rail
 
 
 def _pf(val, default=0.0):
@@ -177,8 +179,7 @@ def _runtime_diag() -> dict:
             "launch_validation_state": _STARTUP_CONTEXT["launch_validation_state"],
             "active_route": "MAIN",
             "active_workspace": "MAIN",
-            "active_main_subview": "command_center",
-            "active_jig_subview": "command_center",
+            "active_sub_room": "",
             "loaded_slate_date": "",
             "last_hydration_ts": "",
             "hydration_fingerprint": "",
@@ -204,8 +205,7 @@ def _update_runtime_route_diag() -> None:
     diag = _runtime_diag()
     diag["active_route"] = st.session_state.get("active_route", "MAIN")
     diag["active_workspace"] = st.session_state.get("active_workspace", diag["active_route"])
-    diag["active_main_subview"] = st.session_state.get("active_main_subview", "command_center")
-    diag["active_jig_subview"] = st.session_state.get("active_jig_subview", "command_center")
+    diag["active_sub_room"] = st.session_state.get("active_sub_room", "")
     data = st.session_state.get("data") or {}
     diag["loaded_slate_date"] = data.get("date") or st.session_state.get("cache_key", "")
 
@@ -480,8 +480,7 @@ def _render_runtime_diagnostics() -> None:
         st.caption(f"Launch validation: {diag.get('launch_validation_state', '') or 'unknown'}")
         st.caption(f"Route: {diag.get('active_route', 'MAIN')}")
         st.caption(f"Workspace: {diag.get('active_workspace', 'MAIN')}")
-        st.caption(f"MAIN sub-view: {diag.get('active_main_subview', 'command_center')}")
-        st.caption(f"JIG sub-view: {diag.get('active_jig_subview', 'command_center')}")
+        st.caption(f"Sub-room: {diag.get('active_sub_room', '') or 'none'}")
         st.caption(f"Slate date: {diag.get('loaded_slate_date', '') or 'not loaded'}")
         st.caption(f"Last hydration: {diag.get('last_hydration_ts', '') or 'not loaded'}")
         st.caption(f"Hydration fingerprint: {diag.get('hydration_fingerprint', '') or 'not computed'}")
@@ -538,36 +537,11 @@ def _stable_key_token(*parts) -> str:
     return hashlib.sha1(raw.encode("utf-8")).hexdigest()[:12]
 
 
-def _normalize_subview_state(state_key: str, options: list[tuple[str, str]], default_id: str) -> str:
-    valid_ids = [option_id for option_id, _label in options]
-    if default_id not in valid_ids:
-        default_id = valid_ids[0]
-    active_id = st.session_state.get(state_key, default_id)
-    if active_id not in valid_ids:
-        active_id = default_id
-        st.session_state[state_key] = active_id
-    return active_id
+def _slip_label(player: dict) -> str:
+    odds = player.get("fanduel_american") or player.get("best_american")
+    return f"{player.get('player_name', '')} ({player.get('team', '')}) {_fmt_american(odds)}"
 
 
-def _render_subview_selector(
-    state_key: str,
-    label: str,
-    options: list[tuple[str, str]],
-    default_id: str,
-) -> str:
-    """Render one active internal view; avoids Streamlit hidden-tab execution."""
-    active_id = _normalize_subview_state(state_key, options, default_id)
-    labels = {option_id: text for option_id, text in options}
-    option_ids = [option_id for option_id, _text in options]
-    return st.radio(
-        label,
-        options=option_ids,
-        index=option_ids.index(active_id),
-        format_func=lambda option_id: labels.get(option_id, option_id),
-        horizontal=True,
-        key=state_key,
-        label_visibility="collapsed",
-    )
 
 
 def _session_fp_value(fp_key: str, value_key: str, fp: tuple, builder):
@@ -1071,6 +1045,23 @@ def _render_deployment_tray(shell_ctx: dict) -> None:
     slip = list(st.session_state.get("fd_slip", []))
     sources = dict(st.session_state.get("fd_slip_sources", {}))
     expanded = st.session_state.get("_shell_deploy_tray_open", False)
+    data = shell_ctx.get("data") or {}
+    slip_players = {}
+    for player in data.get("all_players", []) or []:
+        slip_players[_slip_label(player)] = player
+    slip_rows = []
+    slip_names = set()
+    for label in slip:
+        player = slip_players.get(label)
+        if not player:
+            continue
+        slip_names.add(str(player.get("player_name", "") or ""))
+        row = dict(player)
+        row["source_tab"] = sources.get(label, {}).get("tab", "FD Slip")
+        row["source_section"] = sources.get(label, {}).get("section", "")
+        row["_deployment_tier"] = _deployment_tier(player)
+        row["_lifecycle"] = "deployed"
+        slip_rows.append(row)
     st.markdown(
         f"<div style='margin-top:16px;padding:10px 12px;border:1px solid #171726;border-radius:14px;background:linear-gradient(180deg,#07070c 0%,#040408 100%);'>"
         f"<div style='display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;'>"
@@ -1100,19 +1091,28 @@ def _render_deployment_tray(shell_ctx: dict) -> None:
     if not slip:
         st.caption("No deployment targets staged.")
         return
-    for idx, label in enumerate(slip[:8]):
-        cols = st.columns([5, 1])
-        with cols[0]:
-            st.markdown(
-                _shell_badge_html(label[:28], "DEPLOY", sources.get(label, {}).get("tab", "")),
-                unsafe_allow_html=True,
-            )
-        with cols[1]:
-            if st.button("Drop", key=f"deploy_drop_{idx}", width="stretch"):
-                _record_interaction("deploy_tray.drop", rerun_source="fd_slip_update")
-                st.session_state["fd_slip"] = [item for item in slip if item != label]
-                st.session_state.pop("fd_slip_select", None)
-                st.rerun()
+    if slip_rows:
+        _exp = _deployment_exposure_summary(slip_rows)
+        st.caption(
+            f"{_exp['total_exposure']:.0f} exposure · "
+            f"{_exp['stack_count']} stack{'s' if _exp['stack_count'] != 1 else ''} · "
+            f"{_exp['repeated_game_exposure']:.0f} repeated-game exposure"
+        )
+        _render_deployment_cards(slip_rows, slip_names)
+    else:
+        for idx, label in enumerate(slip[:8]):
+            cols = st.columns([5, 1])
+            with cols[0]:
+                st.markdown(
+                    _shell_badge_html(label[:28], "DEPLOY", sources.get(label, {}).get("tab", "")),
+                    unsafe_allow_html=True,
+                )
+            with cols[1]:
+                if st.button("Drop", key=f"deploy_drop_{idx}", width="stretch"):
+                    _record_interaction("deploy_tray.drop", rerun_source="fd_slip_update")
+                    st.session_state["fd_slip"] = [item for item in slip if item != label]
+                    st.session_state.pop("fd_slip_select", None)
+                    st.rerun()
 
 
 def _lazy_route_gate(route_id: str, route_label: str, data: dict, fingerprint: tuple, caption: str) -> bool:
@@ -1166,7 +1166,7 @@ st.set_page_config(
     page_title="Codex HR Engine",
     page_icon="⚾",
     layout="wide",
-    initial_sidebar_state="auto",
+    initial_sidebar_state="collapsed",
 )
 
 # PWA + mobile home-screen support
@@ -1224,6 +1224,40 @@ except ImportError as e:
 st.markdown("""
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;700;900&display=swap');
+
+/* ══════════════════════════ SHELL LOCK ══════════════════════════ */
+html, body, .stApp {
+    width: 100%;
+    min-height: 100vh;
+    margin: 0;
+    padding: 0;
+    overflow-x: hidden;
+    background-color: #040404;
+}
+[data-testid="stAppViewContainer"] {
+    min-height: 100vh;
+    padding: 0 !important;
+    max-width: 100% !important;
+}
+[data-testid="stAppViewContainer"] .main {
+    min-height: 100vh;
+    padding: 0 !important;
+}
+[data-testid="stAppViewContainer"] .main .block-container {
+    max-width: 100% !important;
+    padding: 0.75rem 1rem 1rem 1rem !important;
+}
+[data-testid="stHeader"],
+[data-testid="stToolbar"],
+[data-testid="stDecoration"],
+[data-testid="stSidebar"],
+[data-testid="stSidebarNav"],
+[data-testid="stSidebarCollapseButton"],
+#MainMenu,
+[data-testid="stMainMenu"],
+footer {
+    display: none !important;
+}
 
 /* â"€â"€ Animations â"€â"€ */
 @keyframes glow-pulse {
@@ -1834,6 +1868,431 @@ def _apply_heatmap(df: "pd.DataFrame") -> "pd.io.formats.style.Styler":
     return styler
 
 
+_MAIN_TCC_SECTION_KEYS = {
+    "batter_power_contact": ("tac_min_barrel", "tac_min_hh", "tac_min_xslg", "tac_min_iso"),
+    "launch_contact_shape": ("tac_min_pull_air", "tac_min_hr_window"),
+    "matchup_splits": ("tac_min_matchup_pct",),
+    "pitcher_vulnerability": ("tac_min_hvy_score",),
+    "environment": ("tac_exclude_started", "tac_include_live"),
+    "advanced_hr_signals": ("tac_min_ev", "tac_min_edge", "tac_min_conf", "tac_min_model_prob"),
+    "momentum_recency": (),
+    "game_context": (),
+}
+_MAIN_TCC_SECTION_LABELS = {
+    "batter_power_contact": "Batter Power & Contact",
+    "launch_contact_shape": "Launch & Contact Shape",
+    "matchup_splits": "Matchup & Splits",
+    "pitcher_vulnerability": "Pitcher Vulnerability",
+    "environment": "Environment",
+    "advanced_hr_signals": "Advanced HR Signals",
+    "momentum_recency": "Momentum & Recency",
+    "game_context": "Game Context",
+}
+_MAIN_TCC_SECTION_ORDER = tuple(_MAIN_TCC_SECTION_LABELS.keys())
+_BATTERS_TABLE_ALL_COLUMNS = (
+    "Player", "Matchup Outlook", "Pitch Mix Analysis", "Total HRs", "ISO", "xSLG", "Barrel %",
+    "Hard Hit %", "Pull Air %", "HR Window %", "EV", "Launch Angle", "Sweet Spot %",
+    "HR/FB %", "Contact Shape Score", "Arsenal Matchup Score", "HR Threat",
+)
+_BATTERS_TABLE_PRESETS = {
+    "Show All": _BATTERS_TABLE_ALL_COLUMNS,
+    "Power Only": (
+        "Player", "HR Threat", "Total HRs", "ISO", "xSLG", "Barrel %", "Hard Hit %",
+        "EV", "Launch Angle", "Sweet Spot %",
+    ),
+    "Matchup View": (
+        "Player", "Matchup Outlook", "Pitch Mix Analysis", "Pull Air %", "HR Window %",
+        "Contact Shape Score", "Arsenal Matchup Score", "HR Threat",
+    ),
+    "Compact View": (
+        "Player", "Matchup Outlook", "Barrel %", "Hard Hit %", "xSLG", "EV", "HR Threat",
+    ),
+    "Reset Columns": _BATTERS_TABLE_ALL_COLUMNS,
+}
+_BATTERS_TABLE_MOBILE_COLUMNS = (
+    "Player", "Matchup Outlook", "Barrel %", "Hard Hit %", "xSLG", "EV", "HR Threat",
+)
+_BATTERS_TABLE_TOOLTIP_META = {
+    "ISO": ("Isolated power", ".157", ".250+ elite"),
+    "xSLG": ("Expected slugging", ".418", ".500+ impact"),
+    "Barrel %": ("Barrel rate", "5.5%", "10%+ elite"),
+    "Hard Hit %": ("Hard-hit rate", "38%", "45%+ strong"),
+    "Pull Air %": ("Pulled airborne contact", "12%", "24%+ dangerous"),
+    "HR Window %": ("Sweet-spot proxy", "33%", "38%+ strong"),
+    "EV": ("Average exit velocity", "89 mph", "92+ impact"),
+    "Launch Angle": ("Average launch angle", "12°", "12°-22° prime"),
+    "Sweet Spot %": ("8°-32° contact", "33%", "38%+ strong"),
+    "HR/FB %": ("Home run per fly ball", "13%", "18%+ elevated"),
+    "Contact Shape Score": ("Contact geometry composite", "50", "70+ elite"),
+    "Arsenal Matchup Score": ("Pitch-mix exploitation grade", "50", "65+ strong"),
+}
+
+
+def _query_param_first(name: str) -> str:
+    try:
+        value = st.query_params.get(name)
+    except Exception:
+        value = st.experimental_get_query_params().get(name)
+    if isinstance(value, list):
+        return str(value[0]) if value else ""
+    return str(value or "")
+
+
+def _set_query_params_filtered(remove: set[str]) -> None:
+    try:
+        params = {k: v for k, v in dict(st.query_params).items() if k not in remove}
+        st.query_params.clear()
+        for key, value in params.items():
+            st.query_params[key] = value
+    except Exception:
+        params = {
+            k: v for k, v in st.experimental_get_query_params().items()
+            if k not in remove
+        }
+        st.experimental_set_query_params(**params)
+
+
+def _batters_table_apply_preset(scope: str, preset_label: str) -> None:
+    st.session_state[f"table_visible_cols_{scope}"] = list(_BATTERS_TABLE_PRESETS[preset_label])
+    st.session_state[f"table_col_preset_{scope}"] = preset_label
+
+
+def _batters_table_visible_columns(scope: str) -> list[str]:
+    key = f"table_visible_cols_{scope}"
+    current = st.session_state.get(key)
+    if not current:
+        current = list(_BATTERS_TABLE_ALL_COLUMNS)
+        st.session_state[key] = current
+    ordered = [col for col in _BATTERS_TABLE_ALL_COLUMNS if col in set(current)]
+    st.session_state[key] = ordered
+    return ordered
+
+
+def _tcc_section_active_count(section_key: str, tac_reset_defaults: dict) -> int:
+    keys = _MAIN_TCC_SECTION_KEYS.get(section_key, ())
+    count = 0
+    for key in keys:
+        value = st.session_state.get(key, tac_reset_defaults.get(key))
+        default = tac_reset_defaults.get(key)
+        if isinstance(default, bool):
+            if bool(value) != bool(default):
+                count += 1
+            continue
+        if key == "tac_min_matchup_pct":
+            if float(value or 0) > 75.0:
+                count += 1
+            continue
+        if float(value or 0) > float(default or 0):
+            count += 1
+    return count
+
+
+def _tcc_section_visible(section_key: str) -> bool:
+    vis_key = f"tcc_visible_{section_key}"
+    if vis_key not in st.session_state:
+        st.session_state[vis_key] = not bool(st.session_state.get("tcc_compact_mode", False))
+    return bool(st.session_state.get(vis_key, True))
+
+
+def _set_all_tcc_sections(visible: bool) -> None:
+    for section_key in _MAIN_TCC_SECTION_ORDER:
+        st.session_state[f"tcc_visible_{section_key}"] = visible
+
+
+def _reset_tcc_visibility_state() -> None:
+    st.session_state["tcc_compact_mode"] = False
+    st.session_state["_tcc_compact_prev"] = False
+    _set_all_tcc_sections(True)
+
+
+def _render_tcc_section_header(section_key: str, tac_reset_defaults: dict) -> bool:
+    label = _MAIN_TCC_SECTION_LABELS[section_key]
+    active_count = _tcc_section_active_count(section_key, tac_reset_defaults)
+    is_visible = _tcc_section_visible(section_key)
+    warn = "" if is_visible or active_count == 0 else "  ⚠"
+    count_text = f" ({active_count} active)" if active_count else ""
+    st.toggle(
+        f"{label}{count_text}{warn}",
+        key=f"tcc_visible_{section_key}",
+        help="Visibility only. Hidden sections keep current filter state.",
+    )
+    return bool(st.session_state.get(f"tcc_visible_{section_key}", True))
+
+
+def _pct_band(value: float, elite: float, strong: float, dangerous: float) -> str:
+    if value >= elite:
+        return "Elite"
+    if value >= strong:
+        return "Strong"
+    if value >= dangerous:
+        return "Dangerous"
+    return "Monitor"
+
+
+def _table_heat_style(column: str, raw_value) -> str:
+    try:
+        value = float(raw_value)
+    except (TypeError, ValueError):
+        return "background:#0f172a;color:#64748b;"
+    if column == "ISO":
+        if value >= 0.250: return "background:#12351f;color:#d1fae5;"
+        if value >= 0.220: return "background:#14532d;color:#dcfce7;"
+        if value >= 0.200: return "background:#3f2e12;color:#fde68a;"
+        if value >= 0.170: return "background:#0f172a;color:#cbd5e1;"
+        return "background:#3b0d0d;color:#fecaca;"
+    if column == "xSLG":
+        if value >= 0.550: return "background:#12351f;color:#d1fae5;"
+        if value >= 0.500: return "background:#14532d;color:#dcfce7;"
+        if value >= 0.450: return "background:#0f172a;color:#cbd5e1;"
+        return "background:#3b0d0d;color:#fecaca;"
+    if column in ("Barrel %", "Hard Hit %", "Pull Air %", "HR Window %", "Sweet Spot %", "HR/FB %"):
+        bands = {
+            "Barrel %": (12.0, 8.0, 5.5),
+            "Hard Hit %": (48.0, 42.0, 38.0),
+            "Pull Air %": (26.0, 20.0, 12.0),
+            "HR Window %": (40.0, 35.0, 30.0),
+            "Sweet Spot %": (40.0, 35.0, 30.0),
+            "HR/FB %": (22.0, 18.0, 13.0),
+        }
+        elite, strong, average = bands[column]
+        if value >= elite: return "background:#12351f;color:#d1fae5;"
+        if value >= strong: return "background:#14532d;color:#dcfce7;"
+        if value >= average: return "background:#0f172a;color:#cbd5e1;"
+        return "background:#3b0d0d;color:#fecaca;"
+    if column == "EV":
+        if value >= 92.0: return "background:#12351f;color:#d1fae5;"
+        if value >= 90.0: return "background:#14532d;color:#dcfce7;"
+        if value >= 88.0: return "background:#0f172a;color:#cbd5e1;"
+        return "background:#3b0d0d;color:#fecaca;"
+    if column == "Launch Angle":
+        if 12.0 <= value <= 22.0: return "background:#14532d;color:#dcfce7;"
+        if 8.0 <= value <= 28.0: return "background:#0f172a;color:#cbd5e1;"
+        return "background:#3b0d0d;color:#fecaca;"
+    if column in ("Contact Shape Score", "Arsenal Matchup Score"):
+        if value >= 75.0: return "background:#12351f;color:#d1fae5;"
+        if value >= 62.0: return "background:#14532d;color:#dcfce7;"
+        if value >= 48.0: return "background:#0f172a;color:#cbd5e1;"
+        return "background:#3b0d0d;color:#fecaca;"
+    return "background:#0f172a;color:#e2e8f0;"
+
+
+def _matchup_outlook_display(player: dict, ctx: dict | None = None) -> tuple[str, str]:
+    mod = float(((ctx or {}).get("hvy_modifier")) or 0.0)
+    if mod <= 0:
+        mod = float(player.get("pitcher_factor", 1.0) or 1.0) * float(player.get("platoon_factor", 1.0) or 1.0)
+    if mod >= 1.20: return "Elite", "#16a34a"
+    if mod >= 1.10: return "Adv", "#22c55e"
+    if mod >= 1.03: return "Edge", "#eab308"
+    if mod >= 0.97: return "Even", "#64748b"
+    if mod >= 0.90: return "Risk", "#f97316"
+    return "Fade", "#ef4444"
+
+
+def _hr_threat_display(player: dict, ctx: dict | None = None) -> tuple[str, str, str, str]:
+    barrel = _pf(player.get("barrel_pct"), 0.0)
+    hh = _pf(player.get("hard_hit"), 0.0)
+    xslg = _pf(player.get("xslg") or player.get("actual_slg"), 0.0)
+    edge = float(player.get("edge_pct", 0.0) or 0.0)
+    mod = float(((ctx or {}).get("hvy_modifier")) or 1.0)
+    signal = barrel * 2.4 + hh * 0.7 + xslg * 100 + edge * 2.0 + ((mod - 1.0) * 100 * 1.2)
+    if signal >= 95: return "Elite", "#ef4444", "E", "diamond"
+    if signal >= 82: return "Dangerous", "#f97316", "D", "square"
+    if signal >= 70: return "Active", "#facc15", "A", "circle"
+    if signal >= 58: return "Elevated", "#38bdf8", "V", "square"
+    return "Monitor", "#64748b", "M", "circle"
+
+
+def _contact_shape_score(player: dict) -> float:
+    launch = _pf(player.get("avg_launch_angle"), 0.0)
+    sweet = _pf(player.get("sweet_spot_pct"), 0.0)
+    pull_air = _pf(resolve_pull_air_pct(player), 0.0)
+    launch_score = max(0.0, 100.0 - min(abs(launch - 17.0) * 7.0, 100.0))
+    return round(min(100.0, launch_score * 0.25 + sweet * 1.3 + pull_air * 1.4), 1)
+
+
+def _arsenal_matchup_score(player: dict, ctx: dict | None = None) -> float | None:
+    if not ctx:
+        return None
+    mod = float(ctx.get("hvy_modifier", 1.0) or 1.0)
+    pitch_tags = _pitch_attack_tags(ctx, player, max_tags=2)
+    tag_bonus = 10.0 if pitch_tags else 0.0
+    return round(min(100.0, max(0.0, (mod - 0.75) / 0.65 * 100.0 + tag_bonus)), 1)
+
+
+def _pitch_mix_cell_html(player: dict, ctx: dict | None = None) -> str:
+    if not ctx:
+        return "<span style='color:#64748b;'>Deferred</span>"
+    tags = _pitch_attack_tags(ctx, player, max_tags=2)
+    if not tags:
+        return "<span style='color:#64748b;'>No mix</span>"
+    bits = []
+    for label, css_class in tags:
+        color = "#4ade80" if "favorable" in css_class else "#f87171" if "vulnerable" in css_class else "#60a5fa"
+        bits.append(
+            f"<span style='display:inline-block;margin:1px 4px 1px 0;padding:1px 6px;"
+            f"border:1px solid #1e293b;border-radius:999px;color:{color};font-size:10px;'>{html.escape(label)}</span>"
+        )
+    return "".join(bits)
+
+
+def _batters_table_cell(value, *, column: str, raw=None, tooltip: str = "", extra_style: str = "") -> str:
+    raw_value = raw if raw is not None else value
+    title_attr = f" title=\"{html.escape(tooltip)}\"" if tooltip else ""
+    text = html.escape(str(value))
+    style = _table_heat_style(column, raw_value) if column in _BATTERS_TABLE_TOOLTIP_META else "background:#0f172a;color:#e2e8f0;"
+    return f"<td{title_attr} style='padding:8px 10px;border-bottom:1px solid #162033;white-space:nowrap;{style}{extra_style}'>{text}</td>"
+
+
+def _batters_table_tooltip(column: str, value_text: str, raw_value) -> str:
+    meta = _BATTERS_TABLE_TOOLTIP_META.get(column)
+    if not meta:
+        return ""
+    label, avg, band = meta
+    try:
+        if column in ("ISO", "xSLG"):
+            value_float = float(raw_value)
+            band_text = _pct_band(value_float, 0.250 if column == "ISO" else 0.550, 0.220 if column == "ISO" else 0.500, 0.200 if column == "ISO" else 0.450)
+        else:
+            value_float = float(raw_value)
+            band_text = "Strong" if value_float else "Monitor"
+    except (TypeError, ValueError):
+        band_text = "Unavailable"
+    return f"{label} | Value: {value_text} | Lg Avg: {avg} | Band: {band_text} / {band}"
+
+
+def _render_batters_table_html(ranked: list[dict], visible_columns: list[str], scope: str, pm_ctxs: dict | None = None) -> str:
+    pm_ctxs = pm_ctxs or {}
+    active_name = str(st.session_state.get("table_active_player") or "")
+    headers = "".join(
+        f"<th class='batters-col-{idx}' style='padding:8px 10px;text-align:left;font-size:10px;"
+        f"letter-spacing:0.8px;color:#94a3b8;background:#08111f;border-bottom:1px solid #1e293b;white-space:nowrap;'>{html.escape(col)}</th>"
+        for idx, col in enumerate(visible_columns)
+    )
+    rows_html = []
+    for player in ranked:
+        pid = str(player.get('player_id') or '')
+        name = player.get("player_name", "")
+        ctx = pm_ctxs.get(player.get("player_id"), {})
+        matchup_label, matchup_color = _matchup_outlook_display(player, ctx)
+        threat_label, threat_color, threat_glyph, threat_shape = _hr_threat_display(player, ctx)
+        total_hrs = int(player.get("home_runs") or player.get("hr") or player.get("hr_count") or 0)
+        iso = _pf(player.get("iso"), 0.0)
+        xslg = _pf(player.get("xslg") or player.get("actual_slg"), 0.0)
+        barrel = _pf(player.get("barrel_pct"), 0.0)
+        hard_hit = _pf(player.get("hard_hit"), 0.0)
+        pull_air = _pf(resolve_pull_air_pct(player), 0.0)
+        hr_window = _pf(player.get("sweet_spot_pct"), 0.0)
+        ev = _pf(player.get("exit_velo"), 0.0)
+        launch = _pf(player.get("avg_launch_angle"), 0.0)
+        sweet = _pf(player.get("sweet_spot_pct"), 0.0)
+        hr_fb = _pf(player.get("hr_fb_pct"), 0.0)
+        contact_shape = _contact_shape_score(player)
+        arsenal_score = _arsenal_matchup_score(player, ctx)
+        pitch_mix_html = _pitch_mix_cell_html(player, ctx)
+        active_style = "border-left:3px solid #4a7fa5;" if active_name and active_name == name else ""
+        row_cells = []
+        for col in visible_columns:
+            if col == "Player":
+                params = f"?table_scope={urllib.parse.quote(scope)}&table_player_id={urllib.parse.quote(pid)}&table_player_name={urllib.parse.quote(name)}"
+                row_cells.append(
+                    f"<td style='padding:8px 10px;border-bottom:1px solid #162033;white-space:nowrap;{active_style}'>"
+                    f"<a href='{params}' style='color:#9bb8d3;text-decoration:underline;font-weight:600;'>{html.escape(name)}</a>"
+                    f"<div style='font-size:10px;color:#64748b;'>{html.escape(str(player.get('team') or ''))} vs {html.escape(str(player.get('opponent') or ''))}</div>"
+                    f"</td>"
+                )
+            elif col == "Matchup Outlook":
+                row_cells.append(
+                    f"<td style='padding:8px 10px;border-bottom:1px solid #162033;'>"
+                    f"<span style='display:inline-block;min-width:58px;text-align:center;padding:2px 8px;border-radius:999px;"
+                    f"background:color-mix(in srgb, {matchup_color} 18%, #08111f);border:1px solid #1e293b;"
+                    f"color:{matchup_color};font-size:10px;font-weight:700;'>{matchup_label}</span></td>"
+                )
+            elif col == "Pitch Mix Analysis":
+                row_cells.append(
+                    f"<td style='padding:8px 10px;border-bottom:1px solid #162033;white-space:normal;min-width:144px;'>{pitch_mix_html}</td>"
+                )
+            elif col == "HR Threat":
+                radius = "50%" if threat_shape == "circle" else "4px"
+                transform = "transform:rotate(45deg);" if threat_shape == "diamond" else ""
+                inner_transform = "transform:rotate(-45deg);" if threat_shape == "diamond" else ""
+                row_cells.append(
+                    f"<td title='{html.escape(threat_label)}' style='padding:8px 10px;border-bottom:1px solid #162033;'>"
+                    f"<span style='display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;"
+                    f"border:1px solid {threat_color};border-radius:{radius};box-shadow:0 0 0 1px rgba(15,23,42,0.85),0 0 8px color-mix(in srgb, {threat_color} 25%, transparent);"
+                    f"color:{threat_color};font-size:10px;font-weight:800;{transform}'>"
+                    f"<span style='{inner_transform}'>{threat_glyph}</span></span></td>"
+                )
+            else:
+                val_map = {
+                    "Total HRs": (str(total_hrs), total_hrs),
+                    "ISO": (f"{iso:.3f}" if iso > 0 else "--", iso if iso > 0 else None),
+                    "xSLG": (f"{xslg:.3f}" if xslg > 0 else "--", xslg if xslg > 0 else None),
+                    "Barrel %": (f"{barrel:.1f}%" if barrel > 0 else "--", barrel if barrel > 0 else None),
+                    "Hard Hit %": (f"{hard_hit:.1f}%" if hard_hit > 0 else "--", hard_hit if hard_hit > 0 else None),
+                    "Pull Air %": (f"{pull_air:.1f}%" if pull_air > 0 else "--", pull_air if pull_air > 0 else None),
+                    "HR Window %": (f"{hr_window:.1f}%" if hr_window > 0 else "--", hr_window if hr_window > 0 else None),
+                    "EV": (f"{ev:.1f}" if ev > 0 else "--", ev if ev > 0 else None),
+                    "Launch Angle": (f"{launch:.1f}°" if launch else "--", launch if launch else None),
+                    "Sweet Spot %": (f"{sweet:.1f}%" if sweet > 0 else "--", sweet if sweet > 0 else None),
+                    "HR/FB %": (f"{hr_fb:.1f}%" if hr_fb > 0 else "--", hr_fb if hr_fb > 0 else None),
+                    "Contact Shape Score": (f"{contact_shape:.1f}", contact_shape),
+                    "Arsenal Matchup Score": (f"{arsenal_score:.1f}" if arsenal_score is not None else "--", arsenal_score),
+                }
+                display_text, raw_value = val_map[col]
+                tooltip = _batters_table_tooltip(col, display_text, raw_value)
+                row_cells.append(_batters_table_cell(display_text, column=col, raw=raw_value, tooltip=tooltip))
+        rows_html.append(
+            f"<tr style='background:#0b1323;' onmouseover=\"this.style.background='#101a2c'\" onmouseout=\"this.style.background='#0b1323'\">{''.join(row_cells)}</tr>"
+        )
+    table_cols_css = []
+    for idx, col in enumerate(visible_columns):
+        if col == "Player":
+            table_cols_css.append(f".batters-table-wrap .batters-col-{idx}, .batters-table-wrap td:nth-child({idx + 1}) {{ position: sticky; left: 0; z-index: 2; background:#0b1323; }}")
+    mobile_hidden = "".join(
+        f".batters-table-wrap td:nth-child({visible_columns.index(col)+1}), .batters-table-wrap th:nth-child({visible_columns.index(col)+1}) {{ display:none; }}"
+        for col in visible_columns if col not in _BATTERS_TABLE_MOBILE_COLUMNS
+    )
+    return (
+        "<style>"
+        ".batters-table-wrap{overflow-x:auto;border:1px solid #162033;border-radius:8px;background:#08111f;}"
+        ".batters-table{border-collapse:separate;border-spacing:0;min-width:1160px;width:100%;}"
+        ".batters-table td,.batters-table th{font-size:11px;}"
+        "@media (max-width: 768px){.batters-table{min-width:760px;}}"
+        f"@media (max-width: 640px){{{mobile_hidden}}}"
+        + "".join(table_cols_css) +
+        "</style>"
+        f"<div class='batters-table-wrap'><table class='batters-table'><thead><tr>{headers}</tr></thead><tbody>{''.join(rows_html)}</tbody></table></div>"
+    )
+
+
+def _consume_batters_table_player_query(ranked: list[dict], scope: str) -> None:
+    target_scope = _query_param_first("table_scope")
+    if target_scope and target_scope != scope:
+        return
+    player_id = _query_param_first("table_player_id")
+    player_name = _query_param_first("table_player_name").strip().lower()
+    if not player_id and not player_name:
+        return
+    target_player = None
+    for player in ranked:
+        if player_id and str(player.get("player_id") or "") == player_id:
+            target_player = player
+            break
+        if player_name and str(player.get("player_name") or "").strip().lower() == player_name:
+            target_player = player
+            break
+    _set_query_params_filtered({"table_scope", "table_player_id", "table_player_name"})
+    if not target_player:
+        return
+    st.session_state["table_active_player"] = target_player.get("player_name", "")
+    _open_player_modal(
+        target_player,
+        source_tab="Batters Table",
+        source_section=scope,
+        interaction_source=f"table.player_name.{scope}",
+    )
+
+
 def _edge_col(edge) -> str:
     """Inline HTML text color for an edge% value."""
     try:
@@ -1844,6 +2303,220 @@ def _edge_col(edge) -> str:
     if edge >= 5:  return "#86efac"
     if edge >= 2:  return "#f0f0f0"
     return "#f87171"
+
+
+_DEPLOYMENT_TIER_ORDER = (
+    "Core Deployment",
+    "High Conviction",
+    "Tactical Exposure",
+    "Volatility Exposure",
+    "Hedge Layer",
+    "Watchlist Only",
+    "No Deployment",
+)
+_DEPLOYMENT_TIER_META = {
+    "Core Deployment": ("●", "#14532d", "#4ade80"),
+    "High Conviction": ("◆", "#166534", "#86efac"),
+    "Tactical Exposure": ("▲", "#1f2937", "#fbbf24"),
+    "Volatility Exposure": ("○", "#3b0d0d", "#f87171"),
+    "Hedge Layer": ("■", "#111827", "#f59e0b"),
+    "Watchlist Only": ("◌", "#0f172a", "#94a3b8"),
+    "No Deployment": ("-", "#0b1020", "#6b7280"),
+}
+_LIFECYCLE_ORDER = (
+    "qualified",
+    "shortlisted",
+    "deployed",
+    "live",
+    "settled",
+    "reviewed",
+    "archived",
+)
+
+
+def _deployment_tier(player: dict) -> str:
+    ev = _pf(player.get("ev_pct"))
+    edge = _pf(player.get("edge_pct"))
+    conf = _pf(player.get("confidence"))
+    model = _pf(player.get("model_prob")) * 100.0
+    odds = player.get("fanduel_american") or player.get("best_american") or player.get("american_odds")
+    if not any((ev, edge, conf, model, odds)):
+        return "No Deployment"
+    if ev >= 18 and edge >= 7 and conf >= 50:
+        return "Core Deployment"
+    if ev >= 12 and edge >= 5 and conf >= 50:
+        return "High Conviction"
+    if ev >= 5 and edge >= 2:
+        return "Tactical Exposure"
+    if ev < 0 and conf >= 40:
+        return "Hedge Layer"
+    if ev < 5 and edge < 2 and conf >= 35:
+        return "Volatility Exposure"
+    return "Watchlist Only"
+
+
+def _deployment_lifecycle(player: dict, slip_lookup: set[str] | None = None) -> str:
+    hr_result = str(player.get("hr_result", "") or "").strip().lower()
+    if hr_result in {"0", "1"}:
+        return "settled"
+    if hr_result == "void":
+        return "archived"
+
+    date_str = str(player.get("date", "") or "").strip()
+    try:
+        row_date = _dt.datetime.strptime(date_str, "%Y-%m-%d").date() if date_str else None
+    except ValueError:
+        row_date = None
+
+    if player.get("close_odds") or player.get("clv_pp"):
+        return "reviewed"
+
+    if slip_lookup and (
+        player.get("pick_id") in slip_lookup
+        or str(player.get("player_name", "") or "") in slip_lookup
+        or str(player.get("source_tab", "") or "").strip().lower() == "fd slip"
+    ):
+        return "deployed"
+
+    game_time = player.get("game_time_utc") or ""
+    if game_time:
+        try:
+            game_dt = _dt.datetime.fromisoformat(str(game_time).replace("Z", "+00:00")).astimezone(_EDT)
+            if game_dt <= _dt.datetime.now(_EDT) and not hr_result:
+                return "live"
+        except ValueError:
+            pass
+
+    ev = _pf(player.get("ev_pct"))
+    edge = _pf(player.get("edge_pct"))
+    conf = _pf(player.get("confidence"))
+    if ev >= 12 and edge >= 5 and conf >= 50:
+        return "shortlisted"
+    if ev > 0 or edge > 0 or conf > 0 or _pf(player.get("model_prob")) > 0:
+        return "qualified"
+    if row_date and (_dt.date.today() - row_date).days >= 7:
+        return "archived"
+    return "qualified"
+
+
+def _deployment_rows_for_mode(rows: list[dict], mode: str, slip_lookup: set[str] | None = None) -> list[dict]:
+    visible = []
+    for row in rows:
+        tier = _deployment_tier(row)
+        lifecycle = _deployment_lifecycle(row, slip_lookup=slip_lookup)
+        if mode == "deployed_only" and lifecycle not in {"deployed", "live"}:
+            continue
+        if mode == "high_conviction_only" and tier not in {"Core Deployment", "High Conviction"}:
+            continue
+        if mode == "settled_only" and lifecycle != "settled":
+            continue
+        if mode == "live_only" and lifecycle != "live":
+            continue
+        if mode == "archived" and lifecycle != "archived":
+            continue
+        if mode == "review" and lifecycle not in {"reviewed", "settled", "archived"}:
+            continue
+        row = dict(row)
+        row["_deployment_tier"] = tier
+        row["_lifecycle"] = lifecycle
+        visible.append(row)
+    return visible
+
+
+def _deployment_exposure_summary(rows: list[dict]) -> dict:
+    from collections import Counter
+
+    total_exposure = 0.0
+    repeated_player = 0.0
+    repeated_game = 0.0
+    volatility_exposure = 0.0
+    stack_exposure = 0.0
+    player_counts = Counter()
+    game_counts = Counter()
+    team_counts = Counter()
+    for row in rows:
+        try:
+            bet = float(row.get("bet_dollars", 10) or 10)
+        except (TypeError, ValueError):
+            bet = 10.0
+        total_exposure += bet
+        player_key = str(row.get("player_name", "") or "").strip().lower()
+        game_key = (
+            str(row.get("date", "") or "").strip(),
+            str(row.get("team", "") or "").strip().lower(),
+            str(row.get("opponent", "") or "").strip().lower(),
+        )
+        player_counts[player_key] += 1
+        game_counts[game_key] += 1
+        team_counts[str(row.get("team", "") or "").strip().lower()] += 1
+        if _deployment_tier(row) in {"Volatility Exposure", "Hedge Layer", "Watchlist Only", "No Deployment"}:
+            volatility_exposure += bet
+
+    for row in rows:
+        try:
+            bet = float(row.get("bet_dollars", 10) or 10)
+        except (TypeError, ValueError):
+            bet = 10.0
+        player_key = str(row.get("player_name", "") or "").strip().lower()
+        game_key = (
+            str(row.get("date", "") or "").strip(),
+            str(row.get("team", "") or "").strip().lower(),
+            str(row.get("opponent", "") or "").strip().lower(),
+        )
+        if player_counts[player_key] > 1:
+            repeated_player += bet
+        if game_counts[game_key] > 1:
+            repeated_game += bet
+        if team_counts[str(row.get("team", "") or "").strip().lower()] > 1:
+            stack_exposure += bet
+
+    return {
+        "total_exposure": total_exposure,
+        "repeated_player_exposure": repeated_player,
+        "repeated_game_exposure": repeated_game,
+        "volatility_exposure": volatility_exposure,
+        "stack_exposure": stack_exposure,
+        "player_count": len(player_counts),
+        "game_count": len(game_counts),
+        "stack_count": sum(1 for count in team_counts.values() if count > 1),
+    }
+
+
+def _render_deployment_cards(rows: list[dict], slip_labels: set[str]) -> None:
+    if not rows:
+        st.caption("No deployment rows match current visibility mode.")
+        return
+    grouped: dict[str, list[dict]] = {tier: [] for tier in _DEPLOYMENT_TIER_ORDER}
+    for row in rows:
+        grouped.setdefault(row.get("_deployment_tier", "Watchlist Only"), []).append(row)
+    for tier in _DEPLOYMENT_TIER_ORDER:
+        tier_rows = grouped.get(tier, [])
+        if not tier_rows:
+            continue
+        glyph, bg, accent = _DEPLOYMENT_TIER_META.get(tier, ("-", "#0f172a", "#94a3b8"))
+        st.markdown(
+            f"<div style='background:{bg};border:1px solid {accent};border-radius:12px;"
+            f"padding:8px 10px;margin:8px 0 6px;'>"
+            f"<div style='display:flex;justify-content:space-between;gap:8px;align-items:center;flex-wrap:wrap;'>"
+            f"<div style='color:#f3f4f6;font-size:12px;font-weight:800;'>{glyph} {html.escape(tier)}</div>"
+            f"<div style='color:#cbd5e1;font-size:10px;'>"
+            f"{len(tier_rows)} pick{'s' if len(tier_rows) != 1 else ''}</div></div></div>",
+            unsafe_allow_html=True,
+        )
+        for row in tier_rows[:6]:
+            lifecycle = row.get("_lifecycle", "qualified")
+            state_label = lifecycle.upper()
+            detail = f"{row.get('source_tab', '')} · {row.get('source_section', '')}".strip(" ·")
+            if row.get("player_name", "") in slip_labels:
+                detail = f"{detail} · SLIP" if detail else "SLIP"
+            st.markdown(
+                _shell_badge_html(
+                    f"{row.get('player_name', 'Unknown')} · {row.get('team', '')}",
+                    state_label,
+                    detail[:48],
+                ),
+                unsafe_allow_html=True,
+            )
 
 
 _MLB_PHOTO_BASE = (
@@ -2730,6 +3403,7 @@ def _clear_player_modal():
     st.session_state.pop("selected_player_modal", None)
     st.session_state.pop("modal_source_tab", None)
     st.session_state.pop("modal_source_section", None)
+    st.session_state.pop("table_active_player", None)
 
 
 def _open_player_modal(
@@ -3113,7 +3787,7 @@ def _build_rqt_rows(
 
 def _render_qualified_table(
     ranked: list, scale: float, min_ev: float, min_edge: float,
-    steam_names: set = None, key_suffix: str = "",
+    steam_names: set = None, key_suffix: str = "", pm_ctxs: dict | None = None,
 ):
     """Render the qualified picks dataframe with range bar, legend, and column configs."""
     import io
@@ -3150,103 +3824,41 @@ def _render_qualified_table(
         unsafe_allow_html=True,
     )
 
-    session_br = st.session_state.get("bankroll_override", config.BANKROLL)
-
-    df = pd.DataFrame(rows)
-    df = df.fillna("--")
-    df = df.replace([np.nan, np.inf, -np.inf, float('inf'), -float('inf')], "--")
-    df = _apply_heatmap(df)
-
     _table_scope = key_suffix or "default"
-    _tver_key = f"_table_ver_{_table_scope}"
-    _tver = st.session_state.get(_tver_key, 0)
+    _consume_batters_table_player_query(ranked, _table_scope)
+    _active_cols_key = f"table_visible_cols_{_table_scope}"
+    if _active_cols_key not in st.session_state:
+        st.session_state[_active_cols_key] = list(_BATTERS_TABLE_ALL_COLUMNS)
+    _visible_cols = _batters_table_visible_columns(_table_scope)
     _record_widget_zone(
         f"table.qualified.{_table_scope}",
-        widget_count_estimate=1 + int(bool(rows)),
+        widget_count_estimate=2 + int(bool(rows)),
     )
-    _df_sel = st.dataframe(
-        df,
-        width='stretch',
-        hide_index=True,
-        on_select="rerun",
-        selection_mode="single-row",
-        key=f"picks_df_{_table_scope}_{_tver}",
-        column_config={
-            "Tier":    st.column_config.TextColumn("Tier",
-                help=(
-                    "Confidence tier — requires BOTH confidence AND edge to clear the bar.\n\n"
-                    "🌟 S — Conf ≥70 AND Edge ≥8%: Elite. Act with conviction.\n"
-                    "✅ A — Conf ≥55 AND Edge ≥5%: Strong. Core betting targets.\n"
-                    "🟡 B — Conf ≥40 AND Edge ≥3%: Solid. Worth standard size.\n"
-                    "🔴 C — Below B thresholds: Noisy or thin. Reduce size or skip."
-                )),
-            "Rating":  st.column_config.TextColumn("Rating",
-                help=(
-                    "Pick quality tier based on EV%, Edge%, and model Confidence.\n\n"
-                    "🌟 ONCE IN A LIFETIME — EV ≥30% + Edge ≥12% + Conf ≥65. "
-                    "Rare: the model sees a large, confident mispricing vs the market. "
-                    "Expect 1–3 per day at most.\n\n"
-                    "🔥 STRONG EDGE — EV ≥18% + Edge ≥7% + Conf ≥50. "
-                    "Clear disagreement between model and market with solid confidence. "
-                    "Core betting targets most days.\n\n"
-                    "✅ SOLID PLAY — EV ≥5% + Edge ≥2%. "
-                    "Positive expected value with a real model edge — worth playing "
-                    "at reasonable stakes. The bulk of qualified picks land here.\n\n"
-                    "📊 MARGINAL — Passes filters but edge or EV is thin. "
-                    "Skip unless odds improve or you have strong conviction."
-                )),
-            "#":       st.column_config.TextColumn("#",
-                help="Composite rank: tier first (S→A→B→C), then confidence-weighted score"),
-            "Player":  st.column_config.TextColumn("Player"),
-            "Team":    st.column_config.TextColumn("Team"),
-            "Opp":     st.column_config.TextColumn("Opp"),
-            "Spot":    st.column_config.TextColumn("Spot",
-                help="Lineup spot. 🟢=premium PA (1-4), 🟡=mid (5-6), 🔴=bottom (7-9). ⚡=platoon edge vs this pitcher."),
-            "Pitcher": st.column_config.TextColumn("Pitcher",
-                help="🔴=elite suppressor, 🟠=tough, ⬜=neutral, 🟡=favorable, 🟢=HR target. ⚡=batter has platoon edge."),
-            "Odds":    st.column_config.TextColumn("Odds",
-                help="Best American odds across all books for HR (0.5+)"),
-            "Model%":  st.column_config.TextColumn("Model%",
-                help=f"Poisson HR probability — Statcast + park + pitcher + weather + platoon.\nRange: {model_rng}"),
-            "Mkt%":    st.column_config.TextColumn("Mkt%",
-                help=f"Market no-vig implied probability.\nRange: {mkt_rng}"),
-            "Edge":    st.column_config.TextColumn("Edge",
-                help=f"Model% − Market%. Active threshold +{min_edge:.1f}%.\nRange: {edge_rng}"),
-            "EV%":     st.column_config.TextColumn("EV%",
-                help=f"Expected value per $100 wagered. Active threshold +{min_ev:.1f}%.\nRange: {ev_rng}"),
-            "Bet $":   st.column_config.TextColumn("Bet $",
-                help=f"Quarter-Kelly sizing on ${session_br:,.0f} bankroll (5% cap = ${session_br*config.MAX_BET_PCT:.0f} max).\nRange: {bet_rng}"),
-            "Conf":    st.column_config.TextColumn("Conf",
-                help=f"Confidence 0–100: sample size + Statcast availability + model/market agreement.\nRange: {conf_rng}"),
-            "Brl%":    st.column_config.TextColumn("Brl%",
-                help="Statcast barrel rate. League avg ~5.5%. Higher = more true HR power."),
-            "SwSp%":   st.column_config.TextColumn("SwSp%",
-                help="Sweet spot rate (LA 8-32°). League avg ~33%. The exact HR angle band."),
-            "EV mph":  st.column_config.TextColumn("EV mph",
-                help="Average exit velocity. League avg ~89 mph."),
-            "FB%":     st.column_config.TextColumn("FB%",
-                help="Fly ball rate (Savant pure FB, excludes popups). League avg ~26.5%. Higher = more HR opportunities."),
-            "GB%":     st.column_config.TextColumn("GB%",
-                help="Ground ball rate. League avg ~43%. Higher = fewer HR chances."),
-
-            "Pull%":   st.column_config.TextColumn("Pull%",
-                help="Pull rate. League avg ~40%. Pull hitters access the short porch."),
-            "Score":   st.column_config.TextColumn("Score",
-                help=f"Ranking score = 40% EV% + 35% Edge% + 25% Conf.\nRange: {score_rng}"),
-        },
+    _preset_cols = st.columns(5)
+    for _btn_col, _preset_label in zip(_preset_cols, _BATTERS_TABLE_PRESETS.keys()):
+        with _btn_col:
+            if st.button(_preset_label, key=f"table_preset_{_table_scope}_{_preset_label}", width="stretch"):
+                _batters_table_apply_preset(_table_scope, _preset_label)
+                st.rerun()
+    _selected_cols = st.multiselect(
+        "Batters Table Columns",
+        options=list(_BATTERS_TABLE_ALL_COLUMNS),
+        default=_visible_cols,
+        key=f"table_col_selector_{_table_scope}",
+        help="Visibility only. Column order stays fixed.",
     )
-
-    # Open player modal on row click; bump table version so selection resets after modal
-    _sel_rows = getattr(getattr(_df_sel, "selection", None), "rows", [])
-    if _sel_rows and 0 <= _sel_rows[0] < len(ranked):
-        st.session_state[_tver_key] = _tver + 1
-        _open_player_modal(
-            ranked[_sel_rows[0]],
-            source_tab="Picks Table",
-            source_section=_table_scope,
-            interaction_source=f"table.select.{_table_scope}",
-        )
-    st.caption("💡 Click any row to view full player details & add to FD Slip.")
+    if _selected_cols:
+        st.session_state[_active_cols_key] = [col for col in _BATTERS_TABLE_ALL_COLUMNS if col in set(_selected_cols)]
+        _visible_cols = _batters_table_visible_columns(_table_scope)
+    st.caption(
+        f"Batters Table · {len(ranked)} rows · {len(_visible_cols)} visible columns · "
+        "player-name click opens Player Card · hidden columns do not change filters, rank, or sort order."
+    )
+    st.markdown(
+        _render_batters_table_html(ranked, _visible_cols, _table_scope, pm_ctxs=pm_ctxs),
+        unsafe_allow_html=True,
+    )
+    st.caption("Hover stat cells for tactical context. Tooltips stay suppressed on touch/mobile.")
 
     if rows:
         csv_buf = io.StringIO()
@@ -3850,6 +4462,7 @@ def _render_full_slate_all_players(
     slate_ts: str = "",
     pm_ctxs: dict | None = None,
     source_section: str = "Full Slate",
+    lens: str = "full_slate",
 ) -> None:
     """
     True operational full slate: all playable batters organized by game.
@@ -3891,6 +4504,7 @@ def _render_full_slate_all_players(
             for p in all_players
         ),
         hash(tuple(sorted(qualified_names))),
+        lens,
     )
 
     def _build_fs_view_model() -> dict:
@@ -3908,11 +4522,37 @@ def _render_full_slate_all_players(
 
         sorted_gks = sorted(games.keys(), key=_gsk)
         game_rows = []
+        if lens == "power_profile":
+            _ps_key = lambda p: (p.get("team", ""), -(
+                (_pf(p.get("barrel_pct"), 0.0) or 0.0) * 2.5
+                + (_pf(p.get("hard_hit"), 0.0) or 0.0) * 0.5
+                + ((_pf(p.get("xslg") or p.get("actual_slg"), 0.0) or 0.0) * 30.0)
+                + (_pf(p.get("pull_air_pct") or p.get("pull_pct"), 0.0) or 0.0) * 0.4
+                + (_pf(p.get("sweet_spot_pct"), 0.0) or 0.0) * 0.4
+                + (_pf(p.get("model_prob"), 0.0) or 0.0) * 100.0
+            ))
+        elif lens == "matchup_edge":
+            _ps_key = lambda p: (p.get("team", ""), -(
+                (_pf(p.get("model_prob"), 0.0) or 0.0) * 100.0 * 1.5
+                + ((_pf(p.get("pitcher_factor"), 1.0) or 1.0) - 1.0) * 60.0
+                + ((_pf(p.get("platoon_factor"), 1.0) or 1.0) - 1.0) * 30.0
+                + (_pf(p.get("barrel_pct"), 0.0) or 0.0) * 0.5
+            ))
+        elif lens == "deployment_edge":
+            _ps_key = lambda p: (p.get("team", ""), -(
+                ((_pf(p.get("ev_pct"), 0) or 0) * 0.40)
+                + ((_pf(p.get("edge_pct"), 0) or 0) * 0.35)
+                + ((_pf(p.get("confidence"), 0) or 0) * 0.25)
+            ))
+        elif lens == "portfolio":
+            _ps_key = lambda p: (p.get("team", ""), -(
+                ((_pf(p.get("ev_pct"), 0) or 0) * 0.50)
+                + ((_pf(p.get("confidence"), 0) or 0) * 0.50)
+            ))
+        else:
+            _ps_key = lambda p: (p.get("team", ""), int(p.get("lineup_spot") or 99))
         for gk in sorted_gks:
-            sorted_players = sorted(
-                games[gk],
-                key=lambda p: (p.get("team", ""), int(p.get("lineup_spot") or 99)),
-            )
+            sorted_players = sorted(games[gk], key=_ps_key)
             game_rows.append((gk, sorted_players))
         return {
             "games": game_rows,
@@ -4507,8 +5147,8 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                 unsafe_allow_html=True)
     st.markdown(
         "<div style='font-size:11px;color:#555;letter-spacing:0.5px;margin:-4px 0 8px;'>"
-        "Quantitative Market-Aware Intelligence &nbsp;·&nbsp; EV / Edge Ranked &nbsp;·&nbsp; "
-        "Statcast Calibrated"
+        "Power Profile &nbsp;›&nbsp; Matchup Edge &nbsp;›&nbsp; Deployment Edge &nbsp;·&nbsp; "
+        "Statcast · EV · Edge · Calibrated"
         "</div>",
         unsafe_allow_html=True,
     )
@@ -4594,9 +5234,9 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
             ):
                 _open_player_modal(
                     _top,
-                    source_tab="Command Center",
+                    source_tab="Deployment Edge",
                     source_section="Top Pick",
-                    interaction_source="command_center.hero_open",
+                    interaction_source="deployment_edge.hero_open",
                 )
             _top_sub = (
                 f"<div style='font-size:12px; color:#888; margin:-4px 0 2px 6px;'>"
@@ -4849,125 +5489,154 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
             "POWER / CONTACT / MARKET filters narrow the full Main universe.  "
             "MATCHUP EDGE controls (bottom) affect only the Matchup Edge tab."
         )
+        _oc1, _oc2, _oc3, _oc4 = st.columns(4)
+        with _oc1:
+            _prev_compact = bool(st.session_state.get("_tcc_compact_prev", False))
+            if "tcc_compact_mode" not in st.session_state:
+                st.session_state["tcc_compact_mode"] = False
+            _compact_now = st.toggle(
+                "Compact TCC",
+                key="tcc_compact_mode",
+                help="Visibility only. Hidden sections keep current thresholds.",
+            )
+            for _section_key in _MAIN_TCC_SECTION_ORDER:
+                _vis_key = f"tcc_visible_{_section_key}"
+                if _vis_key not in st.session_state:
+                    st.session_state[_vis_key] = not _compact_now
+            if _compact_now != _prev_compact:
+                _set_all_tcc_sections(not _compact_now)
+                st.session_state["_tcc_compact_prev"] = _compact_now
+                st.rerun()
+        with _oc2:
+            if st.button("Expanded Mode", key="tcc_expand_all", width="stretch"):
+                st.session_state["tcc_compact_mode"] = False
+                st.session_state["_tcc_compact_prev"] = False
+                _set_all_tcc_sections(True)
+                st.rerun()
+        with _oc3:
+            if st.button("Compact Mode", key="tcc_collapse_all", width="stretch"):
+                st.session_state["tcc_compact_mode"] = True
+                st.session_state["_tcc_compact_prev"] = True
+                _set_all_tcc_sections(False)
+                st.rerun()
+        with _oc4:
+            if st.button("Reset Visibility", key="tcc_reset_visibility", width="stretch"):
+                _reset_tcc_visibility_state()
+                st.session_state["_tcc_compact_prev"] = False
+                st.rerun()
 
-        # ── MAIN UNIVERSE FILTERS (affect Full Slate / Top Targets / Portfolio / Command Center) ──
+        # ── MAIN UNIVERSE FILTERS (affect Full Slate / Power Profile / Portfolio / Deployment Edge) ──
         st.markdown(
             "<div style='font-size:9px;color:#4ade80;font-weight:700;letter-spacing:2px;"
             "margin:8px 0 4px;'>▼ MAIN UNIVERSE FILTERS — narrow all tabs</div>",
             unsafe_allow_html=True,
         )
-        _tf1, _tf2, _tf3 = st.columns(3)
-        with _tf1:
-            st.markdown(
-                "<div style='font-size:10px;color:#a78bfa;font-weight:700;"
-                "letter-spacing:1px;margin-bottom:4px;'>POWER PROFILE</div>",
-                unsafe_allow_html=True,
-            )
-            _fc.render_filter_control(
-                "Barrel %", "tac_min_barrel", 0.0, 20.0, 0.0, 0.5, "%.1f",
-                "Statcast barrel rate floor — 8%+ = elite power tier",
-            )
-            _fc.render_filter_control(
-                "Hard Hit %", "tac_min_hh", 0.0, 60.0, 0.0, 0.5, "%.1f",
-                "Hard-hit rate floor (exit velo ≥ 95 mph)",
-            )
-        with _tf2:
-            st.markdown(
-                "<div style='font-size:10px;color:#a78bfa;font-weight:700;"
-                "letter-spacing:1px;margin-bottom:4px;'>CONTACT QUALITY</div>",
-                unsafe_allow_html=True,
-            )
-            _fc.render_filter_control(
-                "xSLG", "tac_min_xslg", 0.000, 0.700, 0.000, 0.010, "%.3f",
-                "Expected slugging percentage floor — league avg ≈ .418",
-            )
-            _fc.render_filter_control(
-                "ISO", "tac_min_iso", 0.000, 0.450, 0.000, 0.010, "%.3f",
-                "Isolated power (SLG − AVG) floor — league avg ≈ .157",
-            )
-        with _tf3:
-            st.markdown(
-                "<div style='font-size:10px;color:#a78bfa;font-weight:700;"
-                "letter-spacing:1px;margin-bottom:4px;'>CONTACT SHAPE</div>",
-                unsafe_allow_html=True,
-            )
-            _fc.render_filter_control(
-                "Pull Air %", "tac_min_pull_air", 0.0, 40.0, 0.0, 0.5, "%.1f",
-                "Pulled-airborne contact rate floor",
-            )
-            _fc.render_filter_control(
-                "HR Window %", "tac_min_hr_window", 0.0, 50.0, 0.0, 0.5, "%.1f",
-                "Sweet-spot % floor (8–32° launch angle)",
-            )
+        if _render_tcc_section_header("batter_power_contact", _tac_reset_defaults):
+            _tf1, _tf2 = st.columns(2)
+            with _tf1:
+                _fc.render_filter_control(
+                    "Barrel %", "tac_min_barrel", 0.0, 20.0, 0.0, 0.5, "%.1f",
+                    "Statcast barrel rate floor — 8%+ = elite power tier",
+                )
+                _fc.render_filter_control(
+                    "Hard Hit %", "tac_min_hh", 0.0, 60.0, 0.0, 0.5, "%.1f",
+                    "Hard-hit rate floor (exit velo ≥ 95 mph)",
+                )
+            with _tf2:
+                _fc.render_filter_control(
+                    "xSLG", "tac_min_xslg", 0.000, 0.700, 0.000, 0.010, "%.3f",
+                    "Expected slugging percentage floor — league avg ≈ .418",
+                )
+                _fc.render_filter_control(
+                    "ISO", "tac_min_iso", 0.000, 0.450, 0.000, 0.010, "%.3f",
+                    "Isolated power (SLG − AVG) floor — league avg ≈ .157",
+                )
+        if _render_tcc_section_header("launch_contact_shape", _tac_reset_defaults):
+            _shape1, _shape2 = st.columns(2)
+            with _shape1:
+                _fc.render_filter_control(
+                    "Pull Air %", "tac_min_pull_air", 0.0, 40.0, 0.0, 0.5, "%.1f",
+                    "Pulled-airborne contact rate floor",
+                )
+            with _shape2:
+                _fc.render_filter_control(
+                    "HR Window %", "tac_min_hr_window", 0.0, 50.0, 0.0, 0.5, "%.1f",
+                    "Sweet-spot % floor (8–32° launch angle)",
+                )
 
-        st.markdown(
-            "<div style='font-size:10px;color:#60a5fa;font-weight:700;"
-            "letter-spacing:1px;margin:8px 0 4px;'>MARKET / MODEL FILTERS</div>",
-            unsafe_allow_html=True,
-        )
-        _tm1, _tm2, _tm3, _tm4 = st.columns(4)
-        with _tm1:
-            _fc.render_filter_control(
-                "EV %", "tac_min_ev", 0.0, 20.0, 0.0, 0.5, "%.1f",
-                "Minimum expected value percentage",
-            )
-        with _tm2:
-            _fc.render_filter_control(
-                "Edge %", "tac_min_edge", 0.0, 20.0, 0.0, 0.5, "%.1f",
-                "Minimum edge over market no-vig probability",
-            )
-        with _tm3:
-            _fc.render_filter_control(
-                "Confidence", "tac_min_conf", 0.0, 100.0, 0.0, 5.0, "%.0f",
-                "Minimum model confidence score (0–100)",
-            )
-        with _tm4:
-            _fc.render_filter_control(
-                "Model Prob %", "tac_min_model_prob", 0.0, 30.0, 0.0, 0.5, "%.1f",
-                "Minimum model probability percentage",
-            )
+        if _render_tcc_section_header("advanced_hr_signals", _tac_reset_defaults):
+            _tm1, _tm2, _tm3, _tm4 = st.columns(4)
+            with _tm1:
+                _fc.render_filter_control(
+                    "EV %", "tac_min_ev", 0.0, 20.0, 0.0, 0.5, "%.1f",
+                    "Minimum expected value percentage",
+                )
+            with _tm2:
+                _fc.render_filter_control(
+                    "Edge %", "tac_min_edge", 0.0, 20.0, 0.0, 0.5, "%.1f",
+                    "Minimum edge over market no-vig probability",
+                )
+            with _tm3:
+                _fc.render_filter_control(
+                    "Confidence", "tac_min_conf", 0.0, 100.0, 0.0, 5.0, "%.0f",
+                    "Minimum model confidence score (0–100)",
+                )
+            with _tm4:
+                _fc.render_filter_control(
+                    "Model Prob %", "tac_min_model_prob", 0.0, 30.0, 0.0, 0.5, "%.1f",
+                    "Minimum model probability percentage",
+                )
 
-        _te1, _te2, _te3 = st.columns(3)
-        with _te1:
-            st.toggle("Exclude Started Games", value=False, key="tac_exclude_started")
-        with _te2:
-            st.toggle("Include Live Games",    value=False, key="tac_include_live")
-        with _te3:
-            _tc_cutoff = st.session_state.get("cutoff_utc_hour")
-            if _tc_cutoff is not None:
-                _tc_et = (_tc_cutoff - 4) % 24
-                _tc_h12 = _tc_et % 12 or 12
-                _tc_ampm = "AM" if _tc_et < 12 else "PM"
-                st.caption(f"⏰ Time gate: {_tc_h12}:00 {_tc_ampm} ET  ←  sidebar")
-            else:
-                st.caption("⏰ No time gate  ←  sidebar")
+        if _render_tcc_section_header("environment", _tac_reset_defaults):
+            _te1, _te2, _te3 = st.columns(3)
+            with _te1:
+                st.toggle("Exclude Started Games", value=False, key="tac_exclude_started")
+            with _te2:
+                st.toggle("Include Live Games", value=False, key="tac_include_live")
+            with _te3:
+                _tc_cutoff = st.session_state.get("cutoff_utc_hour")
+                if _tc_cutoff is not None:
+                    _tc_et = (_tc_cutoff - 4) % 24
+                    _tc_h12 = _tc_et % 12 or 12
+                    _tc_ampm = "AM" if _tc_et < 12 else "PM"
+                    st.caption(f"⏰ Time gate: {_tc_h12}:00 {_tc_ampm} ET  ←  sidebar")
+                else:
+                    st.caption("⏰ No time gate  ←  sidebar")
 
         # ── MATCHUP EDGE FILTERS (affect only the Matchup Edge tab) ──────────────
         st.markdown(
             "<div style='border-top:1px solid #2a1a00;margin:10px 0 6px;"
             "padding-top:8px;font-size:9px;color:#f97316;font-weight:700;"
-            "letter-spacing:2px;'>▼ MATCHUP EDGE TAB ONLY — does not narrow Main/Top Targets/Full Slate</div>",
+            "letter-spacing:2px;'>▼ MATCHUP EDGE TAB ONLY — does not narrow Power Profile/Deployment Edge/Full Slate</div>",
             unsafe_allow_html=True,
         )
-        _tme1, _tme2 = st.columns(2)
-        with _tme1:
-            _fc.render_filter_control(
-                "Min Matchup Modifier %", "tac_min_matchup_pct", 75, 140, 75, 1, "%d",
-                "HVY modifier gate for Matchup Edge tab. 100=neutral, 110+=favorable, 120+=elite. "
-                "Does NOT remove picks from Command Center, Top Targets, or Full Slate.",
-            )
-        with _tme2:
-            _fc.render_filter_control(
-                "Min HVY Score", "tac_min_hvy_score", 0, 100, 0, 1, "%d",
-                "HVY composite matchup score gate (0–100) for Matchup Edge tab only. "
-                "Does NOT remove picks from Command Center, Top Targets, or Full Slate.",
-            )
+        if _render_tcc_section_header("matchup_splits", _tac_reset_defaults):
+            _tme1 = st.columns(1)[0]
+            with _tme1:
+                _fc.render_filter_control(
+                    "Min Matchup Modifier %", "tac_min_matchup_pct", 75, 140, 75, 1, "%d",
+                    "HVY modifier gate for Matchup Edge tab. 100=neutral, 110+=favorable, 120+=elite. "
+                    "Does NOT remove picks from Power Profile, Deployment Edge, or Full Slate.",
+                )
+        if _render_tcc_section_header("pitcher_vulnerability", _tac_reset_defaults):
+            _tme2 = st.columns(1)[0]
+            with _tme2:
+                _fc.render_filter_control(
+                    "Min HVY Score", "tac_min_hvy_score", 0, 100, 0, 1, "%d",
+                    "HVY composite matchup score gate (0–100) for Matchup Edge tab only. "
+                    "Does NOT remove picks from Power Profile, Deployment Edge, or Full Slate.",
+                )
+
+        if _render_tcc_section_header("momentum_recency", _tac_reset_defaults):
+            st.caption("No dedicated Main recency gate wired in this runtime. Existing ranked outputs remain unchanged.")
+        if _render_tcc_section_header("game_context", _tac_reset_defaults):
+            st.caption("Game context stays owned by sidebar time gate, lineup confirmation, live-state labels, and restore flow.")
 
         # ── PITCH MIX DISPLAY CONTROL ────────────────────────────────────────
         st.markdown(
             "<div style='border-top:1px solid #1a1a1a;margin:8px 0 4px;"
             "padding-top:6px;font-size:9px;color:#888;letter-spacing:1px;'>"
-            "PITCH MIX DISPLAY — Command Center / Top Targets / Matchup Edge cards</div>",
+            "PITCH MIX DISPLAY — Power Profile / Matchup Edge / Deployment Edge cards</div>",
             unsafe_allow_html=True,
         )
         _pm1, _pm2 = st.columns(2)
@@ -5052,20 +5721,19 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
     _status_cache = _status_bundle["status"]
     _urgency_cache = _status_bundle["urgency"]
 
-    _main_subview = _render_subview_selector(
-        "active_main_subview",
-        "main_sub_view",
-        [
-            ("command_center", f"⚡  COMMAND CENTER  ({len(_display_pool)})"),
-            ("top_targets", f"💎  TOP TARGETS  ({_n_elite})"),
-            ("matchup_edge", "🎯  MATCHUP EDGE"),
-            ("full_slate", f"🗂️  FULL SLATE  ({len(all_players)})"),
-            ("portfolio", "📊  PORTFOLIO"),
-        ],
-        "command_center",
+    # ── T2 routing: derive sub-room from authoritative active_sub_room key ──────
+    _MAIN_SUB_ROOM_MAP = {
+        "Full Slate": "full_slate",
+        "Command Center": "command_center",
+        "Top Targets": "top_targets",
+        "Match Edge": "matchup_edge",
+        "Portfolio": "portfolio",
+    }
+    _main_subview = _MAIN_SUB_ROOM_MAP.get(
+        _navstate.get_active_sub_room(st.session_state), "full_slate"
     )
 
-    # ── TAB 1: COMMAND CENTER ────────────────────────────────────────────────
+    # ── TAB 3: DEPLOYMENT EDGE ───────────────────────────────────────────────
     if _main_subview == "command_center":
         _mark_render_section(
             "MAIN.command_center",
@@ -5114,7 +5782,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
             _qv_pm_ctxs = _ensure_pitch_mix_contexts(
                 _qv_pool,
                 data.get("date", ""),
-                spinner_label="Loading Command Center pitch intelligence…",
+                spinner_label="Loading Deployment Edge pitch intelligence…",
             )
             # ── Tactical scan status bar ──────────────────────────────────────
             _qv_steam_n = len(_steam_names & {p.get("player_name") for p in _display_pool})
@@ -5125,9 +5793,9 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
             _qv_conf_n  = sum(1 for p in _display_pool if p.get("lineup_spot") is not None)
             st.markdown(
                 f"<div style='display:flex;gap:14px;align-items:center;padding:6px 0 10px;"
-                f"border-bottom:1px solid #1e1e40;margin-bottom:10px;flex-wrap:wrap;'>"
-                f"<span style='color:#a78bfa;font-size:12px;font-weight:700;letter-spacing:2px;"
-                f"text-transform:uppercase;'>⚡ Tactical Intel Feed</span>"
+                f"border-bottom:1px solid #1e2810;margin-bottom:10px;flex-wrap:wrap;'>"
+                f"<span style='color:#f97316;font-size:12px;font-weight:700;letter-spacing:2px;"
+                f"text-transform:uppercase;'>🔰 Deployment Edge</span>"
                 f"<span style='color:#4ade80;font-size:11px;'>✅ {_qv_conf_n} confirmed</span>"
                 + (f"<span style='color:#f87171;font-size:11px;'>🔴 {_qv_live_n} LIVE</span>" if _qv_live_n else "")
                 + (f"<span style='color:#FFD700;font-size:11px;'>📈 {_qv_steam_n} steam</span>"  if _qv_steam_n else "")
@@ -5175,9 +5843,9 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                         ):
                             _open_player_modal(
                                 _qp,
-                                source_tab="Command Center",
+                                source_tab="Deployment Edge",
                                 source_section=f"Rank #{_rank}",
-                                interaction_source="command_center.rank_open",
+                                interaction_source="deployment_edge.rank_open",
                             )
 
                         # Level 1 — Tactical Intelligence Card (fingerprint-cached)
@@ -5217,7 +5885,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                 + (" — Optimizer filtered" if _optimizer_on else ""),
                 expanded=False,
             ):
-                _render_qualified_table(_display_pool, scale, min_ev, min_edge, _steam_names, "qv_slate")
+                _render_qualified_table(_display_pool, scale, min_ev, min_edge, _steam_names, "qv_slate", pm_ctxs=_qv_pm_ctxs)
         if all_by_model:
             with st.expander(f"🌐 Full Universe ({len(all_by_model)} players with odds)", expanded=False):
                 _render_qualified_table(all_by_model, scale, min_ev, min_edge, _steam_names, "qv_universe")
@@ -5258,7 +5926,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                         use_container_width=True,
                     )
 
-    # ── TAB 2: TOP TARGETS (formerly Elite) ───────────────────────────────────
+    # ── TAB 1: POWER PROFILE ─────────────────────────────────────────────────
     elif _main_subview == "top_targets":
         _mark_render_section(
             "MAIN.top_targets",
@@ -5282,7 +5950,12 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
             _elite_fp,
             lambda: sorted(
                 [p for p in ranked if _pf(p.get("barrel_pct"), 0) >= 8.0],
-                key=lambda p: (_pf(p.get("barrel_pct"), 0), p.get("score") or 0),
+                key=lambda p: (
+                    _pf(p.get("barrel_pct"), 0),
+                    (_pf(p.get("model_prob"), 0.0) or 0.0) * 100.0
+                    + (_pf(p.get("hard_hit"), 0.0) or 0.0) * 0.4
+                    + ((_pf(p.get("xslg") or p.get("actual_slg"), 0.0) or 0.0) * 20.0),
+                ),
                 reverse=True,
             ),
         )
@@ -5295,23 +5968,54 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                 unsafe_allow_html=True,
             )
         else:
+            # ── POWER PROFILE identity header ─────────────────────────────────
+            import base64 as _b64, os as _os
+            _pp_icon_html = st.session_state.get("_pp_icon_html_cached", None)
+            if _pp_icon_html is None:
+                _pp_icon_path = _os.path.join(_os.path.dirname(__file__), "assets", "power_profile_icon.png")
+                _pp_icon_html = ""
+                if _os.path.exists(_pp_icon_path):
+                    try:
+                        with open(_pp_icon_path, "rb") as _pp_f:
+                            _pp_b64 = _b64.b64encode(_pp_f.read()).decode()
+                        _pp_icon_html = (
+                            f"<img src='data:image/png;base64,{_pp_b64}' "
+                            f"style='height:36px;width:auto;object-fit:contain;"
+                            f"filter:brightness(1.15) drop-shadow(0 0 6px rgba(249,115,22,0.55));'"
+                            f"alt='Power Profile' />"
+                        )
+                    except Exception:
+                        pass
+                st.session_state["_pp_icon_html_cached"] = _pp_icon_html
+            st.markdown(
+                f"<div style='display:flex;align-items:center;gap:12px;padding:6px 0 10px;"
+                f"border-bottom:1px solid #2a1800;margin-bottom:12px;'>"
+                + (_pp_icon_html or "<span style='font-size:28px;filter:drop-shadow(0 0 8px rgba(249,115,22,0.7));'>⚡</span>")
+                + f"<div>"
+                f"<div style='color:#f97316;font-size:13px;font-weight:800;letter-spacing:3px;"
+                f"text-transform:uppercase;'>Power Profile</div>"
+                f"<div style='color:#666;font-size:10px;letter-spacing:1px;margin-top:2px;'>"
+                f"Barrel · Hard-Hit · Exit Velo · Pull-Air · Sweet Spot · ISO / xSLG</div>"
+                f"</div></div>",
+                unsafe_allow_html=True,
+            )
             _elite_loaded_key = f"_main_elite_loaded_{_slate_ts}"
             if not st.session_state.get(_elite_loaded_key):
                 st.markdown(
-                    f"<div style='padding:18px 0;color:#888;font-size:12px;'>"
-                    f"<b style='color:#f97316;'>{len(_elite_pool)} elite barrel bats</b>"
-                    f" &nbsp;·&nbsp; pitch-mix cards build on demand to reduce hidden tab pressure"
+                    f"<div style='padding:12px 0;color:#888;font-size:12px;'>"
+                    f"<b style='color:#f97316;'>{len(_elite_pool)} power-profile bats</b>"
+                    f" &nbsp;·&nbsp; barrel ≥ 8% · pitch-mix cards build on demand"
                     f"</div>",
                     unsafe_allow_html=True,
                 )
-                if st.button("▶ Load Top Targets", key="load_main_elite", type="primary"):
+                if st.button("▶ Load Power Profile", key="load_main_elite", type="primary"):
                     st.session_state[_elite_loaded_key] = True
                     st.rerun()
             else:
                 _elite_pm_ctxs = _ensure_pitch_mix_contexts(
                     _elite_pool,
                     data.get("date", ""),
-                    spinner_label="Loading Top Targets pitch intelligence…",
+                    spinner_label="Loading Power Profile pitch intelligence…",
                 )
             # Pre-compute pitch tags for all elite players before the render loop
                 _elite_pitch_tags: dict = {}
@@ -5331,7 +6035,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                     f"<span style='color:#FFD700;font-weight:700;font-size:12px;'>💎 ELITE {_el_elite}</span>"
                     f"<span style='color:#4ade80;font-weight:700;font-size:12px;'>⚡ POWER {_el_power}</span>"
                     f"<span style='color:#86efac;font-weight:700;font-size:12px;'>✅ SOLID {_el_solid}</span>"
-                    f"<span style='color:#444;font-size:11px;'>· barrel ≥ 8% · BRL / HH% / xSLG / Pull / FB%</span>"
+                    f"<span style='color:#444;font-size:11px;'>· barrel ≥ 8% · Brl / HH% / EV / xSLG / ISO / Pull-Air</span>"
                     f"</div>",
                     unsafe_allow_html=True,
                 )
@@ -5366,9 +6070,9 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                             ):
                                 _open_player_modal(
                                     _ep,
-                                    source_tab="Top Targets",
-                                    source_section=f"Elite #{_el_rank}",
-                                    interaction_source="top_targets.card_open",
+                                    source_tab="Power Profile",
+                                    source_section=f"Power #{_el_rank}",
+                                    interaction_source="power_profile.card_open",
                                 )
 
                             _ep_opt_sel = _ep.get("player_name") in _optimizer_selected_names
@@ -5394,7 +6098,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                                                        expanded=st.session_state.get("main_pitch_mix_expanded", False),
                                                        slate_ts=_slate_ts)
 
-    # ── TAB 3: MATCHUP EDGE ───────────────────────────────────────────────────
+    # ── TAB 2: MATCHUP EDGE ───────────────────────────────────────────────────
     elif _main_subview == "matchup_edge":
         _mark_render_section(
             "MAIN.matchup_edge",
@@ -5667,7 +6371,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                                                expanded=st.session_state.get("main_pitch_mix_expanded", False),
                                                slate_ts=_slate_ts)
 
-    # ── TAB 4: PORTFOLIO BUILDER ──────────────────────────────────────────────
+    # ── TAB 5: PORTFOLIO ─────────────────────────────────────────────────────
     elif _main_subview == "portfolio":
         _mark_render_section(
             "MAIN.portfolio",
@@ -5825,7 +6529,12 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                         f"{''.join(_rt_chips)}</div>",
                         unsafe_allow_html=True,
                     )
-                    _render_qualified_table(_opt_sel, scale, min_ev, min_edge, _steam_names, "port_sel")
+                    _opt_pm_ctxs = _ensure_pitch_mix_contexts(
+                        _opt_sel,
+                        data.get("date", ""),
+                        spinner_label="Loading Portfolio batters table overlays…",
+                    ) if _opt_sel else {}
+                    _render_qualified_table(_opt_sel, scale, min_ev, min_edge, _steam_names, "port_sel", pm_ctxs=_opt_pm_ctxs)
 
                 st.markdown(
                     "<div style='margin:16px 0 8px;font-size:12px;font-weight:700;"
@@ -5957,6 +6666,124 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
         # - live conditions panel
         # - matchup navigation strip
         # - return-to-top behavior
+        # ── Full Slate Tactical Lens Selector ────────────────────────────────
+        _FS_LENS_KEY = "main_full_slate_lens"
+        if _FS_LENS_KEY not in st.session_state:
+            st.session_state[_FS_LENS_KEY] = "full_slate"
+        _active_lens = st.session_state[_FS_LENS_KEY]
+
+        _FS_LENS_DEFS = [
+            ("power_profile",   "⚡", "POWER PROFILE",   "Raw HR power capability"),
+            ("matchup_edge",    "🎯", "MATCHUP EDGE",     "Pitcher exploit & targeting"),
+            ("deployment_edge", "🚀", "DEPLOYMENT EDGE",  "Deployment readiness"),
+            ("full_slate",      "📋", "FULL SLATE",       "Full battlefield scan"),
+            ("portfolio",       "💼", "PORTFOLIO",        "Exposure & strategy"),
+        ]
+
+        st.markdown(
+            "<style>"
+            "div[data-testid='column'] div[data-testid='stButton'] button {"
+            "  font-family:monospace !important;"
+            "  font-size:10px !important;"
+            "  letter-spacing:0.5px !important;"
+            "  padding:5px 4px !important;"
+            "  border-radius:3px !important;"
+            "  width:100% !important;"
+            "}"
+            "</style>",
+            unsafe_allow_html=True,
+        )
+        _lens_cols = st.columns(5, gap="small")
+        for _lcol, (_lkey, _licon, _llabel, _ldesc) in zip(_lens_cols, _FS_LENS_DEFS):
+            with _lcol:
+                if st.button(
+                    f"{_licon} {_llabel}",
+                    key=f"fs_lens_btn_{_lkey}",
+                    type="primary" if _active_lens == _lkey else "secondary",
+                    use_container_width=True,
+                ):
+                    st.session_state[_FS_LENS_KEY] = _lkey
+                    st.rerun()
+
+        # Summary panel + tier key
+        _FS_LENS_SUMMARIES = {
+            "power_profile": (
+                "POWER PROFILE",
+                "Ranks by true HR capability composite: Barrel % (primary, 2.5&times;), "
+                "Model Prob (1.0&times;), xSLG (30&times;), Hard-Hit % (0.5&times;), "
+                "Pull-Air % (0.4&times;), Sweet Spot % (0.4&times;). "
+                "No EV or sportsbook influence. Elite baseline: Barrel &ge; 8%.",
+            ),
+            "matchup_edge": (
+                "MATCHUP EDGE",
+                "Ranks pitcher exploitability: Model Prob (primary, 1.5&times;), "
+                "Pitcher Factor deviation (60&times;), Platoon/handedness leverage (30&times;), "
+                "Barrel quality anchor (0.5&times;). Market-independent — pure baseball matchup signal.",
+            ),
+            "deployment_edge": (
+                "DEPLOYMENT EDGE",
+                "Ranks and highlights actionable deployment opportunities using EV, Edge, Confidence, "
+                "lineup status, odds value, and environmental support. "
+                "Composite: EV &times; 0.40 + Edge &times; 0.35 + Confidence &times; 0.25. "
+                "Players sorted by deployment composite descending within each game.",
+            ),
+            "full_slate": (
+                "FULL SLATE",
+                "Shows all playable batters organized by game. "
+                "QUAL and ELITE highlight players but do not remove anyone from the board. "
+                "Players sorted by lineup spot within each game.",
+            ),
+            "portfolio": (
+                "PORTFOLIO",
+                "Ranks and highlights exposure-aware opportunities using EV, confidence, "
+                "volatility, stack correlation, and deployment discipline. "
+                "Players sorted by EV + Confidence composite descending within each game.",
+            ),
+        }
+        _sum_title, _sum_body = _FS_LENS_SUMMARIES[_active_lens]
+
+        _TIER_KEY_ROWS = [
+            ("#3a0800", "#ff5533", "STEAM",  "strongest escalation"),
+            ("#2a2000", "#FFD700", "ELITE",  "premium HR threat"),
+            ("#0a2a0a", "#4ade80", "QUAL",   "qualified opportunity"),
+            ("#071828", "#60a5fa", "DANGER", "notable threat"),
+            ("#111118", "#555566", "LOW",    "low signal"),
+        ]
+        _tier_badges_html = "".join(
+            f"<div style='display:flex;align-items:center;gap:4px;margin-bottom:3px;'>"
+            f"<span style='background:{_tbg};border:1px solid {_tbc};color:{_tbc};"
+            f"font-size:8px;font-weight:700;letter-spacing:1px;padding:1px 5px;"
+            f"border-radius:2px;font-family:monospace;white-space:nowrap;min-width:52px;"
+            f"text-align:center;'>{_tlbl}</span>"
+            f"<span style='color:#444;font-size:9px;white-space:nowrap;'>{_tdesc}</span>"
+            f"</div>"
+            for _tbg, _tbc, _tlbl, _tdesc in _TIER_KEY_ROWS
+        )
+        _qual_formula_html = (
+            "<div style='margin-top:6px;padding:5px 8px;background:#070712;"
+            "border-left:2px solid #2a2a55;font-family:monospace;font-size:9px;color:#5a5a88;'>"
+            "QUAL: EV &times; 0.40 + Edge &times; 0.35 + Conf &times; 0.25"
+            "</div>"
+        ) if _active_lens in ("deployment_edge", "full_slate") else ""
+
+        st.markdown(
+            f"<div style='background:#06061a;border:1px solid #181830;border-radius:4px;"
+            f"padding:8px 12px;margin:5px 0 4px;'>"
+            f"<div style='display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;'>"
+            f"<div style='flex:1;min-width:220px;'>"
+            f"<div style='font-size:9px;font-weight:700;letter-spacing:2px;color:#5555aa;"
+            f"font-family:monospace;margin-bottom:4px;'>{_sum_title}</div>"
+            f"<div style='font-size:10px;color:#777;line-height:1.55;'>{_sum_body}</div>"
+            f"{_qual_formula_html}"
+            f"</div>"
+            f"<div style='min-width:160px;'>"
+            f"<div style='font-size:8px;font-weight:700;letter-spacing:2px;color:#333;"
+            f"font-family:monospace;margin-bottom:5px;'>TIER KEY</div>"
+            f"{_tier_badges_html}"
+            f"</div>"
+            f"</div></div>",
+            unsafe_allow_html=True,
+        )
         # ── Mode selector: visibility ≠ qualification ────────────────────────
         # All Players: all batters organized by game; filters highlight, do not remove.
         # Qualified: sidebar EV/Edge + TCC profile filters applied.
@@ -5981,7 +6808,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
             st.caption(
                 "True operational full slate — all playable batters organized by game.  "
                 "Filters highlight (✓ QUAL, ★ ELITE) but do not remove players.  "
-                "📊 Pitch Mix intelligence available in COMMAND CENTER / TOP TARGETS / MATCHUP EDGE tabs."
+                "📊 Pitch Mix intelligence available in POWER PROFILE / MATCHUP EDGE / DEPLOYMENT EDGE tabs."
             )
             _fs_pm_ctxs = {}
             if not st.session_state.get(_fs_loaded_key):
@@ -6012,6 +6839,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                 slate_ts=_slate_ts,
                 pm_ctxs=_fs_pm_ctxs,
                 source_section="Main Full Slate · All Players",
+                lens=_active_lens,
             )
 
         elif _fs_mode == "Qualified":
@@ -6053,9 +6881,14 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                 st.caption(
                     f"{len(_fs_sorted)} qualified players · composite score EV×0.40 + "
                     f"Edge×0.35 + Conf×0.25 · TCC + sidebar filters applied · "
-                    "📊 Pitch Mix in COMMAND CENTER / TOP TARGETS / MATCHUP EDGE tabs"
+                    "📊 Pitch Mix in POWER PROFILE / MATCHUP EDGE / DEPLOYMENT EDGE tabs"
                 )
-                _render_qualified_table(_fs_sorted, scale, min_ev, min_edge, _steam_names, "fs_qual")
+                _fs_sorted_pm_ctxs = _ensure_pitch_mix_contexts(
+                    _fs_sorted,
+                    data.get("date", ""),
+                    spinner_label="Loading Full Slate batters table overlays…",
+                ) if _fs_sorted else {}
+                _render_qualified_table(_fs_sorted, scale, min_ev, min_edge, _steam_names, "fs_qual", pm_ctxs=_fs_sorted_pm_ctxs)
 
         else:  # Elite Targets
             _fs_elite_fp = (
@@ -6114,6 +6947,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                     slate_ts=_slate_ts,
                     pm_ctxs=_fs_elite_pm_ctxs,
                     source_section="Main Full Slate · Elite Targets",
+                    lens=_active_lens,
                 )
 
 
@@ -7134,17 +7968,16 @@ def tab_jig(data: dict):
 
         _render_jig_way_raw_filters(all_players_raw)
 
-        _jig_subview = _render_subview_selector(
-            "active_jig_subview",
-            "jig_sub_view",
-            [
-                ("command_center", f"🎯 Command Center ({len(qualified)})"),
-                ("top_targets", "⚡ Top Targets"),
-                ("matchup_edge", "💪 Matchup Edge"),
-                ("full_slate", f"🗂️ Full Slate ({len(all_players)})"),
-                ("portfolio", "🔗 Portfolio"),
-            ],
-            "command_center",
+        # ── T2 routing: derive sub-room from authoritative active_sub_room key ──
+        _JIG_SUB_ROOM_MAP = {
+            "JIG Builder": "command_center",
+            "Top Targets": "top_targets",
+            "Match Edge": "matchup_edge",
+            "Full Slate": "full_slate",
+            "Portfolio": "portfolio",
+        }
+        _jig_subview = _JIG_SUB_ROOM_MAP.get(
+            _navstate.get_active_sub_room(st.session_state), "command_center"
         )
 
         if _jig_subview == "command_center":
@@ -7866,7 +8699,7 @@ def tab_jig(data: dict):
     st.caption(
         "xSLG (25%) · Barrel (20%) · ISO (15%) · Pull AIR (15%) · Hard Hit (15%) · HR Window (10%)"
         "  ·  Context: arsenal matchup · hand splits · contact shape · environment · H2H  ·  "
-        "JIG Tactical Command Center controls apply only within JIG."
+        "JIG Builder Controls apply only within JIG."
     )
     from clients.pitch_mix import HVY_CACHE_VERSION as _HVY_VER
     _hvy_pitcher_fp = hash(frozenset((p.get("player_id"), p.get("pitcher_id")) for p in all_players_raw))
@@ -7935,142 +8768,149 @@ def tab_jig(data: dict):
         "jig_tac_exclude_started": False,
         "jig_tac_include_live": False,
     }
-    with st.expander("⚙️ JIG Tactical Command Center", expanded=False):
-        # ── JIG Engine Identity + Preset Bar ────────────────────────────────
-        st.markdown(
-            "<div style='display:flex;justify-content:space-between;align-items:baseline;"
-            "margin-bottom:2px;'>"
-            "<div style='font-size:9px;color:#888;letter-spacing:1px;'>JIG ENGINE PRESET</div>"
-            "<div style='font-size:9px;color:#f97316;letter-spacing:1px;'>"
-            "Tactical · Matchup-Driven · Arsenal-Focused</div>"
-            "</div>",
-            unsafe_allow_html=True,
-        )
-        def _jig_tcc_reset():
-            for _rk, _rv in _jig_tac_reset_defaults.items():
-                st.session_state[_rk] = _rv
-            st.session_state.pop("jig_active_preset", None)
-            st.rerun()
-        _fc.render_preset_bar("jig_active_preset", _fc.JIG_PRESETS, reset_cb=_jig_tcc_reset)
-        st.caption("Narrow JIG player universe by batter profile + matchup context")
+    # ── JIG Builder Controls — persistent room surface (Gate 1B) ────────────
+    st.markdown(
+        "<div style='border-top:1px solid #2a1500;background:#0d0500;padding:6px 10px 4px;"
+        "margin-bottom:4px;'>"
+        "<span style='font-size:9px;color:#f97316;letter-spacing:1.5px;font-weight:700;'>"
+        "⚙️  JIG BUILDER CONTROLS</span></div>",
+        unsafe_allow_html=True,
+    )
+    # ── JIG Engine Identity + Preset Bar ────────────────────────────────
+    st.markdown(
+        "<div style='display:flex;justify-content:space-between;align-items:baseline;"
+        "margin-bottom:2px;'>"
+        "<div style='font-size:9px;color:#888;letter-spacing:1px;'>JIG ENGINE PRESET</div>"
+        "<div style='font-size:9px;color:#f97316;letter-spacing:1px;'>"
+        "Tactical · Matchup-Driven · Arsenal-Focused</div>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+    def _jig_tcc_reset():
+        for _rk, _rv in _jig_tac_reset_defaults.items():
+            st.session_state[_rk] = _rv
+        st.session_state.pop("jig_active_preset", None)
+        st.rerun()
+    _fc.render_preset_bar("jig_active_preset", _fc.JIG_PRESETS, reset_cb=_jig_tcc_reset)
+    st.caption("Narrow JIG player universe by batter profile + matchup context")
 
-        st.markdown(
-            "<div style='font-size:10px;color:#a78bfa;font-weight:700;"
-            "letter-spacing:1px;margin:8px 0 4px;'>BATTER PROFILE FILTERS</div>",
-            unsafe_allow_html=True,
+    st.markdown(
+        "<div style='font-size:10px;color:#a78bfa;font-weight:700;"
+        "letter-spacing:1px;margin:8px 0 4px;'>BATTER PROFILE FILTERS</div>",
+        unsafe_allow_html=True,
+    )
+    _ja1, _ja2, _ja3, _ja4, _ja5, _ja6 = st.columns(6)
+    with _ja1:
+        _fc.render_filter_control(
+            "Barrel %", "jig_tac_min_barrel", 0.0, 20.0, 0.0, 0.5, "%.1f",
+            "Statcast barrel rate floor",
         )
-        _ja1, _ja2, _ja3, _ja4, _ja5, _ja6 = st.columns(6)
-        with _ja1:
-            _fc.render_filter_control(
-                "Barrel %", "jig_tac_min_barrel", 0.0, 20.0, 0.0, 0.5, "%.1f",
-                "Statcast barrel rate floor",
-            )
-        with _ja2:
-            _fc.render_filter_control(
-                "Hard Hit %", "jig_tac_min_hh", 0.0, 60.0, 0.0, 1.0, "%.1f",
-                "Hard-hit rate floor (≥95mph exit velo)",
-            )
-        with _ja3:
-            _fc.render_filter_control(
-                "xSLG", "jig_tac_min_xslg", 0.000, 0.800, 0.000, 0.010, "%.3f",
-                "Expected slugging percentage floor",
-            )
-        with _ja4:
-            _fc.render_filter_control(
-                "ISO", "jig_tac_min_iso", 0.000, 0.400, 0.000, 0.010, "%.3f",
-                "Isolated power (SLG−AVG) floor",
-            )
-        with _ja5:
-            _fc.render_filter_control(
-                "Pull Air %", "jig_tac_min_pull_air", 0.0, 30.0, 0.0, 0.5, "%.1f",
-                "Pulled-airborne contact rate floor",
-            )
-        with _ja6:
-            _fc.render_filter_control(
-                "HR Window %", "jig_tac_min_hr_window", 0.0, 50.0, 0.0, 1.0, "%.1f",
-                "Sweet-spot % floor (8–32° launch angle)",
-            )
-
-        st.markdown(
-            "<div style='font-size:10px;color:#a78bfa;font-weight:700;"
-            "letter-spacing:1px;margin:8px 0 4px;'>MATCHUP / HVY FILTERS</div>",
-            unsafe_allow_html=True,
+    with _ja2:
+        _fc.render_filter_control(
+            "Hard Hit %", "jig_tac_min_hh", 0.0, 60.0, 0.0, 1.0, "%.1f",
+            "Hard-hit rate floor (≥95mph exit velo)",
         )
-        _jb1, _jb2, _jb3 = st.columns(3)
-        with _jb1:
-            _fc.render_filter_control(
-                "Min Matchup Modifier %", "jig_tac_min_matchup_pct", 75, 140, 75, 1, "%d",
-                "HVY modifier floor — 100=neutral, 110=favorable, 120=elite mismatch",
-            )
-        with _jb2:
-            _fc.render_filter_control(
-                "Min HVY Score", "jig_tac_min_hvy_score", 0, 100, 0, 1, "%d",
-                "Composite batter matchup score floor (0–100)",
-            )
-        with _jb3:
-            _jig_cutoff = st.session_state.get("cutoff_utc_hour")
-            if _jig_cutoff is not None:
-                _jig_et = (_jig_cutoff - 4) % 24
-                _jig_h12 = _jig_et % 12 or 12
-                _jig_ampm = "AM" if _jig_et < 12 else "PM"
-                st.caption(f"⏰ Time gate: {_jig_h12}:00 {_jig_ampm} ET  ←  sidebar")
-            else:
-                st.caption("⏰ No time gate  ←  sidebar")
-
-        st.markdown(
-            "<div style='font-size:10px;color:#f97316;font-weight:700;"
-            "letter-spacing:1px;margin:8px 0 4px;'>PITCHER VULNERABILITY</div>",
-            unsafe_allow_html=True,
+    with _ja3:
+        _fc.render_filter_control(
+            "xSLG", "jig_tac_min_xslg", 0.000, 0.800, 0.000, 0.010, "%.3f",
+            "Expected slugging percentage floor",
         )
-        _jv1, _jv2, _jv3 = st.columns(3)
-        with _jv1:
-            _fc.render_filter_control(
-                "Total HR Allowed", "jig_tac_min_pit_hr_total", 0, 30, 0, 1, "%d",
-                "Pitcher must have allowed ≥ N HRs total this season — 0 = no filter",
-            )
-        with _jv2:
-            _fc.render_filter_control(
-                "HR vs LHB", "jig_tac_min_pit_hr_lhb", 0, 20, 0, 1, "%d",
-                "Pitcher must have allowed ≥ N HRs vs LHBs — applied only to LHBs",
-            )
-        with _jv3:
-            _fc.render_filter_control(
-                "HR vs RHB", "jig_tac_min_pit_hr_rhb", 0, 20, 0, 1, "%d",
-                "Pitcher must have allowed ≥ N HRs vs RHBs — applied only to RHBs",
-            )
-
-        _jte1, _jte2 = st.columns(2)
-        with _jte1:
-            st.toggle("Exclude Started Games", value=False, key="jig_tac_exclude_started")
-        with _jte2:
-            st.toggle("Include Live Games",    value=False, key="jig_tac_include_live")
-
-        # ── PITCH MIX DISPLAY CONTROL ────────────────────────────────────────
-        st.markdown(
-            "<div style='border-top:1px solid #1a1a1a;margin:8px 0 4px;"
-            "padding-top:6px;font-size:9px;color:#888;letter-spacing:1px;'>"
-            "PITCH MIX DISPLAY — JIG matchup cards</div>",
-            unsafe_allow_html=True,
+    with _ja4:
+        _fc.render_filter_control(
+            "ISO", "jig_tac_min_iso", 0.000, 0.400, 0.000, 0.010, "%.3f",
+            "Isolated power (SLG−AVG) floor",
         )
-        _jpm1, _jpm2 = st.columns(2)
-        with _jpm1:
-            if st.button(
-                "Open All Pitch Mix",
-                key="_jig_pm_open",
-                    width="stretch",
-                help="Expand pitch mix analysis on all visible JIG cards",
-            ):
-                st.session_state["jig_pitch_mix_expanded"] = True
-                st.rerun()
-        with _jpm2:
-            if st.button(
-                "Close All Pitch Mix",
-                key="_jig_pm_close",
+    with _ja5:
+        _fc.render_filter_control(
+            "Pull Air %", "jig_tac_min_pull_air", 0.0, 30.0, 0.0, 0.5, "%.1f",
+            "Pulled-airborne contact rate floor",
+        )
+    with _ja6:
+        _fc.render_filter_control(
+            "HR Window %", "jig_tac_min_hr_window", 0.0, 50.0, 0.0, 1.0, "%.1f",
+            "Sweet-spot % floor (8–32° launch angle)",
+        )
+
+    st.markdown(
+        "<div style='font-size:10px;color:#a78bfa;font-weight:700;"
+        "letter-spacing:1px;margin:8px 0 4px;'>MATCHUP / HVY FILTERS</div>",
+        unsafe_allow_html=True,
+    )
+    _jb1, _jb2, _jb3 = st.columns(3)
+    with _jb1:
+        _fc.render_filter_control(
+            "Min Matchup Modifier %", "jig_tac_min_matchup_pct", 75, 140, 75, 1, "%d",
+            "HVY modifier floor — 100=neutral, 110=favorable, 120=elite mismatch",
+        )
+    with _jb2:
+        _fc.render_filter_control(
+            "Min HVY Score", "jig_tac_min_hvy_score", 0, 100, 0, 1, "%d",
+            "Composite batter matchup score floor (0–100)",
+        )
+    with _jb3:
+        _jig_cutoff = st.session_state.get("cutoff_utc_hour")
+        if _jig_cutoff is not None:
+            _jig_et = (_jig_cutoff - 4) % 24
+            _jig_h12 = _jig_et % 12 or 12
+            _jig_ampm = "AM" if _jig_et < 12 else "PM"
+            st.caption(f"⏰ Time gate: {_jig_h12}:00 {_jig_ampm} ET  ←  sidebar")
+        else:
+            st.caption("⏰ No time gate  ←  sidebar")
+
+    st.markdown(
+        "<div style='font-size:10px;color:#f97316;font-weight:700;"
+        "letter-spacing:1px;margin:8px 0 4px;'>PITCHER VULNERABILITY</div>",
+        unsafe_allow_html=True,
+    )
+    _jv1, _jv2, _jv3 = st.columns(3)
+    with _jv1:
+        _fc.render_filter_control(
+            "Total HR Allowed", "jig_tac_min_pit_hr_total", 0, 30, 0, 1, "%d",
+            "Pitcher must have allowed ≥ N HRs total this season — 0 = no filter",
+        )
+    with _jv2:
+        _fc.render_filter_control(
+            "HR vs LHB", "jig_tac_min_pit_hr_lhb", 0, 20, 0, 1, "%d",
+            "Pitcher must have allowed ≥ N HRs vs LHBs — applied only to LHBs",
+        )
+    with _jv3:
+        _fc.render_filter_control(
+            "HR vs RHB", "jig_tac_min_pit_hr_rhb", 0, 20, 0, 1, "%d",
+            "Pitcher must have allowed ≥ N HRs vs RHBs — applied only to RHBs",
+        )
+
+    _jte1, _jte2 = st.columns(2)
+    with _jte1:
+        st.toggle("Exclude Started Games", value=False, key="jig_tac_exclude_started")
+    with _jte2:
+        st.toggle("Include Live Games",    value=False, key="jig_tac_include_live")
+
+    # ── PITCH MIX DISPLAY CONTROL ────────────────────────────────────────
+    st.markdown(
+        "<div style='border-top:1px solid #1a1a1a;margin:8px 0 4px;"
+        "padding-top:6px;font-size:9px;color:#888;letter-spacing:1px;'>"
+        "PITCH MIX DISPLAY — JIG matchup cards</div>",
+        unsafe_allow_html=True,
+    )
+    _jpm1, _jpm2 = st.columns(2)
+    with _jpm1:
+        if st.button(
+            "Open All Pitch Mix",
+            key="_jig_pm_open",
                 width="stretch",
-                help="Collapse pitch mix analysis on all visible JIG cards",
-            ):
-                st.session_state["jig_pitch_mix_expanded"] = False
-                st.rerun()
+            help="Expand pitch mix analysis on all visible JIG cards",
+        ):
+            st.session_state["jig_pitch_mix_expanded"] = True
+            st.rerun()
+    with _jpm2:
+        if st.button(
+            "Close All Pitch Mix",
+            key="_jig_pm_close",
+            width="stretch",
+            help="Collapse pitch mix analysis on all visible JIG cards",
+        ):
+            st.session_state["jig_pitch_mix_expanded"] = False
+            st.rerun()
 
     # Build JIG-TCC-filtered player list
     _jig_tac_params = {
@@ -8467,6 +9307,91 @@ def tab_performance():
         c2.markdown(_pnl_box("Avg CLV",    f"{avg_clv:+.2f}%",               clv_css),   unsafe_allow_html=True)
         c3.markdown(_pnl_box("Beat Close", f"{beat_close:.1f}%",             beat_css),  unsafe_allow_html=True)
         c4.markdown(_pnl_box("Verdict",    verdict,                           v_css),     unsafe_allow_html=True)
+
+    st.divider()
+    st.markdown('<div class="section-header">🚚 Deployment Review & Lifecycle</div>',
+                unsafe_allow_html=True)
+    try:
+        from tracking import pick_tracker as _pt
+
+        _all_deploy_rows = _pt.load_all()
+        _cur_data = st.session_state.get("data") or {}
+        _slip_label_map = {_slip_label(p): p for p in (_cur_data.get("all_players", []) or [])}
+        _slip_names = {
+            p.get("player_name", "")
+            for label in st.session_state.get("fd_slip", [])
+            if (p := _slip_label_map.get(label))
+        }
+        _mode_options = [
+            ("all", "All Rows"),
+            ("deployed_only", "Deployed Only"),
+            ("high_conviction_only", "High-Conviction Only"),
+            ("settled_only", "Settled Only"),
+            ("live_only", "Live Only"),
+            ("archived", "Archived"),
+            ("review", "Review Mode"),
+        ]
+        _mode = st.selectbox(
+            "Visibility mode",
+            options=[opt[0] for opt in _mode_options],
+            format_func=lambda x: dict(_mode_options).get(x, x),
+            key="deployment_visibility_mode",
+            label_visibility="collapsed",
+        )
+        _deploy_rows = _deployment_rows_for_mode(_all_deploy_rows, _mode, slip_lookup=_slip_names)
+        _deploy_summary = _deployment_exposure_summary(_deploy_rows)
+        _lifecycle_counts = {}
+        for _row in _deploy_rows:
+            _lifecycle_counts[_row.get("_lifecycle", "qualified")] = _lifecycle_counts.get(_row.get("_lifecycle", "qualified"), 0) + 1
+
+        _m1, _m2, _m3, _m4, _m5 = st.columns(5)
+        _m1.metric("Visible Picks", len(_deploy_rows))
+        _m2.metric("Total Exposure", f"${_deploy_summary['total_exposure']:.0f}")
+        _m3.metric("Repeated Player", f"${_deploy_summary['repeated_player_exposure']:.0f}")
+        _m4.metric("Repeated Game", f"${_deploy_summary['repeated_game_exposure']:.0f}")
+        _m5.metric("Volatility", f"${_deploy_summary['volatility_exposure']:.0f}")
+
+        _warnings = []
+        if _deploy_summary["repeated_player_exposure"] > 0:
+            _warnings.append("repeated-player concentration")
+        if _deploy_summary["repeated_game_exposure"] > 0:
+            _warnings.append("repeated-game concentration")
+        if _deploy_summary["stack_exposure"] > 0 and _deploy_summary["stack_exposure"] / max(_deploy_summary["total_exposure"], 1.0) >= 0.35:
+            _warnings.append("stack concentration")
+        if _deploy_summary["volatility_exposure"] > 0 and _deploy_summary["volatility_exposure"] / max(_deploy_summary["total_exposure"], 1.0) >= 0.40:
+            _warnings.append("volatility concentration")
+        if _warnings:
+            st.warning("Exposure watch: " + ", ".join(_warnings))
+        else:
+            st.caption("Exposure clean: no concentration flags in current visibility mode.")
+
+        if _deploy_rows:
+            _tier_counts = {}
+            for _row in _deploy_rows:
+                tier = _row.get("_deployment_tier", "Watchlist Only")
+                _tier_counts[tier] = _tier_counts.get(tier, 0) + 1
+            st.markdown(
+                "".join(
+                    _shell_badge_html(tier, str(count), f"{count} pick{'s' if count != 1 else ''}")
+                    for tier, count in _tier_counts.items()
+                ),
+                unsafe_allow_html=True,
+            )
+            _render_deployment_cards(_deploy_rows, _slip_names)
+
+            _deploy_df = pd.DataFrame(_deploy_rows)
+            _keep_cols = [
+                "date", "player_name", "team", "source_tab", "source_section",
+                "_deployment_tier", "_lifecycle", "ev_pct", "edge_pct", "confidence",
+                "open_no_vig_pct", "close_no_vig_pct", "clv_pp", "hr_result",
+            ]
+            _show_cols = [c for c in _keep_cols if c in _deploy_df.columns]
+            if _show_cols:
+                st.dataframe(_deploy_df[_show_cols], hide_index=True, width="stretch")
+        else:
+            st.info("No rows match current deployment visibility mode.")
+    except Exception as _deploy_err:
+        st.warning(f"Deployment review unavailable: {_deploy_err}")
 
     # ── P&L by Rating Tier ────────────────────────────────────────────────────
     try:
@@ -8975,10 +9900,9 @@ def main():
     if _initial_route not in _route_order:
         _initial_route = "MAIN"
     st.session_state["active_route"] = _initial_route
-    if _pending_workspace_route in _route_order or st.session_state.get("active_workspace") not in _route_order:
-        st.session_state["active_workspace"] = _initial_route
     _investigation.init_investigation_state()
     _ensure_navigation_continuity_state()
+    _navstate.init_nav_state(st.session_state)
     _investigation.record_route_context(_initial_route)
     _update_runtime_route_diag()
 
@@ -9000,16 +9924,12 @@ def main():
         _workspace_sel = st.selectbox(
             "Active workspace",
             options=_route_order,
-            index=_route_order.index(
-                st.session_state.get("active_workspace", _initial_route)
-                if st.session_state.get("active_workspace", _initial_route) in _route_order
-                else _initial_route
-            ),
+            index=_route_order.index(_initial_route),
             format_func=lambda x: _route_labels.get(x, x),
             label_visibility="collapsed",
             key="active_workspace",
         )
-        st.session_state["active_route"] = _workspace_sel
+        _navstate.set_active_section(st.session_state, _workspace_sel)
         _investigation.record_route_context(_workspace_sel)
         _update_runtime_route_diag()
 
@@ -9667,6 +10587,7 @@ The app will open full-screen like a native app.
         st.caption(f"Storage: {'☁️ Sheets' if backend == 'sheets' else '💾 Local CSV'}")
 
 
+    _render_sub_room_rail()
     # ── Banner ────────────────────────────────────────────────────────────────
     _banner = Path(__file__).parent / "assets" / "banner.png"
     if _banner.exists():
