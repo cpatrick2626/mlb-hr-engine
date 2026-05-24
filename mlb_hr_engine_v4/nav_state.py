@@ -14,6 +14,7 @@ SECTION_JIG = "JIG"
 SECTION_STRATEGY = "ADVANCED_STRATEGIES"
 SECTION_HITS = "HITS"
 SECTION_PERFORMANCE = "PERFORMANCE"
+SECTION_26 = "26"
 
 SECTIONS: tuple[str, ...] = (
     SECTION_MAIN,
@@ -21,16 +22,17 @@ SECTIONS: tuple[str, ...] = (
     SECTION_STRATEGY,
     SECTION_HITS,
     SECTION_PERFORMANCE,
+    SECTION_26,
 )
 
 # ── Ordered sub-room registry per section ─────────────────────────────────────
 # STRATEGY / HITS / PERFORMANCE are direct sections — no sub-room ownership.
 SUB_ROOMS: dict[str, tuple[str, ...]] = {
     SECTION_MAIN: (
+        "Power Profile",
+        "Matchup Edge",
         "Full Slate",
-        "Command Center",
-        "Top Targets",
-        "Match Edge",
+        "Deployment Edge",
         "Portfolio",
     ),
     SECTION_JIG: (
@@ -43,15 +45,17 @@ SUB_ROOMS: dict[str, tuple[str, ...]] = {
     SECTION_STRATEGY: (),
     SECTION_HITS: (),
     SECTION_PERFORMANCE: (),
+    SECTION_26: (),
 }
 
 # ── Default sub-room per section ──────────────────────────────────────────────
 SECTION_DEFAULTS: dict[str, str] = {
-    SECTION_MAIN: "Full Slate",
+    SECTION_MAIN: "Power Profile",
     SECTION_JIG: "JIG Builder",
     SECTION_STRATEGY: "",
     SECTION_HITS: "",
     SECTION_PERFORMANCE: "",
+    SECTION_26: "",
 }
 
 _ACTIVE_SECTION_KEY = "active_route"

@@ -679,6 +679,8 @@ def _restore_runtime_context() -> bool:
         restored_route,
     )
     st.session_state["active_route"] = restored_workspace
+    st.session_state["active_workspace"] = restored_workspace
+    st.session_state["active_workspace_selector"] = restored_workspace
     st.session_state[_PENDING_WORKSPACE_ROUTE_KEY] = restored_workspace
     if payload.get("selected_player_modal"):
         st.session_state["selected_player_modal"] = payload.get("selected_player_modal")
@@ -713,6 +715,8 @@ def _request_workspace_route(route: str) -> str:
         st.session_state.get("active_route", "MAIN"),
     )
     st.session_state["active_route"] = next_route
+    st.session_state["active_workspace"] = next_route
+    st.session_state["active_workspace_selector"] = next_route
     st.session_state[_PENDING_WORKSPACE_ROUTE_KEY] = next_route
     return next_route
 
@@ -1448,12 +1452,13 @@ div[data-testid="stSelectbox"] label { font-size: 12px; color: #666; }
 /* Pitch attack vulnerability tags — always visible on Level 1 card */
 .tac-pitch-tag {
     font-size: 10px;
-    padding: 2px 7px;
+    padding: 2px 8px;
     border-radius: 3px;
     font-weight: 600;
     white-space: nowrap;
     display: inline-block;
-    margin: 1px 2px 1px 0;
+    margin: 1px 3px 1px 0;
+    line-height: 1.3;
 }
 .tac-pitch-favorable { background: #0a2010; color: #4ade80; border: 1px solid #1a5530; }
 .tac-pitch-vulnerable { background: #200808; color: #f87171; border: 1px solid #550a0a; }
@@ -2824,7 +2829,7 @@ def _intelligence_card_html(
             f"<span class='tac-pitch-tag {css}'>{lbl}</span>"
             for lbl, css in pitch_tags
         )
-        pitch_html = f"<div style='margin:4px 0 2px;line-height:1.6;'>{tag_items}</div>"
+        pitch_html = f"<div style='margin:3px 0 2px;line-height:1.4;'>{tag_items}</div>"
 
     odds_fmt = _fmt_american(odds) if odds else "--"
 
@@ -2897,27 +2902,27 @@ def _intelligence_card_html(
         # ── Row 3: Stat pills — PRIMARY market signals (MDL/EV/EDGE) | SECONDARY context (BRL/ENV) ──
         + f"<div style='display:flex;gap:2px;margin-bottom:4px;'>"
         # Primary: model, EV, edge — slightly brighter bg + larger font to dominate attention
-        f"<div style='flex:1;text-align:center;background:#0c0c22;border-radius:4px;padding:4px 1px;'>"
-        f"<div style='font-size:13px;font-weight:700;color:#a78bfa;line-height:1.1;'>{model_p:.0f}%</div>"
-        f"<div style='font-size:7px;color:#4a4a70;letter-spacing:0.3px;'>MDL</div></div>"
+        f"<div style='flex:1;text-align:center;background:#0c0c22;border-radius:4px;padding:5px 2px;'>"
+        f"<div style='font-size:13px;font-weight:700;color:#a78bfa;line-height:1.15;'>{model_p:.0f}%</div>"
+        f"<div style='font-size:8px;color:#5555aa;letter-spacing:0.2px;font-weight:500;'>MDL</div></div>"
 
-        f"<div style='flex:1;text-align:center;background:#0c0c22;border-radius:4px;padding:4px 1px;'>"
-        f"<div style='font-size:13px;font-weight:700;color:{ev_col_};line-height:1.1;'>{ev_display}</div>"
-        f"<div style='font-size:7px;color:#4a4a70;'>EV</div></div>"
+        f"<div style='flex:1;text-align:center;background:#0c0c22;border-radius:4px;padding:5px 2px;'>"
+        f"<div style='font-size:13px;font-weight:700;color:{ev_col_};line-height:1.15;'>{ev_display}</div>"
+        f"<div style='font-size:8px;color:#5555aa;font-weight:500;'>EV</div></div>"
 
-        f"<div style='flex:1;text-align:center;background:#0c0c22;border-radius:4px;padding:4px 1px;"
+        f"<div style='flex:1;text-align:center;background:#0c0c22;border-radius:4px;padding:5px 2px;"
         f"border-right:1px solid #1e1e35;'>"
-        f"<div style='font-size:13px;font-weight:700;color:{edge_col_};line-height:1.1;'>{edge_display}</div>"
-        f"<div style='font-size:7px;color:#4a4a70;'>EDGE</div></div>"
+        f"<div style='font-size:13px;font-weight:700;color:{edge_col_};line-height:1.15;'>{edge_display}</div>"
+        f"<div style='font-size:8px;color:#5555aa;font-weight:500;'>EDGE</div></div>"
 
         # Secondary: barrel + environment — quieter background, standard size
-        f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:4px;padding:4px 1px;'>"
-        f"<div style='font-size:12px;font-weight:700;color:{brl_col};line-height:1.1;'>{barrel:.1f}%</div>"
-        f"<div style='font-size:7px;color:#3a3a55;'>BRL</div></div>"
+        f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:4px;padding:5px 2px;'>"
+        f"<div style='font-size:12px;font-weight:700;color:{brl_col};line-height:1.15;'>{barrel:.1f}%</div>"
+        f"<div style='font-size:8px;color:#4a4a66;font-weight:500;'>BRL</div></div>"
 
-        f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:4px;padding:4px 1px;'>"
-        f"<div style='font-size:10px;font-weight:700;color:{env_col_};line-height:1.1;'>{env_lbl}</div>"
-        f"<div style='font-size:7px;color:#3a3a55;'>ENV</div></div>"
+        f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:4px;padding:5px 2px;'>"
+        f"<div style='font-size:10px;font-weight:700;color:{env_col_};line-height:1.15;'>{env_lbl}</div>"
+        f"<div style='font-size:8px;color:#4a4a66;font-weight:500;'>ENV</div></div>"
         f"</div>"
 
         # Convergence signal — compact, below stat row
@@ -2927,12 +2932,12 @@ def _intelligence_card_html(
         + pitch_html
 
         # ── Row 5: HVY matchup bar + weather ──
-        + f"<div style='display:flex;align-items:center;gap:5px;margin-top:4px;'>"
-        f"<div style='font-size:7px;color:#444;letter-spacing:1px;white-space:nowrap;"
-        f"font-family:monospace;'>HVY</div>"
+        + f"<div style='display:flex;align-items:center;gap:6px;margin-top:4px;'>"
+        f"<div style='font-size:8px;color:#555;letter-spacing:0.5px;white-space:nowrap;"
+        f"font-weight:500;'>HVY</div>"
         f"<div style='flex:1;background:#0d0d18;border-radius:2px;height:3px;'>"
         f"<div style='background:{hvy_col};width:{hvy_bar}%;height:3px;border-radius:2px;'></div></div>"
-        f"<div style='font-size:8px;font-weight:600;color:{hvy_col};letter-spacing:0.3px;'>{hvy_lbl}</div>"
+        f"<div style='font-size:8px;font-weight:700;color:{hvy_col};letter-spacing:0.2px;'>{hvy_lbl}</div>"
         + weather_frag
         + f"</div>"
 
@@ -3048,7 +3053,7 @@ def _elite_card_html(
             f"<span class='tac-pitch-tag {css}'>{lbl}</span>"
             for lbl, css in pitch_tags
         )
-        pitch_html = f"<div style='margin:4px 0 2px;line-height:1.6;'>{tag_items}</div>"
+        pitch_html = f"<div style='margin:3px 0 2px;line-height:1.4;'>{tag_items}</div>"
 
     # Optimizer badge
     opt_badge = (
@@ -3108,48 +3113,48 @@ def _elite_card_html(
 
         # ── Row 2: Statcast power cluster — BRL is the hero metric here ──
         f"<div style='display:flex;gap:2px;margin-bottom:5px;'>"
-        f"<div style='flex:1;text-align:center;background:#0e0e0e;border-radius:4px;padding:3px 1px;'>"
-        f"<div style='font-size:13px;font-weight:900;color:{brl_col};line-height:1.1;'>{barrel:.1f}%</div>"
-        f"<div style='font-size:7px;color:#4a4a4a;letter-spacing:0.3px;'>BRL</div></div>"
+        f"<div style='flex:1;text-align:center;background:#0e0e0e;border-radius:4px;padding:4px 2px;'>"
+        f"<div style='font-size:13px;font-weight:900;color:{brl_col};line-height:1.15;'>{barrel:.1f}%</div>"
+        f"<div style='font-size:8px;color:#555555;letter-spacing:0.2px;font-weight:500;'>BRL</div></div>"
 
-        f"<div style='flex:1;text-align:center;background:#0e0e0e;border-radius:4px;padding:3px 1px;'>"
-        f"<div style='font-size:11px;font-weight:700;color:{hh_col};line-height:1.1;'>{hh:.0f}%</div>"
-        f"<div style='font-size:7px;color:#3a3a3a;'>HH%</div></div>"
+        f"<div style='flex:1;text-align:center;background:#0e0e0e;border-radius:4px;padding:4px 2px;'>"
+        f"<div style='font-size:11px;font-weight:700;color:{hh_col};line-height:1.15;'>{hh:.0f}%</div>"
+        f"<div style='font-size:8px;color:#464646;font-weight:500;'>HH%</div></div>"
 
-        f"<div style='flex:1;text-align:center;background:#0e0e0e;border-radius:4px;padding:3px 1px;'>"
-        f"<div style='font-size:11px;font-weight:700;color:{xslg_col};line-height:1.1;'>{xslg:.3f}</div>"
-        f"<div style='font-size:7px;color:#3a3a3a;'>{xslg_lbl}</div></div>"
+        f"<div style='flex:1;text-align:center;background:#0e0e0e;border-radius:4px;padding:4px 2px;'>"
+        f"<div style='font-size:11px;font-weight:700;color:{xslg_col};line-height:1.15;'>{xslg:.3f}</div>"
+        f"<div style='font-size:8px;color:#464646;font-weight:500;'>{xslg_lbl}</div></div>"
 
-        f"<div style='flex:1;text-align:center;background:#0e0e0e;border-radius:4px;padding:3px 1px;'>"
-        f"<div style='font-size:11px;font-weight:700;color:{pull_col};line-height:1.1;'>{pull:.0f}%</div>"
-        f"<div style='font-size:7px;color:#3a3a3a;'>PULL</div></div>"
+        f"<div style='flex:1;text-align:center;background:#0e0e0e;border-radius:4px;padding:4px 2px;'>"
+        f"<div style='font-size:11px;font-weight:700;color:{pull_col};line-height:1.15;'>{pull:.0f}%</div>"
+        f"<div style='font-size:8px;color:#464646;font-weight:500;'>PULL</div></div>"
 
-        f"<div style='flex:1;text-align:center;background:#0e0e0e;border-radius:4px;padding:3px 1px;'>"
-        f"<div style='font-size:11px;font-weight:700;color:{fb_col};line-height:1.1;'>{fb:.0f}%</div>"
-        f"<div style='font-size:7px;color:#3a3a3a;'>FB%</div></div>"
+        f"<div style='flex:1;text-align:center;background:#0e0e0e;border-radius:4px;padding:4px 2px;'>"
+        f"<div style='font-size:11px;font-weight:700;color:{fb_col};line-height:1.15;'>{fb:.0f}%</div>"
+        f"<div style='font-size:8px;color:#464646;font-weight:500;'>FB%</div></div>"
         f"</div>"
 
         # ── Row 3: Market signals — EV and EDGE are primary decision signals ──
         f"<div style='display:flex;gap:2px;margin-bottom:4px;'>"
-        f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:4px;padding:3px 1px;'>"
-        f"<div style='font-size:11px;font-weight:700;color:#a78bfa;line-height:1.1;'>{model_p:.0f}%</div>"
-        f"<div style='font-size:7px;color:#3a3a55;'>MDL</div></div>"
+        f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:4px;padding:4px 2px;'>"
+        f"<div style='font-size:11px;font-weight:700;color:#a78bfa;line-height:1.15;'>{model_p:.0f}%</div>"
+        f"<div style='font-size:8px;color:#4a4a66;font-weight:500;'>MDL</div></div>"
 
-        f"<div style='flex:1;text-align:center;background:#0c0c22;border-radius:4px;padding:3px 1px;'>"
-        f"<div style='font-size:12px;font-weight:700;color:{ev_col_};line-height:1.1;'>{ev_display}</div>"
-        f"<div style='font-size:7px;color:#4a4a70;'>EV</div></div>"
+        f"<div style='flex:1;text-align:center;background:#0c0c22;border-radius:4px;padding:4px 2px;'>"
+        f"<div style='font-size:12px;font-weight:700;color:{ev_col_};line-height:1.15;'>{ev_display}</div>"
+        f"<div style='font-size:8px;color:#5555aa;font-weight:500;'>EV</div></div>"
 
-        f"<div style='flex:1;text-align:center;background:#0c0c22;border-radius:4px;padding:3px 1px;'>"
-        f"<div style='font-size:12px;font-weight:700;color:{edge_col_};line-height:1.1;'>{edge_display}</div>"
-        f"<div style='font-size:7px;color:#4a4a70;'>EDGE</div></div>"
+        f"<div style='flex:1;text-align:center;background:#0c0c22;border-radius:4px;padding:4px 2px;'>"
+        f"<div style='font-size:12px;font-weight:700;color:{edge_col_};line-height:1.15;'>{edge_display}</div>"
+        f"<div style='font-size:8px;color:#5555aa;font-weight:500;'>EDGE</div></div>"
 
-        f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:4px;padding:3px 1px;'>"
-        f"<div style='font-size:11px;font-weight:700;color:#FF6666;line-height:1.1;'>{odds_fmt}</div>"
-        f"<div style='font-size:7px;color:#3a3a55;'>ODDS</div></div>"
+        f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:4px;padding:4px 2px;'>"
+        f"<div style='font-size:11px;font-weight:700;color:#FF6666;line-height:1.15;'>{odds_fmt}</div>"
+        f"<div style='font-size:8px;color:#4a4a66;font-weight:500;'>ODDS</div></div>"
 
-        f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:4px;padding:3px 1px;'>"
-        f"<div style='font-size:10px;font-weight:700;color:{env_col_};line-height:1.1;'>{env_lbl}</div>"
-        f"<div style='font-size:7px;color:#3a3a55;'>ENV</div></div>"
+        f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:4px;padding:4px 2px;'>"
+        f"<div style='font-size:10px;font-weight:700;color:{env_col_};line-height:1.15;'>{env_lbl}</div>"
+        f"<div style='font-size:8px;color:#4a4a66;font-weight:500;'>ENV</div></div>"
         f"</div>"
 
         # Elite convergence signal
@@ -3165,11 +3170,11 @@ def _elite_card_html(
         + pitch_html
 
         # ── HVY matchup bar + weather ──
-        + f"<div style='display:flex;align-items:center;gap:5px;margin-top:3px;'>"
-        f"<div style='font-size:8px;color:#555;letter-spacing:0.5px;white-space:nowrap;'>HVY</div>"
+        + f"<div style='display:flex;align-items:center;gap:6px;margin-top:3px;'>"
+        f"<div style='font-size:8px;color:#666;letter-spacing:0.5px;white-space:nowrap;font-weight:500;'>HVY</div>"
         f"<div style='flex:1;background:#111;border-radius:2px;height:3px;'>"
         f"<div style='background:{hvy_col};width:{hvy_bar}%;height:3px;border-radius:2px;'></div></div>"
-        f"<div style='font-size:8px;font-weight:700;color:{hvy_col};'>{hvy_lbl}</div>"
+        f"<div style='font-size:8px;font-weight:700;color:{hvy_col};letter-spacing:0.2px;'>{hvy_lbl}</div>"
         + weather_frag
         + f"</div>"
 
@@ -6680,19 +6685,28 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
             ("portfolio",       "💼", "PORTFOLIO",        "Exposure & strategy"),
         ]
 
+        # CSS-only styling for lens buttons (target by Streamlit st-key class)
         st.markdown(
-            "<style>"
-            "div[data-testid='column'] div[data-testid='stButton'] button {"
-            "  font-family:monospace !important;"
-            "  font-size:10px !important;"
-            "  letter-spacing:0.5px !important;"
-            "  padding:5px 4px !important;"
-            "  border-radius:3px !important;"
-            "  width:100% !important;"
-            "}"
-            "</style>",
+            """
+            <style>
+            [class*="st-key-fs_lens_btn_"] button {
+                white-space: nowrap !important;
+                overflow: hidden !important;
+                text-overflow: ellipsis !important;
+                min-height: 44px !important;
+                max-height: 44px !important;
+                line-height: 1.0 !important;
+            }
+            [class*="st-key-fs_lens_btn_"] button p {
+                white-space: nowrap !important;
+                overflow: hidden !important;
+                text-overflow: ellipsis !important;
+            }
+            </style>
+            """,
             unsafe_allow_html=True,
         )
+
         _lens_cols = st.columns(5, gap="small")
         for _lcol, (_lkey, _licon, _llabel, _ldesc) in zip(_lens_cols, _FS_LENS_DEFS):
             with _lcol:
@@ -9900,6 +9914,8 @@ def main():
     if _initial_route not in _route_order:
         _initial_route = "MAIN"
     st.session_state["active_route"] = _initial_route
+    st.session_state["active_workspace"] = _initial_route
+    st.session_state["active_workspace_selector"] = _initial_route
     _investigation.init_investigation_state()
     _ensure_navigation_continuity_state()
     _navstate.init_nav_state(st.session_state)
@@ -9921,14 +9937,22 @@ def main():
         """, unsafe_allow_html=True)
 
         st.markdown("#### 🧭 Active Workspace")
+        # Read the current active_route; selectbox uses independent key to avoid conflict
+        _current_route = st.session_state.get("active_route", _initial_route)
+        _selectbox_index = _route_order.index(_current_route) if _current_route in _route_order else 0
         _workspace_sel = st.selectbox(
             "Active workspace",
             options=_route_order,
-            index=_route_order.index(_initial_route),
+            index=_selectbox_index,
             format_func=lambda x: _route_labels.get(x, x),
             label_visibility="collapsed",
-            key="active_workspace",
+            key="active_workspace_selector",
         )
+        # Sync selectbox choice back to BOTH active_route and active_workspace for full consistency
+        if _workspace_sel != _current_route:
+            st.session_state["active_route"] = _workspace_sel
+            st.session_state["active_workspace"] = _workspace_sel
+            st.rerun()
         _navstate.set_active_section(st.session_state, _workspace_sel)
         _investigation.record_route_context(_workspace_sel)
         _update_runtime_route_diag()
@@ -10597,6 +10621,8 @@ The app will open full-screen like a native app.
     if _active_route not in _route_order:
         _active_route = "MAIN"
         st.session_state["active_route"] = _active_route
+        st.session_state["active_workspace"] = _active_route
+        st.session_state["active_workspace_selector"] = _active_route
     _investigation.record_route_context(_active_route)
     _update_runtime_route_diag()
     _route_data = _sidebar_route_data

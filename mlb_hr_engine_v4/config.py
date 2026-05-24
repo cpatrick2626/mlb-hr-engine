@@ -28,6 +28,7 @@ MAX_BET_PCT: float = 0.05      # Hard cap at 5% of bankroll per bet
 MIN_BET_DOLLARS: float = 5.0
 
 # ── Filter Thresholds ─────────────────────────────────────────────────────────
+MIN_QUAL_PROB: float = 0.08  # Primary HR threat floor (~2.5× league avg per-game rate); market-independent
 MIN_EV_PCT: float = 3.0    # Bread-and-butter floor; anything below is noise
 MIN_EDGE_PCT: float = 2.0  # Minimum model-vs-market edge to surface a play
 MIN_PA_THRESHOLD: float = 3.3      # Blocks 9-hole batters (3.2 PA); 3.1 was dead (never fired)
