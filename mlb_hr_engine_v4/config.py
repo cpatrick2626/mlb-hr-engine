@@ -61,24 +61,24 @@ REGRESSION_PA: int = 200            # Bayes regression towards league mean
 MIN_RECENT_PA: int = 20             # Need ≥20 recent PA to trust recent rate
 
 # League-average HR/9 for pitchers (2026 MLB May-6; qualified starters=0.957; +relievers push higher)
-LEAGUE_AVG_HR9: float = 1.05          # 2026 MLB May-6
-LEAGUE_AVG_ISO: float = 0.157         # ISO = SLG - AVG; 2026 MLB May-6 (qualified bias adj from 0.164)
-LEAGUE_HR_FB:   float = 0.097         # HR per fly ball; 2026 MLB May-6 (was 0.106)
+LEAGUE_AVG_HR9: float = 1.06  # HR per 9 IP (qualified pitchers); 2026 May-25
+LEAGUE_AVG_ISO: float = 0.148  # ISO = SLG - AVG; 2026 May-25
+LEAGUE_HR_FB: float = 0.102  # HR per fly ball; 2026 May-25
 # All Statcast leaderboard league averages live here — single source for mid-season refresh.
 # NOTE: Savant fb_rate is pure fly balls (excludes popups). FanGraphs FB% (~34%) combines fb+pu.
 # LEAGUE_AVG_FB_PCT must match Savant's definition since it's compared against the CSV fb_rate column.
-LEAGUE_AVG_BARREL_RATE: float = 0.055 # barrel per PA (brl_pa); 2026 May-6 (unchanged: 0.0552)
-LEAGUE_AVG_FB_PCT:      float = 0.264 # Savant pure fly ball rate (excludes popups); 2026 May-6
-LEAGUE_AVG_EXIT_VELO:   float = 89.1  # mph average exit velocity; 2026 May-6
-LEAGUE_AVG_HARD_HIT:    float = 0.399 # EV >95 mph rate; 2026 May-6
-LEAGUE_AVG_XSLG:        float = 0.418 # expected SLG (est_slg); 2026 May-6 (was 0.407)
-LEAGUE_AVG_SWEET_SPOT:  float = 0.334 # LA 8-32° sweet spot rate; 2026 May-6
-LEAGUE_AVG_PULL_PCT:    float = 0.392 # pull rate; 2026 May-6
-LEAGUE_AVG_GB_PCT:      float = 0.428 # ground ball rate; 2026 May-6
-LEAGUE_AVG_LD_PCT:      float = 0.235 # line drive rate; 2026 May-6
-LEAGUE_AVG_IFFB_PCT:    float = 0.073 # infield fly ball (popup) rate; 2026 May-6 (unchanged)
-LEAGUE_AVG_STR_PCT:     float = 0.368 # straightaway/center rate; 2026 May-6 (unchanged)
-LEAGUE_AVG_OPPO_PCT:    float = 0.240 # opposite field rate; 2026 May-6 (unchanged)
+LEAGUE_AVG_BARREL_RATE: float = 0.055  # barrel per PA (brl_pa); 2026 May-25
+LEAGUE_AVG_FB_PCT: float = 0.264  # Savant pure fly ball rate (excludes popups); 2026 May-25
+LEAGUE_AVG_EXIT_VELO: float = 89.1  # mph average exit velocity; 2026 May-25
+LEAGUE_AVG_HARD_HIT: float = 0.398  # EV >95 mph rate; 2026 May-25
+LEAGUE_AVG_XSLG: float = 0.400  # expected SLG (est_slg); 2026 May-25
+LEAGUE_AVG_SWEET_SPOT: float = 0.336  # LA 8-32 deg sweet spot rate; 2026 May-25
+LEAGUE_AVG_PULL_PCT: float = 0.394  # pull rate; 2026 May-25
+LEAGUE_AVG_GB_PCT: float = 0.426  # ground ball rate; 2026 May-25
+LEAGUE_AVG_LD_PCT: float = 0.236  # line drive rate; 2026 May-25
+LEAGUE_AVG_IFFB_PCT: float = 0.073  # infield fly ball (popup) rate; 2026 May-25
+LEAGUE_AVG_STR_PCT: float = 0.365  # straightaway/center rate; 2026 May-25
+LEAGUE_AVG_OPPO_PCT: float = 0.241  # opposite field rate; 2026 May-25
 
 # ── Probability model ceiling ─────────────────────────────────────────────────
 # Full-season 2025 backtest: actual HR rate in 30%+ bucket = 28.9%; ceiling aligns with observed reality.
