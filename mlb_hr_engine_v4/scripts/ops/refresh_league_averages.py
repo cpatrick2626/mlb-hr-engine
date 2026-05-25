@@ -9,10 +9,14 @@ config.py patch block. Operator reviews and applies manually unless --apply
 is passed.
 
 Endpoints (mirrors mlb_hr_engine_v4/clients/statcast.py):
-  - /leaderboard/statcast          (batter, min=50 PA)
-  - /leaderboard/batted-ball       (batter, min=50 PA)
-  - /leaderboard/expected_statistics (batter, min=50 PA)
-  - /leaderboard/statcast          (pitcher, min=30 IP)
+  - /leaderboard/statcast            (batter, min=50 PA)  → barrel, EV, HH, SS
+  - /leaderboard/batted-ball         (batter, min=50 PA)  → FB/GB/LD/IFFB/Pull/Str/Oppo
+  - /leaderboard/expected_statistics (batter, min=50 PA)  → xSLG, ISO (slg-ba)
+  - /leaderboard/statcast            (pitcher, min=30 IP) → sanity-check signal coverage
+
+The pitcher Savant statcast CSV exposes only contact-quality columns (no HR /
+IP / airOuts), so HR/9 and HR/FB are computed from MLB Stats API league
+team-pitching aggregates (the same source clients/mlb_stats.py already uses).
 
 Output sections:
   1) CURRENT vs FETCHED diff table (delta + flag if >5%)
@@ -155,7 +159,7 @@ def _weighted_mean(pairs: list[tuple[float, float]]) -> float | None:
 
 # ── Aggregation ───────────────────────────────────────────────────────────────
 def _batter_statcast() -> dict[str, float]:
-    """PA-weighted league averages from batter statcast leaderboard."""
+    """attempts-weighted league averages from batter statcast leaderboard."""
     url = (
         "https://baseballsavant.mlb.com/leaderboard/statcast"
         f"?type=batter&year={YEAR}&min={BATTER_MIN}&csv=true"
@@ -167,39 +171,30 @@ def _batter_statcast() -> dict[str, float]:
         "LEAGUE_AVG_HARD_HIT":    [],
         "LEAGUE_AVG_SWEET_SPOT":  [],
     }
-    iso_pairs: list[tuple[float, float]] = []
 
     for r in rows:
-        pa = _f(r, "pa", "attempts")
-        if not pa or pa < BATTER_MIN:
+        # Savant batter statcast leaderboard uses 'attempts' (batted-ball events) as the PA-like weight.
+        w = _f(r, "pa", "attempts")
+        if not w or w < BATTER_MIN:
             continue
 
         brl = _f(r, "brl_pa")
         if brl is not None:
-            out["LEAGUE_AVG_BARREL_RATE"].append((brl / 100.0, pa))
+            out["LEAGUE_AVG_BARREL_RATE"].append((brl / 100.0, w))
 
         ev = _f(r, "avg_hit_speed", "exit_velocity_avg")
         if ev is not None and 60.0 <= ev <= 125.0:
-            out["LEAGUE_AVG_EXIT_VELO"].append((ev, pa))
+            out["LEAGUE_AVG_EXIT_VELO"].append((ev, w))
 
         hh = _f(r, "ev95percent", "hard_hit_percent")
         if hh is not None:
-            out["LEAGUE_AVG_HARD_HIT"].append((hh / 100.0, pa))
+            out["LEAGUE_AVG_HARD_HIT"].append((hh / 100.0, w))
 
         sw = _f(r, "sweet_spot_percent", "anglesweetspotpercent", "sweet_spot_pct")
         if sw is not None:
-            out["LEAGUE_AVG_SWEET_SPOT"].append((sw / 100.0, pa))
+            out["LEAGUE_AVG_SWEET_SPOT"].append((sw / 100.0, w))
 
-        slg = _f(r, "slg_percent", "slg", "slugging")
-        avg = _f(r, "ba", "batting_avg", "avg")
-        if slg is not None and avg is not None:
-            iso = slg - avg
-            if 0.0 <= iso <= 0.6:
-                iso_pairs.append((iso, pa))
-
-    result = {k: _weighted_mean(v) for k, v in out.items()}
-    result["LEAGUE_AVG_ISO"] = _weighted_mean(iso_pairs)
-    return result
+    return {k: _weighted_mean(v) for k, v in out.items()}
 
 
 def _batter_batted_ball() -> dict[str, float]:
@@ -232,45 +227,77 @@ def _batter_batted_ball() -> dict[str, float]:
 
 
 def _batter_expected() -> dict[str, float]:
-    """PA-weighted xSLG from expected-statistics leaderboard."""
+    """PA-weighted xSLG (and ISO = slg-ba) from expected-statistics leaderboard."""
     url = (
         "https://baseballsavant.mlb.com/leaderboard/expected_statistics"
         f"?type=batter&year={YEAR}&min={BATTER_MIN}&csv=true"
     )
     rows = _fetch_csv(url)
-    pairs: list[tuple[float, float]] = []
+    xslg_pairs: list[tuple[float, float]] = []
+    iso_pairs: list[tuple[float, float]] = []
     for r in rows:
         pa = _f(r, "pa", "attempts") or 1.0
         xslg = _f(r, "xslg", "est_slg", "expected_slg")
         if xslg is not None and 0.0 <= xslg <= 1.5:
-            pairs.append((xslg, pa))
-    return {"LEAGUE_AVG_XSLG": _weighted_mean(pairs)}
+            xslg_pairs.append((xslg, pa))
+        slg = _f(r, "slg", "slg_percent")
+        ba = _f(r, "ba", "batting_avg", "avg")
+        if slg is not None and ba is not None:
+            iso = slg - ba
+            if 0.0 <= iso <= 0.6:
+                iso_pairs.append((iso, pa))
+    return {
+        "LEAGUE_AVG_XSLG": _weighted_mean(xslg_pairs),
+        "LEAGUE_AVG_ISO":  _weighted_mean(iso_pairs),
+    }
+
+
+def _ip_to_float(raw) -> float:
+    """MLB Stats API gives IP as '120.1' meaning 120 + 1/3 innings."""
+    if raw in (None, ""):
+        return 0.0
+    s = str(raw)
+    if "." in s:
+        whole, frac = s.split(".", 1)
+        return float(whole) + (float(frac) / 3.0 if frac else 0.0)
+    return float(s)
 
 
 def _pitcher_aggregates() -> dict[str, float]:
-    """Totals-based aggregates from pitcher statcast leaderboard."""
-    url = (
-        "https://baseballsavant.mlb.com/leaderboard/statcast"
-        f"?type=pitcher&year={YEAR}&min={PITCHER_MIN}&csv=true"
-    )
-    rows = _fetch_csv(url)
+    """League-wide HR/9 and HR/FB from MLB Stats API team-pitching aggregates.
 
+    The Savant pitcher statcast leaderboard returns only contact-quality
+    columns (no HR / IP / airOuts), so we use the same MLB Stats API the
+    project already relies on (clients/mlb_stats.py). We still touch the
+    Savant pitcher endpoint below as a sanity check on signal coverage.
+    """
+    # Sanity touch — ensures the Savant pitcher endpoint is reachable; result
+    # used only as a connectivity check, not for math.
+    try:
+        _fetch_csv(
+            "https://baseballsavant.mlb.com/leaderboard/statcast"
+            f"?type=pitcher&year={YEAR}&min={PITCHER_MIN}&csv=true"
+        )
+    except requests.RequestException:
+        pass
+
+    url = (
+        "https://statsapi.mlb.com/api/v1/teams/stats"
+        f"?stats=season&group=pitching&season={YEAR}&sportIds=1"
+    )
+    resp = requests.get(url, headers=HEADERS, timeout=30)
+    resp.raise_for_status()
+    data = resp.json()
+
+    splits = (data.get("stats") or [{}])[0].get("splits", [])
     total_hr = 0.0
     total_ip = 0.0
     total_air_outs = 0.0
-
-    for r in rows:
-        ip = _f(r, "ip", "innings_pitched", "p_formatted_ip")
-        if ip is None or ip < PITCHER_MIN:
-            continue
-        hr = _f(r, "hrs", "home_run", "home_runs", "hr")
-        if hr is None:
-            continue
-        ao = _f(r, "air_out", "air_outs", "airOuts", "fb", "fly_balls")
-        total_hr += hr
-        total_ip += ip
-        if ao is not None:
-            total_air_outs += ao
+    for s in splits:
+        st = s.get("stat", {}) or {}
+        total_hr += float(st.get("homeRuns") or 0)
+        total_ip += _ip_to_float(st.get("inningsPitched"))
+        total_air_outs += float(st.get("airOuts") or 0)
 
     result: dict[str, float | None] = {"LEAGUE_AVG_HR9": None, "LEAGUE_HR_FB": None}
     if total_ip > 0:
