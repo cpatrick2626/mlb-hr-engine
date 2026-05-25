@@ -54,7 +54,13 @@ def base_hr_rate(
     # REGRESSION_PA so the league-mean anchor never disappears entirely.
     # Reduced floor 0.55→0.50: lets established hitters (300+ PA) carry slightly more
     # weight on their own observed rate; addresses 10-15% bucket under-prediction.
-    effective_reg = (config.REGRESSION_PA * max(0.50, 1.0 - season_pa / 700.0)
+    # Dynamic prior: scale REGRESSION_PA down as sample builds.
+    # At 0 PA: full 200 PA prior. At 300 PA: ~100 PA prior. Floor at 80 PA
+    # so the league-mean anchor never disappears for even large samples.
+    # This lets elite hitters (high barrel%, high season HR rate) escape the
+    # league-mean anchor faster without removing the prior entirely.
+    _dynamic_reg = max(80, int(config.REGRESSION_PA * max(0.40, 1.0 - season_pa / 500.0)))
+    effective_reg = (_dynamic_reg
                      if season_pa > 0 else config.REGRESSION_PA)
     regressed_season = (
         (season_hr + effective_reg * regression_target)
@@ -520,12 +526,15 @@ def confidence_score(
     pitcher_matchup = hr9_conf + plat_conf                             # 0–20
 
     # ── 4. Market Signal (0–30) ────────────────────────────────────────────────
-    edge      = abs(model_prob - market_prob)
-    se        = math.sqrt(model_prob * (1 - model_prob) / max(season_pa, 1))
-    snr       = min(edge / (se + 0.005), 3.0) / 3.0
-    snr_conf  = snr * 21.0                                             # 0–21
+    # Edge signal: how far model diverges from market (0-21 points)
+    # Normalized: 5pp edge = full score, scales linearly below
+    edge       = abs(model_prob - market_prob)
+    edge_conf  = min(edge / 0.05, 1.0) * 21.0
+
+    # Book consensus: more books agreeing = stronger market signal (0-9 points)
     books_conf = 9.0 if n_books >= 3 else (6.0 if n_books == 2 else 4.0)
-    market_signal = snr_conf + books_conf                              # 0–30
+
+    market_signal = edge_conf + books_conf
 
     # ── 5. Penalty ─────────────────────────────────────────────────────────────
     penalty = 0.0 if lineup_confirmed else -8.0

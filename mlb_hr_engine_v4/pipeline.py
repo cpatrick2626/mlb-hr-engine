@@ -8,6 +8,7 @@ a single dict that both the CLI display and the Streamlit UI can consume.
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, timedelta, datetime, timezone
 from rapidfuzz import fuzz, process as fuzz_process
+import math
 import unicodedata
 
 import config
@@ -174,12 +175,22 @@ def _build_player_profile(
     fatigue_fac    = prob.pitcher_fatigue_factor(pitcher_days_rest)
     pit_factor     = max(0.55, min(1.60, pit_factor * fatigue_fac))
 
-    # Attenuate pitcher factor toward 1.0 — signal is directional but low-amplitude in aggregate.
-    # PITCHER_FACTOR_SCALE=0.60 compresses effective range to [0.73, 1.36].
-    # Also reduces batter×pitcher interaction proportionally (pitcher_excess computed below).
+    # Non-linear pitcher factor attenuation.
+    # Middle band [0.85, 1.15]: compress by PITCHER_FACTOR_SCALE (low signal, high noise).
+    # Tails (<0.85 or >1.15): pass through unattenuated (genuine suppressor/vulnerability signal).
+    # This preserves dangerous pitcher signal (HR/9 2.5+) while reducing noise in the middle.
     _pfs = getattr(config, "PITCHER_FACTOR_SCALE", 1.0)
     if _pfs < 1.0:
-        pit_factor = max(0.55, min(1.60, 1.0 + (pit_factor - 1.0) * _pfs))
+        deviation = pit_factor - 1.0
+        if abs(deviation) <= 0.15:
+            # Middle band: compress toward 1.0
+            pit_factor = 1.0 + deviation * _pfs
+        else:
+            # Tail: preserve direction, compress only the middle portion
+            middle = 0.15 * math.copysign(1.0, deviation)
+            tail = deviation - middle
+            pit_factor = 1.0 + middle * _pfs + tail
+        pit_factor = max(0.55, min(1.60, pit_factor))
 
     # Pitcher HR/9 for confidence threshold flag
     pit_ip = mlb_stats.parse_ip(pitcher_stats.get("inningsPitched", "0.0"))
@@ -191,9 +202,12 @@ def _build_player_profile(
     cf_bearing = park_data.get("cf_bearing", 0.0)
     game_hour  = _utc_to_local_hour(game_time_utc, park_data.get("tz_offset", -5))
     weather    = weather_client.get_game_weather(park_data["lat"], park_data["lon"], game_hour)
+    _pull_pct_raw = sc_stats.get("pull_pct")
+    _pull_pct_float = float(_pull_pct_raw) if _pull_pct_raw is not None else None
     w_factor   = max(0.80, min(1.20,
         weather_client.temp_factor(weather["temp_f"])
-        * weather_client.wind_factor(weather["wind_mph"], weather["wind_deg"], is_dome, cf_bearing)
+        * weather_client.wind_factor(weather["wind_mph"], weather["wind_deg"], is_dome, cf_bearing,
+                                     batter_side=batter_side, pull_pct=_pull_pct_float)
         * weather_client.humidity_factor(weather["humidity_pct"])
     ))
 

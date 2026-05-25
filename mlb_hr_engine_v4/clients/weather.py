@@ -104,17 +104,39 @@ def get_game_weather(lat: float, lon: float, game_hour_local: int = 19) -> dict:
         return result
 
 
-def wind_factor(wind_mph: float, wind_deg: float, is_dome: bool = False, cf_bearing: float = 0.0) -> float:
+def wind_factor(
+    wind_mph: float,
+    wind_deg: float,
+    is_dome: bool = False,
+    cf_bearing: float = 0.0,
+    batter_side: str = "",
+    pull_pct: float | None = None,
+) -> float:
     """
     Stage 5 (expert pipeline): continuous wind adjustment (~3% per mph blowing out to CF).
     wind_deg: meteorological convention - direction wind is BLOWING FROM (0=N, 90=E, ...).
     cf_bearing: compass direction FROM home plate TO center field (park-specific).
-    Tailwind (boost) when wind blows FROM the opposite of cf_bearing;
-    headwind (suppress) when wind blows FROM cf_bearing direction.
+    Tailwind (boost) when wind blows FROM the opposite of the effective bearing;
+    headwind (suppress) when wind blows FROM the effective bearing direction.
+
+    Batter-handedness pull shift: pull hitters drive the ball away from straight CF.
+    When pull_pct is above league average (config.LEAGUE_AVG_PULL_PCT), the effective
+    bearing rotates 25° toward the batter's pull field:
+      - R (RHB): pulls to LF  → shift -25° from cf_bearing
+      - L (LHB): pulls to RF  → shift +25° from cf_bearing
+      - S / unknown / low pull rate: no shift
     """
     if is_dome or wind_mph < 2:
         return 1.0
-    opposing = (cf_bearing + 180) % 360
+
+    effective_bearing = cf_bearing
+    if pull_pct is not None and pull_pct > config.LEAGUE_AVG_PULL_PCT:
+        if batter_side == "R":
+            effective_bearing = (cf_bearing - 25) % 360
+        elif batter_side == "L":
+            effective_bearing = (cf_bearing + 25) % 360
+
+    opposing = (effective_bearing + 180) % 360
     angle_diff = abs(((wind_deg - opposing) + 180) % 360 - 180)
     wind_to_cf = wind_mph * math.cos(math.radians(angle_diff))
     adj = wind_to_cf * 0.003
