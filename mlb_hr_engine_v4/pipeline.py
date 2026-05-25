@@ -11,6 +11,12 @@ from rapidfuzz import fuzz, process as fuzz_process
 import unicodedata
 
 import config
+from config import (
+    MATCHUP_QUALITY_ELITE_THRESHOLD,
+    MATCHUP_QUALITY_STRONG_THRESHOLD,
+    MATCHUP_QUALITY_AVG_THRESHOLD,
+    PITCHER_VULNERABILITY_HR9_THRESHOLD,
+)
 from clients import mlb_stats, odds_api
 from clients import weather as weather_client
 from clients import statcast as statcast_client
@@ -23,6 +29,60 @@ from tracking import adaptive_weights as _aw
 
 
 # ── Core helpers (same logic as v3 main.py, extracted here) ──────────────────
+
+def _matchup_quality_tier(
+    model_prob: float,
+    barrel_pct: float,
+    exit_velo: float | None,
+    pitcher_hr9: float,
+    park_factor: float,
+) -> str:
+    """
+    Deterministic matchup quality tier for Full Slate display.
+    Uses MAIN factors only: batter power + HR probability + pitcher exposure + park.
+    No JIG/HVY logic.
+
+    Inputs:
+    - model_prob: calibrated game HR probability (0.0-1.0)
+    - barrel_pct: Statcast barrel rate (0.0-1.0)
+    - exit_velo: exit velocity (float, mph) or None
+    - pitcher_hr9: pitcher HR/9 ratio
+    - park_factor: park HR factor (0.7-1.3 typical)
+
+    Returns: one of {ELITE, STRONG, AVG, WEAK, DANGER}
+
+    Logic:
+    - ELITE: model_prob >= 0.15 (top-tier threat)
+    - STRONG: model_prob >= 0.10 (solid threat)
+    - WEAK: model_prob < 0.05 OR barrel_pct < 0.04 (low power/low threat)
+    - DANGER: pitcher_hr9 >= 2.2 (extreme pitcher vulnerability, high env risk)
+    - AVG: everything else (playable/neutral)
+    """
+    model_prob = float(model_prob or 0.0)
+    barrel_pct = float(barrel_pct or 0.0)
+    exit_velo = float(exit_velo or 0.0)
+    pitcher_hr9 = float(pitcher_hr9 or 0.0)
+    park_factor = float(park_factor or 1.0)
+
+    # DANGER: extreme pitcher vulnerability (gives up 2.2+ HR/9 = top 5% vulnerable)
+    if pitcher_hr9 >= PITCHER_VULNERABILITY_HR9_THRESHOLD:
+        return "DANGER"
+
+    # ELITE: top batter threat (15%+ HR probability from model)
+    if model_prob >= MATCHUP_QUALITY_ELITE_THRESHOLD:
+        return "ELITE"
+
+    # STRONG: solid threat (10-15% HR probability)
+    if model_prob >= MATCHUP_QUALITY_STRONG_THRESHOLD:
+        return "STRONG"
+
+    # WEAK: low power or very low HR probability
+    if model_prob < MATCHUP_QUALITY_AVG_THRESHOLD or barrel_pct < 0.04:
+        return "WEAK"
+
+    # AVG: everything else
+    return "AVG"
+
 
 def _utc_to_local_hour(game_time_utc: str, tz_offset: int) -> int:
     """Parse game_time_utc ('2026-04-26T22:05:00Z') and return local game hour (0-23)."""
@@ -167,6 +227,36 @@ def _build_player_profile(
     # barrel_rate passed for elite tier Platt (ELITE_PLATT_ENABLED in config.py)
     model_prob = round(_cal.apply_calibration(model_prob, barrel_rate=sc_barrel), 4)
 
+    # Additional fields for Full Slate table display
+    season_hits = int(season_stats.get("hits", 0))
+    season_ab = int(season_stats.get("atBats", 0))
+    season_avg = round(season_hits / season_ab, 3) if season_ab > 0 else 0.0
+
+    xwoba_raw = _safe_float(sc_stats.get("xwoba"))
+
+    season_k = int(season_stats.get("strikeOuts", 0))
+    season_sf = int(season_stats.get("sacFlies", 0))
+    season_hr = int(season_stats.get("homeRuns", 0))
+    season_babip = round(
+        (season_hits - season_hr) / (season_ab - season_k - season_hr + season_sf), 3
+    ) if (season_ab - season_k - season_hr + season_sf) > 0 else None
+
+    pull_pct_val = _safe_float(sc_stats.get("pull_pct"))
+    oppo_pct_val = _safe_float(sc_stats.get("oppo_pct"))
+    if pull_pct_val is not None and oppo_pct_val is not None:
+        center_pct_raw = 1.0 - pull_pct_val - oppo_pct_val
+        center_pct = round(max(0.0, center_pct_raw) * 100, 1)
+    else:
+        center_pct = None
+
+    matchup_quality = _matchup_quality_tier(
+        model_prob=model_prob,
+        barrel_pct=sc_barrel,
+        exit_velo=_safe_float(sc_stats.get("exit_velocity_avg")),
+        pitcher_hr9=pitcher_hr9,
+        park_factor=pk_factor,
+    )
+
     return {
         "player_id": player_id, "player_name": player_name,
         "team": team, "opponent": opponent, "home_team": home_team,
@@ -203,6 +293,11 @@ def _build_player_profile(
         "xiso": xiso,
         "xslg_diff": xslg_diff,
         "actual_slg": round(actual_slg, 3),
+        "batting_avg": season_avg,
+        "babip": season_babip,
+        "xwoba": xwoba_raw,
+        "center_pct": center_pct,
+        "matchup_quality": matchup_quality,
     }
 
 

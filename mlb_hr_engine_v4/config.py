@@ -239,3 +239,12 @@ PORTFOLIO_MIN_BARREL_PCT:       float = 0.0     # 0 = no barrel floor; set 6.0+ 
 PORTFOLIO_MIN_EV_PCT:           float = 3.0     # mirrors existing MIN_EV_PCT (no change by default)
 PORTFOLIO_CORRELATION_LINEUP:   float = 0.40    # estimated same-lineup pairwise ρ (factor model)
 PORTFOLIO_CORRELATION_CROSSGAME:float = 0.04    # estimated cross-game same-day pairwise ρ
+
+# ── Matchup Quality Tier Thresholds ──────────────────────────────────────────
+# Used by pipeline._matchup_quality_tier to classify Full Slate display tiers
+# (ELITE / STRONG / AVG / WEAK / DANGER). MAIN-only signal; no JIG/HVY logic.
+# Migrated from pipeline.py per AUDIT-001 — config.py is single source of truth.
+MATCHUP_QUALITY_ELITE_THRESHOLD:    float = 0.15  # model_prob ≥ this → ELITE
+MATCHUP_QUALITY_STRONG_THRESHOLD:   float = 0.10  # model_prob ≥ this → STRONG
+MATCHUP_QUALITY_AVG_THRESHOLD:      float = 0.05  # model_prob < this (or low barrel) → WEAK
+PITCHER_VULNERABILITY_HR9_THRESHOLD: float = 2.2  # pitcher_hr9 ≥ this → DANGER (top 5% vulnerable)
