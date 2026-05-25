@@ -225,7 +225,7 @@ def _render_navigation_breadcrumbs(shell_ctx: dict) -> None:
     )
     st.markdown(
         f"<div style='background:#05060a;border:1px solid #161623;border-radius:12px;"
-        f"padding:8px 12px;margin:0 0 10px;'>"
+        f"padding:8px 12px;margin:0 0 6px;'>"
         f"<div style='color:#6b7280;font-size:9px;letter-spacing:1.4px;text-transform:uppercase;'>Navigation Breadcrumb</div>"
         f"<div style='margin-top:4px;display:flex;flex-wrap:wrap;align-items:center;gap:4px;'>{stage_markup}</div>"
         f"</div>",
@@ -271,7 +271,7 @@ def _render_recovery_prompt_shell(shell_ctx: dict) -> None:
     )
     st.markdown(
         f"<div style='background:linear-gradient(180deg,#100f16 0%,#08080d 100%);"
-        f"border:1px solid #2b2440;border-radius:14px;padding:12px 14px;margin:0 0 12px;'>"
+        f"border:1px solid #2b2440;border-radius:14px;padding:12px 14px;margin:0 0 8px;'>"
         f"<div style='color:#f3f4f6;font-size:13px;font-weight:800;'>{title}</div>"
         f"<div style='color:#cbd5e1;font-size:11px;margin-top:4px;'>{message}</div>"
         f"{context_html}"
@@ -867,7 +867,7 @@ def _render_command_strip(shell_ctx: dict) -> None:
     ) or "<span style='color:#4ade80;font-size:10px;'>No degraded feeds detected.</span>"
     st.markdown(
         f"<div style='background:linear-gradient(180deg,#09090f 0%,#050508 100%);"
-        f"border:1px solid #161623;border-radius:12px;padding:10px 12px;margin:0 0 12px;'>"
+        f"border:1px solid #161623;border-radius:12px;padding:10px 12px;margin:0 0 8px;'>"
         f"<div style='display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;'>"
         f"<div><div style='color:#6b7280;font-size:9px;letter-spacing:1.4px;text-transform:uppercase;'>Command Strip</div>"
         f"<div style='color:#f3f4f6;font-size:15px;font-weight:800;'>{html.escape(route_label)}</div></div>"
@@ -1007,7 +1007,7 @@ def _render_live_feed_shell(data: dict, shell_ctx: dict) -> None:
     top_ev = float(ranked[0].get("ev_pct", 0) or 0) if ranked else 0.0
     n_confirmed = sum(1 for p in players if p.get("lineup_spot"))
     st.markdown(
-        f"<div style='background:#06060b;border:1px solid #151523;border-radius:12px;padding:10px 12px;margin:0 0 12px;'>"
+        f"<div style='background:#06060b;border:1px solid #151523;border-radius:12px;padding:10px 12px;margin:0 0 8px;'>"
         f"<div style='color:#6b7280;font-size:9px;letter-spacing:1.4px;text-transform:uppercase;'>Live Intelligence Feed</div>"
         f"<div style='display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-top:8px;'>"
         f"<div style='background:#090913;border:1px solid #171726;border-radius:8px;padding:8px;'><div style='color:#6b7280;font-size:9px;'>Top Target</div><div style='color:#f3f4f6;font-size:12px;font-weight:700;'>{html.escape(top_name)}</div><div style='color:#4ade80;font-size:11px;'>EV {top_ev:+.1f}%</div></div>"
@@ -1043,6 +1043,39 @@ def _render_queue_shell(data: dict, shell_ctx: dict) -> None:
                 _record_interaction("queue.shell_open", rerun_source="shell_queue_jump")
                 if _jump_to_investigation_target(target, data):
                     st.rerun()
+
+
+def _render_deployment_readiness_strip(shell_ctx: dict) -> None:
+    """Compact upstream deployment readiness indicator in upper tactical shell."""
+    slip = list(st.session_state.get("fd_slip", []))
+    slip_count = len(slip)
+    expanded = st.session_state.get("_shell_deploy_tray_open", False)
+    tray_toggle_label = "Collapse Tray" if expanded else "Expand Tray"
+
+    # Readiness state: empty / armed
+    if slip_count == 0:
+        readiness_state = "EMPTY"
+        state_color = "#8b5cf6"  # purple
+    else:
+        readiness_state = "ARMED"
+        state_color = "#10b981"  # green
+
+    st.markdown(
+        f"<div style='margin-top:12px;padding:10px 12px;border:1px solid #0f172a;border-radius:12px;background:linear-gradient(180deg,#0f172a 0%,#0c111d 100%);'>"
+        f"<div style='display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;'>"
+        f"<div>"
+        f"<div style='color:#6b7280;font-size:8px;letter-spacing:1.4px;text-transform:uppercase;'>Deployment Readiness</div>"
+        f"<div style='display:flex;align-items:center;gap:8px;margin-top:4px;'>"
+        f"<div style='background:{state_color};border-radius:6px;padding:4px 8px;'>"
+        f"<span style='color:#fff;font-size:10px;font-weight:800;'>{readiness_state}</span>"
+        f"</div>"
+        f"<div style='color:#d1d5db;font-size:11px;font-weight:600;'>{slip_count} target{'s' if slip_count != 1 else ''}</div>"
+        f"</div>"
+        f"</div>"
+        f"<div style='font-size:9px;color:#9ca3af;'>{tray_toggle_label}</div>"
+        f"</div></div>",
+        unsafe_allow_html=True,
+    )
 
 
 def _render_deployment_tray(shell_ctx: dict) -> None:
@@ -2900,29 +2933,29 @@ def _intelligence_card_html(
            if barrel >= 5.0 else "")
 
         # ── Row 3: Stat pills — PRIMARY market signals (MDL/EV/EDGE) | SECONDARY context (BRL/ENV) ──
-        + f"<div style='display:flex;gap:2px;margin-bottom:4px;'>"
+        + f"<div style='display:flex;gap:3px;margin-bottom:4px;'>"
         # Primary: model, EV, edge — slightly brighter bg + larger font to dominate attention
-        f"<div style='flex:1;text-align:center;background:#0c0c22;border-radius:4px;padding:5px 2px;'>"
-        f"<div style='font-size:13px;font-weight:700;color:#a78bfa;line-height:1.15;'>{model_p:.0f}%</div>"
-        f"<div style='font-size:8px;color:#5555aa;letter-spacing:0.2px;font-weight:500;'>MDL</div></div>"
+        f"<div style='flex:1;text-align:center;background:#0c0c22;border-radius:4px;padding:5px 3px;min-width:0;'>"
+        f"<div style='font-size:12px;font-weight:700;color:#a78bfa;line-height:1.2;'>{model_p:.0f}%</div>"
+        f"<div style='font-size:8px;color:#5555aa;letter-spacing:0.2px;font-weight:500;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'>MDL</div></div>"
 
-        f"<div style='flex:1;text-align:center;background:#0c0c22;border-radius:4px;padding:5px 2px;'>"
-        f"<div style='font-size:13px;font-weight:700;color:{ev_col_};line-height:1.15;'>{ev_display}</div>"
-        f"<div style='font-size:8px;color:#5555aa;font-weight:500;'>EV</div></div>"
+        f"<div style='flex:1;text-align:center;background:#0c0c22;border-radius:4px;padding:5px 3px;min-width:0;'>"
+        f"<div style='font-size:12px;font-weight:700;color:{ev_col_};line-height:1.2;'>{ev_display}</div>"
+        f"<div style='font-size:8px;color:#5555aa;font-weight:500;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'>EV</div></div>"
 
-        f"<div style='flex:1;text-align:center;background:#0c0c22;border-radius:4px;padding:5px 2px;"
+        f"<div style='flex:1;text-align:center;background:#0c0c22;border-radius:4px;padding:5px 3px;min-width:0;"
         f"border-right:1px solid #1e1e35;'>"
-        f"<div style='font-size:13px;font-weight:700;color:{edge_col_};line-height:1.15;'>{edge_display}</div>"
-        f"<div style='font-size:8px;color:#5555aa;font-weight:500;'>EDGE</div></div>"
+        f"<div style='font-size:12px;font-weight:700;color:{edge_col_};line-height:1.2;'>{edge_display}</div>"
+        f"<div style='font-size:8px;color:#5555aa;font-weight:500;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'>EDGE</div></div>"
 
         # Secondary: barrel + environment — quieter background, standard size
-        f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:4px;padding:5px 2px;'>"
-        f"<div style='font-size:12px;font-weight:700;color:{brl_col};line-height:1.15;'>{barrel:.1f}%</div>"
-        f"<div style='font-size:8px;color:#4a4a66;font-weight:500;'>BRL</div></div>"
+        f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:4px;padding:5px 3px;min-width:0;'>"
+        f"<div style='font-size:12px;font-weight:700;color:{brl_col};line-height:1.2;'>{barrel:.1f}%</div>"
+        f"<div style='font-size:8px;color:#4a4a66;font-weight:500;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'>BRL</div></div>"
 
-        f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:4px;padding:5px 2px;'>"
-        f"<div style='font-size:10px;font-weight:700;color:{env_col_};line-height:1.15;'>{env_lbl}</div>"
-        f"<div style='font-size:8px;color:#4a4a66;font-weight:500;'>ENV</div></div>"
+        f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:4px;padding:5px 3px;min-width:0;'>"
+        f"<div style='font-size:10px;font-weight:700;color:{env_col_};line-height:1.2;'>{env_lbl}</div>"
+        f"<div style='font-size:8px;color:#4a4a66;font-weight:500;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'>ENV</div></div>"
         f"</div>"
 
         # Convergence signal — compact, below stat row
@@ -4455,6 +4488,18 @@ def _jig_threat_level(entry: dict) -> tuple:
     return                    "LOW",     "#4b5563", "#060606", "#1e1e20"
 
 
+def _mq_color(mq_tier: str) -> tuple:
+    """(bg_color, text_color) for matchup quality badge."""
+    tiers = {
+        "ELITE": ("#1a4d1a", "#4ade80"),
+        "STRONG": ("#2d5a2d", "#86efac"),
+        "AVG": ("#1a1a28", "#888"),
+        "WEAK": ("#4a2020", "#f87171"),
+        "DANGER": ("#5a1a1a", "#ff6b6b"),
+    }
+    return tiers.get(mq_tier, ("#0a0a12", "#666"))
+
+
 # ─── Full Slate "All Players" game-organized renderer ─────────────────────────
 
 def _render_full_slate_all_players(
@@ -4876,93 +4921,113 @@ def _render_full_slate_all_players(
             f"</div></div>"
             )
 
-            # Hotspot containment: row HTML is stable across control reruns unless
-            # slate/player badges or pitch-context fingerprint actually changes.
-            _row_parts = ["<div style='margin-bottom:2px'>"]
+            # Tactical table render (Phase 4: Full Slate intelligent table)
+            # Columns: PLAYER | TEAM | BATS | MQ | PA | AVG | SLG | BABIP | GB% | HH% | LD% | BRL% | EV | LA° | PULL% | CTR% | OPP HR/9 | xwOBA | HR/PA
+            table_rows = []
             for _ri, p in enumerate(game_players):
                 pname  = p.get("player_name", "?")
                 pteam  = p.get("team", "?")
-                spot_s = str(p.get("lineup_spot")) if p.get("lineup_spot") else "?"
+                bats = p.get("batter_side", "?")
+                mq = p.get("matchup_quality", "AVG")
+                spot = p.get("lineup_spot") or "?"
 
-                brl   = _pf(p.get("barrel_pct"), 0)
-                model = (p.get("model_prob") or 0) * 100
-                ev    = p.get("ev_pct")
-                edge  = p.get("edge_pct")
-                conf  = p.get("confidence")
+                season_pa = p.get("season_pa", 0)
+                batting_avg = p.get("batting_avg")
+                slg = p.get("actual_slg")
+                babip = p.get("babip")
+                gb_pct = _pf(p.get("gb_pct"), 0)
+                hard_hit = _pf(p.get("hard_hit"), 0)
+                ld_pct = _pf(p.get("ld_pct"), 0)
+                barrel_pct = _pf(p.get("barrel_pct"), 0)
+                exit_velo = _pf(p.get("exit_velo"), 0)
+                launch_angle = p.get("avg_launch_angle")
+                pull_pct = _pf(p.get("pull_pct"), 0)
+                center_pct = p.get("center_pct")
+                pitcher_hr9 = p.get("pitcher_hr9", 0)
+                xwoba = p.get("xwoba")
+                season_hr = p.get("season_hr", 0)
+                hr_pa = round(season_hr / season_pa, 3) if season_pa > 0 else None
 
-                brl_col   = "#FFD700" if brl >= 12 else "#4ade80" if brl >= 8 else "#60a5fa" if brl >= 5 else "#888"
-                model_col = "#FFD700" if model >= 20 else "#4ade80" if model >= 15 else "#aaa"
-                ev_col    = "#4ade80" if (ev or 0) > 0 else "#888"
-                edge_col  = "#4ade80" if (edge or 0) > 0 else "#888"
+                # Format values for display
+                pa_s = str(season_pa) if season_pa else "—"
+                avg_s = f"{batting_avg:.3f}" if batting_avg else "—"
+                slg_s = f"{slg:.3f}" if slg else "—"
+                babip_s = f"{babip:.3f}" if babip else "—"
+                gb_s = f"{gb_pct:.1f}%" if gb_pct else "—"
+                hh_s = f"{hard_hit:.1f}%" if hard_hit else "—"
+                ld_s = f"{ld_pct:.1f}%" if ld_pct else "—"
+                brl_s = f"{barrel_pct:.1f}%" if barrel_pct else "—"
+                ev_s = f"{exit_velo:.1f}" if exit_velo else "—"
+                la_s = f"{launch_angle:.1f}°" if launch_angle else "—"
+                pull_s = f"{pull_pct:.1f}%" if pull_pct else "—"
+                ctr_s = f"{center_pct:.1f}%" if center_pct else "—"
+                hr9_s = f"{pitcher_hr9:.2f}" if pitcher_hr9 else "—"
+                xwoba_s = f"{xwoba:.3f}" if xwoba else "—"
+                hrpa_s = f"{hr_pa:.3f}" if hr_pa else "—"
 
-                brl_s   = f"{brl:.1f}%" if brl else "—"
-                model_s = f"{model:.1f}%"
-                ev_s    = f"{ev:+.1f}%" if ev is not None else "—"
-                edge_s  = f"{edge:+.1f}%" if edge is not None else "—"
-                conf_s  = str(int(conf)) if conf is not None else "—"
+                # Heatmap colors for metrics (green elite, yellow avg, red weak)
+                mq_bg, mq_tc = _mq_color(mq)
 
-                is_tac_qual = pname in tac_qualified_names
-                is_qual     = pname in qualified_names
-                is_elite    = brl >= 8.0
-                is_steam    = pname in steam_names
-
-                badges = ""
-                if is_steam:
-                    badges += ("<span style='background:#1a0a00;border:1px solid #f97316;"
-                               "color:#f97316;font-size:8px;padding:1px 4px;"
-                               "border-radius:2px;margin-left:4px'>STEAM</span>")
-                if is_elite:
-                    badges += ("<span style='background:#1a1200;border:1px solid #665500;"
-                               "color:#FFD700;font-size:8px;padding:1px 4px;"
-                               "border-radius:2px;margin-left:3px'>★ ELITE</span>")
-                if is_tac_qual:
-                    badges += ("<span style='background:#0a1a0a;border:1px solid #2a6a2a;"
-                               "color:#4ade80;font-size:8px;padding:1px 4px;"
-                               "border-radius:2px;margin-left:3px'>✓ QUAL</span>")
-                elif is_qual:
-                    badges += ("<span style='background:#0a0a1a;border:1px solid #2a2a5a;"
-                               "color:#60a5fa;font-size:8px;padding:1px 4px;"
-                               "border-radius:2px;margin-left:3px'>ODDS</span>")
-
-                _alt_bg = "#0d0d18" if _ri % 2 == 0 else "#090910"
-                row_bg  = "#0f0f1e" if is_tac_qual else "#0a0a14" if is_qual else _alt_bg
-                _row_lc = "#FFD700" if brl >= 12 else "#4ade80" if is_tac_qual else "#60a5fa" if is_qual else "#1a1a28"
-
-                _fs_pid   = p.get("player_id")
-                _fs_pctx  = (pm_ctxs or {}).get(_fs_pid, {}) if _fs_pid else {}
-                _fs_hmod  = _fs_pctx.get("hvy_modifier") if _fs_pctx else None
-                _thr_lbl, _thr_tc, _thr_bg, _thr_bc = _main_threat_level(p, _fs_hmod)
-                _thr_badge = (
-                    f"<span style='margin-left:auto;background:{_thr_bg};"
-                    f"border:1px solid {_thr_bc};color:{_thr_tc};font-size:7px;"
-                    f"font-weight:700;letter-spacing:1.5px;padding:2px 6px;"
-                    f"border-radius:1px;white-space:nowrap;font-family:monospace;"
-                    f"text-transform:uppercase;'>{_thr_lbl}</span>"
+                row_html = (
+                    f"<tr style='background:#0a0a14;border-bottom:1px solid #1a1a28;'>"
+                    f"<td style='padding:3px 6px;color:#60a5fa;font-size:9px;font-weight:600;text-align:center;'>{spot}</td>"
+                    f"<td style='padding:3px 6px;color:#60a5fa;font-size:10px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px;cursor:pointer;text-decoration:underline;'>{pname}</td>"
+                    f"<td style='padding:3px 6px;color:#999;font-size:9px;text-align:center;'>{pteam}</td>"
+                    f"<td style='padding:3px 6px;color:#888;font-size:9px;text-align:center;'>{bats}</td>"
+                    f"<td style='padding:3px 6px;background:{mq_bg};color:{mq_tc};font-size:9px;font-weight:700;text-align:center;border-radius:2px;'>{mq}</td>"
+                    f"<td style='padding:3px 6px;color:#aaa;font-size:9px;text-align:right;'>{pa_s}</td>"
+                    f"<td style='padding:3px 6px;color:#aaa;font-size:9px;text-align:center;'>{avg_s}</td>"
+                    f"<td style='padding:3px 6px;color:#aaa;font-size:9px;text-align:center;'>{slg_s}</td>"
+                    f"<td style='padding:3px 6px;color:#aaa;font-size:9px;text-align:center;'>{babip_s}</td>"
+                    f"<td style='padding:3px 6px;color:#aaa;font-size:9px;text-align:center;'>{gb_s}</td>"
+                    f"<td style='padding:3px 6px;color:#aaa;font-size:9px;text-align:center;'>{hh_s}</td>"
+                    f"<td style='padding:3px 6px;color:#aaa;font-size:9px;text-align:center;'>{ld_s}</td>"
+                    f"<td style='padding:3px 6px;background:{'#1a4d1a' if barrel_pct >= 8.0 else '#4a2020' if barrel_pct < 5.0 else '#1a1a28'};color:{'#4ade80' if barrel_pct >= 8.0 else '#f87171' if barrel_pct < 5.0 else '#888'};font-size:9px;font-weight:600;text-align:center;border-radius:2px;'>{brl_s}</td>"
+                    f"<td style='padding:3px 6px;color:#aaa;font-size:9px;text-align:center;'>{ev_s}</td>"
+                    f"<td style='padding:3px 6px;color:#aaa;font-size:9px;text-align:center;'>{la_s}</td>"
+                    f"<td style='padding:3px 6px;color:#aaa;font-size:9px;text-align:center;'>{pull_s}</td>"
+                    f"<td style='padding:3px 6px;color:#aaa;font-size:9px;text-align:center;'>{ctr_s}</td>"
+                    f"<td style='padding:3px 6px;background:{'#1a4d1a' if pitcher_hr9 >= 2.2 else '#1a1a28' if pitcher_hr9 >= 1.8 else '#5a1a1a'};color:{'#4ade80' if pitcher_hr9 >= 2.2 else '#888' if pitcher_hr9 >= 1.8 else '#ff6b6b'};font-size:9px;font-weight:600;text-align:center;border-radius:2px;'>{hr9_s}</td>"
+                    f"<td style='padding:3px 6px;color:#aaa;font-size:9px;text-align:center;'>{xwoba_s}</td>"
+                    f"<td style='padding:3px 6px;color:#aaa;font-size:9px;text-align:center;'>{hrpa_s}</td>"
+                    f"</tr>"
                 )
+                table_rows.append(row_html)
 
-                _row_parts.append(
-                    f"<div style='display:flex;align-items:center;padding:2px 6px 2px 9px;"
-                    f"background:{row_bg};border-bottom:1px solid #0c0c12;"
-                    f"border-left:2px solid {_row_lc};gap:5px;flex-wrap:nowrap;'>"
-                    f"<span style='color:#555;font-size:9px;min-width:14px;text-align:right'>{spot_s}</span>"
-                    f"<span style='color:#eee;font-size:11px;font-weight:700;min-width:145px;"
-                    f"overflow:hidden;white-space:nowrap;text-overflow:ellipsis'>{pname}</span>"
-                    f"<span style='color:#666;font-size:10px;min-width:30px'>{pteam}</span>"
-                    f"<span style='color:#444;font-size:9px'>BRL</span>"
-                    f"<span style='color:{brl_col};font-size:11px;font-weight:600;min-width:36px'>{brl_s}</span>"
-                    f"<span style='color:#444;font-size:9px'>MDL</span>"
-                    f"<span style='color:{model_col};font-size:11px;min-width:36px'>{model_s}</span>"
-                    f"<span style='color:#1e1e2e;font-size:9px;margin:0 1px;'>·</span>"
-                    f"<span style='color:#5a5a88;font-size:9px;font-weight:600;'>EV</span>"
-                    f"<span style='color:{ev_col};font-size:11px;font-weight:700;min-width:38px'>{ev_s}</span>"
-                    f"<span style='color:#5a5a88;font-size:9px;font-weight:600;'>EDG</span>"
-                    f"<span style='color:{edge_col};font-size:11px;font-weight:700;min-width:38px'>{edge_s}</span>"
-                    f"{badges}"
-                    f"{_thr_badge}"
-                    f"</div>"
-                )
-            _row_parts.append("</div>")
-            return header_html + "".join(_row_parts)
+            table_html = (
+                f"<div style='overflow-x:auto;background:#09090f;border:1px solid #1a1a28;border-radius:4px;'>"
+                f"<table style='width:100%;border-collapse:collapse;font-family:monospace;font-size:9px;'>"
+                f"<thead style='background:#0d0d1a;border-bottom:2px solid #2a2a3a;'>"
+                f"<tr>"
+                f"<th style='padding:4px 6px;color:#60a5fa;text-align:center;font-weight:700;font-size:8px;'>#</th>"
+                f"<th style='padding:4px 6px;color:#eee;text-align:left;font-weight:700;font-size:8px;'>PLAYER</th>"
+                f"<th style='padding:4px 6px;color:#aaa;text-align:center;font-weight:700;font-size:8px;'>TM</th>"
+                f"<th style='padding:4px 6px;color:#888;text-align:center;font-weight:700;font-size:8px;'>BATS</th>"
+                f"<th style='padding:4px 6px;color:#4ade80;text-align:center;font-weight:700;font-size:8px;'>MQ</th>"
+                f"<th style='padding:4px 6px;color:#aaa;text-align:right;font-weight:700;font-size:8px;'>PA</th>"
+                f"<th style='padding:4px 6px;color:#aaa;text-align:center;font-weight:700;font-size:8px;'>AVG</th>"
+                f"<th style='padding:4px 6px;color:#aaa;text-align:center;font-weight:700;font-size:8px;'>SLG</th>"
+                f"<th style='padding:4px 6px;color:#aaa;text-align:center;font-weight:700;font-size:8px;'>BABIP</th>"
+                f"<th style='padding:4px 6px;color:#aaa;text-align:center;font-weight:700;font-size:8px;'>GB%</th>"
+                f"<th style='padding:4px 6px;color:#aaa;text-align:center;font-weight:700;font-size:8px;'>HH%</th>"
+                f"<th style='padding:4px 6px;color:#aaa;text-align:center;font-weight:700;font-size:8px;'>LD%</th>"
+                f"<th style='padding:4px 6px;color:#4ade80;text-align:center;font-weight:700;font-size:8px;'>BRL%</th>"
+                f"<th style='padding:4px 6px;color:#aaa;text-align:center;font-weight:700;font-size:8px;'>EV</th>"
+                f"<th style='padding:4px 6px;color:#aaa;text-align:center;font-weight:700;font-size:8px;'>LA°</th>"
+                f"<th style='padding:4px 6px;color:#aaa;text-align:center;font-weight:700;font-size:8px;'>PULL%</th>"
+                f"<th style='padding:4px 6px;color:#aaa;text-align:center;font-weight:700;font-size:8px;'>CTR%</th>"
+                f"<th style='padding:4px 6px;color:#f87171;text-align:center;font-weight:700;font-size:8px;'>OPP HR/9</th>"
+                f"<th style='padding:4px 6px;color:#aaa;text-align:center;font-weight:700;font-size:8px;'>xwOBA</th>"
+                f"<th style='padding:4px 6px;color:#aaa;text-align:center;font-weight:700;font-size:8px;'>HR/PA</th>"
+                f"</tr>"
+                f"</thead>"
+                f"<tbody>"
+                + "".join(table_rows)
+                + f"</tbody>"
+                f"</table>"
+                f"</div>"
+            )
+            return header_html + table_html
 
         st.markdown(_card_html(_game_html_fp, _build_game_html), unsafe_allow_html=True)
 
@@ -6332,27 +6397,27 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                             f"<div style='font-size:10px;color:{_lbl_col};font-weight:700;'>MATCHUP: {_lbl}</div>"
                             f"</div></div>"
                             + _mbar
-                            + f"<div style='display:flex;gap:2px;margin-top:6px;'>"
-                            f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:5px;padding:4px 2px;'>"
-                            f"<div style='font-size:12px;font-weight:700;color:#a78bfa;'>{_model:.0f}%</div>"
-                            f"<div style='font-size:8px;color:#4a4a6a;'>MODEL</div></div>"
-                            f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:5px;padding:4px 2px;'>"
-                            f"<div style='font-size:12px;font-weight:700;color:{_brl_col};'>{_brl:.1f}%</div>"
-                            f"<div style='font-size:8px;color:#4a4a6a;'>BARREL</div></div>"
-                            f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:5px;padding:4px 2px;"
+                            + f"<div style='display:flex;gap:3px;margin-top:6px;'>"
+                            f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:5px;padding:4px 4px;min-width:0;'>"
+                            f"<div style='font-size:12px;font-weight:700;color:#a78bfa;line-height:1.3;'>{_model:.0f}%</div>"
+                            f"<div style='font-size:8px;color:#4a4a6a;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'>MODEL</div></div>"
+                            f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:5px;padding:4px 4px;min-width:0;'>"
+                            f"<div style='font-size:12px;font-weight:700;color:{_brl_col};line-height:1.3;'>{_brl:.1f}%</div>"
+                            f"<div style='font-size:8px;color:#4a4a6a;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'>BARREL</div></div>"
+                            f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:5px;padding:4px 4px;min-width:0;"
                             f"border-right:1px solid #1e1e35;'>"
-                            f"<div style='font-size:12px;font-weight:700;color:{_tier_col};'>{_tier}</div>"
-                            f"<div style='font-size:8px;color:#4a4a6a;'>QUANT</div></div>"
-                            f"<div style='flex:1;text-align:center;background:#0c0c1e;border-radius:5px;padding:4px 2px;'>"
-                            f"<div style='font-size:14px;font-weight:700;color:{_ev_col};'>{_ev_disp}</div>"
-                            f"<div style='font-size:8px;color:#55558a;'>EV</div></div>"
-                            f"<div style='flex:1;text-align:center;background:#0c0c1e;border-radius:5px;padding:4px 2px;'>"
-                            f"<div style='font-size:14px;font-weight:700;color:{_edge_col_val};'>{_edge_disp}</div>"
-                            f"<div style='font-size:8px;color:#55558a;'>EDGE</div></div>"
-                            f"<div style='flex:1;text-align:center;background:#0c0c1e;border-radius:5px;padding:4px 2px;'>"
-                            f"<a href='{_url}' target='_blank' style='text-decoration:none;'>"
-                            f"<div style='font-size:14px;font-weight:700;color:#FF6666;'>{_fmt_american(_odds)}</div>"
-                            f"<div style='font-size:8px;color:#55558a;'>ODDS ↗</div></a></div>"
+                            f"<div style='font-size:12px;font-weight:700;color:{_tier_col};line-height:1.3;'>{_tier}</div>"
+                            f"<div style='font-size:8px;color:#4a4a6a;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'>QUANT</div></div>"
+                            f"<div style='flex:1;text-align:center;background:#0c0c1e;border-radius:5px;padding:4px 4px;min-width:0;'>"
+                            f"<div style='font-size:12px;font-weight:700;color:{_ev_col};line-height:1.3;'>{_ev_disp}</div>"
+                            f"<div style='font-size:8px;color:#55558a;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'>EV</div></div>"
+                            f"<div style='flex:1;text-align:center;background:#0c0c1e;border-radius:5px;padding:4px 4px;min-width:0;'>"
+                            f"<div style='font-size:12px;font-weight:700;color:{_edge_col_val};line-height:1.3;'>{_edge_disp}</div>"
+                            f"<div style='font-size:8px;color:#55558a;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'>EDGE</div></div>"
+                            f"<div style='flex:1;text-align:center;background:#0c0c1e;border-radius:5px;padding:4px 4px;min-width:0;'>"
+                            f"<a href='{_url}' target='_blank' style='text-decoration:none;display:flex;flex-direction:column;align-items:center;justify-content:center;'>"
+                            f"<div style='font-size:12px;font-weight:700;color:#FF6666;line-height:1.3;'>{_fmt_american(_odds)}</div>"
+                            f"<div style='font-size:8px;color:#55558a;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'>ODDS ↗</div></a></div>"
                             f"</div>"
                             + (
                                 "<div style='font-size:8px;color:#444;letter-spacing:1px;"
@@ -6678,12 +6743,13 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
         _active_lens = st.session_state[_FS_LENS_KEY]
 
         _FS_LENS_DEFS = [
-            ("power_profile",   "⚡", "POWER PROFILE",   "Raw HR power capability"),
-            ("matchup_edge",    "🎯", "MATCHUP EDGE",     "Pitcher exploit & targeting"),
-            ("deployment_edge", "🚀", "DEPLOYMENT EDGE",  "Deployment readiness"),
             ("full_slate",      "📋", "FULL SLATE",       "Full battlefield scan"),
             ("portfolio",       "💼", "PORTFOLIO",        "Exposure & strategy"),
         ]
+        _valid_lens_keys = {_lkey for _lkey, _, _, _ in _FS_LENS_DEFS}
+        if _active_lens not in _valid_lens_keys:
+            _active_lens = "full_slate"
+            st.session_state[_FS_LENS_KEY] = _active_lens
 
         # CSS-only styling for lens buttons (target by Streamlit st-key class)
         st.markdown(
@@ -6721,26 +6787,6 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
 
         # Summary panel + tier key
         _FS_LENS_SUMMARIES = {
-            "power_profile": (
-                "POWER PROFILE",
-                "Ranks by true HR capability composite: Barrel % (primary, 2.5&times;), "
-                "Model Prob (1.0&times;), xSLG (30&times;), Hard-Hit % (0.5&times;), "
-                "Pull-Air % (0.4&times;), Sweet Spot % (0.4&times;). "
-                "No EV or sportsbook influence. Elite baseline: Barrel &ge; 8%.",
-            ),
-            "matchup_edge": (
-                "MATCHUP EDGE",
-                "Ranks pitcher exploitability: Model Prob (primary, 1.5&times;), "
-                "Pitcher Factor deviation (60&times;), Platoon/handedness leverage (30&times;), "
-                "Barrel quality anchor (0.5&times;). Market-independent — pure baseball matchup signal.",
-            ),
-            "deployment_edge": (
-                "DEPLOYMENT EDGE",
-                "Ranks and highlights actionable deployment opportunities using EV, Edge, Confidence, "
-                "lineup status, odds value, and environmental support. "
-                "Composite: EV &times; 0.40 + Edge &times; 0.35 + Confidence &times; 0.25. "
-                "Players sorted by deployment composite descending within each game.",
-            ),
             "full_slate": (
                 "FULL SLATE",
                 "Shows all playable batters organized by game. "
@@ -6778,7 +6824,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
             "border-left:2px solid #2a2a55;font-family:monospace;font-size:9px;color:#5a5a88;'>"
             "QUAL: EV &times; 0.40 + Edge &times; 0.35 + Conf &times; 0.25"
             "</div>"
-        ) if _active_lens in ("deployment_edge", "full_slate") else ""
+        ) if _active_lens == "full_slate" else ""
 
         st.markdown(
             f"<div style='background:#06061a;border:1px solid #181830;border-radius:4px;"
@@ -7644,23 +7690,23 @@ def tab_jig(data: dict):
                 f"<div class='stat-box'><div style='color:#9ca3af;'>ISO</div>"
                 f"<div style='color:{iso_c};font-weight:700;'>{iso:.3f}</div></div>"
                 f"</div>"
-                f"<div style='display:flex;gap:2px;margin-bottom:2px;'>"
-                f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:4px;padding:3px 2px;'>"
-                f"<div style='font-size:13px;font-weight:700;color:#FF6666;'>{odds_str}</div>"
-                f"<div style='font-size:8px;color:#555;'>ODDS</div></div>"
-                f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:4px;padding:3px 2px;'>"
-                f"<div style='font-size:12px;font-weight:700;color:#a78bfa;'>{_hvy_model:.0f}%</div>"
-                f"<div style='font-size:8px;color:#555;'>MDL</div></div>"
-                f"<div style='flex:1;text-align:center;background:#0c0c1e;border-radius:4px;padding:3px 2px;'>"
-                f"<div style='font-size:13px;font-weight:700;color:{ev_c};'>{ev_display}</div>"
-                f"<div style='font-size:8px;color:#4a4a70;'>EV</div></div>"
-                f"<div style='flex:1;text-align:center;background:#0c0c1e;border-radius:4px;padding:3px 2px;"
+                f"<div style='display:flex;gap:3px;margin-bottom:2px;'>"
+                f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:4px;padding:3px 3px;min-width:0;'>"
+                f"<div style='font-size:12px;font-weight:700;color:#FF6666;line-height:1.3;'>{odds_str}</div>"
+                f"<div style='font-size:8px;color:#555;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'>ODDS</div></div>"
+                f"<div style='flex:1;text-align:center;background:#0a0a18;border-radius:4px;padding:3px 3px;min-width:0;'>"
+                f"<div style='font-size:12px;font-weight:700;color:#a78bfa;line-height:1.3;'>{_hvy_model:.0f}%</div>"
+                f"<div style='font-size:8px;color:#555;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'>MDL</div></div>"
+                f"<div style='flex:1;text-align:center;background:#0c0c1e;border-radius:4px;padding:3px 3px;min-width:0;'>"
+                f"<div style='font-size:12px;font-weight:700;color:{ev_c};line-height:1.3;'>{ev_display}</div>"
+                f"<div style='font-size:8px;color:#4a4a70;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'>EV</div></div>"
+                f"<div style='flex:1;text-align:center;background:#0c0c1e;border-radius:4px;padding:3px 3px;min-width:0;"
                 f"border-right:1px solid #1e1e35;'>"
-                f"<div style='font-size:13px;font-weight:700;color:{_hvy_ec};'>{_hvy_edge_display}</div>"
-                f"<div style='font-size:8px;color:#4a4a70;'>EDGE</div></div>"
-                f"<div style='flex:1;text-align:center;background:#0a0a14;border-radius:4px;padding:3px 2px;'>"
-                f"<div style='font-size:11px;font-weight:700;color:{mod_c};'>{_hvy_mod_display}</div>"
-                f"<div style='font-size:8px;color:#444;'>{_hvy_mod_label}</div></div>"
+                f"<div style='font-size:12px;font-weight:700;color:{_hvy_ec};line-height:1.3;'>{_hvy_edge_display}</div>"
+                f"<div style='font-size:8px;color:#4a4a70;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'>EDGE</div></div>"
+                f"<div style='flex:1;text-align:center;background:#0a0a14;border-radius:4px;padding:3px 3px;min-width:0;'>"
+                f"<div style='font-size:11px;font-weight:700;color:{mod_c};line-height:1.3;'>{_hvy_mod_display}</div>"
+                f"<div style='font-size:8px;color:#444;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'>{_hvy_mod_label}</div></div>"
                 f"</div>"
                 + (f"<div style='margin-top:4px;padding-top:3px;border-top:1px solid #1a1a2a;'>"
                    f"{_hvy_weather_frag}</div>" if _hvy_weather_frag else "")
@@ -10615,8 +10661,12 @@ The app will open full-screen like a native app.
     # ── Banner ────────────────────────────────────────────────────────────────
     _banner = Path(__file__).parent / "assets" / "banner.png"
     if _banner.exists():
+        st.markdown(
+            "<div style='max-height:60px;overflow:hidden;margin:0 -1rem 2px -1rem;'>",
+            unsafe_allow_html=True,
+        )
         st.image(str(_banner), width="stretch")
-    st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
     _active_route = st.session_state.get("active_route", "MAIN")
     if _active_route not in _route_order:
         _active_route = "MAIN"
@@ -10637,6 +10687,7 @@ The app will open full-screen like a native app.
         _render_command_strip(_shell_ctx)
         _render_live_feed_shell(_route_data, _shell_ctx)
         _render_queue_shell(_route_data, _shell_ctx)
+        _render_deployment_readiness_strip(_shell_ctx)
 
     if _active_route == "MAIN":
         try:
