@@ -19,7 +19,7 @@ pip install -r mlb_hr_engine_v4/requirements.txt           # dashboard + CLI dep
 pip install -r mlb_hr_engine_v4/requirements-api.txt       # FastAPI service deps (separate)
 ```
 
-A `.env` file is expected inside each version directory (e.g. `mlb_hr_engine_v4/.env`). `.env.example` files are committed as templates. See section 10 for variables and loading behavior.
+A `.env` file is expected inside each version directory (e.g. `mlb_hr_engine_v4/.env`). `.env.example` files are committed as templates. See section 11 for variables and loading behavior.
 
 ## 4. Common Commands
 
@@ -115,7 +115,7 @@ Two surfaces deploy independently.
 **Streamlit dashboard (`mlb_hr_engine_v4/app.py`)**
 - Operator-facing dashboard.
 - Run locally with `python -m streamlit run app.py` from inside `mlb_hr_engine_v4/`.
-- Reads from `mlb_hr_engine_v4/.env` (or Streamlit secrets — see section 10).
+- Reads from `mlb_hr_engine_v4/.env` (or Streamlit secrets — see section 11).
 
 **FastAPI service (`mlb_hr_engine_v4/api/main.py`)**
 - Read endpoints (picks, strategies, runs) gated by Supabase JWT auth.
@@ -168,7 +168,55 @@ Subdirectories (only those that exist are listed):
 
 Note: the same `clients/`, `engine/`, `output/`, `data/`, `tracking/`, `backtest/` module names also exist (with reduced surface area) in v1/v2/v3. Treat each version's tree as self-contained.
 
-## 10. Environment Variables
+## 10. Frontend Surface (Next.js Prototype)
+
+`mlb_hr_engine_v4/frontend/` is a Next.js 14 prototype surface used for design iteration of HR threat card components and related tactical UI. As of 2026-05-25 it is **standalone**: no Python runtime, FastAPI service, or Fly.io deployment invokes it. Streamlit (`app.py`) and Next.js (`frontend/`) are isolated operational surfaces with no runtime cross-dependency.
+
+### Canonical paths
+
+- **Frontend root:** `mlb_hr_engine_v4/frontend/`
+- **Active TSX components:** `mlb_hr_engine_v4/frontend/components/`
+- **Build entry:** `mlb_hr_engine_v4/frontend/app/page.tsx`
+- **TypeScript config:** `mlb_hr_engine_v4/frontend/tsconfig.json` (path alias `@/*` resolves to `./*`, scoped inside `frontend/`)
+- **Build artifacts:** `mlb_hr_engine_v4/frontend/.next/`
+
+### Local development (Next.js, when needed)
+
+Do NOT run these unless the operator explicitly authorizes a frontend session. Default assumption is that the frontend is dormant.
+
+### Surface isolation rules
+
+- Streamlit dashboard (`app.py`) does NOT import, consume, or render `.tsx` files. Confirmed by C-001 audit and X-001 investigation.
+- FastAPI service (`api/main.py`) does NOT serve `frontend/` assets.
+- Fly.io deployment (`fly.toml`, `Dockerfile`) does NOT build `frontend/`.
+- Next.js components do NOT call Python runtime directly. Any future bridge must go through the FastAPI service contract (and require a separate doctrine update).
+- session_state, cache, auth, and routing are NOT shared between Streamlit and Next.js.
+
+### Archived legacy components
+
+On 2026-05-25, the pre-rebuild `mlb_hr_engine_v4/components/hr/*.tsx` files were archived to `mlb_hr_engine_v4/_archive/components_hr_pre_rebuild/hr/`. These were the May 23 "tactical HR threat card system" originals, superseded by the May 24 "MAIN HR-threat-first rebuild" inside `frontend/components/hr/`. The archived versions had zero importers and were not doctrine-aligned (missing corner brackets, pulse animations, semantic green barrel palette, etc.). See `mlb_hr_engine_v4/_archive/components_hr_pre_rebuild/README.md` for restoration steps and full audit trail.
+
+### Future integration (not yet specified)
+
+If `frontend/` is wired into production (Fly.io deployment, FastAPI integration, replacement of Streamlit operator dashboard, etc.), the following doctrine items MUST be updated in the same change:
+
+- This section
+- `AGENTS.md` (platform identity)
+- `MASTER_TCC_DOCTRINE.md` (orchestration scope if TCC extends to Next.js)
+- `FULL_SLATE_UX_DOCTRINE.md` (if Full Slate renders on Next.js)
+- `ROOM_06_DEPLOYMENT_FD_SLIP_TRACKING_DOCTRINE.md` (if deployment surface changes)
+- Deployment configs (`fly.toml`, `Dockerfile`)
+
+Until then, treat `frontend/` as design iteration only.
+
+### Audit trail
+
+- 2026-05-25 C-001 doctrine audit (Steps 1-6) first identified `frontend/` and root `components/hr/*.tsx` as undocumented
+- 2026-05-25 X-001 frontend investigation confirmed `frontend/` as canonical, root `components/hr/` as orphaned
+- 2026-05-25 X-002 archival moved root `components/hr/` to `_archive/components_hr_pre_rebuild/`
+- 2026-05-25 X-005 first push to origin committed and synced (commits f420411, 35cb365, 08adcf8)
+
+## 11. Environment Variables
 
 **Where `.env` lives**
 
@@ -192,7 +240,7 @@ Each version directory carries its own `.env` (e.g. `mlb_hr_engine_v4/.env`) alo
 - `CRON_SECRET` — required to call `POST /api/pipeline/run`.
 - `GOOGLE_SHEETS_CREDS` — path to service-account JSON, only if Sheets sync is in use.
 
-## 11. Reference Docs
+## 12. Reference Docs
 
 Durable in-repo references. Consult these before changing related surfaces.
 
@@ -208,15 +256,15 @@ Durable in-repo references. Consult these before changing related surfaces.
 
 Historical session/changelog material lives in the `OPTIMIZATION_RESULTS_*.md`, `MLB_HR_ENGINE_V4_OPTIMIZATION_ANALYSIS.md`, and `FIX*_VALIDATION_REPORT.md` files at the repo root, and in `mlb_hr_engine_v4/Docs/`. Treat those as frozen artifacts; do not rely on them for current parameter values.
 
-## 12. Validation / Safety Rules
+## 13. Validation / Safety Rules
 
 - Read `config.py` directly for current model parameters. Do not infer parameter values from this file or older doctrine documents — they drift.
 - Re-run the relevant analysis script under `mlb_hr_engine_v4/scripts/analysis/` after any change that touches signal weights, calibration, regression anchors, filter thresholds, or pitcher/park multipliers. Outputs are written next to the scripts as `*_output.txt`.
-- New `.env`-dependent scripts: confirm the script's cwd before recommending an invocation pattern; `load_dotenv()` is cwd-sensitive (see section 10).
+- New `.env`-dependent scripts: confirm the script's cwd before recommending an invocation pattern; `load_dotenv()` is cwd-sensitive (see section 11).
 - Never fabricate Statcast/Savant data. Fall back gracefully when input is incomplete; preserve real provider integrity. (`AGENTS.md` § Pitch Mix Rules.)
 - Do not adjust model thresholds or calibration based on small samples. The operator's stated rule is no threshold/calibration changes from n<200 settled real picks; verify in current ops docs before any such change.
 
-## 13. What Not To Do
+## 14. What Not To Do
 
 - Do not merge MAIN and JIG. Do not blend the HVY pitch-mix signal into MAIN model probability.
 - Do not duplicate model constants, calibration parameters, or league baselines into documentation. They live in `config.py`.
