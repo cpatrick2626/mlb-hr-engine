@@ -63,3 +63,4 @@ portfolio_analysis_output.txt
 temp/
 tmp/
 cache/temp/
+.claude/settings.local.json
