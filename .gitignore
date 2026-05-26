@@ -12,7 +12,6 @@ build/
 # Environment / secrets
 .env
 *.env
-.streamlit/secrets.toml
 
 # Tracking data (generated at runtime — not source code)
 codex_hr_engine_v1/tracking/*.csv
@@ -64,3 +63,11 @@ temp/
 tmp/
 cache/temp/
 .claude/settings.local.json
+
+# Obsidian vault - local only files
+MLB HR ENGINE/.obsidian/workspace.json
+MLB HR ENGINE/.obsidian/workspace-mobile.json
+MLB HR ENGINE/.obsidian/graph.json
+
+# Allow vault reports to be committed
+!MLB HR ENGINE/reports/
