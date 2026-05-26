@@ -274,3 +274,72 @@ Historical session/changelog material lives in the `OPTIMIZATION_RESULTS_*.md`, 
 - Do not assume `py -3.12` works on macOS/Linux. Use `python` (and confirm a 3.12 interpreter when scripts require it).
 - Do not invent deployment behavior beyond what `Dockerfile` and `fly.toml` actually declare.
 - Do not commit `.env` files or any file containing real secrets.
+
+---
+
+## WIKI SYSTEM
+
+### VAULT PATH
+`C:\MLB HR Engine\mlb-hr-engine-master\MLB HR ENGINE`
+
+### VAULT DIRECTORY MAP
+
+| Directory | Contents |
+|-----------|----------|
+| `wiki\doctrine\` | scoring philosophy, MAIN/JIG doctrine, visual doctrine, deployment, room governance |
+| `wiki\architecture\` | pipeline.py flow, config.py record, app.py surface map, session_state map, cache map, Supabase schema, FastAPI arch |
+| `wiki\formulas\` | batter weights, pitcher vulnerability, environmental multipliers, EV derivation |
+| `wiki\concepts\` | barrel danger, pitch mix exploitation, hard-hit quality, handedness edges, pitcher fatigue, HR environment, matchup escalation, market inefficiency |
+| `wiki\stabilization\` | 12-step sequence, per-step records, validation history, regression boundaries |
+| `wiki\sessions\` | per-session summaries, decisions, files touched |
+| `wiki\assets\` | Banana/draw.io/Photoshop references |
+| `raw\` | raw data outputs from external agents |
+| `raw\assets\` | UI mockups from Banana/draw.io |
+| `raw\odds\` | Firecrawl odds scrapes |
+| `raw\statcast\` | Statcast/Savant data pulls |
+| `raw\weather\` | weather data pulls |
+| `raw\lineups\` | lineup data pulls |
+| `reports\` | generated reports |
+
+### LOG ENTRY FORMAT
+```
+## [YYYY-MM-DD] agent | task description | result
+```
+
+### AGENT ROUTING
+
+| Agent | Scope |
+|-------|-------|
+| Claude App | doctrine, UX, formula philosophy, architecture decisions |
+| Claude Code | file edits, audits, LOW/MEDIUM/HIGH risk repo work, wiki writes |
+| ChatGPT | external research, formula validation |
+| Playwright | runtime validation, port checks |
+| Supabase CLI | schema, migrations |
+| Firecrawl JS | external data scrapes → `raw\` immediately |
+| Banana | UI mockups → `raw\assets\` |
+| draw.io | architecture diagrams → `raw\assets\` |
+| Continue.dev | in-editor assist → `wiki\sessions\` |
+| Replit | rapid prototypes → `raw\` or `wiki\sessions\` |
+| GitHub | version control, commits mirror log entries |
+| Obsidian Git | auto-commits vault on timer |
+| Caveman | review hooks → status in `wiki\stabilization\` |
+
+### PROTECTED ZONES
+No modification without operator authorization:
+- MAIN/JIG separation
+- session_state ownership
+- cache ownership
+- routing architecture
+- modal architecture
+- Full Slate core logic
+- config.py thresholds
+- formula calibration constants
+- hydration logic
+
+### SESSION PROTOCOL
+
+**Before:** Read CLAUDE.md → Read `wiki\index.md` → Read relevant pages → proceed
+
+**After:** Update wiki pages → Append `wiki\log.md` → Update `wiki\index.md` → file raw outputs
+
+**Git:** DO NOT COMMIT. DO NOT PUSH unless operator authorizes.
