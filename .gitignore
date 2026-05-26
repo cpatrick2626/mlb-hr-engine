@@ -71,3 +71,12 @@ MLB HR ENGINE/.obsidian/graph.json
 
 # Allow vault reports to be committed
 !MLB HR ENGINE/reports/
+
+# Obsidian plugin binaries — do not commit
+MLB HR ENGINE/.obsidian/plugins/*/main.js
+MLB HR ENGINE/.obsidian/plugins/*/data.json
+MLB HR ENGINE/.obsidian/plugins/*/styles.css
+MLB HR ENGINE/.obsidian/plugins/*/manifest.json
+
+# Obsidian config files — keep these
+# community-plugins.json and app.json already tracked
