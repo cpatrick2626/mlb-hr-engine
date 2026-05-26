@@ -4500,6 +4500,51 @@ def _mq_color(mq_tier: str) -> tuple:
     return tiers.get(mq_tier, ("#0a0a12", "#666"))
 
 
+def _fs_tier_from_prob(model_prob: float) -> str:
+    """Classify model_prob into 5-tier Full Slate display system.
+    Coexists with confidence_tier (EV/edge-based) — does not replace it."""
+    t = config.FS_TIER_THRESHOLDS
+    if model_prob >= t["CRITICAL"]:  return "CRITICAL"
+    if model_prob >= t["DANGEROUS"]: return "DANGEROUS"
+    if model_prob >= t["STRONG"]:    return "STRONG"
+    if model_prob >= t["ACTIVE"]:    return "ACTIVE"
+    return "QUIET"
+
+
+def _fs_heatmap_color(value, column_key: str) -> str:
+    """5-bucket background color for Full Slate numeric cells."""
+    _INVERTED = {"gb_pct"}
+    thresholds = config.FS_HEATMAP_THRESHOLDS.get(column_key)
+    if thresholds is None or value is None:
+        return config.FS_HEATMAP_COLORS["AVERAGE"]
+    v = float(value)
+    t0, t1, t2, t3 = thresholds
+    if column_key in _INVERTED:
+        v, t0, t1, t2, t3 = -v, -t0, -t1, -t2, -t3
+    if v >= t0: return config.FS_HEATMAP_COLORS["ELITE"]
+    if v >= t1: return config.FS_HEATMAP_COLORS["STRONG"]
+    if v >= t2: return config.FS_HEATMAP_COLORS["AVERAGE"]
+    if v >= t3: return config.FS_HEATMAP_COLORS["WEAK"]
+    return config.FS_HEATMAP_COLORS["DANGER"]
+
+
+def _fs_mq_pie_html(mq: str) -> str:
+    """4-dot quadrant fill badge for Matchup Quality column."""
+    bg, tc = _mq_color(mq)
+    fills = {"ELITE": 4, "STRONG": 3, "AVG": 2, "WEAK": 1, "DANGER": 0}
+    n = fills.get(mq, 2)
+    dot_parts = []
+    for i in range(4):
+        c = tc if i < n else "#2a2a3a"
+        dot_parts.append(f"<span style='color:{c};font-size:7px;line-height:1;'>●</span>")
+    dots = "".join(dot_parts)
+    return (
+        f"<div style='background:{bg};border-radius:2px;padding:2px 5px;"
+        f"display:inline-flex;gap:1px;align-items:center;'>"
+        f"{dots}</div>"
+    )
+
+
 # ─── Full Slate "All Players" game-organized renderer ─────────────────────────
 
 def _render_full_slate_all_players(
@@ -4671,6 +4716,18 @@ def _render_full_slate_all_players(
             "select 'All games' above to expand."
         )
 
+    # ── View mode toggle (Game / Player) ────────────────────────────────────
+    _fs_view_mode_key = f"{_fs_zone_scope}_view_mode"
+    _fs_view_mode = st.radio(
+        "View mode",
+        options=["game", "player"],
+        format_func=lambda x: "📋 GAME VIEW" if x == "game" else "📊 PLAYER VIEW",
+        index=0 if st.session_state.get(_fs_view_mode_key, "game") == "game" else 1,
+        horizontal=True,
+        key=_fs_view_mode_key,
+        label_visibility="collapsed",
+    )
+
     # ── Game navigation strip ────────────────────────────────────────────────
     _nav_parts = []
     for _ni, (gk, _gp) in enumerate(_game_rows_shown):
@@ -4704,7 +4761,7 @@ def _render_full_slate_all_players(
             f"{_dot}{_qtag}"
             f"</a>"
         )
-    if _nav_parts:
+    if _nav_parts and _fs_view_mode == "game":
         st.markdown(
             "<div id='fs_top' style='display:flex;flex-wrap:wrap;gap:0;"
             "padding:4px 0 8px;border-bottom:1px solid #1a1a2e;margin-bottom:4px;'>"
@@ -4720,6 +4777,102 @@ def _render_full_slate_all_players(
         "</div>",
         unsafe_allow_html=True,
     )
+
+    # ── Player view — flat table sorted by model_prob desc ──────────────────
+    if _fs_view_mode == "player":
+        _pv_all = sorted(all_players, key=lambda p: float(p.get("model_prob") or 0), reverse=True)
+        _pv_rows = []
+        for _pv_p in _pv_all:
+            _pv_name   = _pv_p.get("player_name", "?")
+            _pv_team   = _pv_p.get("team", "?")
+            _pv_ht     = _pv_p.get("home_team", "")
+            _pv_game   = f"{_pv_p.get('opponent','?')}@{_pv_ht}" if _pv_ht else _pv_team
+            _pv_mp     = float(_pv_p.get("model_prob") or 0)
+            _pv_tk     = _fs_tier_from_prob(_pv_mp)
+            _pv_td     = config.FS_TIER_DISPLAY[_pv_tk]
+            _pv_tier_s = (f"<span style='color:{_pv_td['color']};font-size:10px;'>{_pv_td['icon']}</span>"
+                          if _pv_mp > 0 else "—")
+            _pv_mq     = _pv_p.get("matchup_quality", "AVG")
+            _pv_mq_pie = _fs_mq_pie_html(_pv_mq)
+            _pv_chip   = ("<span style='display:inline-block;width:7px;height:7px;"
+                          "border-radius:50%;background:#334155;margin-right:3px;"
+                          "vertical-align:middle;'></span>")
+            _pv_spa    = _pv_p.get("season_pa", 0)
+            _pv_avg    = _pv_p.get("batting_avg")
+            _pv_slg    = _pv_p.get("actual_slg")
+            _pv_babip  = _pv_p.get("babip")
+            _pv_gb     = _pf(_pv_p.get("gb_pct"), 0)
+            _pv_hh     = _pf(_pv_p.get("hard_hit"), 0)
+            _pv_ld     = _pf(_pv_p.get("ld_pct"), 0)
+            _pv_brl    = _pf(_pv_p.get("barrel_pct"), 0)
+            _pv_ev     = _pf(_pv_p.get("exit_velo"), 0)
+            _pv_la     = _pv_p.get("avg_launch_angle")
+            _pv_pull   = _pf(_pv_p.get("pull_pct"), 0)
+            _pv_ctr    = _pv_p.get("center_pct")
+            _pv_hr9    = _pv_p.get("pitcher_hr9", 0)
+            _pv_xwoba  = _pv_p.get("xwoba")
+            _pv_shr    = _pv_p.get("season_hr", 0)
+            _pv_hrpa   = round(_pv_shr / _pv_spa, 3) if _pv_spa > 0 else None
+            _pv_fd_raw = _pv_p.get("fanduel_american")
+            _pv_fd_s   = (f"+{_pv_fd_raw}" if _pv_fd_raw and _pv_fd_raw > 0
+                          else str(_pv_fd_raw) if _pv_fd_raw else "—")
+            _pv_rows.append(
+                f"<tr style='background:#0a0a14;border-bottom:1px solid #1a1a28;'>"
+                f"<td style='padding:3px 4px;text-align:center;'>{_pv_tier_s}</td>"
+                f"<td style='padding:3px 4px;color:#60a5fa;font-size:10px;font-weight:700;white-space:nowrap;'>{_pv_chip}{_pv_name}</td>"
+                f"<td style='padding:3px 4px;color:#888;font-size:9px;text-align:center;'>{_pv_team}</td>"
+                f"<td style='padding:3px 4px;color:#555;font-size:8px;white-space:nowrap;'>{_pv_game}</td>"
+                f"<td style='padding:3px 4px;text-align:center;'>{_pv_mq_pie}</td>"
+                f"<td style='padding:3px 4px;background:{_fs_heatmap_color(_pv_spa, 'season_pa')};color:#ccc;font-size:9px;text-align:right;'>{str(_pv_spa) if _pv_spa else '—'}</td>"
+                f"<td style='padding:3px 4px;background:{_fs_heatmap_color(_pv_avg, 'batting_avg')};color:#ccc;font-size:9px;text-align:center;'>{f'{_pv_avg:.3f}' if _pv_avg else '—'}</td>"
+                f"<td style='padding:3px 4px;background:{_fs_heatmap_color(_pv_slg, 'actual_slg')};color:#ccc;font-size:9px;text-align:center;'>{f'{_pv_slg:.3f}' if _pv_slg else '—'}</td>"
+                f"<td style='padding:3px 4px;background:{_fs_heatmap_color(_pv_babip, 'babip')};color:#ccc;font-size:9px;text-align:center;'>{f'{_pv_babip:.3f}' if _pv_babip else '—'}</td>"
+                f"<td style='padding:3px 4px;background:{_fs_heatmap_color(_pv_gb, 'gb_pct')};color:#ccc;font-size:9px;text-align:center;'>{f'{_pv_gb:.1f}%' if _pv_gb else '—'}</td>"
+                f"<td style='padding:3px 4px;background:{_fs_heatmap_color(_pv_hh, 'hard_hit')};color:#ccc;font-size:9px;text-align:center;'>{f'{_pv_hh:.1f}%' if _pv_hh else '—'}</td>"
+                f"<td style='padding:3px 4px;background:{_fs_heatmap_color(_pv_ld, 'ld_pct')};color:#ccc;font-size:9px;text-align:center;'>{f'{_pv_ld:.1f}%' if _pv_ld else '—'}</td>"
+                f"<td style='padding:3px 4px;background:{_fs_heatmap_color(_pv_brl, 'barrel_pct')};color:#ccc;font-size:9px;font-weight:600;text-align:center;'>{f'{_pv_brl:.1f}%' if _pv_brl else '—'}</td>"
+                f"<td style='padding:3px 4px;background:{_fs_heatmap_color(_pv_ev, 'exit_velo')};color:#ccc;font-size:9px;text-align:center;'>{f'{_pv_ev:.1f}' if _pv_ev else '—'}</td>"
+                f"<td style='padding:3px 4px;background:{_fs_heatmap_color(_pv_la, 'avg_launch_angle')};color:#ccc;font-size:9px;text-align:center;'>{f'{_pv_la:.1f}°' if _pv_la else '—'}</td>"
+                f"<td style='padding:3px 4px;background:{_fs_heatmap_color(_pv_pull, 'pull_pct')};color:#ccc;font-size:9px;text-align:center;'>{f'{_pv_pull:.1f}%' if _pv_pull else '—'}</td>"
+                f"<td style='padding:3px 4px;background:{_fs_heatmap_color(_pv_ctr, 'center_pct')};color:#ccc;font-size:9px;text-align:center;'>{f'{_pv_ctr:.1f}%' if _pv_ctr else '—'}</td>"
+                f"<td style='padding:3px 4px;background:{_fs_heatmap_color(_pv_hr9, 'pitcher_hr9')};color:#ccc;font-size:9px;font-weight:600;text-align:center;'>{f'{_pv_hr9:.2f}' if _pv_hr9 else '—'}</td>"
+                f"<td style='padding:3px 4px;background:{_fs_heatmap_color(_pv_xwoba, 'xwoba')};color:#ccc;font-size:9px;text-align:center;'>{f'{_pv_xwoba:.3f}' if _pv_xwoba else '—'}</td>"
+                f"<td style='padding:3px 4px;color:#ccc;font-size:9px;text-align:center;'>{f'{_pv_hrpa:.3f}' if _pv_hrpa else '—'}</td>"
+                f"<td style='padding:3px 4px;color:#f59e0b;font-size:9px;text-align:center;font-weight:600;'>{_pv_fd_s}</td>"
+                f"</tr>"
+            )
+        _pv_html = (
+            "<div style='overflow-x:auto;background:#09090f;border:1px solid #1a1a28;border-radius:4px;'>"
+            "<table style='width:100%;border-collapse:collapse;font-family:monospace;font-size:9px;'>"
+            "<thead style='background:#0d0d1a;border-bottom:2px solid #2a2a3a;'>"
+            "<tr>"
+            "<th style='padding:4px 5px;color:#888;text-align:center;font-weight:700;font-size:8px;'>TIER</th>"
+            "<th style='padding:4px 5px;color:#eee;text-align:left;font-weight:700;font-size:8px;'>PLAYER</th>"
+            "<th style='padding:4px 5px;color:#aaa;text-align:center;font-weight:700;font-size:8px;'>TM</th>"
+            "<th style='padding:4px 5px;color:#555;text-align:left;font-weight:700;font-size:8px;'>GAME</th>"
+            "<th style='padding:4px 5px;color:#4ade80;text-align:center;font-weight:700;font-size:8px;'>MQ</th>"
+            "<th style='padding:4px 5px;color:#aaa;text-align:right;font-weight:700;font-size:8px;'>PA</th>"
+            "<th style='padding:4px 5px;color:#aaa;text-align:center;font-weight:700;font-size:8px;'>AVG</th>"
+            "<th style='padding:4px 5px;color:#aaa;text-align:center;font-weight:700;font-size:8px;'>SLG</th>"
+            "<th style='padding:4px 5px;color:#aaa;text-align:center;font-weight:700;font-size:8px;'>BABIP</th>"
+            "<th style='padding:4px 5px;color:#aaa;text-align:center;font-weight:700;font-size:8px;'>GB%</th>"
+            "<th style='padding:4px 5px;color:#aaa;text-align:center;font-weight:700;font-size:8px;'>HH%</th>"
+            "<th style='padding:4px 5px;color:#aaa;text-align:center;font-weight:700;font-size:8px;'>LD%</th>"
+            "<th style='padding:4px 5px;color:#4ade80;text-align:center;font-weight:700;font-size:8px;'>BRL%</th>"
+            "<th style='padding:4px 5px;color:#aaa;text-align:center;font-weight:700;font-size:8px;'>EV</th>"
+            "<th style='padding:4px 5px;color:#aaa;text-align:center;font-weight:700;font-size:8px;'>LA°</th>"
+            "<th style='padding:4px 5px;color:#aaa;text-align:center;font-weight:700;font-size:8px;'>PULL%</th>"
+            "<th style='padding:4px 5px;color:#aaa;text-align:center;font-weight:700;font-size:8px;'>CTR%</th>"
+            "<th style='padding:4px 5px;color:#f87171;text-align:center;font-weight:700;font-size:8px;'>OPP HR/9</th>"
+            "<th style='padding:4px 5px;color:#aaa;text-align:center;font-weight:700;font-size:8px;'>xwOBA</th>"
+            "<th style='padding:4px 5px;color:#aaa;text-align:center;font-weight:700;font-size:8px;'>HR/PA</th>"
+            "<th style='padding:4px 5px;color:#f59e0b;text-align:center;font-weight:700;font-size:8px;'>FD</th>"
+            "</tr></thead><tbody>"
+            + "".join(_pv_rows)
+            + "</tbody></table></div>"
+        )
+        st.markdown(_pv_html, unsafe_allow_html=True)
+        return
 
     def _pit_vuln(factor: float) -> tuple:
         """(label, color) for pitcher vulnerability display in Full Slate."""
@@ -4858,6 +5011,7 @@ def _render_full_slate_all_players(
                     int((p.get("player_name") or "") in qualified_names),
                     int((p.get("player_name") or "") in tac_qualified_names),
                     int((p.get("player_name") or "") in steam_names),
+                    p.get("fanduel_american"),
                 )
                 for p in game_players
             ),
@@ -4922,7 +5076,7 @@ def _render_full_slate_all_players(
             )
 
             # Tactical table render (Phase 4: Full Slate intelligent table)
-            # Columns: PLAYER | TEAM | BATS | MQ | PA | AVG | SLG | BABIP | GB% | HH% | LD% | BRL% | EV | LA° | PULL% | CTR% | OPP HR/9 | xwOBA | HR/PA
+            # Columns: TIER | # | PLAYER | TEAM | BATS | MQ | PA | AVG | SLG | BABIP | GB% | HH% | LD% | BRL% | EV | LA° | PULL% | CTR% | OPP HR/9 | xwOBA | HR/PA | FD
             table_rows = []
             for _ri, p in enumerate(game_players):
                 pname  = p.get("player_name", "?")
@@ -4947,49 +5101,65 @@ def _render_full_slate_all_players(
                 xwoba = p.get("xwoba")
                 season_hr = p.get("season_hr", 0)
                 hr_pa = round(season_hr / season_pa, 3) if season_pa > 0 else None
+                model_prob_r = float(p.get("model_prob") or 0)
+                tier_key_r   = _fs_tier_from_prob(model_prob_r)
+                tier_disp_r  = config.FS_TIER_DISPLAY[tier_key_r]
+                tier_s = (
+                    f"<span style='color:{tier_disp_r['color']};font-size:10px;'>"
+                    f"{tier_disp_r['icon']}</span>"
+                    if model_prob_r > 0 else "—"
+                )
+                fd_raw = p.get("fanduel_american")
+                fd_s = (f"+{fd_raw}" if fd_raw and fd_raw > 0
+                        else str(fd_raw) if fd_raw else "—")
+                team_chip = (
+                    "<span style='display:inline-block;width:7px;height:7px;"
+                    "border-radius:50%;background:#334155;margin-right:3px;"
+                    "vertical-align:middle;'></span>"
+                )
+                mq_pie = _fs_mq_pie_html(mq)
 
                 # Format values for display
-                pa_s = str(season_pa) if season_pa else "—"
-                avg_s = f"{batting_avg:.3f}" if batting_avg else "—"
-                slg_s = f"{slg:.3f}" if slg else "—"
+                pa_s    = str(season_pa) if season_pa else "—"
+                avg_s   = f"{batting_avg:.3f}" if batting_avg else "—"
+                slg_s   = f"{slg:.3f}" if slg else "—"
                 babip_s = f"{babip:.3f}" if babip else "—"
-                gb_s = f"{gb_pct:.1f}%" if gb_pct else "—"
-                hh_s = f"{hard_hit:.1f}%" if hard_hit else "—"
-                ld_s = f"{ld_pct:.1f}%" if ld_pct else "—"
-                brl_s = f"{barrel_pct:.1f}%" if barrel_pct else "—"
-                ev_s = f"{exit_velo:.1f}" if exit_velo else "—"
-                la_s = f"{launch_angle:.1f}°" if launch_angle else "—"
-                pull_s = f"{pull_pct:.1f}%" if pull_pct else "—"
-                ctr_s = f"{center_pct:.1f}%" if center_pct else "—"
-                hr9_s = f"{pitcher_hr9:.2f}" if pitcher_hr9 else "—"
+                gb_s    = f"{gb_pct:.1f}%" if gb_pct else "—"
+                hh_s    = f"{hard_hit:.1f}%" if hard_hit else "—"
+                ld_s    = f"{ld_pct:.1f}%" if ld_pct else "—"
+                brl_s   = f"{barrel_pct:.1f}%" if barrel_pct else "—"
+                ev_s    = f"{exit_velo:.1f}" if exit_velo else "—"
+                la_s    = f"{launch_angle:.1f}°" if launch_angle else "—"
+                pull_s  = f"{pull_pct:.1f}%" if pull_pct else "—"
+                ctr_s   = f"{center_pct:.1f}%" if center_pct else "—"
+                hr9_s   = f"{pitcher_hr9:.2f}" if pitcher_hr9 else "—"
                 xwoba_s = f"{xwoba:.3f}" if xwoba else "—"
-                hrpa_s = f"{hr_pa:.3f}" if hr_pa else "—"
-
-                # Heatmap colors for metrics (green elite, yellow avg, red weak)
-                mq_bg, mq_tc = _mq_color(mq)
+                hrpa_s  = f"{hr_pa:.3f}" if hr_pa else "—"
 
                 row_html = (
                     f"<tr style='background:#0a0a14;border-bottom:1px solid #1a1a28;'>"
+                    f"<td style='padding:3px 6px;text-align:center;width:22px;'>{tier_s}</td>"
                     f"<td style='padding:3px 6px;color:#60a5fa;font-size:9px;font-weight:600;text-align:center;'>{spot}</td>"
-                    f"<td style='padding:3px 6px;color:#60a5fa;font-size:10px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px;cursor:pointer;text-decoration:underline;'>{pname}</td>"
+                    f"<td style='padding:3px 6px;color:#60a5fa;font-size:10px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px;cursor:pointer;text-decoration:underline;'>{team_chip}{pname}</td>"
                     f"<td style='padding:3px 6px;color:#999;font-size:9px;text-align:center;'>{pteam}</td>"
                     f"<td style='padding:3px 6px;color:#888;font-size:9px;text-align:center;'>{bats}</td>"
-                    f"<td style='padding:3px 6px;background:{mq_bg};color:{mq_tc};font-size:9px;font-weight:700;text-align:center;border-radius:2px;'>{mq}</td>"
-                    f"<td style='padding:3px 6px;color:#aaa;font-size:9px;text-align:right;'>{pa_s}</td>"
-                    f"<td style='padding:3px 6px;color:#aaa;font-size:9px;text-align:center;'>{avg_s}</td>"
-                    f"<td style='padding:3px 6px;color:#aaa;font-size:9px;text-align:center;'>{slg_s}</td>"
-                    f"<td style='padding:3px 6px;color:#aaa;font-size:9px;text-align:center;'>{babip_s}</td>"
-                    f"<td style='padding:3px 6px;color:#aaa;font-size:9px;text-align:center;'>{gb_s}</td>"
-                    f"<td style='padding:3px 6px;color:#aaa;font-size:9px;text-align:center;'>{hh_s}</td>"
-                    f"<td style='padding:3px 6px;color:#aaa;font-size:9px;text-align:center;'>{ld_s}</td>"
-                    f"<td style='padding:3px 6px;background:{'#1a4d1a' if barrel_pct >= 8.0 else '#4a2020' if barrel_pct < 5.0 else '#1a1a28'};color:{'#4ade80' if barrel_pct >= 8.0 else '#f87171' if barrel_pct < 5.0 else '#888'};font-size:9px;font-weight:600;text-align:center;border-radius:2px;'>{brl_s}</td>"
-                    f"<td style='padding:3px 6px;color:#aaa;font-size:9px;text-align:center;'>{ev_s}</td>"
-                    f"<td style='padding:3px 6px;color:#aaa;font-size:9px;text-align:center;'>{la_s}</td>"
-                    f"<td style='padding:3px 6px;color:#aaa;font-size:9px;text-align:center;'>{pull_s}</td>"
-                    f"<td style='padding:3px 6px;color:#aaa;font-size:9px;text-align:center;'>{ctr_s}</td>"
-                    f"<td style='padding:3px 6px;background:{'#1a4d1a' if pitcher_hr9 >= 2.2 else '#1a1a28' if pitcher_hr9 >= 1.8 else '#5a1a1a'};color:{'#4ade80' if pitcher_hr9 >= 2.2 else '#888' if pitcher_hr9 >= 1.8 else '#ff6b6b'};font-size:9px;font-weight:600;text-align:center;border-radius:2px;'>{hr9_s}</td>"
-                    f"<td style='padding:3px 6px;color:#aaa;font-size:9px;text-align:center;'>{xwoba_s}</td>"
-                    f"<td style='padding:3px 6px;color:#aaa;font-size:9px;text-align:center;'>{hrpa_s}</td>"
+                    f"<td style='padding:3px 6px;text-align:center;'>{mq_pie}</td>"
+                    f"<td style='padding:3px 4px;background:{_fs_heatmap_color(season_pa, 'season_pa')};color:#ccc;font-size:9px;text-align:right;'>{pa_s}</td>"
+                    f"<td style='padding:3px 4px;background:{_fs_heatmap_color(batting_avg, 'batting_avg')};color:#ccc;font-size:9px;text-align:center;'>{avg_s}</td>"
+                    f"<td style='padding:3px 4px;background:{_fs_heatmap_color(slg, 'actual_slg')};color:#ccc;font-size:9px;text-align:center;'>{slg_s}</td>"
+                    f"<td style='padding:3px 4px;background:{_fs_heatmap_color(babip, 'babip')};color:#ccc;font-size:9px;text-align:center;'>{babip_s}</td>"
+                    f"<td style='padding:3px 4px;background:{_fs_heatmap_color(gb_pct, 'gb_pct')};color:#ccc;font-size:9px;text-align:center;'>{gb_s}</td>"
+                    f"<td style='padding:3px 4px;background:{_fs_heatmap_color(hard_hit, 'hard_hit')};color:#ccc;font-size:9px;text-align:center;'>{hh_s}</td>"
+                    f"<td style='padding:3px 4px;background:{_fs_heatmap_color(ld_pct, 'ld_pct')};color:#ccc;font-size:9px;text-align:center;'>{ld_s}</td>"
+                    f"<td style='padding:3px 4px;background:{_fs_heatmap_color(barrel_pct, 'barrel_pct')};color:#ccc;font-size:9px;font-weight:600;text-align:center;border-radius:2px;'>{brl_s}</td>"
+                    f"<td style='padding:3px 4px;background:{_fs_heatmap_color(exit_velo, 'exit_velo')};color:#ccc;font-size:9px;text-align:center;'>{ev_s}</td>"
+                    f"<td style='padding:3px 4px;background:{_fs_heatmap_color(launch_angle, 'avg_launch_angle')};color:#ccc;font-size:9px;text-align:center;'>{la_s}</td>"
+                    f"<td style='padding:3px 4px;background:{_fs_heatmap_color(pull_pct, 'pull_pct')};color:#ccc;font-size:9px;text-align:center;'>{pull_s}</td>"
+                    f"<td style='padding:3px 4px;background:{_fs_heatmap_color(center_pct, 'center_pct')};color:#ccc;font-size:9px;text-align:center;'>{ctr_s}</td>"
+                    f"<td style='padding:3px 4px;background:{_fs_heatmap_color(pitcher_hr9, 'pitcher_hr9')};color:#ccc;font-size:9px;font-weight:600;text-align:center;border-radius:2px;'>{hr9_s}</td>"
+                    f"<td style='padding:3px 4px;background:{_fs_heatmap_color(xwoba, 'xwoba')};color:#ccc;font-size:9px;text-align:center;'>{xwoba_s}</td>"
+                    f"<td style='padding:3px 4px;color:#ccc;font-size:9px;text-align:center;'>{hrpa_s}</td>"
+                    f"<td style='padding:3px 4px;color:#f59e0b;font-size:9px;text-align:center;font-weight:600;'>{fd_s}</td>"
                     f"</tr>"
                 )
                 table_rows.append(row_html)
@@ -4999,6 +5169,7 @@ def _render_full_slate_all_players(
                 f"<table style='width:100%;border-collapse:collapse;font-family:monospace;font-size:9px;'>"
                 f"<thead style='background:#0d0d1a;border-bottom:2px solid #2a2a3a;'>"
                 f"<tr>"
+                f"<th style='padding:4px 6px;color:#888;text-align:center;font-weight:700;font-size:8px;'>TIER</th>"
                 f"<th style='padding:4px 6px;color:#60a5fa;text-align:center;font-weight:700;font-size:8px;'>#</th>"
                 f"<th style='padding:4px 6px;color:#eee;text-align:left;font-weight:700;font-size:8px;'>PLAYER</th>"
                 f"<th style='padding:4px 6px;color:#aaa;text-align:center;font-weight:700;font-size:8px;'>TM</th>"
@@ -5019,6 +5190,7 @@ def _render_full_slate_all_players(
                 f"<th style='padding:4px 6px;color:#f87171;text-align:center;font-weight:700;font-size:8px;'>OPP HR/9</th>"
                 f"<th style='padding:4px 6px;color:#aaa;text-align:center;font-weight:700;font-size:8px;'>xwOBA</th>"
                 f"<th style='padding:4px 6px;color:#aaa;text-align:center;font-weight:700;font-size:8px;'>HR/PA</th>"
+                f"<th style='padding:4px 6px;color:#f59e0b;text-align:center;font-weight:700;font-size:8px;'>FD</th>"
                 f"</tr>"
                 f"</thead>"
                 f"<tbody>"

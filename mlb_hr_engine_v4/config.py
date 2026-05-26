@@ -248,3 +248,53 @@ MATCHUP_QUALITY_ELITE_THRESHOLD:    float = 0.15  # model_prob ≥ this → ELIT
 MATCHUP_QUALITY_STRONG_THRESHOLD:   float = 0.10  # model_prob ≥ this → STRONG
 MATCHUP_QUALITY_AVG_THRESHOLD:      float = 0.05  # model_prob < this (or low barrel) → WEAK
 PITCHER_VULNERABILITY_HR9_THRESHOLD: float = 2.2  # pitcher_hr9 ≥ this → DANGER (top 5% vulnerable)
+
+# ── Full Slate Tier Display ───────────────────────────────────────────────────
+# 5-tier classification driven by model_prob. Display-only — does not affect
+# model probability, EV, or confidence_tier (which is EV/edge-based).
+FS_TIER_THRESHOLDS: dict = {
+    "CRITICAL":  0.18,   # model_prob >= 18%
+    "DANGEROUS": 0.13,   # model_prob >= 13%
+    "STRONG":    0.09,   # model_prob >= 9%
+    "ACTIVE":    0.06,   # model_prob >= 6%
+    "QUIET":     0.00,   # model_prob < 6%
+}
+
+FS_TIER_DISPLAY: dict = {
+    "CRITICAL":  {"icon": "⚡", "color": "#ff4444", "label": "CRITICAL"},
+    "DANGEROUS": {"icon": "🎯", "color": "#ff8800", "label": "DANGEROUS"},
+    "STRONG":    {"icon": "↑",  "color": "#ffcc00", "label": "STRONG"},
+    "ACTIVE":    {"icon": "◎",  "color": "#88aaff", "label": "ACTIVE"},
+    "QUIET":     {"icon": "▪",  "color": "#666666", "label": "QUIET"},
+}
+
+# ── Full Slate Heatmap ────────────────────────────────────────────────────────
+# 5-bucket color ramp applied to numeric columns in the Full Slate table.
+# Thresholds are fixed cutoffs, not dynamic percentiles.
+FS_HEATMAP_COLORS: dict = {
+    "ELITE":   "#1a472a",   # dark green
+    "STRONG":  "#2d6a4f",   # medium green
+    "AVERAGE": "#1a1a2e",   # neutral dark
+    "WEAK":    "#4a1942",   # muted red-purple
+    "DANGER":  "#7b2d00",   # dark red-orange
+}
+
+# Thresholds: [elite_floor, strong_floor, average_floor, weak_floor]
+# Values >= elite_floor → ELITE; < weak_floor → DANGER.
+# gb_pct is INVERTED: lower gb_pct = better for HR.
+FS_HEATMAP_THRESHOLDS: dict = {
+    "barrel_pct":       [14.0, 10.0,  7.0,  4.0],
+    "hard_hit":         [50.0, 42.0, 35.0, 28.0],
+    "exit_velo":        [93.0, 91.0, 88.0, 85.0],
+    "xwoba":            [0.400, 0.360, 0.320, 0.280],
+    "pull_pct":         [45.0, 40.0, 35.0, 30.0],
+    "pitcher_hr9":      [1.50,  1.20,  1.00,  0.80],
+    "ld_pct":           [28.0, 24.0, 20.0, 16.0],
+    "gb_pct":           [55.0, 50.0, 45.0, 40.0],   # inverted: lower = better
+    "avg_launch_angle": [18.0, 15.0, 12.0,  8.0],
+    "batting_avg":      [0.290, 0.270, 0.250, 0.230],
+    "actual_slg":       [0.500, 0.450, 0.400, 0.350],
+    "babip":            [0.340, 0.310, 0.290, 0.270],
+    "center_pct":       [30.0, 25.0, 20.0, 15.0],
+    "season_pa":        [400,   300,   200,  100],
+}
