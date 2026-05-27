@@ -5126,10 +5126,11 @@ def _render_full_slate_all_players(
                 fd_raw = p.get("fanduel_american")
                 fd_s = (f"+{fd_raw}" if fd_raw and fd_raw > 0
                         else str(fd_raw) if fd_raw else "—")
+                _tc_color = config.TEAM_COLORS.get(pteam, "#334155")
                 team_chip = (
-                    "<span style='display:inline-block;width:7px;height:7px;"
-                    "border-radius:50%;background:#334155;margin-right:3px;"
-                    "vertical-align:middle;'></span>"
+                    f"<span style='display:inline-block;width:7px;height:7px;"
+                    f"border-radius:50%;background:{_tc_color};margin-right:3px;"
+                    f"vertical-align:middle;'></span>"
                 )
                 mq_pie = _fs_mq_pie_html(mq)
 

@@ -442,14 +442,14 @@ FASTAPI SERVICE
 SECTION 14 · CURRENT PROJECT STATE
 ═══════════════════════════════════════════════════════════════
 
-LAST SESSION: 2026-05-26 (wiki build + Phase 0 closure)
+LAST SESSION: 2026-05-26 (Phase 1 Track A + MAIN doctrine reform)
 
 RECENT COMMITS:
-  db268a3  docs(wiki): Phase 0 closure — app.py audit complete
+  0cda370  docs(wiki): Phase 1 session filing + untrack runtime CSVs
+  d415763  feat(main): MAIN doctrine filter reform
+  523d84f  feat(full-slate): Phase 1 Track A complete
+  db268a3  docs(wiki): Phase 0 closure
   828b42b  chore(repo): ignore Obsidian plugin binaries
-  f1facab  docs(wiki): update log + index after doctrine merge
-  05e3907  docs(wiki): merge governance sections into 5 doctrine pages
-  210950e  chore(repo): clean gitignore + Obsidian vault rules
 
 DESIGN-LOCKED (specs in _design\, not yet runtime code):
   · Full Slate Intelligence Matrix
@@ -471,16 +471,18 @@ WORKING TREE STATE:
 
 WIKI STATE:
   · Infrastructure built 2026-05-26
-  · Doctrine pages complete (merged governance + technical content)
-  · Architecture pages stub only — need repo audit (Claude Code)
-  · Formula pages populated with known weights
-  · Concept pages empty — add as system develops
+  · Doctrine pages complete + MAIN doctrine reform filed
+  · Architecture pages — session-state-map updated
+  · Formula pages populated
   · Plugin stack installed and enabled (14 plugins)
   · Obsidian Git configured and live
   · Templater templates not yet created
 
 PHASE 0 — COMPLETE
-PHASE 1 — NEXT (Full Slate Matrix — MEDIUM risk)
+PHASE 1 TRACK A — COMPLETE (523d84f)
+MAIN DOCTRINE REFORM — COMPLETE (d415763)
+PHASE 1 TRACK B — NEXT (Full Slate renderer restructure)
+RANKER AUDIT — QUEUED (Codex — HIGH risk read-only)
 
 ═══════════════════════════════════════════════════════════════
 SECTION 15 · IMPLEMENTATION ROADMAP
