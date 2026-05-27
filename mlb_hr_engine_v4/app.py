@@ -4543,28 +4543,60 @@ def _fs_heatmap_color(value, column_key: str) -> str:
 
 
 def _fs_mq_pie_html(mq: str) -> str:
-    """4-dot quadrant fill badge for Matchup Quality column."""
-    bg, tc = _mq_color(mq)
-    fills = {"ELITE": 4, "STRONG": 3, "AVG": 2, "WEAK": 1, "DANGER": 0}
+    """
+    Render matchup quality as a CSS conic-gradient
+    pie chart divided into 4 quadrants.
+    ELITE=4 filled, STRONG=3, AVG=2, WEAK=1, DANGER=0
+    """
+    fills = {
+        "ELITE":  4,
+        "STRONG": 3,
+        "AVG":    2,
+        "WEAK":   1,
+        "DANGER": 0,
+    }
+    colors = {
+        "ELITE":  "#4ade80",
+        "STRONG": "#86efac",
+        "AVG":    "#fbbf24",
+        "WEAK":   "#f97316",
+        "DANGER": "#ef4444",
+    }
     n = fills.get(mq, 2)
-    dot_parts = []
-    for i in range(4):
-        c = tc if i < n else "#2a2a3a"
-        dot_parts.append(
-            f"<span style='color:{c};font-size:7px;"
-            f"line-height:1;'>●</span>"
-        )
-    dots = "".join(dot_parts)
+    c = colors.get(mq, "#fbbf24")
     label = f"{mq} MATCHUP" if mq else "—"
+
+    # Build conic-gradient: n quadrants filled, rest dark
+    # 4 quadrants = 90° each
+    filled_deg = n * 90
+    if filled_deg >= 360:
+        gradient = f"conic-gradient({c} 360deg)"
+    elif filled_deg == 0:
+        gradient = "conic-gradient(#2a2a3a 360deg)"
+    else:
+        gradient = (
+            f"conic-gradient({c} {filled_deg}deg, "
+            f"#2a2a3a {filled_deg}deg)"
+        )
+
+    pie_html = (
+        f"<div style='"
+        f"width:20px;height:20px;"
+        f"border-radius:50%;"
+        f"background:{gradient};"
+        f"border:1px solid #444;"
+        f"flex-shrink:0;"
+        f"'></div>"
+    )
+
     return (
-        f"<div style='display:inline-flex;flex-direction:"
-        f"column;align-items:center;gap:2px;'>"
-        f"<div style='background:{bg};border-radius:2px;"
-        f"padding:2px 5px;display:inline-flex;gap:1px;"
-        f"align-items:center;'>{dots}</div>"
-        f"<span style='color:{tc};font-size:8px;"
-        f"font-weight:600;letter-spacing:0.5px;'>"
-        f"{label}</span>"
+        f"<div style='display:inline-flex;"
+        f"flex-direction:column;"
+        f"align-items:center;gap:2px;'>"
+        f"{pie_html}"
+        f"<span style='color:{c};font-size:8px;"
+        f"font-weight:600;letter-spacing:0.3px;"
+        f"white-space:nowrap;'>{label}</span>"
         f"</div>"
     )
 
@@ -4857,55 +4889,55 @@ def _render_full_slate_all_players(
             _pv_bg = "#0d0d1a" if _pv_ri % 2 == 0 else "#111122"
             _pv_rows.append(
                 f"<tr style='background:{_pv_bg};border-bottom:1px solid #1a1a2e;min-height:44px;'>"
-                f"<td style='padding:8px 4px;text-align:center;'>{_pv_tier_s}</td>"
-                f"<td style='padding:8px 4px;color:#60a5fa;font-size:10px;font-weight:700;white-space:nowrap;'>{_pv_chip}{_pv_name}</td>"
-                f"<td style='padding:8px 4px;color:#888;font-size:9px;text-align:center;'>{_pv_team}</td>"
-                f"<td style='padding:8px 4px;color:#555;font-size:8px;white-space:nowrap;'>{_pv_game}</td>"
-                f"<td style='padding:8px 4px;text-align:center;'>{_pv_mq_pie}</td>"
-                f"<td style='padding:8px 4px;background:{_fs_heatmap_color(_pv_spa, 'season_pa')};color:#ccc;font-size:9px;text-align:right;'>{str(_pv_spa) if _pv_spa else '—'}</td>"
-                f"<td style='padding:8px 4px;background:{_fs_heatmap_color(_pv_avg, 'batting_avg')};color:#ccc;font-size:9px;text-align:center;'>{f'{_pv_avg:.3f}' if _pv_avg else '—'}</td>"
-                f"<td style='padding:8px 4px;background:{_fs_heatmap_color(_pv_slg, 'actual_slg')};color:#ccc;font-size:9px;text-align:center;'>{f'{_pv_slg:.3f}' if _pv_slg else '—'}</td>"
-                f"<td style='padding:8px 4px;background:{_fs_heatmap_color(_pv_babip, 'babip')};color:#ccc;font-size:9px;text-align:center;'>{f'{_pv_babip:.3f}' if _pv_babip else '—'}</td>"
-                f"<td style='padding:8px 4px;background:{_fs_heatmap_color(_pv_gb, 'gb_pct')};color:#ccc;font-size:9px;text-align:center;'>{f'{_pv_gb:.1f}%' if _pv_gb else '—'}</td>"
-                f"<td style='padding:8px 4px;background:{_fs_heatmap_color(_pv_hh, 'hard_hit')};color:#ccc;font-size:9px;text-align:center;'>{f'{_pv_hh:.1f}%' if _pv_hh else '—'}</td>"
-                f"<td style='padding:8px 4px;background:{_fs_heatmap_color(_pv_ld, 'ld_pct')};color:#ccc;font-size:9px;text-align:center;'>{f'{_pv_ld:.1f}%' if _pv_ld else '—'}</td>"
-                f"<td style='padding:8px 4px;background:{_fs_heatmap_color(_pv_brl, 'barrel_pct')};color:#ccc;font-size:9px;font-weight:600;text-align:center;'>{f'{_pv_brl:.1f}%' if _pv_brl else '—'}</td>"
-                f"<td style='padding:8px 4px;background:{_fs_heatmap_color(_pv_ev, 'exit_velo')};color:#ccc;font-size:9px;text-align:center;'>{f'{_pv_ev:.1f}' if _pv_ev else '—'}</td>"
-                f"<td style='padding:8px 4px;background:{_fs_heatmap_color(_pv_la, 'avg_launch_angle')};color:#ccc;font-size:9px;text-align:center;'>{f'{_pv_la:.1f}°' if _pv_la else '—'}</td>"
-                f"<td style='padding:8px 4px;background:{_fs_heatmap_color(_pv_pull, 'pull_pct')};color:#ccc;font-size:9px;text-align:center;'>{f'{_pv_pull:.1f}%' if _pv_pull else '—'}</td>"
-                f"<td style='padding:8px 4px;background:{_fs_heatmap_color(_pv_ctr, 'center_pct')};color:#ccc;font-size:9px;text-align:center;'>{f'{_pv_ctr:.1f}%' if _pv_ctr else '—'}</td>"
-                f"<td style='padding:8px 4px;background:{_fs_heatmap_color(_pv_hr9, 'pitcher_hr9')};color:#ccc;font-size:9px;font-weight:600;text-align:center;'>{f'{_pv_hr9:.2f}' if _pv_hr9 else '—'}</td>"
-                f"<td style='padding:8px 4px;background:{_fs_heatmap_color(_pv_xwoba, 'xwoba')};color:#ccc;font-size:9px;text-align:center;'>{f'{_pv_xwoba:.3f}' if _pv_xwoba else '—'}</td>"
-                f"<td style='padding:8px 4px;color:#ccc;font-size:9px;text-align:center;'>{f'{_pv_hrpa:.3f}' if _pv_hrpa else '—'}</td>"
-                f"<td style='padding:8px 4px;color:#f59e0b;font-size:9px;text-align:center;font-weight:600;'>{_pv_fd_s}</td>"
+                f"<td style='padding:6px 3px;text-align:center;width:36px;min-width:36px;max-width:36px;'>{_pv_tier_s}</td>"
+                f"<td style='padding:6px 3px;color:#60a5fa;font-size:10px;font-weight:700;width:160px;min-width:160px;max-width:160px;overflow:hidden;'>{_pv_chip}<span style='font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px;display:inline-block;vertical-align:middle;'>{_pv_name}</span></td>"
+                f"<td style='padding:6px 3px;color:#888;font-size:9px;text-align:center;width:36px;min-width:36px;max-width:36px;'>{_pv_team}</td>"
+                f"<td style='padding:6px 3px;color:#555;font-size:8px;white-space:nowrap;width:80px;min-width:80px;max-width:80px;overflow:hidden;text-overflow:ellipsis;'>{_pv_game}</td>"
+                f"<td style='padding:6px 3px;text-align:center;width:110px;min-width:110px;max-width:110px;'>{_pv_mq_pie}</td>"
+                f"<td style='padding:6px 3px;background:{_fs_heatmap_color(_pv_spa, 'season_pa')};color:#ccc;font-size:11px;text-align:right;width:40px;min-width:40px;max-width:40px;'>{str(_pv_spa) if _pv_spa else '—'}</td>"
+                f"<td style='padding:6px 3px;background:{_fs_heatmap_color(_pv_avg, 'batting_avg')};color:#ccc;font-size:11px;text-align:center;width:46px;min-width:46px;max-width:46px;'>{f'{_pv_avg:.3f}' if _pv_avg else '—'}</td>"
+                f"<td style='padding:6px 3px;background:{_fs_heatmap_color(_pv_slg, 'actual_slg')};color:#ccc;font-size:11px;text-align:center;width:46px;min-width:46px;max-width:46px;'>{f'{_pv_slg:.3f}' if _pv_slg else '—'}</td>"
+                f"<td style='padding:6px 3px;background:{_fs_heatmap_color(_pv_babip, 'babip')};color:#ccc;font-size:11px;text-align:center;width:50px;min-width:50px;max-width:50px;'>{f'{_pv_babip:.3f}' if _pv_babip else '—'}</td>"
+                f"<td style='padding:6px 3px;background:{_fs_heatmap_color(_pv_gb, 'gb_pct')};color:#ccc;font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{f'{_pv_gb:.1f}%' if _pv_gb else '—'}</td>"
+                f"<td style='padding:6px 3px;background:{_fs_heatmap_color(_pv_hh, 'hard_hit')};color:#ccc;font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{f'{_pv_hh:.1f}%' if _pv_hh else '—'}</td>"
+                f"<td style='padding:6px 3px;background:{_fs_heatmap_color(_pv_ld, 'ld_pct')};color:#ccc;font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{f'{_pv_ld:.1f}%' if _pv_ld else '—'}</td>"
+                f"<td style='padding:6px 3px;background:{_fs_heatmap_color(_pv_brl, 'barrel_pct')};color:#ccc;font-size:11px;font-weight:600;text-align:center;width:58px;min-width:58px;max-width:58px;'>{f'{_pv_brl:.1f}%' if _pv_brl else '—'}</td>"
+                f"<td style='padding:6px 3px;background:{_fs_heatmap_color(_pv_ev, 'exit_velo')};color:#ccc;font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{f'{_pv_ev:.1f}' if _pv_ev else '—'}</td>"
+                f"<td style='padding:6px 3px;background:{_fs_heatmap_color(_pv_la, 'avg_launch_angle')};color:#ccc;font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{f'{_pv_la:.1f}°' if _pv_la else '—'}</td>"
+                f"<td style='padding:6px 3px;background:{_fs_heatmap_color(_pv_pull, 'pull_pct')};color:#ccc;font-size:11px;text-align:center;width:48px;min-width:48px;max-width:48px;'>{f'{_pv_pull:.1f}%' if _pv_pull else '—'}</td>"
+                f"<td style='padding:6px 3px;background:{_fs_heatmap_color(_pv_ctr, 'center_pct')};color:#ccc;font-size:11px;text-align:center;width:58px;min-width:58px;max-width:58px;'>{f'{_pv_ctr:.1f}%' if _pv_ctr else '—'}</td>"
+                f"<td style='padding:6px 3px;background:{_fs_heatmap_color(_pv_hr9, 'pitcher_hr9')};color:#ccc;font-size:11px;font-weight:600;text-align:center;width:58px;min-width:58px;max-width:58px;'>{f'{_pv_hr9:.2f}' if _pv_hr9 else '—'}</td>"
+                f"<td style='padding:6px 3px;background:{_fs_heatmap_color(_pv_xwoba, 'xwoba')};color:#ccc;font-size:11px;text-align:center;width:50px;min-width:50px;max-width:50px;'>{f'{_pv_xwoba:.3f}' if _pv_xwoba else '—'}</td>"
+                f"<td style='padding:6px 3px;color:#ccc;font-size:11px;text-align:center;width:50px;min-width:50px;max-width:50px;'>{f'{_pv_hrpa:.3f}' if _pv_hrpa else '—'}</td>"
+                f"<td style='padding:6px 3px;color:#f59e0b;font-size:11px;text-align:center;font-weight:600;width:58px;min-width:58px;max-width:58px;'>{_pv_fd_s}</td>"
                 f"</tr>"
             )
         _pv_html = (
             "<div style='overflow-x:auto;background:#09090f;border:1px solid #1a1a28;border-radius:4px;'>"
-            "<table style='width:100%;border-collapse:collapse;font-family:monospace;font-size:9px;'>"
+            "<table style='width:100%;border-collapse:collapse;font-family:monospace;font-size:9px;table-layout:fixed;'>"
             "<thead style='background:#0d0d1a;border-bottom:2px solid #2a2a3a;'>"
             "<tr>"
-            "<th style='padding:4px 5px;color:#aaa;text-align:center;font-weight:700;font-size:10px;letter-spacing:0.8px;'>TIER</th>"
-            "<th style='padding:4px 5px;color:#aaa;text-align:left;font-weight:700;font-size:10px;letter-spacing:0.8px;'>PLAYER</th>"
-            "<th style='padding:4px 5px;color:#aaa;text-align:center;font-weight:700;font-size:10px;letter-spacing:0.8px;'>TM</th>"
-            "<th style='padding:4px 5px;color:#aaa;text-align:left;font-weight:700;font-size:10px;letter-spacing:0.8px;'>GAME</th>"
-            "<th style='padding:4px 5px;color:#aaa;text-align:center;font-weight:700;font-size:10px;letter-spacing:0.8px;'>MATCHUP QUALITY</th>"
-            "<th style='padding:4px 5px;color:#aaa;text-align:right;font-weight:700;font-size:10px;letter-spacing:0.8px;'>PA</th>"
-            "<th style='padding:4px 5px;color:#aaa;text-align:center;font-weight:700;font-size:10px;letter-spacing:0.8px;'>AVG</th>"
-            "<th style='padding:4px 5px;color:#aaa;text-align:center;font-weight:700;font-size:10px;letter-spacing:0.8px;'>SLG</th>"
-            "<th style='padding:4px 5px;color:#aaa;text-align:center;font-weight:700;font-size:10px;letter-spacing:0.8px;'>BABIP</th>"
-            "<th style='padding:4px 5px;color:#aaa;text-align:center;font-weight:700;font-size:10px;letter-spacing:0.8px;'>GB%</th>"
-            "<th style='padding:4px 5px;color:#aaa;text-align:center;font-weight:700;font-size:10px;letter-spacing:0.8px;'>HH%</th>"
-            "<th style='padding:4px 5px;color:#aaa;text-align:center;font-weight:700;font-size:10px;letter-spacing:0.8px;'>LD%</th>"
-            "<th style='padding:4px 5px;color:#aaa;text-align:center;font-weight:700;font-size:10px;letter-spacing:0.8px;'>BARREL%</th>"
-            "<th style='padding:4px 5px;color:#aaa;text-align:center;font-weight:700;font-size:10px;letter-spacing:0.8px;'>EV</th>"
-            "<th style='padding:4px 5px;color:#aaa;text-align:center;font-weight:700;font-size:10px;letter-spacing:0.8px;'>LA°</th>"
-            "<th style='padding:4px 5px;color:#aaa;text-align:center;font-weight:700;font-size:10px;letter-spacing:0.8px;'>PULL%</th>"
-            "<th style='padding:4px 5px;color:#aaa;text-align:center;font-weight:700;font-size:10px;letter-spacing:0.8px;'>CENTER%</th>"
-            "<th style='padding:4px 5px;color:#f87171;text-align:center;font-weight:700;font-size:10px;letter-spacing:0.8px;'>OPP HR/9</th>"
-            "<th style='padding:4px 5px;color:#aaa;text-align:center;font-weight:700;font-size:10px;letter-spacing:0.8px;'>xwOBA</th>"
-            "<th style='padding:4px 5px;color:#aaa;text-align:center;font-weight:700;font-size:10px;letter-spacing:0.8px;'>HR/PA</th>"
-            "<th style='padding:4px 5px;color:#f59e0b;text-align:center;font-weight:700;font-size:10px;letter-spacing:0.8px;'>FANDUEL</th>"
+            "<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:36px;min-width:36px;max-width:36px;'>TIER</th>"
+            "<th style='padding:4px 3px;color:#aaa;text-align:left;font-weight:700;font-size:9px;letter-spacing:0.8px;width:160px;min-width:160px;max-width:160px;'>PLAYER</th>"
+            "<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:36px;min-width:36px;max-width:36px;'>TM</th>"
+            "<th style='padding:4px 3px;color:#aaa;text-align:left;font-weight:700;font-size:9px;letter-spacing:0.8px;width:80px;min-width:80px;max-width:80px;'>GAME</th>"
+            "<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:110px;min-width:110px;max-width:110px;'>MATCHUP QUALITY</th>"
+            "<th style='padding:4px 3px;color:#aaa;text-align:right;font-weight:700;font-size:9px;letter-spacing:0.8px;width:40px;min-width:40px;max-width:40px;'>PA</th>"
+            "<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:46px;min-width:46px;max-width:46px;'>AVG</th>"
+            "<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:46px;min-width:46px;max-width:46px;'>SLG</th>"
+            "<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:50px;min-width:50px;max-width:50px;'>BABIP</th>"
+            "<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>GB%</th>"
+            "<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>HH%</th>"
+            "<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>LD%</th>"
+            "<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>BARREL%</th>"
+            "<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>EV</th>"
+            "<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>LA°</th>"
+            "<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:48px;min-width:48px;max-width:48px;'>PULL%</th>"
+            "<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>CENTER%</th>"
+            "<th style='padding:4px 3px;color:#f87171;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>OPP HR/9</th>"
+            "<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:50px;min-width:50px;max-width:50px;'>xwOBA</th>"
+            "<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:50px;min-width:50px;max-width:50px;'>HR/PA</th>"
+            "<th style='padding:4px 3px;color:#f59e0b;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>FANDUEL</th>"
             "</tr></thead><tbody>"
             + "".join(_pv_rows)
             + "</tbody></table></div>"
@@ -5179,61 +5211,61 @@ def _render_full_slate_all_players(
                 _row_bg = "#0d0d1a" if _ri % 2 == 0 else "#111122"
                 row_html = (
                     f"<tr style='background:{_row_bg};border-bottom:1px solid #1a1a2e;min-height:44px;'>"
-                    f"<td style='padding:8px 6px;text-align:center;width:22px;'>{tier_s}</td>"
-                    f"<td style='padding:8px 6px;color:#60a5fa;font-size:9px;font-weight:600;text-align:center;'>{spot}</td>"
-                    f"<td style='padding:8px 6px;white-space:nowrap;'>"
+                    f"<td style='padding:6px 3px;text-align:center;width:36px;min-width:36px;max-width:36px;'>{tier_s}</td>"
+                    f"<td style='padding:6px 3px;color:#60a5fa;font-size:11px;font-weight:600;text-align:center;width:28px;min-width:28px;max-width:28px;'>{spot}</td>"
+                    f"<td style='padding:6px 3px;width:160px;min-width:160px;max-width:160px;overflow:hidden;'>"
                     f"<div style='display:flex;align-items:center;gap:6px;'>"
                     f"{team_chip}"
                     f"<div style='display:flex;flex-direction:column;line-height:1.2;'>"
-                    f"<span style='color:#eee;font-size:12px;font-weight:600;'>{pname}</span>"
-                    f"<span style='color:#888;font-size:10px;'>{pteam} | {bats}</span>"
+                    f"<span style='color:#eee;font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px;'>{pname}</span>"
+                    f"<span style='color:#888;font-size:9px;white-space:nowrap;'>{pteam} | {bats}</span>"
                     f"</div></div></td>"
-                    f"<td style='padding:8px 6px;text-align:center;'>{mq_pie}</td>"
-                    f"<td style='padding:8px 4px;background:{_fs_heatmap_color(season_pa, 'season_pa')};color:#ccc;font-size:9px;text-align:right;'>{pa_s}</td>"
-                    f"<td style='padding:8px 4px;background:{_fs_heatmap_color(batting_avg, 'batting_avg')};color:#ccc;font-size:9px;text-align:center;'>{avg_s}</td>"
-                    f"<td style='padding:8px 4px;background:{_fs_heatmap_color(slg, 'actual_slg')};color:#ccc;font-size:9px;text-align:center;'>{slg_s}</td>"
-                    f"<td style='padding:8px 4px;background:{_fs_heatmap_color(babip, 'babip')};color:#ccc;font-size:9px;text-align:center;'>{babip_s}</td>"
-                    f"<td style='padding:8px 4px;background:{_fs_heatmap_color(gb_pct, 'gb_pct')};color:#ccc;font-size:9px;text-align:center;'>{gb_s}</td>"
-                    f"<td style='padding:8px 4px;background:{_fs_heatmap_color(hard_hit, 'hard_hit')};color:#ccc;font-size:9px;text-align:center;'>{hh_s}</td>"
-                    f"<td style='padding:8px 4px;background:{_fs_heatmap_color(ld_pct, 'ld_pct')};color:#ccc;font-size:9px;text-align:center;'>{ld_s}</td>"
-                    f"<td style='padding:8px 4px;background:{_fs_heatmap_color(barrel_pct, 'barrel_pct')};color:#ccc;font-size:9px;font-weight:600;text-align:center;border-radius:2px;'>{brl_s}</td>"
-                    f"<td style='padding:8px 4px;background:{_fs_heatmap_color(exit_velo, 'exit_velo')};color:#ccc;font-size:9px;text-align:center;'>{ev_s}</td>"
-                    f"<td style='padding:8px 4px;background:{_fs_heatmap_color(launch_angle, 'avg_launch_angle')};color:#ccc;font-size:9px;text-align:center;'>{la_s}</td>"
-                    f"<td style='padding:8px 4px;background:{_fs_heatmap_color(pull_pct, 'pull_pct')};color:#ccc;font-size:9px;text-align:center;'>{pull_s}</td>"
-                    f"<td style='padding:8px 4px;background:{_fs_heatmap_color(center_pct, 'center_pct')};color:#ccc;font-size:9px;text-align:center;'>{ctr_s}</td>"
-                    f"<td style='padding:8px 4px;background:{_fs_heatmap_color(pitcher_hr9, 'pitcher_hr9')};color:#ccc;font-size:9px;font-weight:600;text-align:center;border-radius:2px;'>{hr9_s}</td>"
-                    f"<td style='padding:8px 4px;background:{_fs_heatmap_color(xwoba, 'xwoba')};color:#ccc;font-size:9px;text-align:center;'>{xwoba_s}</td>"
-                    f"<td style='padding:8px 4px;color:#ccc;font-size:9px;text-align:center;'>{hrpa_s}</td>"
-                    f"<td style='padding:8px 4px;color:#f59e0b;font-size:9px;text-align:center;font-weight:600;'>{fd_s}</td>"
+                    f"<td style='padding:6px 3px;text-align:center;width:110px;min-width:110px;max-width:110px;'>{mq_pie}</td>"
+                    f"<td style='padding:6px 3px;background:{_fs_heatmap_color(season_pa, 'season_pa')};color:#ccc;font-size:11px;text-align:right;width:40px;min-width:40px;max-width:40px;'>{pa_s}</td>"
+                    f"<td style='padding:6px 3px;background:{_fs_heatmap_color(batting_avg, 'batting_avg')};color:#ccc;font-size:11px;text-align:center;width:46px;min-width:46px;max-width:46px;'>{avg_s}</td>"
+                    f"<td style='padding:6px 3px;background:{_fs_heatmap_color(slg, 'actual_slg')};color:#ccc;font-size:11px;text-align:center;width:46px;min-width:46px;max-width:46px;'>{slg_s}</td>"
+                    f"<td style='padding:6px 3px;background:{_fs_heatmap_color(babip, 'babip')};color:#ccc;font-size:11px;text-align:center;width:50px;min-width:50px;max-width:50px;'>{babip_s}</td>"
+                    f"<td style='padding:6px 3px;background:{_fs_heatmap_color(gb_pct, 'gb_pct')};color:#ccc;font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{gb_s}</td>"
+                    f"<td style='padding:6px 3px;background:{_fs_heatmap_color(hard_hit, 'hard_hit')};color:#ccc;font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{hh_s}</td>"
+                    f"<td style='padding:6px 3px;background:{_fs_heatmap_color(ld_pct, 'ld_pct')};color:#ccc;font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{ld_s}</td>"
+                    f"<td style='padding:6px 3px;background:{_fs_heatmap_color(barrel_pct, 'barrel_pct')};color:#ccc;font-size:11px;font-weight:600;text-align:center;border-radius:2px;width:58px;min-width:58px;max-width:58px;'>{brl_s}</td>"
+                    f"<td style='padding:6px 3px;background:{_fs_heatmap_color(exit_velo, 'exit_velo')};color:#ccc;font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{ev_s}</td>"
+                    f"<td style='padding:6px 3px;background:{_fs_heatmap_color(launch_angle, 'avg_launch_angle')};color:#ccc;font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{la_s}</td>"
+                    f"<td style='padding:6px 3px;background:{_fs_heatmap_color(pull_pct, 'pull_pct')};color:#ccc;font-size:11px;text-align:center;width:48px;min-width:48px;max-width:48px;'>{pull_s}</td>"
+                    f"<td style='padding:6px 3px;background:{_fs_heatmap_color(center_pct, 'center_pct')};color:#ccc;font-size:11px;text-align:center;width:58px;min-width:58px;max-width:58px;'>{ctr_s}</td>"
+                    f"<td style='padding:6px 3px;background:{_fs_heatmap_color(pitcher_hr9, 'pitcher_hr9')};color:#ccc;font-size:11px;font-weight:600;text-align:center;border-radius:2px;width:58px;min-width:58px;max-width:58px;'>{hr9_s}</td>"
+                    f"<td style='padding:6px 3px;background:{_fs_heatmap_color(xwoba, 'xwoba')};color:#ccc;font-size:11px;text-align:center;width:50px;min-width:50px;max-width:50px;'>{xwoba_s}</td>"
+                    f"<td style='padding:6px 3px;color:#ccc;font-size:11px;text-align:center;width:50px;min-width:50px;max-width:50px;'>{hrpa_s}</td>"
+                    f"<td style='padding:6px 3px;color:#f59e0b;font-size:11px;text-align:center;font-weight:600;width:58px;min-width:58px;max-width:58px;'>{fd_s}</td>"
                     f"</tr>"
                 )
                 table_rows.append(row_html)
 
             table_html = (
                 f"<div style='overflow-x:auto;background:#09090f;border:1px solid #1a1a28;border-radius:4px;'>"
-                f"<table style='width:100%;border-collapse:collapse;font-family:monospace;font-size:9px;'>"
+                f"<table style='width:100%;border-collapse:collapse;font-family:monospace;font-size:9px;table-layout:fixed;'>"
                 f"<thead style='background:#0d0d1a;border-bottom:2px solid #2a2a3a;'>"
                 f"<tr>"
-                f"<th style='padding:4px 6px;color:#aaa;text-align:center;font-weight:700;font-size:10px;letter-spacing:0.8px;'>TIER</th>"
-                f"<th style='padding:4px 6px;color:#aaa;text-align:center;font-weight:700;font-size:10px;letter-spacing:0.8px;'>#</th>"
-                f"<th style='padding:4px 6px;color:#aaa;text-align:left;font-weight:700;font-size:10px;letter-spacing:0.8px;'>PLAYER</th>"
-                f"<th style='padding:4px 6px;color:#aaa;text-align:center;font-weight:700;font-size:10px;letter-spacing:0.8px;'>MATCHUP QUALITY</th>"
-                f"<th style='padding:4px 6px;color:#aaa;text-align:right;font-weight:700;font-size:10px;letter-spacing:0.8px;'>PA</th>"
-                f"<th style='padding:4px 6px;color:#aaa;text-align:center;font-weight:700;font-size:10px;letter-spacing:0.8px;'>AVG</th>"
-                f"<th style='padding:4px 6px;color:#aaa;text-align:center;font-weight:700;font-size:10px;letter-spacing:0.8px;'>SLG</th>"
-                f"<th style='padding:4px 6px;color:#aaa;text-align:center;font-weight:700;font-size:10px;letter-spacing:0.8px;'>BABIP</th>"
-                f"<th style='padding:4px 6px;color:#aaa;text-align:center;font-weight:700;font-size:10px;letter-spacing:0.8px;'>GB%</th>"
-                f"<th style='padding:4px 6px;color:#aaa;text-align:center;font-weight:700;font-size:10px;letter-spacing:0.8px;'>HH%</th>"
-                f"<th style='padding:4px 6px;color:#aaa;text-align:center;font-weight:700;font-size:10px;letter-spacing:0.8px;'>LD%</th>"
-                f"<th style='padding:4px 6px;color:#aaa;text-align:center;font-weight:700;font-size:10px;letter-spacing:0.8px;'>BARREL%</th>"
-                f"<th style='padding:4px 6px;color:#aaa;text-align:center;font-weight:700;font-size:10px;letter-spacing:0.8px;'>EV</th>"
-                f"<th style='padding:4px 6px;color:#aaa;text-align:center;font-weight:700;font-size:10px;letter-spacing:0.8px;'>LA°</th>"
-                f"<th style='padding:4px 6px;color:#aaa;text-align:center;font-weight:700;font-size:10px;letter-spacing:0.8px;'>PULL%</th>"
-                f"<th style='padding:4px 6px;color:#aaa;text-align:center;font-weight:700;font-size:10px;letter-spacing:0.8px;'>CENTER%</th>"
-                f"<th style='padding:4px 6px;color:#f87171;text-align:center;font-weight:700;font-size:10px;letter-spacing:0.8px;'>OPP HR/9</th>"
-                f"<th style='padding:4px 6px;color:#aaa;text-align:center;font-weight:700;font-size:10px;letter-spacing:0.8px;'>xwOBA</th>"
-                f"<th style='padding:4px 6px;color:#aaa;text-align:center;font-weight:700;font-size:10px;letter-spacing:0.8px;'>HR/PA</th>"
-                f"<th style='padding:4px 6px;color:#f59e0b;text-align:center;font-weight:700;font-size:10px;letter-spacing:0.8px;'>FANDUEL</th>"
+                f"<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:36px;min-width:36px;max-width:36px;'>TIER</th>"
+                f"<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:28px;min-width:28px;max-width:28px;'>#</th>"
+                f"<th style='padding:4px 3px;color:#aaa;text-align:left;font-weight:700;font-size:9px;letter-spacing:0.8px;width:160px;min-width:160px;max-width:160px;'>PLAYER</th>"
+                f"<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:110px;min-width:110px;max-width:110px;'>MATCHUP QUALITY</th>"
+                f"<th style='padding:4px 3px;color:#aaa;text-align:right;font-weight:700;font-size:9px;letter-spacing:0.8px;width:40px;min-width:40px;max-width:40px;'>PA</th>"
+                f"<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:46px;min-width:46px;max-width:46px;'>AVG</th>"
+                f"<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:46px;min-width:46px;max-width:46px;'>SLG</th>"
+                f"<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:50px;min-width:50px;max-width:50px;'>BABIP</th>"
+                f"<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>GB%</th>"
+                f"<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>HH%</th>"
+                f"<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>LD%</th>"
+                f"<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>BARREL%</th>"
+                f"<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>EV</th>"
+                f"<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>LA°</th>"
+                f"<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:48px;min-width:48px;max-width:48px;'>PULL%</th>"
+                f"<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>CENTER%</th>"
+                f"<th style='padding:4px 3px;color:#f87171;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>OPP HR/9</th>"
+                f"<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:50px;min-width:50px;max-width:50px;'>xwOBA</th>"
+                f"<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:50px;min-width:50px;max-width:50px;'>HR/PA</th>"
+                f"<th style='padding:4px 3px;color:#f59e0b;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>FANDUEL</th>"
                 f"</tr>"
                 f"</thead>"
                 f"<tbody>"

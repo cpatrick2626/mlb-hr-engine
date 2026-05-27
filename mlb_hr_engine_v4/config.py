@@ -280,11 +280,11 @@ FS_TIER_DISPLAY: dict = {
 # 5-bucket color ramp applied to numeric columns in the Full Slate table.
 # Thresholds are fixed cutoffs, not dynamic percentiles.
 FS_HEATMAP_COLORS: dict = {
-    "ELITE":   "#1a472a",   # dark green
-    "STRONG":  "#2d6a4f",   # medium green
-    "AVERAGE": "#1a1a2e",   # neutral dark
-    "WEAK":    "#4a1942",   # muted red-purple
-    "DANGER":  "#7b2d00",   # dark red-orange
+    "ELITE":   "#0d3b1a",   # deep dark green
+    "STRONG":  "#1a5c2a",   # medium green
+    "AVERAGE": "#111111",   # near black neutral
+    "WEAK":    "#5c1a1a",   # dark red
+    "DANGER":  "#8b0000",   # deep bright red
 }
 
 # Thresholds: [elite_floor, strong_floor, average_floor, weak_floor]
