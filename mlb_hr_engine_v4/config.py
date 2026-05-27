@@ -93,6 +93,14 @@ VIG_FACTOR: float = 0.075          # Fallback vig for unknown books; global defa
 DYNAMIC_VIG_ENABLED: bool = True   # Use per-book vig model (engine/vig.py)
 DYNAMIC_VIG_ODDS_RANGE: bool = True  # Scale vig by implied probability (longer shots → higher vig)
 
+# MAIN DOCTRINE — PROJECTED MARKET
+# Used when real FanDuel odds are not yet posted.
+# Market typically prices HR props at ~75% of true probability.
+PROJ_MARKET_VIG_FACTOR: float = 0.75
+
+# Implied probability to American odds conversion floor
+PROJ_MIN_IMPLIED_PROB: float = 0.01
+
 _today = __import__("datetime").date.today()
 # Jan–Feb: season hasn't started, use prior year; Mar–Dec: use current year
 CURRENT_SEASON: int = _today.year if _today.month >= 3 else _today.year - 1

@@ -2866,6 +2866,26 @@ def _intelligence_card_html(
 
     odds_fmt = _fmt_american(odds) if odds else "--"
 
+    # ── Projected market values (display only — when no live odds posted) ──
+    _proj_amber = "#f59e0b"
+    _is_proj = not odds
+    if _is_proj:
+        _pm = _derive_projected_market(player.get("model_prob", 0))
+        odds_fmt       = f"PROJ {_fmt_american(_pm['proj_american'])}"
+        ev_display     = f"PROJ {_pm['proj_ev']:+.1f}%"
+        edge_display   = f"PROJ {_pm['proj_edge']:+.1f}%"
+        ev_col_        = _proj_amber
+        edge_col_      = _proj_amber
+        odds_color     = _proj_amber
+        odds_font_size = "10px"
+        ev_font_size   = "9px"
+        edge_font_size = "9px"
+    else:
+        odds_color     = "#FF6666"
+        odds_font_size = "16px"
+        ev_font_size   = "12px"
+        edge_font_size = "12px"
+
     # Convergence detection — presentation only, no formula changes
     _conv_items = []
     if barrel >= 8.0 and edge is not None and edge >= 2.0:
@@ -2912,7 +2932,7 @@ def _intelligence_card_html(
         f"</div></div>"
         # Right: odds + tier
         f"<div style='text-align:right;flex-shrink:0;margin-left:6px;'>"
-        f"<div style='font-size:16px;font-weight:700;color:#FF6666;line-height:1;'>{odds_fmt}</div>"
+        f"<div style='font-size:{odds_font_size};font-weight:700;color:{odds_color};line-height:1;'>{odds_fmt}</div>"
         f"<div style='font-size:8px;color:{tier_col};font-weight:700;margin-top:1px;letter-spacing:0.3px;'>"
         f"{tier}-TIER{badges_html}</div>"
         f"</div></div>"
@@ -2940,12 +2960,12 @@ def _intelligence_card_html(
         f"<div style='font-size:8px;color:#5555aa;letter-spacing:0.2px;font-weight:500;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'>MDL</div></div>"
 
         f"<div style='flex:1;text-align:center;background:#0c0c22;border-radius:4px;padding:5px 3px;min-width:0;'>"
-        f"<div style='font-size:12px;font-weight:700;color:{ev_col_};line-height:1.2;'>{ev_display}</div>"
+        f"<div style='font-size:{ev_font_size};font-weight:700;color:{ev_col_};line-height:1.2;'>{ev_display}</div>"
         f"<div style='font-size:8px;color:#5555aa;font-weight:500;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'>EV</div></div>"
 
         f"<div style='flex:1;text-align:center;background:#0c0c22;border-radius:4px;padding:5px 3px;min-width:0;"
         f"border-right:1px solid #1e1e35;'>"
-        f"<div style='font-size:12px;font-weight:700;color:{edge_col_};line-height:1.2;'>{edge_display}</div>"
+        f"<div style='font-size:{edge_font_size};font-weight:700;color:{edge_col_};line-height:1.2;'>{edge_display}</div>"
         f"<div style='font-size:8px;color:#5555aa;font-weight:500;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;'>EDGE</div></div>"
 
         # Secondary: barrel + environment — quieter background, standard size
@@ -3642,12 +3662,6 @@ def _apply_ui_filters(
 
     result = []
     for p in players:
-        if not p.get("best_american"):
-            continue
-        if _safe_float(p.get("ev_pct"), -999) < min_ev:
-            continue
-        if _safe_float(p.get("edge_pct"), -999) < min_edge:
-            continue
         if _safe_float(p.get("confidence"), 0) < min_confidence:
             continue
         if _safe_float(p.get("expected_pa"), 0) < config.MIN_PA_THRESHOLD:
@@ -5307,6 +5321,36 @@ def _render_full_slate_all_players(
         unsafe_allow_html=True,
     )
     _finish_heavy_render(_render_started)
+
+
+def _derive_projected_market(model_prob: float) -> dict:
+    """
+    Derive projected market values from model probability.
+    Used when FanDuel odds are not yet posted.
+    All values labeled PROJ so operator knows they are
+    model-derived, not real market data.
+    """
+    proj_implied = max(
+        model_prob * config.PROJ_MARKET_VIG_FACTOR,
+        config.PROJ_MIN_IMPLIED_PROB,
+    )
+    if proj_implied >= 0.50:
+        proj_american = round(-(proj_implied / (1 - proj_implied)) * 100)
+    else:
+        proj_american = round(((1 - proj_implied) / proj_implied) * 100)
+
+    proj_ev = round((model_prob - proj_implied) * 100, 1)
+    proj_edge = round(
+        ((model_prob - proj_implied) / proj_implied) * 100, 1
+    ) if proj_implied > 0 else 0.0
+
+    return {
+        "proj_implied":  round(proj_implied * 100, 1),
+        "proj_american": proj_american,
+        "proj_ev":       proj_ev,
+        "proj_edge":     proj_edge,
+        "is_projected":  True,
+    }
 
 
 def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int | None = None, min_confidence: float = 0):
@@ -10226,18 +10270,18 @@ def main():
 
         st.markdown("#### 🎯 Filter Thresholds")
         _min_ev = st.slider(
-            "Min EV%",
+            "Min EV% (display ref only — not a MAIN gate)",
             min_value=-10.0, max_value=15.0,
-            value=float(st.session_state.get("min_ev", config.MIN_EV_PCT)),
+            value=float(st.session_state.get("min_ev", 0.0)),
             step=0.5,
-            help="Slide to -10 to show all players with odds, regardless of EV.",
+            help="EV% is no longer a MAIN filter gate. Value retained for FD Slip and reference display.",
         )
         _min_edge = st.slider(
-            "Min Edge%",
+            "Min Edge% (display ref only — not a MAIN gate)",
             min_value=-5.0, max_value=8.0,
-            value=float(st.session_state.get("min_edge", config.MIN_EDGE_PCT)),
+            value=float(st.session_state.get("min_edge", 0.0)),
             step=0.5,
-            help="Slide to -5 to show all players with odds, regardless of edge.",
+            help="Edge% is no longer a MAIN filter gate. Value retained for FD Slip and reference display.",
         )
         _min_conf = st.slider(
             "Min Confidence",
