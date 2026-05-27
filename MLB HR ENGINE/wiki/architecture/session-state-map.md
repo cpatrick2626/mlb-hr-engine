@@ -25,6 +25,13 @@ Streamlit's `session_state` is a protected surface in the MLB HR Engine. Each ke
 
 **Note:** Full key inventory requires Claude Code audit of `app.py` and `pipeline.py`. This stub reflects known protected categories from doctrine.
 
+## FD Slip Reference Keys
+
+- `min_ev` and `min_edge` feed FD Slip at line `10365`
+- Cannot remove without touching routing
+- Default set to `0.0`
+- Display-reference only
+
 ## Cross-References
 
 - [Cache Ownership Map](cache-ownership-map.md)

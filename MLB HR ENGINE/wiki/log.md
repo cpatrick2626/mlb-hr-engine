@@ -12,3 +12,7 @@
 - Full overwrite on room-governance.md (was stub, now complete)
 - Commit: 05e3907 | 283 insertions | branch: stabilization-rerender-pass
 - No runtime files touched
+## [2026-05-26] claude-code | Phase 1 Track A Full Slate - 523d84f | COMPLETE
+## [2026-05-26] claude-code | MAIN doctrine filter reform - d415763 | COMPLETE
+## [2026-05-26] claude | MAIN doctrine decision - market gates removed | FILED
+## [2026-05-26] claude | Full Slate spec gap analysis | FILED

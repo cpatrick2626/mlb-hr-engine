@@ -34,6 +34,13 @@ unavailable, display `--` and report as a data gap. No threshold or
 calibration changes from n<200 settled picks without explicit operator
 authorization.
 
+## MAIN Doctrine Reform
+
+- **Market data is display-only:** market fields never gate player qualification in MAIN.
+- **Projected market values:** projected market-facing values derive from `model_prob`.
+- **Layer 1 filter chain:** 3 market-dependent gates removed.
+- **Qualification order:** model qualifies first; market context displays after.
+
 ## Cross-References
 
 - [JIG Tactical Doctrine](jig-tactical-doctrine.md) — the separated tactical layer
