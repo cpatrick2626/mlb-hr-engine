@@ -6163,11 +6163,10 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
 
     # ── T2 routing: derive sub-room from authoritative active_sub_room key ──────
     _MAIN_SUB_ROOM_MAP = {
-        "Full Slate": "full_slate",
-        "Command Center": "command_center",
-        "Top Targets": "top_targets",
-        "Match Edge": "matchup_edge",
-        "Portfolio": "portfolio",
+        "Full Slate":      "full_slate",
+        "Top Targets":     "top_targets",
+        "Matchup Hunter":  "matchup_edge",
+        "Deploy":          "command_center",
     }
     _main_subview = _MAIN_SUB_ROOM_MAP.get(
         _navstate.get_active_sub_room(st.session_state), "full_slate"
