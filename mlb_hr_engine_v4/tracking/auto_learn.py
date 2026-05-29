@@ -122,12 +122,7 @@ def apply_suggestion(suggestion_id: str, value=None) -> bool:
         adj["min_model_prob"] = _compute_prob_threshold(rows)
     elif suggestion_id == "prob_scale":
         adj["prob_scale"] = _compute_prob_scale(calib)
-    elif suggestion_id == "ranker_weights":
-        new_w = _compute_ranker_ev_weight(rows)
-        if new_w is not None:
-            adj["ranker_ev_weight"] = round(new_w, 2)
-        else:
-            return False
+    # ranker_ev_weight learning retired — Ranker Reform 2026-05-29
     elif suggestion_id == "recent_weight":
         new_rw = _compute_recent_weight(rows)
         if new_rw is not None:
@@ -213,15 +208,6 @@ def auto_apply_safe() -> dict:
                         f"min_ev_pct→{new_min:.1f}% "
                         f"(low-EV win rate {low_wr:.0%} vs {high_wr:.0%})"
                     )
-
-    # 3. Ranker weights (EV vs Edge ratio)
-    if n >= 30:
-        new_ev_w = _compute_ranker_ev_weight(rows)
-        if new_ev_w is not None:
-            new_ev_w = round(max(0.40, min(0.70, new_ev_w)), 2)
-            if abs(new_ev_w - adj.get("ranker_ev_weight", 0.55)) >= 0.05:
-                adj["ranker_ev_weight"] = new_ev_w
-                applied.append(f"ranker_ev_weight→{new_ev_w:.2f}")
 
     # 4. Recent/season blend (needs streak_factor in picks log)
     if n >= 25:
@@ -416,27 +402,6 @@ def _generate_suggestions(
                 "impact": "low",
             })
 
-    # ── 5. Ranker EV/Edge weight rebalancing ──────────────────────────────
-    new_ev_w = _compute_ranker_ev_weight(settled)
-    if new_ev_w is not None:
-        current_ev_w = load_adjustments().get("ranker_ev_weight", 0.55)
-        delta_w = abs(new_ev_w - current_ev_w)
-        if delta_w >= 0.05:
-            sid += 1
-            suggestions.append({
-                "id":     "ranker_weights",
-                "sid":    sid,
-                "title":  f"Rebalance ranking formula (EV weight {new_ev_w:.0%} / Edge {1-new_ev_w:.0%})",
-                "detail": (
-                    f"Grid-search across your {len(settled)} settled picks shows EV weight "
-                    f"{new_ev_w:.0%} (Edge {1-new_ev_w:.0%}) better separates winners "
-                    f"from losers than the current {current_ev_w:.0%}/{1-current_ev_w:.0%} split. "
-                    "This affects pick ordering, not probability estimates."
-                ),
-                "value":  {"ranker_ev_weight": new_ev_w},
-                "impact": "medium",
-            })
-
     # ── 6. Recent/season weight ────────────────────────────────────────────
     new_rw = _compute_recent_weight(settled)
     if new_rw is not None:
@@ -545,36 +510,6 @@ def _win_rate(rows: list[dict]) -> float:
     if not settled:
         return 0.0
     return sum(1 for r in settled if r.get("hr_result") == "1") / len(settled)
-
-
-def _compute_ranker_ev_weight(rows: list[dict]) -> "float | None":
-    """
-    Grid-search EV weight (0.30–0.80) to find the ratio that best separates
-    winners from losers in the top-ranked half of settled picks.
-    """
-    settled = [r for r in rows if r.get("hr_result") in ("0", "1")]
-    if len(settled) < 30:
-        return None
-
-    best_w, best_score = 0.55, -1.0
-    for ev_w_int in range(30, 85, 5):
-        ev_w = ev_w_int / 100.0
-        edge_w = 1.0 - ev_w
-        scored = []
-        for r in settled:
-            ev   = float(r.get("ev_pct",   0) or 0)
-            edge = float(r.get("edge_pct", 0) or 0)
-            conf = float(r.get("confidence", 50) or 50)
-            signal = ev * ev_w + edge * edge_w
-            score  = signal * (0.50 + 0.50 * conf / 100)
-            scored.append((score, int(r.get("hr_result", 0))))
-        scored.sort(key=lambda x: x[0], reverse=True)
-        top = scored[:max(1, len(scored) // 2)]
-        wr  = sum(o for _, o in top) / len(top)
-        if wr > best_score:
-            best_score, best_w = wr, ev_w
-
-    return best_w
 
 
 def _compute_recent_weight(rows: list[dict]) -> "float | None":

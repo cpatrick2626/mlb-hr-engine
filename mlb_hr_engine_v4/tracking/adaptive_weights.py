@@ -21,7 +21,7 @@ BOUNDS: dict[str, tuple[float, float]] = {
     "min_model_prob":    (0.04, 0.18),
     "recent_weight":     (0.15, 0.50),
     "interaction_coeff": (0.08, 0.35),
-    "ranker_ev_weight":  (0.35, 0.75),
+    # ranker_ev_weight retired — Ranker Reform 2026-05-29
 }
 
 _cache: dict | None = None

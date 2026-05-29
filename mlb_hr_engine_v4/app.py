@@ -7300,17 +7300,13 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                     _fs_sorted_fp,
                     lambda: sorted(
                         _tac_ranked,
-                        key=lambda p: (
-                            (p.get("ev_pct",    0) or 0) * 0.40 +
-                            (p.get("edge_pct",  0) or 0) * 0.35 +
-                            (p.get("confidence",0) or 0) * 0.25
-                        ),
+                        key=lambda p: (p.get("score", 0) or 0),
                         reverse=True,
                     ),
                 )
                 st.caption(
-                    f"{len(_fs_sorted)} qualified players · composite score EV×0.40 + "
-                    f"Edge×0.35 + Conf×0.25 · TCC + sidebar filters applied · "
+                    f"{len(_fs_sorted)} qualified players · sorted by model score · "
+                    f"TCC + sidebar filters applied · "
                     "📊 Pitch Mix in POWER PROFILE / MATCHUP EDGE / DEPLOYMENT EDGE tabs"
                 )
                 _fs_sorted_pm_ctxs = _ensure_pitch_mix_contexts(

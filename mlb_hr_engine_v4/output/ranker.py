@@ -23,10 +23,6 @@ Confidence Tiers (assigned to every pick):
   C — below B thresholds          → weak/noisy, reduce size or skip
 """
 
-from tracking import adaptive_weights
-
-_DEFAULT_EV_WEIGHT   = 0.55
-_DEFAULT_EDGE_WEIGHT = 0.45
 
 # (grade, display_label, color_hex, min_confidence, min_edge_pct)
 _TIERS = [
@@ -53,16 +49,8 @@ def confidence_tier(confidence: float, edge_pct: float) -> str:
     return "C"
 
 
-def composite_score(ev_pct: float, edge_pct: float, confidence: float) -> float:
-    """
-    Confidence-weighted composite score. Higher = better bet.
-    EV/Edge weights are adaptive — auto-learn adjusts them based on win-rate data.
-    """
-    ev_w   = adaptive_weights.get("ranker_ev_weight", _DEFAULT_EV_WEIGHT)
-    edge_w = 1.0 - ev_w
-    signal     = ev_pct * ev_w + edge_pct * edge_w
-    conf_scale = 0.50 + 0.50 * (confidence / 100.0)
-    return round(signal * conf_scale, 2)
+def composite_score(model_prob: float) -> float:
+    return round(model_prob, 4)
 
 
 def rank_picks(picks: list[dict]) -> list[dict]:
@@ -79,7 +67,7 @@ def rank_picks(picks: list[dict]) -> list[dict]:
         ev   = p.get("ev_pct", 0)
         edge = p.get("edge_pct", 0)
         conf = p.get("confidence", 0)
-        p["score"] = composite_score(ev, edge, conf)
+        p["score"] = composite_score(p.get("model_prob", 0))
         p["confidence_tier"] = confidence_tier(conf, edge)
 
     ranked = sorted(

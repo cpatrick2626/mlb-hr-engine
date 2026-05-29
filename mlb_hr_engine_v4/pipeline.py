@@ -689,11 +689,10 @@ def load_game_data(
             p["confidence_tier"] = _rp.get("confidence_tier", "C")
             p["score"]           = _rp.get("score", 0)
         else:
-            ev   = p.get("ev_pct", 0)
             edge = p.get("edge_pct", 0)
             conf = p.get("confidence", 0)
             p["confidence_tier"] = ranker.confidence_tier(conf, edge)
-            p["score"]           = ranker.composite_score(ev, edge, conf)
+            p["score"]           = ranker.composite_score(p.get("model_prob", 0))
 
     # Auto parlay combos (legacy leg-count view + new profile-based view)
     auto_parlays    = parlay_engine.build_auto_parlays(ranked)
