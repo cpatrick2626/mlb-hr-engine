@@ -8395,11 +8395,12 @@ def tab_jig(data: dict):
 
         # ── T2 routing: derive sub-room from authoritative active_sub_room key ──
         _JIG_SUB_ROOM_MAP = {
-            "JIG Builder": "command_center",
-            "Top Targets": "top_targets",
-            "Match Edge": "matchup_edge",
-            "Full Slate": "full_slate",
-            "Portfolio": "portfolio",
+            "JIG Builder":   "jig_builder",
+            "Full Slate":    "full_slate",
+            "Matchup":       "matchup",
+            "Arsenal":       "arsenal",
+            "Power Profile": "power_profile",
+            "Exploit":       "exploit",
         }
         _jig_subview = _JIG_SUB_ROOM_MAP.get(
             _navstate.get_active_sub_room(st.session_state), "command_center"
