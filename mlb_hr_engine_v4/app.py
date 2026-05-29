@@ -1260,7 +1260,7 @@ except ImportError as e:
 # â"€â"€ Styling â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 st.markdown("""
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;700;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;700;900&family=Barlow+Condensed:wght@800&display=swap');
 
 /* ══════════════════════════ SHELL LOCK ══════════════════════════ */
 html, body, .stApp {
@@ -4565,13 +4565,7 @@ def _fs_tier_html(tier: str) -> str:
 def _fs_heatmap_color(value, column_key: str) -> dict:
     """Return bg and text color for Full Slate heatmap cell."""
     _INVERTED = {"gb_pct"}
-    _TEXT_COLORS = {
-        "ELITE":   "#1aff66",   # --green-500
-        "STRONG":  "#6dffae",   # --green-300
-        "AVERAGE": "#b8c2c0",   # --fg-2
-        "WEAK":    "#ff8a93",   # --red-300
-        "DANGER":  "#ff3344",   # --red-500
-    }
+    _TEXT_COLORS = config.FS_HEATMAP_TEXT_COLORS
     thresholds = config.FS_HEATMAP_THRESHOLDS.get(column_key)
     if thresholds is None or value is None:
         return {"bg": config.FS_HEATMAP_COLORS["AVERAGE"], "text": _TEXT_COLORS["AVERAGE"]}
@@ -4635,15 +4629,8 @@ def _fs_mq_pie_html(mq: str) -> str:
         "WEAK":   1,
         "DANGER": 0,
     }
-    colors = {
-        "ELITE":  "#4ade80",
-        "STRONG": "#86efac",
-        "AVG":    "#fbbf24",
-        "WEAK":   "#f97316",
-        "DANGER": "#ef4444",
-    }
     n = fills.get(mq, 2)
-    c = colors.get(mq, "#fbbf24")
+    c = config.FS_MQ_PIE_COLORS.get(mq, config.FS_MQ_PIE_COLORS["AVG"])
     label = f"{mq} MATCHUP" if mq else "—"
     _mq_tooltips = {
         "ELITE":  "ELITE MATCHUP: Favorable pitcher vulnerability + handedness + park",
@@ -4660,11 +4647,11 @@ def _fs_mq_pie_html(mq: str) -> str:
     if filled_deg >= 360:
         gradient = f"conic-gradient({c} 360deg)"
     elif filled_deg == 0:
-        gradient = "conic-gradient(#2a2a3a 360deg)"
+        gradient = f"conic-gradient({config.FS_MQ_PIE_COLORS['EMPTY']} 360deg)"
     else:
         gradient = (
             f"conic-gradient({c} {filled_deg}deg, "
-            f"#2a2a3a {filled_deg}deg)"
+            f"{config.FS_MQ_PIE_COLORS['EMPTY']} {filled_deg}deg)"
         )
 
     pie_html = (
@@ -4687,6 +4674,39 @@ def _fs_mq_pie_html(mq: str) -> str:
         f"white-space:nowrap;'>{label}</span>"
         f"</div>"
     )
+
+
+def _fs_table_header_html(include_game_cols: bool = False) -> str:
+    """Shared Full Slate table header — single source of truth."""
+    _cols = (
+        "<th title='HR probability tier: APEX=≥18% / ELITE=≥13% / EDGE=≥9% / SIGNAL=≥6% / WATCH=≥3% / COLD=&lt;3%' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:36px;min-width:36px;max-width:36px;'>TIER</th>"
+        "<th title='Batter name, team, and handedness' style='padding:4px 3px;color:#aaa;text-align:left;font-weight:700;font-size:9px;letter-spacing:0.8px;width:140px;min-width:140px;max-width:140px;'>PLAYER</th>"
+    )
+    if include_game_cols:
+        _cols += (
+            "<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:36px;min-width:36px;max-width:36px;'>TM</th>"
+            "<th style='padding:4px 3px;color:#aaa;text-align:left;font-weight:700;font-size:9px;letter-spacing:0.8px;width:80px;min-width:80px;max-width:80px;'>GAME</th>"
+        )
+    _cols += (
+        "<th title='Overall matchup quality vs opposing pitcher' style='padding:4px 2px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:110px;min-width:110px;max-width:110px;'>MATCHUP QUALITY</th>"
+        "<th title='Plate appearances this season' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:40px;min-width:40px;max-width:40px;'>PA</th>"
+        "<th title='Batting average this season' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:46px;min-width:46px;max-width:46px;'>AVG</th>"
+        "<th title='Slugging percentage this season' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:46px;min-width:46px;max-width:46px;'>SLG</th>"
+        "<th title='Batting average on balls in play' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:50px;min-width:50px;max-width:50px;'>BABIP</th>"
+        "<th title='Ground ball rate — lower is better for HR' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>GB%</th>"
+        "<th title='Hard hit rate — exit velocity above 95mph' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>HH%</th>"
+        "<th title='Line drive rate' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>LD%</th>"
+        "<th title='Barrel rate — optimal exit velo + launch angle' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>BARREL%</th>"
+        "<th title='Average exit velocity (mph)' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>EV</th>"
+        "<th title='Average launch angle (degrees)' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>LA°</th>"
+        "<th title='Pull rate — balls hit to pull side' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:48px;min-width:48px;max-width:48px;'>PULL%</th>"
+        "<th title='Center field rate' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>CENTER%</th>"
+        "<th title='Opposing pitcher HR allowed per 9 innings — higher = more vulnerable' style='padding:4px 3px;color:#f87171;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>OPP HR/9</th>"
+        "<th title='Expected weighted on-base average' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:50px;min-width:50px;max-width:50px;'>xwOBA</th>"
+        "<th title='Home run rate per plate appearance' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:50px;min-width:50px;max-width:50px;'>HR/PA</th>"
+        "<th title='FanDuel market odds — display only, does not affect ranking' style='padding:4px 3px;color:#f59e0b;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>FANDUEL</th>"
+    )
+    return _cols
 
 
 # ─── Full Slate "All Players" game-organized renderer ─────────────────────────
@@ -5021,28 +5041,8 @@ def _render_full_slate_all_players(
             "<table style='width:100%;border-collapse:collapse;font-family:monospace;font-size:9px;table-layout:fixed;'>"
             "<thead style='background:#0d0d1a;border-bottom:2px solid #2a2a3a;'>"
             "<tr>"
-            "<th title='HR probability tier: APEX=≥18% / ELITE=≥13% / EDGE=≥9% / SIGNAL=≥6% / WATCH=≥3% / COLD=&lt;3%' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:36px;min-width:36px;max-width:36px;'>TIER</th>"
-            "<th title='Batter name, team, and handedness' style='padding:4px 3px;color:#aaa;text-align:left;font-weight:700;font-size:9px;letter-spacing:0.8px;width:140px;min-width:140px;max-width:140px;'>PLAYER</th>"
-            "<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:36px;min-width:36px;max-width:36px;'>TM</th>"
-            "<th style='padding:4px 3px;color:#aaa;text-align:left;font-weight:700;font-size:9px;letter-spacing:0.8px;width:80px;min-width:80px;max-width:80px;'>GAME</th>"
-            "<th title='Overall matchup quality vs opposing pitcher' style='padding:4px 2px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:110px;min-width:110px;max-width:110px;'>MATCHUP QUALITY</th>"
-            "<th title='Plate appearances this season' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:40px;min-width:40px;max-width:40px;'>PA</th>"
-            "<th title='Batting average this season' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:46px;min-width:46px;max-width:46px;'>AVG</th>"
-            "<th title='Slugging percentage this season' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:46px;min-width:46px;max-width:46px;'>SLG</th>"
-            "<th title='Batting average on balls in play' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:50px;min-width:50px;max-width:50px;'>BABIP</th>"
-            "<th title='Ground ball rate — lower is better for HR' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>GB%</th>"
-            "<th title='Hard hit rate — exit velocity above 95mph' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>HH%</th>"
-            "<th title='Line drive rate' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>LD%</th>"
-            "<th title='Barrel rate — optimal exit velo + launch angle' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>BARREL%</th>"
-            "<th title='Average exit velocity (mph)' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>EV</th>"
-            "<th title='Average launch angle (degrees)' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>LA°</th>"
-            "<th title='Pull rate — balls hit to pull side' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:48px;min-width:48px;max-width:48px;'>PULL%</th>"
-            "<th title='Center field rate' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>CENTER%</th>"
-            "<th title='Opposing pitcher HR allowed per 9 innings — higher = more vulnerable' style='padding:4px 3px;color:#f87171;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>OPP HR/9</th>"
-            "<th title='Expected weighted on-base average' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:50px;min-width:50px;max-width:50px;'>xwOBA</th>"
-            "<th title='Home run rate per plate appearance' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:50px;min-width:50px;max-width:50px;'>HR/PA</th>"
-            "<th title='FanDuel market odds — display only, does not affect ranking' style='padding:4px 3px;color:#f59e0b;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>FANDUEL</th>"
-            "</tr></thead><tbody>"
+            + _fs_table_header_html(include_game_cols=True)
+            + "</tr></thead><tbody>"
             + "".join(_pv_rows)
             + "</tbody></table></div>"
         )
@@ -5358,26 +5358,8 @@ def _render_full_slate_all_players(
                 f"<table style='width:100%;border-collapse:collapse;font-family:monospace;font-size:9px;table-layout:fixed;'>"
                 f"<thead style='background:#0d0d1a;border-bottom:2px solid #2a2a3a;'>"
                 f"<tr>"
-                f"<th title='HR probability tier: APEX=≥18% / ELITE=≥13% / EDGE=≥9% / SIGNAL=≥6% / WATCH=≥3% / COLD=&lt;3%' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:36px;min-width:36px;max-width:36px;'>TIER</th>"
-                f"<th title='Batter name, team, and handedness' style='padding:4px 3px;color:#aaa;text-align:left;font-weight:700;font-size:9px;letter-spacing:0.8px;width:140px;min-width:140px;max-width:140px;'>PLAYER</th>"
-                f"<th title='Overall matchup quality vs opposing pitcher' style='padding:4px 2px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:110px;min-width:110px;max-width:110px;'>MATCHUP QUALITY</th>"
-                f"<th title='Plate appearances this season' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:40px;min-width:40px;max-width:40px;'>PA</th>"
-                f"<th title='Batting average this season' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:46px;min-width:46px;max-width:46px;'>AVG</th>"
-                f"<th title='Slugging percentage this season' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:46px;min-width:46px;max-width:46px;'>SLG</th>"
-                f"<th title='Batting average on balls in play' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:50px;min-width:50px;max-width:50px;'>BABIP</th>"
-                f"<th title='Ground ball rate — lower is better for HR' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>GB%</th>"
-                f"<th title='Hard hit rate — exit velocity above 95mph' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>HH%</th>"
-                f"<th title='Line drive rate' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>LD%</th>"
-                f"<th title='Barrel rate — optimal exit velo + launch angle' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>BARREL%</th>"
-                f"<th title='Average exit velocity (mph)' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>EV</th>"
-                f"<th title='Average launch angle (degrees)' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>LA°</th>"
-                f"<th title='Pull rate — balls hit to pull side' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:48px;min-width:48px;max-width:48px;'>PULL%</th>"
-                f"<th title='Center field rate' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>CENTER%</th>"
-                f"<th title='Opposing pitcher HR allowed per 9 innings — higher = more vulnerable' style='padding:4px 3px;color:#f87171;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>OPP HR/9</th>"
-                f"<th title='Expected weighted on-base average' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:50px;min-width:50px;max-width:50px;'>xwOBA</th>"
-                f"<th title='Home run rate per plate appearance' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:50px;min-width:50px;max-width:50px;'>HR/PA</th>"
-                f"<th title='FanDuel market odds — display only, does not affect ranking' style='padding:4px 3px;color:#f59e0b;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>FANDUEL</th>"
-                f"</tr>"
+                + _fs_table_header_html()
+                + f"</tr>"
                 f"</thead>"
                 f"<tbody>"
                 + "".join(table_rows)
