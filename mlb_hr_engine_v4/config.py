@@ -258,34 +258,59 @@ MATCHUP_QUALITY_AVG_THRESHOLD:      float = 0.05  # model_prob < this (or low ba
 PITCHER_VULNERABILITY_HR9_THRESHOLD: float = 2.2  # pitcher_hr9 ≥ this → DANGER (top 5% vulnerable)
 
 # ── Full Slate Tier Display ───────────────────────────────────────────────────
-# 5-tier classification driven by model_prob. Display-only — does not affect
+# 6-tier classification driven by model_prob. Display-only — does not affect
 # model probability, EV, or confidence_tier (which is EV/edge-based).
 FS_TIER_THRESHOLDS: dict = {
-    "CRITICAL":  0.18,   # model_prob >= 18%
-    "DANGEROUS": 0.13,   # model_prob >= 13%
-    "STRONG":    0.09,   # model_prob >= 9%
-    "ACTIVE":    0.06,   # model_prob >= 6%
-    "QUIET":     0.00,   # model_prob < 6%
+    "APEX":   0.18,
+    "ELITE":  0.13,
+    "EDGE":   0.09,
+    "SIGNAL": 0.06,
+    "WATCH":  0.03,
+    "COLD":   0.00,
 }
 
 FS_TIER_DISPLAY: dict = {
-    "CRITICAL":  {"icon": "⚡", "color": "#ff4444", "label": "CRITICAL"},
-    "DANGEROUS": {"icon": "🎯", "color": "#ff8800", "label": "DANGEROUS"},
-    "STRONG":    {"icon": "↑",  "color": "#ffcc00", "label": "STRONG"},
-    "ACTIVE":    {"icon": "◎",  "color": "#88aaff", "label": "ACTIVE"},
-    "QUIET":     {"icon": "▪",  "color": "#666666", "label": "QUIET"},
+    "APEX":   {"color": "#ff3344", "glow": "rgba(255,51,68,0.55)",   "label": "APEX"},
+    "ELITE":  {"color": "#ff3344", "glow": "rgba(255,51,68,0.55)",   "label": "ELITE"},
+    "EDGE":   {"color": "#1aff66", "glow": "rgba(26,255,102,0.55)",  "label": "EDGE"},
+    "SIGNAL": {"color": "#3b6fff", "glow": "rgba(59,111,255,0.45)",  "label": "SIGNAL"},
+    "WATCH":  {"color": "#ffb020", "glow": "rgba(255,176,32,0.4)",   "label": "WATCH"},
+    "COLD":   {"color": "#6b7872", "glow": "rgba(107,120,114,0.3)",  "label": "COLD"},
 }
 
 # ── Full Slate Heatmap ────────────────────────────────────────────────────────
 # 5-bucket color ramp applied to numeric columns in the Full Slate table.
 # Thresholds are fixed cutoffs, not dynamic percentiles.
 FS_HEATMAP_COLORS: dict = {
-    "ELITE":   "#0d3b1a",   # deep dark green
-    "STRONG":  "#1a5c2a",   # medium green
-    "AVERAGE": "#111111",   # near black neutral
-    "WEAK":    "#5c1a1a",   # dark red
-    "DANGER":  "#8b0000",   # deep bright red
+    "ELITE":   "#0e3a20",   # --heat-warm
+    "STRONG":  "#14291a",   # between warm and mid
+    "AVERAGE": "#0a1014",   # --bg-base
+    "WEAK":    "#3d0a10",   # between cool and cold
+    "DANGER":  "#2a0a10",   # --heat-cold
 }
+
+# ── HR ENGINE DESIGN TOKENS ──────────────────────────────────────────────────
+# Official HR Engine color tokens
+# Source: HR_Engine_Design_System-handoff
+HRE_GREEN_500     = "#1aff66"   # core neon green
+HRE_GREEN_300     = "#6dffae"   # medium green
+HRE_RED_500       = "#ff3344"   # core neon red
+HRE_RED_300       = "#ff8a93"   # medium red
+HRE_CYAN_500      = "#00d9ff"   # info/neutral
+HRE_AMBER_500     = "#ffb020"   # warning/watch
+HRE_BLUE_500      = "#3b6fff"   # signal tier
+HRE_BG_VOID       = "#04070a"   # page background
+HRE_BG_BASE       = "#0a1014"   # primary panel
+HRE_BG_RAISED     = "#0e1519"   # raised card
+HRE_BG_ELEVATED   = "#131b21"   # hover/secondary
+HRE_FG_1          = "#f1f5f3"   # primary text
+HRE_FG_2          = "#b8c2c0"   # secondary text
+HRE_FG_3          = "#6b7872"   # tertiary text
+HRE_HEAT_HOT      = "#14c451"   # heatmap hot
+HRE_HEAT_WARM     = "#0e3a20"   # heatmap warm
+HRE_HEAT_MID      = "#2a1e1a"   # heatmap mid
+HRE_HEAT_COOL     = "#6a1622"   # heatmap cool
+HRE_HEAT_COLD     = "#2a0a10"   # heatmap cold
 
 # Thresholds: [elite_floor, strong_floor, average_floor, weak_floor]
 # Values >= elite_floor → ELITE; < weak_floor → DANGER.

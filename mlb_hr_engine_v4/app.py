@@ -4515,31 +4515,111 @@ def _mq_color(mq_tier: str) -> tuple:
 
 
 def _fs_tier_from_prob(model_prob: float) -> str:
-    """Classify model_prob into 5-tier Full Slate display system.
+    """Classify model_prob into 6-tier Full Slate display system.
     Coexists with confidence_tier (EV/edge-based) — does not replace it."""
     t = config.FS_TIER_THRESHOLDS
-    if model_prob >= t["CRITICAL"]:  return "CRITICAL"
-    if model_prob >= t["DANGEROUS"]: return "DANGEROUS"
-    if model_prob >= t["STRONG"]:    return "STRONG"
-    if model_prob >= t["ACTIVE"]:    return "ACTIVE"
-    return "QUIET"
+    if model_prob >= t["APEX"]:   return "APEX"
+    if model_prob >= t["ELITE"]:  return "ELITE"
+    if model_prob >= t["EDGE"]:   return "EDGE"
+    if model_prob >= t["SIGNAL"]: return "SIGNAL"
+    if model_prob >= t["WATCH"]:  return "WATCH"
+    return "COLD"
 
 
-def _fs_heatmap_color(value, column_key: str) -> str:
-    """5-bucket background color for Full Slate numeric cells."""
+def _fs_tier_html(tier: str) -> str:
+    """Neon text-shadow label for Full Slate tier cell."""
+    t = config.FS_TIER_DISPLAY.get(tier, config.FS_TIER_DISPLAY["COLD"])
+    c = t["color"]
+    g = t["glow"]
+    label = t["label"]
+    _tooltips = {
+        "APEX":   "APEX: Model probability ≥18%. Greatest HR threat. Must deploy.",
+        "ELITE":  "ELITE: Model probability ≥13%. Premium HR danger.",
+        "EDGE":   "EDGE: Model probability ≥9%. Strong matchup advantage.",
+        "SIGNAL": "SIGNAL: Model probability ≥6%. Positive indicators.",
+        "WATCH":  "WATCH: Model probability ≥3%. Marginal. Situational.",
+        "COLD":   "COLD: Model probability <3%. Do not deploy.",
+    }
+    tooltip = _tooltips.get(tier, "")
+    return (
+        f"<div title='{tooltip}' style='"
+        f"color:{c};"
+        f"font-size:9px;"
+        f"font-weight:800;"
+        f"letter-spacing:0.12em;"
+        f"font-family:Barlow Condensed,sans-serif;"
+        f"text-transform:uppercase;"
+        f"text-shadow:0 0 8px {g};"
+        f"text-align:center;"
+        f"white-space:nowrap;"
+        f"background:rgba(8,12,16,0.6);"
+        f"box-shadow:inset 0 0 0 1.5px {g},0 0 8px {g};"
+        f"border-radius:4px;"
+        f"padding:5px 10px;"
+        f"display:inline-block;"
+        f"min-width:48px;"
+        f"'>{label}</div>"
+    )
+
+
+def _fs_heatmap_color(value, column_key: str) -> dict:
+    """Return bg and text color for Full Slate heatmap cell."""
     _INVERTED = {"gb_pct"}
+    _TEXT_COLORS = {
+        "ELITE":   "#1aff66",   # --green-500
+        "STRONG":  "#6dffae",   # --green-300
+        "AVERAGE": "#b8c2c0",   # --fg-2
+        "WEAK":    "#ff8a93",   # --red-300
+        "DANGER":  "#ff3344",   # --red-500
+    }
     thresholds = config.FS_HEATMAP_THRESHOLDS.get(column_key)
     if thresholds is None or value is None:
-        return config.FS_HEATMAP_COLORS["AVERAGE"]
+        return {"bg": config.FS_HEATMAP_COLORS["AVERAGE"], "text": _TEXT_COLORS["AVERAGE"]}
     v = float(value)
     t0, t1, t2, t3 = thresholds
     if column_key in _INVERTED:
         v, t0, t1, t2, t3 = -v, -t0, -t1, -t2, -t3
-    if v >= t0: return config.FS_HEATMAP_COLORS["ELITE"]
-    if v >= t1: return config.FS_HEATMAP_COLORS["STRONG"]
-    if v >= t2: return config.FS_HEATMAP_COLORS["AVERAGE"]
-    if v >= t3: return config.FS_HEATMAP_COLORS["WEAK"]
-    return config.FS_HEATMAP_COLORS["DANGER"]
+    if v >= t0:   bucket = "ELITE"
+    elif v >= t1: bucket = "STRONG"
+    elif v >= t2: bucket = "AVERAGE"
+    elif v >= t3: bucket = "WEAK"
+    else:         bucket = "DANGER"
+    return {"bg": config.FS_HEATMAP_COLORS[bucket], "text": _TEXT_COLORS[bucket]}
+
+
+def _fs_tier_legend_html() -> str:
+    """Inline tier legend strip for Full Slate header row."""
+    items = []
+    for tier in ["APEX", "ELITE", "EDGE", "SIGNAL", "WATCH", "COLD"]:
+        t = config.FS_TIER_DISPLAY[tier]
+        c = t["color"]
+        g = t["glow"]
+        label = t["label"]
+        items.append(
+            f"<span style='"
+            f"color:{c};"
+            f"font-size:9px;"
+            f"font-weight:700;"
+            f"letter-spacing:0.8px;"
+            f"text-shadow:0 0 6px {g};"
+            f"border:1px solid {c};"
+            f"border-radius:3px;"
+            f"padding:1px 4px;"
+            f"box-shadow:0 0 4px {g};"
+            f"'>{label}</span>"
+        )
+    items_html = "".join(
+        [f"<span style='display:inline-flex;align-items:center;gap:3px;'>{item}</span>"
+         for item in items]
+    )
+    return (
+        f"<div style='display:flex;align-items:center;gap:8px;"
+        f"flex-wrap:wrap;padding:6px 0;'>"
+        f"<span style='color:#aaa;font-size:9px;font-weight:600;"
+        f"letter-spacing:1px;'>TIER</span>"
+        f"{items_html}"
+        f"</div>"
+    )
 
 
 def _fs_mq_pie_html(mq: str) -> str:
@@ -4565,6 +4645,14 @@ def _fs_mq_pie_html(mq: str) -> str:
     n = fills.get(mq, 2)
     c = colors.get(mq, "#fbbf24")
     label = f"{mq} MATCHUP" if mq else "—"
+    _mq_tooltips = {
+        "ELITE":  "ELITE MATCHUP: Favorable pitcher vulnerability + handedness + park",
+        "STRONG": "STRONG MATCHUP: Above average matchup conditions",
+        "AVG":    "AVG MATCHUP: Neutral matchup conditions",
+        "WEAK":   "WEAK MATCHUP: Below average matchup conditions",
+        "DANGER": "DANGER MATCHUP: Unfavorable matchup — pitcher dominant",
+    }
+    mq_tooltip = _mq_tooltips.get(mq, "")
 
     # Build conic-gradient: n quadrants filled, rest dark
     # 4 quadrants = 90° each
@@ -4590,7 +4678,7 @@ def _fs_mq_pie_html(mq: str) -> str:
     )
 
     return (
-        f"<div style='display:inline-flex;"
+        f"<div title='{mq_tooltip}' style='display:inline-flex;"
         f"flex-direction:column;"
         f"align-items:center;gap:2px;'>"
         f"{pie_html}"
@@ -4825,20 +4913,24 @@ def _render_full_slate_all_players(
             unsafe_allow_html=True,
         )
 
-    st.markdown(
-        "<div style='display:flex;justify-content:flex-end;"
-        "align-items:center;gap:12px;padding:6px 0;"
-        "font-size:10px;color:#888;'>"
-        "<span style='color:#aaa;font-weight:600;"
-        "letter-spacing:1px;'>MATCHUP KEY</span>"
-        "<span style='color:#4ade80;'>&#9679; ELITE</span>"
-        "<span style='color:#86efac;'>&#9679; STRONG</span>"
-        "<span style='color:#fbbf24;'>&#9679; AVG</span>"
-        "<span style='color:#f97316;'>&#9679; WEAK</span>"
-        "<span style='color:#ef4444;'>&#9679; DANGER</span>"
-        "</div>",
-        unsafe_allow_html=True,
-    )
+    _legend_cols = st.columns([1, 1])
+    with _legend_cols[0]:
+        st.markdown(_fs_tier_legend_html(), unsafe_allow_html=True)
+    with _legend_cols[1]:
+        st.markdown(
+            "<div style='display:flex;justify-content:flex-end;"
+            "align-items:center;gap:12px;padding:6px 0;"
+            "font-size:10px;color:#888;'>"
+            "<span style='color:#aaa;font-weight:600;"
+            "letter-spacing:1px;'>MATCHUP KEY</span>"
+            "<span style='color:#4ade80;'>&#9679; ELITE</span>"
+            "<span style='color:#86efac;'>&#9679; STRONG</span>"
+            "<span style='color:#fbbf24;'>&#9679; AVG</span>"
+            "<span style='color:#f97316;'>&#9679; WEAK</span>"
+            "<span style='color:#ef4444;'>&#9679; DANGER</span>"
+            "</div>",
+            unsafe_allow_html=True,
+        )
     st.markdown(
         "<div style='font-size:9px;color:#333;padding:2px 4px;margin-bottom:4px;"
         "font-family:monospace;letter-spacing:0.5px;'>"
@@ -4859,9 +4951,7 @@ def _render_full_slate_all_players(
             _pv_game   = f"{_pv_p.get('opponent','?')}@{_pv_ht}" if _pv_ht else _pv_team
             _pv_mp     = float(_pv_p.get("model_prob") or 0)
             _pv_tk     = _fs_tier_from_prob(_pv_mp)
-            _pv_td     = config.FS_TIER_DISPLAY[_pv_tk]
-            _pv_tier_s = (f"<span style='color:{_pv_td['color']};font-size:10px;'>{_pv_td['icon']}</span>"
-                          if _pv_mp > 0 else "—")
+            _pv_tier_s = _fs_tier_html(_pv_tk) if _pv_mp > 0 else "—"
             _pv_mq     = _pv_p.get("matchup_quality", "AVG")
             _pv_mq_pie = _fs_mq_pie_html(_pv_mq)
             _pv_chip   = ("<span style='display:inline-block;width:7px;height:7px;"
@@ -4887,27 +4977,41 @@ def _render_full_slate_all_players(
             _pv_fd_s   = (f"+{_pv_fd_raw}" if _pv_fd_raw and _pv_fd_raw > 0
                           else str(_pv_fd_raw) if _pv_fd_raw else "—")
             _pv_bg = "#0d0d1a" if _pv_ri % 2 == 0 else "#111122"
+            _c_spa  = _fs_heatmap_color(_pv_spa,   'season_pa')
+            _c_avg  = _fs_heatmap_color(_pv_avg,   'batting_avg')
+            _c_slg  = _fs_heatmap_color(_pv_slg,   'actual_slg')
+            _c_bab  = _fs_heatmap_color(_pv_babip, 'babip')
+            _c_gb   = _fs_heatmap_color(_pv_gb,    'gb_pct')
+            _c_hh   = _fs_heatmap_color(_pv_hh,    'hard_hit')
+            _c_ld   = _fs_heatmap_color(_pv_ld,    'ld_pct')
+            _c_brl  = _fs_heatmap_color(_pv_brl,   'barrel_pct')
+            _c_ev   = _fs_heatmap_color(_pv_ev,    'exit_velo')
+            _c_la   = _fs_heatmap_color(_pv_la,    'avg_launch_angle')
+            _c_pull = _fs_heatmap_color(_pv_pull,  'pull_pct')
+            _c_ctr  = _fs_heatmap_color(_pv_ctr,   'center_pct')
+            _c_hr9  = _fs_heatmap_color(_pv_hr9,   'pitcher_hr9')
+            _c_xw   = _fs_heatmap_color(_pv_xwoba, 'xwoba')
             _pv_rows.append(
                 f"<tr style='background:{_pv_bg};border-bottom:1px solid #1a1a2e;min-height:44px;'>"
                 f"<td style='padding:6px 3px;text-align:center;width:36px;min-width:36px;max-width:36px;'>{_pv_tier_s}</td>"
-                f"<td style='padding:6px 3px;color:#60a5fa;font-size:10px;font-weight:700;width:160px;min-width:160px;max-width:160px;overflow:hidden;'>{_pv_chip}<span style='font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px;display:inline-block;vertical-align:middle;'>{_pv_name}</span></td>"
+                f"<td style='padding:4px 4px;color:#60a5fa;font-size:10px;font-weight:700;width:140px;min-width:140px;max-width:140px;overflow:hidden;text-align:center;'><div style='display:flex;justify-content:center;align-items:center;text-align:center;'>{_pv_chip}<span style='font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px;display:inline-block;vertical-align:middle;'>{_pv_name}</span></div></td>"
                 f"<td style='padding:6px 3px;color:#888;font-size:9px;text-align:center;width:36px;min-width:36px;max-width:36px;'>{_pv_team}</td>"
                 f"<td style='padding:6px 3px;color:#555;font-size:8px;white-space:nowrap;width:80px;min-width:80px;max-width:80px;overflow:hidden;text-overflow:ellipsis;'>{_pv_game}</td>"
-                f"<td style='padding:6px 3px;text-align:center;width:110px;min-width:110px;max-width:110px;'>{_pv_mq_pie}</td>"
-                f"<td style='padding:6px 3px;background:{_fs_heatmap_color(_pv_spa, 'season_pa')};color:#ccc;font-size:11px;text-align:right;width:40px;min-width:40px;max-width:40px;'>{str(_pv_spa) if _pv_spa else '—'}</td>"
-                f"<td style='padding:6px 3px;background:{_fs_heatmap_color(_pv_avg, 'batting_avg')};color:#ccc;font-size:11px;text-align:center;width:46px;min-width:46px;max-width:46px;'>{f'{_pv_avg:.3f}' if _pv_avg else '—'}</td>"
-                f"<td style='padding:6px 3px;background:{_fs_heatmap_color(_pv_slg, 'actual_slg')};color:#ccc;font-size:11px;text-align:center;width:46px;min-width:46px;max-width:46px;'>{f'{_pv_slg:.3f}' if _pv_slg else '—'}</td>"
-                f"<td style='padding:6px 3px;background:{_fs_heatmap_color(_pv_babip, 'babip')};color:#ccc;font-size:11px;text-align:center;width:50px;min-width:50px;max-width:50px;'>{f'{_pv_babip:.3f}' if _pv_babip else '—'}</td>"
-                f"<td style='padding:6px 3px;background:{_fs_heatmap_color(_pv_gb, 'gb_pct')};color:#ccc;font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{f'{_pv_gb:.1f}%' if _pv_gb else '—'}</td>"
-                f"<td style='padding:6px 3px;background:{_fs_heatmap_color(_pv_hh, 'hard_hit')};color:#ccc;font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{f'{_pv_hh:.1f}%' if _pv_hh else '—'}</td>"
-                f"<td style='padding:6px 3px;background:{_fs_heatmap_color(_pv_ld, 'ld_pct')};color:#ccc;font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{f'{_pv_ld:.1f}%' if _pv_ld else '—'}</td>"
-                f"<td style='padding:6px 3px;background:{_fs_heatmap_color(_pv_brl, 'barrel_pct')};color:#ccc;font-size:11px;font-weight:600;text-align:center;width:58px;min-width:58px;max-width:58px;'>{f'{_pv_brl:.1f}%' if _pv_brl else '—'}</td>"
-                f"<td style='padding:6px 3px;background:{_fs_heatmap_color(_pv_ev, 'exit_velo')};color:#ccc;font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{f'{_pv_ev:.1f}' if _pv_ev else '—'}</td>"
-                f"<td style='padding:6px 3px;background:{_fs_heatmap_color(_pv_la, 'avg_launch_angle')};color:#ccc;font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{f'{_pv_la:.1f}°' if _pv_la else '—'}</td>"
-                f"<td style='padding:6px 3px;background:{_fs_heatmap_color(_pv_pull, 'pull_pct')};color:#ccc;font-size:11px;text-align:center;width:48px;min-width:48px;max-width:48px;'>{f'{_pv_pull:.1f}%' if _pv_pull else '—'}</td>"
-                f"<td style='padding:6px 3px;background:{_fs_heatmap_color(_pv_ctr, 'center_pct')};color:#ccc;font-size:11px;text-align:center;width:58px;min-width:58px;max-width:58px;'>{f'{_pv_ctr:.1f}%' if _pv_ctr else '—'}</td>"
-                f"<td style='padding:6px 3px;background:{_fs_heatmap_color(_pv_hr9, 'pitcher_hr9')};color:#ccc;font-size:11px;font-weight:600;text-align:center;width:58px;min-width:58px;max-width:58px;'>{f'{_pv_hr9:.2f}' if _pv_hr9 else '—'}</td>"
-                f"<td style='padding:6px 3px;background:{_fs_heatmap_color(_pv_xwoba, 'xwoba')};color:#ccc;font-size:11px;text-align:center;width:50px;min-width:50px;max-width:50px;'>{f'{_pv_xwoba:.3f}' if _pv_xwoba else '—'}</td>"
+                f"<td style='padding:4px 2px;text-align:center;width:110px;min-width:110px;max-width:110px;'>{_pv_mq_pie}</td>"
+                f"<td style='padding:6px 3px;background:{_c_spa['bg']};color:{_c_spa['text']};font-size:11px;text-align:center;width:40px;min-width:40px;max-width:40px;'>{str(_pv_spa) if _pv_spa else '—'}</td>"
+                f"<td style='padding:6px 3px;background:{_c_avg['bg']};color:{_c_avg['text']};font-size:11px;text-align:center;width:46px;min-width:46px;max-width:46px;'>{f'{_pv_avg:.3f}' if _pv_avg else '—'}</td>"
+                f"<td style='padding:6px 3px;background:{_c_slg['bg']};color:{_c_slg['text']};font-size:11px;text-align:center;width:46px;min-width:46px;max-width:46px;'>{f'{_pv_slg:.3f}' if _pv_slg else '—'}</td>"
+                f"<td style='padding:6px 3px;background:{_c_bab['bg']};color:{_c_bab['text']};font-size:11px;text-align:center;width:50px;min-width:50px;max-width:50px;'>{f'{_pv_babip:.3f}' if _pv_babip else '—'}</td>"
+                f"<td style='padding:6px 3px;background:{_c_gb['bg']};color:{_c_gb['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{f'{_pv_gb:.1f}%' if _pv_gb else '—'}</td>"
+                f"<td style='padding:6px 3px;background:{_c_hh['bg']};color:{_c_hh['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{f'{_pv_hh:.1f}%' if _pv_hh else '—'}</td>"
+                f"<td style='padding:6px 3px;background:{_c_ld['bg']};color:{_c_ld['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{f'{_pv_ld:.1f}%' if _pv_ld else '—'}</td>"
+                f"<td style='padding:6px 3px;background:{_c_brl['bg']};color:{_c_brl['text']};font-size:11px;font-weight:600;text-align:center;width:58px;min-width:58px;max-width:58px;'>{f'{_pv_brl:.1f}%' if _pv_brl else '—'}</td>"
+                f"<td style='padding:6px 3px;background:{_c_ev['bg']};color:{_c_ev['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{f'{_pv_ev:.1f}' if _pv_ev else '—'}</td>"
+                f"<td style='padding:6px 3px;background:{_c_la['bg']};color:{_c_la['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{f'{_pv_la:.1f}°' if _pv_la else '—'}</td>"
+                f"<td style='padding:6px 3px;background:{_c_pull['bg']};color:{_c_pull['text']};font-size:11px;text-align:center;width:48px;min-width:48px;max-width:48px;'>{f'{_pv_pull:.1f}%' if _pv_pull else '—'}</td>"
+                f"<td style='padding:6px 3px;background:{_c_ctr['bg']};color:{_c_ctr['text']};font-size:11px;text-align:center;width:58px;min-width:58px;max-width:58px;'>{f'{_pv_ctr:.1f}%' if _pv_ctr else '—'}</td>"
+                f"<td style='padding:6px 3px;background:{_c_hr9['bg']};color:{_c_hr9['text']};font-size:11px;font-weight:600;text-align:center;width:58px;min-width:58px;max-width:58px;'>{f'{_pv_hr9:.2f}' if _pv_hr9 else '—'}</td>"
+                f"<td style='padding:6px 3px;background:{_c_xw['bg']};color:{_c_xw['text']};font-size:11px;text-align:center;width:50px;min-width:50px;max-width:50px;'>{f'{_pv_xwoba:.3f}' if _pv_xwoba else '—'}</td>"
                 f"<td style='padding:6px 3px;color:#ccc;font-size:11px;text-align:center;width:50px;min-width:50px;max-width:50px;'>{f'{_pv_hrpa:.3f}' if _pv_hrpa else '—'}</td>"
                 f"<td style='padding:6px 3px;color:#f59e0b;font-size:11px;text-align:center;font-weight:600;width:58px;min-width:58px;max-width:58px;'>{_pv_fd_s}</td>"
                 f"</tr>"
@@ -4917,27 +5021,27 @@ def _render_full_slate_all_players(
             "<table style='width:100%;border-collapse:collapse;font-family:monospace;font-size:9px;table-layout:fixed;'>"
             "<thead style='background:#0d0d1a;border-bottom:2px solid #2a2a3a;'>"
             "<tr>"
-            "<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:36px;min-width:36px;max-width:36px;'>TIER</th>"
-            "<th style='padding:4px 3px;color:#aaa;text-align:left;font-weight:700;font-size:9px;letter-spacing:0.8px;width:160px;min-width:160px;max-width:160px;'>PLAYER</th>"
+            "<th title='HR probability tier: APEX=≥18% / ELITE=≥13% / EDGE=≥9% / SIGNAL=≥6% / WATCH=≥3% / COLD=&lt;3%' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:36px;min-width:36px;max-width:36px;'>TIER</th>"
+            "<th title='Batter name, team, and handedness' style='padding:4px 3px;color:#aaa;text-align:left;font-weight:700;font-size:9px;letter-spacing:0.8px;width:140px;min-width:140px;max-width:140px;'>PLAYER</th>"
             "<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:36px;min-width:36px;max-width:36px;'>TM</th>"
             "<th style='padding:4px 3px;color:#aaa;text-align:left;font-weight:700;font-size:9px;letter-spacing:0.8px;width:80px;min-width:80px;max-width:80px;'>GAME</th>"
-            "<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:110px;min-width:110px;max-width:110px;'>MATCHUP QUALITY</th>"
-            "<th style='padding:4px 3px;color:#aaa;text-align:right;font-weight:700;font-size:9px;letter-spacing:0.8px;width:40px;min-width:40px;max-width:40px;'>PA</th>"
-            "<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:46px;min-width:46px;max-width:46px;'>AVG</th>"
-            "<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:46px;min-width:46px;max-width:46px;'>SLG</th>"
-            "<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:50px;min-width:50px;max-width:50px;'>BABIP</th>"
-            "<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>GB%</th>"
-            "<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>HH%</th>"
-            "<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>LD%</th>"
-            "<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>BARREL%</th>"
-            "<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>EV</th>"
-            "<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>LA°</th>"
-            "<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:48px;min-width:48px;max-width:48px;'>PULL%</th>"
-            "<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>CENTER%</th>"
-            "<th style='padding:4px 3px;color:#f87171;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>OPP HR/9</th>"
-            "<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:50px;min-width:50px;max-width:50px;'>xwOBA</th>"
-            "<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:50px;min-width:50px;max-width:50px;'>HR/PA</th>"
-            "<th style='padding:4px 3px;color:#f59e0b;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>FANDUEL</th>"
+            "<th title='Overall matchup quality vs opposing pitcher' style='padding:4px 2px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:110px;min-width:110px;max-width:110px;'>MATCHUP QUALITY</th>"
+            "<th title='Plate appearances this season' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:40px;min-width:40px;max-width:40px;'>PA</th>"
+            "<th title='Batting average this season' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:46px;min-width:46px;max-width:46px;'>AVG</th>"
+            "<th title='Slugging percentage this season' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:46px;min-width:46px;max-width:46px;'>SLG</th>"
+            "<th title='Batting average on balls in play' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:50px;min-width:50px;max-width:50px;'>BABIP</th>"
+            "<th title='Ground ball rate — lower is better for HR' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>GB%</th>"
+            "<th title='Hard hit rate — exit velocity above 95mph' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>HH%</th>"
+            "<th title='Line drive rate' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>LD%</th>"
+            "<th title='Barrel rate — optimal exit velo + launch angle' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>BARREL%</th>"
+            "<th title='Average exit velocity (mph)' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>EV</th>"
+            "<th title='Average launch angle (degrees)' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>LA°</th>"
+            "<th title='Pull rate — balls hit to pull side' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:48px;min-width:48px;max-width:48px;'>PULL%</th>"
+            "<th title='Center field rate' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>CENTER%</th>"
+            "<th title='Opposing pitcher HR allowed per 9 innings — higher = more vulnerable' style='padding:4px 3px;color:#f87171;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>OPP HR/9</th>"
+            "<th title='Expected weighted on-base average' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:50px;min-width:50px;max-width:50px;'>xwOBA</th>"
+            "<th title='Home run rate per plate appearance' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:50px;min-width:50px;max-width:50px;'>HR/PA</th>"
+            "<th title='FanDuel market odds — display only, does not affect ranking' style='padding:4px 3px;color:#f59e0b;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>FANDUEL</th>"
             "</tr></thead><tbody>"
             + "".join(_pv_rows)
             + "</tbody></table></div>"
@@ -5174,12 +5278,7 @@ def _render_full_slate_all_players(
                 hr_pa = round(season_hr / season_pa, 3) if season_pa > 0 else None
                 model_prob_r = float(p.get("model_prob") or 0)
                 tier_key_r   = _fs_tier_from_prob(model_prob_r)
-                tier_disp_r  = config.FS_TIER_DISPLAY[tier_key_r]
-                tier_s = (
-                    f"<span style='color:{tier_disp_r['color']};font-size:10px;'>"
-                    f"{tier_disp_r['icon']}</span>"
-                    if model_prob_r > 0 else "—"
-                )
+                tier_s = _fs_tier_html(tier_key_r) if model_prob_r > 0 else "—"
                 fd_raw = p.get("fanduel_american")
                 fd_s = (f"+{fd_raw}" if fd_raw and fd_raw > 0
                         else str(fd_raw) if fd_raw else "—")
@@ -5209,32 +5308,45 @@ def _render_full_slate_all_players(
                 hrpa_s  = f"{hr_pa:.3f}" if hr_pa else "—"
 
                 _row_bg = "#0d0d1a" if _ri % 2 == 0 else "#111122"
+                _g_spa  = _fs_heatmap_color(season_pa,    'season_pa')
+                _g_avg  = _fs_heatmap_color(batting_avg,  'batting_avg')
+                _g_slg  = _fs_heatmap_color(slg,          'actual_slg')
+                _g_bab  = _fs_heatmap_color(babip,        'babip')
+                _g_gb   = _fs_heatmap_color(gb_pct,       'gb_pct')
+                _g_hh   = _fs_heatmap_color(hard_hit,     'hard_hit')
+                _g_ld   = _fs_heatmap_color(ld_pct,       'ld_pct')
+                _g_brl  = _fs_heatmap_color(barrel_pct,   'barrel_pct')
+                _g_ev   = _fs_heatmap_color(exit_velo,    'exit_velo')
+                _g_la   = _fs_heatmap_color(launch_angle, 'avg_launch_angle')
+                _g_pull = _fs_heatmap_color(pull_pct,     'pull_pct')
+                _g_ctr  = _fs_heatmap_color(center_pct,   'center_pct')
+                _g_hr9  = _fs_heatmap_color(pitcher_hr9,  'pitcher_hr9')
+                _g_xw   = _fs_heatmap_color(xwoba,        'xwoba')
                 row_html = (
                     f"<tr style='background:{_row_bg};border-bottom:1px solid #1a1a2e;min-height:44px;'>"
                     f"<td style='padding:6px 3px;text-align:center;width:36px;min-width:36px;max-width:36px;'>{tier_s}</td>"
-                    f"<td style='padding:6px 3px;color:#60a5fa;font-size:11px;font-weight:600;text-align:center;width:28px;min-width:28px;max-width:28px;'>{spot}</td>"
-                    f"<td style='padding:6px 3px;width:160px;min-width:160px;max-width:160px;overflow:hidden;'>"
-                    f"<div style='display:flex;align-items:center;gap:6px;'>"
+                    f"<td style='padding:4px 4px;width:140px;min-width:140px;max-width:140px;overflow:hidden;text-align:center;'>"
+                    f"<div style='display:flex;justify-content:center;align-items:center;text-align:center;gap:4px;'>"
                     f"{team_chip}"
-                    f"<div style='display:flex;flex-direction:column;line-height:1.2;'>"
-                    f"<span style='color:#eee;font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:140px;'>{pname}</span>"
+                    f"<div style='display:flex;flex-direction:column;line-height:1.2;align-items:center;text-align:center;'>"
+                    f"<span style='color:#eee;font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px;'>{pname}</span>"
                     f"<span style='color:#888;font-size:9px;white-space:nowrap;'>{pteam} | {bats}</span>"
                     f"</div></div></td>"
-                    f"<td style='padding:6px 3px;text-align:center;width:110px;min-width:110px;max-width:110px;'>{mq_pie}</td>"
-                    f"<td style='padding:6px 3px;background:{_fs_heatmap_color(season_pa, 'season_pa')};color:#ccc;font-size:11px;text-align:right;width:40px;min-width:40px;max-width:40px;'>{pa_s}</td>"
-                    f"<td style='padding:6px 3px;background:{_fs_heatmap_color(batting_avg, 'batting_avg')};color:#ccc;font-size:11px;text-align:center;width:46px;min-width:46px;max-width:46px;'>{avg_s}</td>"
-                    f"<td style='padding:6px 3px;background:{_fs_heatmap_color(slg, 'actual_slg')};color:#ccc;font-size:11px;text-align:center;width:46px;min-width:46px;max-width:46px;'>{slg_s}</td>"
-                    f"<td style='padding:6px 3px;background:{_fs_heatmap_color(babip, 'babip')};color:#ccc;font-size:11px;text-align:center;width:50px;min-width:50px;max-width:50px;'>{babip_s}</td>"
-                    f"<td style='padding:6px 3px;background:{_fs_heatmap_color(gb_pct, 'gb_pct')};color:#ccc;font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{gb_s}</td>"
-                    f"<td style='padding:6px 3px;background:{_fs_heatmap_color(hard_hit, 'hard_hit')};color:#ccc;font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{hh_s}</td>"
-                    f"<td style='padding:6px 3px;background:{_fs_heatmap_color(ld_pct, 'ld_pct')};color:#ccc;font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{ld_s}</td>"
-                    f"<td style='padding:6px 3px;background:{_fs_heatmap_color(barrel_pct, 'barrel_pct')};color:#ccc;font-size:11px;font-weight:600;text-align:center;border-radius:2px;width:58px;min-width:58px;max-width:58px;'>{brl_s}</td>"
-                    f"<td style='padding:6px 3px;background:{_fs_heatmap_color(exit_velo, 'exit_velo')};color:#ccc;font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{ev_s}</td>"
-                    f"<td style='padding:6px 3px;background:{_fs_heatmap_color(launch_angle, 'avg_launch_angle')};color:#ccc;font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{la_s}</td>"
-                    f"<td style='padding:6px 3px;background:{_fs_heatmap_color(pull_pct, 'pull_pct')};color:#ccc;font-size:11px;text-align:center;width:48px;min-width:48px;max-width:48px;'>{pull_s}</td>"
-                    f"<td style='padding:6px 3px;background:{_fs_heatmap_color(center_pct, 'center_pct')};color:#ccc;font-size:11px;text-align:center;width:58px;min-width:58px;max-width:58px;'>{ctr_s}</td>"
-                    f"<td style='padding:6px 3px;background:{_fs_heatmap_color(pitcher_hr9, 'pitcher_hr9')};color:#ccc;font-size:11px;font-weight:600;text-align:center;border-radius:2px;width:58px;min-width:58px;max-width:58px;'>{hr9_s}</td>"
-                    f"<td style='padding:6px 3px;background:{_fs_heatmap_color(xwoba, 'xwoba')};color:#ccc;font-size:11px;text-align:center;width:50px;min-width:50px;max-width:50px;'>{xwoba_s}</td>"
+                    f"<td style='padding:4px 2px;text-align:center;width:110px;min-width:110px;max-width:110px;'>{mq_pie}</td>"
+                    f"<td style='padding:6px 3px;background:{_g_spa['bg']};color:{_g_spa['text']};font-size:11px;text-align:center;width:40px;min-width:40px;max-width:40px;'>{pa_s}</td>"
+                    f"<td style='padding:6px 3px;background:{_g_avg['bg']};color:{_g_avg['text']};font-size:11px;text-align:center;width:46px;min-width:46px;max-width:46px;'>{avg_s}</td>"
+                    f"<td style='padding:6px 3px;background:{_g_slg['bg']};color:{_g_slg['text']};font-size:11px;text-align:center;width:46px;min-width:46px;max-width:46px;'>{slg_s}</td>"
+                    f"<td style='padding:6px 3px;background:{_g_bab['bg']};color:{_g_bab['text']};font-size:11px;text-align:center;width:50px;min-width:50px;max-width:50px;'>{babip_s}</td>"
+                    f"<td style='padding:6px 3px;background:{_g_gb['bg']};color:{_g_gb['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{gb_s}</td>"
+                    f"<td style='padding:6px 3px;background:{_g_hh['bg']};color:{_g_hh['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{hh_s}</td>"
+                    f"<td style='padding:6px 3px;background:{_g_ld['bg']};color:{_g_ld['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{ld_s}</td>"
+                    f"<td style='padding:6px 3px;background:{_g_brl['bg']};color:{_g_brl['text']};font-size:11px;font-weight:600;text-align:center;border-radius:2px;width:58px;min-width:58px;max-width:58px;'>{brl_s}</td>"
+                    f"<td style='padding:6px 3px;background:{_g_ev['bg']};color:{_g_ev['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{ev_s}</td>"
+                    f"<td style='padding:6px 3px;background:{_g_la['bg']};color:{_g_la['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{la_s}</td>"
+                    f"<td style='padding:6px 3px;background:{_g_pull['bg']};color:{_g_pull['text']};font-size:11px;text-align:center;width:48px;min-width:48px;max-width:48px;'>{pull_s}</td>"
+                    f"<td style='padding:6px 3px;background:{_g_ctr['bg']};color:{_g_ctr['text']};font-size:11px;text-align:center;width:58px;min-width:58px;max-width:58px;'>{ctr_s}</td>"
+                    f"<td style='padding:6px 3px;background:{_g_hr9['bg']};color:{_g_hr9['text']};font-size:11px;font-weight:600;text-align:center;border-radius:2px;width:58px;min-width:58px;max-width:58px;'>{hr9_s}</td>"
+                    f"<td style='padding:6px 3px;background:{_g_xw['bg']};color:{_g_xw['text']};font-size:11px;text-align:center;width:50px;min-width:50px;max-width:50px;'>{xwoba_s}</td>"
                     f"<td style='padding:6px 3px;color:#ccc;font-size:11px;text-align:center;width:50px;min-width:50px;max-width:50px;'>{hrpa_s}</td>"
                     f"<td style='padding:6px 3px;color:#f59e0b;font-size:11px;text-align:center;font-weight:600;width:58px;min-width:58px;max-width:58px;'>{fd_s}</td>"
                     f"</tr>"
@@ -5246,26 +5358,25 @@ def _render_full_slate_all_players(
                 f"<table style='width:100%;border-collapse:collapse;font-family:monospace;font-size:9px;table-layout:fixed;'>"
                 f"<thead style='background:#0d0d1a;border-bottom:2px solid #2a2a3a;'>"
                 f"<tr>"
-                f"<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:36px;min-width:36px;max-width:36px;'>TIER</th>"
-                f"<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:28px;min-width:28px;max-width:28px;'>#</th>"
-                f"<th style='padding:4px 3px;color:#aaa;text-align:left;font-weight:700;font-size:9px;letter-spacing:0.8px;width:160px;min-width:160px;max-width:160px;'>PLAYER</th>"
-                f"<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:110px;min-width:110px;max-width:110px;'>MATCHUP QUALITY</th>"
-                f"<th style='padding:4px 3px;color:#aaa;text-align:right;font-weight:700;font-size:9px;letter-spacing:0.8px;width:40px;min-width:40px;max-width:40px;'>PA</th>"
-                f"<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:46px;min-width:46px;max-width:46px;'>AVG</th>"
-                f"<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:46px;min-width:46px;max-width:46px;'>SLG</th>"
-                f"<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:50px;min-width:50px;max-width:50px;'>BABIP</th>"
-                f"<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>GB%</th>"
-                f"<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>HH%</th>"
-                f"<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>LD%</th>"
-                f"<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>BARREL%</th>"
-                f"<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>EV</th>"
-                f"<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>LA°</th>"
-                f"<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:48px;min-width:48px;max-width:48px;'>PULL%</th>"
-                f"<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>CENTER%</th>"
-                f"<th style='padding:4px 3px;color:#f87171;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>OPP HR/9</th>"
-                f"<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:50px;min-width:50px;max-width:50px;'>xwOBA</th>"
-                f"<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:50px;min-width:50px;max-width:50px;'>HR/PA</th>"
-                f"<th style='padding:4px 3px;color:#f59e0b;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>FANDUEL</th>"
+                f"<th title='HR probability tier: APEX=≥18% / ELITE=≥13% / EDGE=≥9% / SIGNAL=≥6% / WATCH=≥3% / COLD=&lt;3%' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:36px;min-width:36px;max-width:36px;'>TIER</th>"
+                f"<th title='Batter name, team, and handedness' style='padding:4px 3px;color:#aaa;text-align:left;font-weight:700;font-size:9px;letter-spacing:0.8px;width:140px;min-width:140px;max-width:140px;'>PLAYER</th>"
+                f"<th title='Overall matchup quality vs opposing pitcher' style='padding:4px 2px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:110px;min-width:110px;max-width:110px;'>MATCHUP QUALITY</th>"
+                f"<th title='Plate appearances this season' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:40px;min-width:40px;max-width:40px;'>PA</th>"
+                f"<th title='Batting average this season' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:46px;min-width:46px;max-width:46px;'>AVG</th>"
+                f"<th title='Slugging percentage this season' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:46px;min-width:46px;max-width:46px;'>SLG</th>"
+                f"<th title='Batting average on balls in play' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:50px;min-width:50px;max-width:50px;'>BABIP</th>"
+                f"<th title='Ground ball rate — lower is better for HR' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>GB%</th>"
+                f"<th title='Hard hit rate — exit velocity above 95mph' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>HH%</th>"
+                f"<th title='Line drive rate' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>LD%</th>"
+                f"<th title='Barrel rate — optimal exit velo + launch angle' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>BARREL%</th>"
+                f"<th title='Average exit velocity (mph)' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>EV</th>"
+                f"<th title='Average launch angle (degrees)' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>LA°</th>"
+                f"<th title='Pull rate — balls hit to pull side' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:48px;min-width:48px;max-width:48px;'>PULL%</th>"
+                f"<th title='Center field rate' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>CENTER%</th>"
+                f"<th title='Opposing pitcher HR allowed per 9 innings — higher = more vulnerable' style='padding:4px 3px;color:#f87171;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>OPP HR/9</th>"
+                f"<th title='Expected weighted on-base average' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:50px;min-width:50px;max-width:50px;'>xwOBA</th>"
+                f"<th title='Home run rate per plate appearance' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:50px;min-width:50px;max-width:50px;'>HR/PA</th>"
+                f"<th title='FanDuel market odds — display only, does not affect ranking' style='padding:4px 3px;color:#f59e0b;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>FANDUEL</th>"
                 f"</tr>"
                 f"</thead>"
                 f"<tbody>"
@@ -7080,21 +7191,21 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
         _sum_title, _sum_body = _FS_LENS_SUMMARIES[_active_lens]
 
         _TIER_KEY_ROWS = [
-            ("#3a0800", "#ff5533", "STEAM",  "strongest escalation"),
-            ("#2a2000", "#FFD700", "ELITE",  "premium HR threat"),
-            ("#0a2a0a", "#4ade80", "QUAL",   "qualified opportunity"),
-            ("#071828", "#60a5fa", "DANGER", "notable threat"),
-            ("#111118", "#555566", "LOW",    "low signal"),
+            ("#FFD700", "APEX",   "Greatest HR threat. Must deploy."),
+            ("#FF3333", "ELITE",  "Premium HR danger. High confidence."),
+            ("#00FF88", "EDGE",   "Strong matchup advantage. Deploy."),
+            ("#4499FF", "SIGNAL", "Positive indicators. Monitor."),
+            ("#FF9900", "WATCH",  "Marginal. Situational only."),
+            ("#555555", "COLD",   "Low probability. Do not deploy."),
         ]
         _tier_badges_html = "".join(
             f"<div style='display:flex;align-items:center;gap:4px;margin-bottom:3px;'>"
-            f"<span style='background:{_tbg};border:1px solid {_tbc};color:{_tbc};"
-            f"font-size:8px;font-weight:700;letter-spacing:1px;padding:1px 5px;"
-            f"border-radius:2px;font-family:monospace;white-space:nowrap;min-width:52px;"
-            f"text-align:center;'>{_tlbl}</span>"
+            f"<span style='color:{_tclr};font-size:8px;font-weight:700;letter-spacing:1px;"
+            f"font-family:monospace;white-space:nowrap;min-width:52px;text-align:left;"
+            f"text-shadow:0 0 6px {_tclr},0 0 12px {_tclr};'>{_tlbl}</span>"
             f"<span style='color:#444;font-size:9px;white-space:nowrap;'>{_tdesc}</span>"
             f"</div>"
-            for _tbg, _tbc, _tlbl, _tdesc in _TIER_KEY_ROWS
+            for _tclr, _tlbl, _tdesc in _TIER_KEY_ROWS
         )
         _qual_formula_html = (
             "<div style='margin-top:6px;padding:5px 8px;background:#070712;"
