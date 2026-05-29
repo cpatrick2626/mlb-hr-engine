@@ -442,14 +442,14 @@ FASTAPI SERVICE
 SECTION 14 · CURRENT PROJECT STATE
 ═══════════════════════════════════════════════════════════════
 
-LAST SESSION: 2026-05-26 (Phase 1 Track A + MAIN doctrine reform)
+LAST SESSION: 2026-05-29 (Full Slate polish sprint — GAPs 1–5 complete)
 
 RECENT COMMITS:
-  0cda370  docs(wiki): Phase 1 session filing + untrack runtime CSVs
+  dfca6a7  refactor(full-slate): extract duplicate table header helper
+  ff4808d  feat(full-slate): Phase 1 Track B
+  0e13424  feat(config): TEAM_COLORS map
+  0cda370  docs(wiki): Phase 1 session filing
   d415763  feat(main): MAIN doctrine filter reform
-  523d84f  feat(full-slate): Phase 1 Track A complete
-  db268a3  docs(wiki): Phase 0 closure
-  828b42b  chore(repo): ignore Obsidian plugin binaries
 
 DESIGN-LOCKED (specs in _design\, not yet runtime code):
   · Full Slate Intelligence Matrix
@@ -472,6 +472,7 @@ WORKING TREE STATE:
 WIKI STATE:
   · Infrastructure built 2026-05-26
   · Doctrine pages complete + MAIN doctrine reform filed
+  · Visual design tokens filed (wiki\doctrine\visual-design-tokens.md)
   · Architecture pages — session-state-map updated
   · Formula pages populated
   · Plugin stack installed and enabled (14 plugins)
@@ -480,9 +481,10 @@ WIKI STATE:
 
 PHASE 0 — COMPLETE
 PHASE 1 TRACK A — COMPLETE (523d84f)
-MAIN DOCTRINE REFORM — COMPLETE (d415763)
-PHASE 1 TRACK B — NEXT (Full Slate renderer restructure)
-RANKER AUDIT — QUEUED (Codex — HIGH risk read-only)
+PHASE 1 TRACK B — COMPLETE (ff4808d)
+FULL SLATE POLISH SPRINT — COMPLETE (dfca6a7)
+RANKER REFORM — NEXT (HIGH risk — Option C authorized, execution packet pending)
+PHASE 2-3 — QUEUED (Pitch Mix Analysis + Batter Card — after Ranker Reform)
 
 ═══════════════════════════════════════════════════════════════
 SECTION 15 · IMPLEMENTATION ROADMAP
