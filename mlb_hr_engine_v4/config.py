@@ -270,8 +270,8 @@ FS_TIER_THRESHOLDS: dict = {
 }
 
 FS_TIER_DISPLAY: dict = {
-    "APEX":   {"color": "#ff3344", "glow": "rgba(255,51,68,0.55)",   "label": "APEX"},
-    "ELITE":  {"color": "#ff3344", "glow": "rgba(255,51,68,0.55)",   "label": "ELITE"},
+    "APEX":   {"color": "#ff3344", "glow": "rgba(255,51,68,0.75)",   "label": "APEX"},
+    "ELITE":  {"color": "#ff8a93", "glow": "rgba(255,138,147,0.5)",  "label": "ELITE"},
     "EDGE":   {"color": "#1aff66", "glow": "rgba(26,255,102,0.55)",  "label": "EDGE"},
     "SIGNAL": {"color": "#3b6fff", "glow": "rgba(59,111,255,0.45)",  "label": "SIGNAL"},
     "WATCH":  {"color": "#ffb020", "glow": "rgba(255,176,32,0.4)",   "label": "WATCH"},
@@ -330,6 +330,27 @@ FS_HEATMAP_THRESHOLDS: dict = {
     "babip":            [0.340, 0.310, 0.290, 0.270],
     "center_pct":       [30.0, 25.0, 20.0, 15.0],
     "season_pa":        [400,   300,   200,  100],
+}
+
+# ── Full Slate Heatmap Text Colors ────────────────────────────────────────────
+# Text colors for heatmap cells — references HRE design tokens.
+FS_HEATMAP_TEXT_COLORS: dict = {
+    "ELITE":   HRE_GREEN_500,   # "#1aff66"
+    "STRONG":  HRE_GREEN_300,   # "#6dffae"
+    "AVERAGE": HRE_FG_2,        # "#b8c2c0"
+    "WEAK":    HRE_RED_300,     # "#ff8a93"
+    "DANGER":  HRE_RED_500,     # "#ff3344"
+}
+
+# ── Full Slate Matchup Quality Pie Colors ─────────────────────────────────────
+# Fill colors for conic-gradient MQ pie chart. Independent palette from tier system.
+FS_MQ_PIE_COLORS: dict = {
+    "ELITE":  "#4ade80",
+    "STRONG": "#86efac",
+    "AVG":    "#fbbf24",
+    "WEAK":   "#f97316",
+    "DANGER": "#ef4444",
+    "EMPTY":  "#2a2a3a",
 }
 
 # ── Team Colors ───────────────────────────────────────────────────────────────

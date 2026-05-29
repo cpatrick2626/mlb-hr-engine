@@ -5019,9 +5019,9 @@ def _render_full_slate_all_players(
                 f"<td style='padding:6px 3px;color:#555;font-size:8px;white-space:nowrap;width:80px;min-width:80px;max-width:80px;overflow:hidden;text-overflow:ellipsis;'>{_pv_game}</td>"
                 f"<td style='padding:4px 2px;text-align:center;width:110px;min-width:110px;max-width:110px;'>{_pv_mq_pie}</td>"
                 f"<td style='padding:6px 3px;background:{_c_spa['bg']};color:{_c_spa['text']};font-size:11px;text-align:center;width:40px;min-width:40px;max-width:40px;'>{str(_pv_spa) if _pv_spa else '—'}</td>"
-                f"<td style='padding:6px 3px;background:{_c_avg['bg']};color:{_c_avg['text']};font-size:11px;text-align:center;width:46px;min-width:46px;max-width:46px;'>{f'{_pv_avg:.3f}' if _pv_avg else '—'}</td>"
-                f"<td style='padding:6px 3px;background:{_c_slg['bg']};color:{_c_slg['text']};font-size:11px;text-align:center;width:46px;min-width:46px;max-width:46px;'>{f'{_pv_slg:.3f}' if _pv_slg else '—'}</td>"
-                f"<td style='padding:6px 3px;background:{_c_bab['bg']};color:{_c_bab['text']};font-size:11px;text-align:center;width:50px;min-width:50px;max-width:50px;'>{f'{_pv_babip:.3f}' if _pv_babip else '—'}</td>"
+                f"<td style='padding:6px 3px;background:{_c_avg['bg']};color:{_c_avg['text']};font-size:11px;text-align:center;width:46px;min-width:46px;max-width:46px;'>{f'{_pv_avg:.3f}'[1:] if _pv_avg else '—'}</td>"
+                f"<td style='padding:6px 3px;background:{_c_slg['bg']};color:{_c_slg['text']};font-size:11px;text-align:center;width:46px;min-width:46px;max-width:46px;'>{f'{_pv_slg:.3f}'[1:] if _pv_slg else '—'}</td>"
+                f"<td style='padding:6px 3px;background:{_c_bab['bg']};color:{_c_bab['text']};font-size:11px;text-align:center;width:50px;min-width:50px;max-width:50px;'>{f'{_pv_babip:.3f}'[1:] if _pv_babip else '—'}</td>"
                 f"<td style='padding:6px 3px;background:{_c_gb['bg']};color:{_c_gb['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{f'{_pv_gb:.1f}%' if _pv_gb else '—'}</td>"
                 f"<td style='padding:6px 3px;background:{_c_hh['bg']};color:{_c_hh['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{f'{_pv_hh:.1f}%' if _pv_hh else '—'}</td>"
                 f"<td style='padding:6px 3px;background:{_c_ld['bg']};color:{_c_ld['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{f'{_pv_ld:.1f}%' if _pv_ld else '—'}</td>"
@@ -5031,8 +5031,8 @@ def _render_full_slate_all_players(
                 f"<td style='padding:6px 3px;background:{_c_pull['bg']};color:{_c_pull['text']};font-size:11px;text-align:center;width:48px;min-width:48px;max-width:48px;'>{f'{_pv_pull:.1f}%' if _pv_pull else '—'}</td>"
                 f"<td style='padding:6px 3px;background:{_c_ctr['bg']};color:{_c_ctr['text']};font-size:11px;text-align:center;width:58px;min-width:58px;max-width:58px;'>{f'{_pv_ctr:.1f}%' if _pv_ctr else '—'}</td>"
                 f"<td style='padding:6px 3px;background:{_c_hr9['bg']};color:{_c_hr9['text']};font-size:11px;font-weight:600;text-align:center;width:58px;min-width:58px;max-width:58px;'>{f'{_pv_hr9:.2f}' if _pv_hr9 else '—'}</td>"
-                f"<td style='padding:6px 3px;background:{_c_xw['bg']};color:{_c_xw['text']};font-size:11px;text-align:center;width:50px;min-width:50px;max-width:50px;'>{f'{_pv_xwoba:.3f}' if _pv_xwoba else '—'}</td>"
-                f"<td style='padding:6px 3px;color:#ccc;font-size:11px;text-align:center;width:50px;min-width:50px;max-width:50px;'>{f'{_pv_hrpa:.3f}' if _pv_hrpa else '—'}</td>"
+                f"<td style='padding:6px 3px;background:{_c_xw['bg']};color:{_c_xw['text']};font-size:11px;text-align:center;width:50px;min-width:50px;max-width:50px;'>{f'{_pv_xwoba:.3f}'[1:] if _pv_xwoba else '—'}</td>"
+                f"<td style='padding:6px 3px;color:#ccc;font-size:11px;text-align:center;width:50px;min-width:50px;max-width:50px;'>{f'{_pv_hrpa:.3f}'[1:] if _pv_hrpa else '—'}</td>"
                 f"<td style='padding:6px 3px;color:#f59e0b;font-size:11px;text-align:center;font-weight:600;width:58px;min-width:58px;max-width:58px;'>{_pv_fd_s}</td>"
                 f"</tr>"
             )
@@ -5292,9 +5292,9 @@ def _render_full_slate_all_players(
 
                 # Format values for display
                 pa_s    = str(season_pa) if season_pa else "—"
-                avg_s   = f"{batting_avg:.3f}" if batting_avg else "—"
-                slg_s   = f"{slg:.3f}" if slg else "—"
-                babip_s = f"{babip:.3f}" if babip else "—"
+                avg_s   = f"{batting_avg:.3f}"[1:] if batting_avg else "—"
+                slg_s   = f"{slg:.3f}"[1:] if slg else "—"
+                babip_s = f"{babip:.3f}"[1:] if babip else "—"
                 gb_s    = f"{gb_pct:.1f}%" if gb_pct else "—"
                 hh_s    = f"{hard_hit:.1f}%" if hard_hit else "—"
                 ld_s    = f"{ld_pct:.1f}%" if ld_pct else "—"
@@ -5304,8 +5304,8 @@ def _render_full_slate_all_players(
                 pull_s  = f"{pull_pct:.1f}%" if pull_pct else "—"
                 ctr_s   = f"{center_pct:.1f}%" if center_pct else "—"
                 hr9_s   = f"{pitcher_hr9:.2f}" if pitcher_hr9 else "—"
-                xwoba_s = f"{xwoba:.3f}" if xwoba else "—"
-                hrpa_s  = f"{hr_pa:.3f}" if hr_pa else "—"
+                xwoba_s = f"{xwoba:.3f}"[1:] if xwoba else "—"
+                hrpa_s  = f"{hr_pa:.3f}"[1:] if hr_pa else "—"
 
                 _row_bg = "#0d0d1a" if _ri % 2 == 0 else "#111122"
                 _g_spa  = _fs_heatmap_color(season_pa,    'season_pa')
