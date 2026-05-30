@@ -3485,6 +3485,95 @@ def _open_player_modal(
     st.rerun()
 
 
+@st.dialog("📋 STAT GUIDE", width="large")
+def _show_stat_guide_dialog():
+    st.markdown(
+        "<style>"
+        ".sg-section{font-size:11px;font-weight:800;letter-spacing:2px;"
+        "color:#60a5fa;padding:8px 0 4px;border-bottom:1px solid #1a1a2e;"
+        "margin-bottom:6px;}"
+        ".sg-row{display:flex;align-items:baseline;gap:8px;padding:3px 0;"
+        "border-bottom:1px solid #111;}"
+        ".sg-abbr{font-family:monospace;font-size:12px;font-weight:700;"
+        "color:#f0c040;min-width:80px;flex-shrink:0;}"
+        ".sg-name{font-size:11px;color:#aaa;min-width:160px;flex-shrink:0;}"
+        ".sg-desc{font-size:11px;color:#777;flex:1;}"
+        ".sg-dir{font-size:11px;color:#4ade80;margin-left:6px;flex-shrink:0;}"
+        ".sg-dir-down{color:#f87171;}"
+        "</style>",
+        unsafe_allow_html=True,
+    )
+
+    def _sg_row(abbr, name, desc, direction="up"):
+        dir_cls = "sg-dir" if direction == "up" else "sg-dir sg-dir-down"
+        arrow = "↑ good" if direction == "up" else "↓ good"
+        return (
+            f"<div class='sg-row'>"
+            f"<span class='sg-abbr'>{abbr}</span>"
+            f"<span class='sg-name'>{name}</span>"
+            f"<span class='sg-desc'>{desc}</span>"
+            f"<span class='{dir_cls}'>{arrow}</span>"
+            f"</div>"
+        )
+
+    batter_rows = "".join([
+        _sg_row("PA",       "Plate Appearances",    "Sample size indicator — higher = more reliable"),
+        _sg_row("AVG",      "Batting Average",      "Hits per at-bat"),
+        _sg_row("SLG",      "Slugging %",           "Total bases per at-bat"),
+        _sg_row("BABIP",    "BA on Balls in Play",  "Luck / contact quality on batted balls"),
+        _sg_row("GB%",      "Ground Ball Rate",     "Lower = more fly balls, better for HR", "down"),
+        _sg_row("HH%",      "Hard Hit Rate",        "Exit velocity ≥ 95 mph"),
+        _sg_row("LD%",      "Line Drive Rate",      "Solid contact indicator"),
+        _sg_row("BARREL%",  "Barrel Rate",          "Optimal exit velocity + launch angle combination"),
+        _sg_row("EV",       "Exit Velocity",        "Average mph off the bat"),
+        _sg_row("LA°",      "Launch Angle",         "Average degrees off the bat"),
+        _sg_row("PULL%",    "Pull Rate",            "Balls hit to pull side"),
+        _sg_row("CENTER%",  "Center Field Rate",    "All-fields hitter indicator"),
+        _sg_row("xwOBA",    "Expected wOBA",        "Predicted overall offensive value"),
+        _sg_row("HR/PA",    "HR Rate",              "Home runs per plate appearance"),
+    ])
+
+    pitcher_rows = "".join([
+        _sg_row("OPP HR/9", "Opp HR Allowed per 9", "Higher = pitcher more vulnerable to HR (good for batter)"),
+    ])
+
+    matchup_rows = (
+        "<div class='sg-row'>"
+        "<span class='sg-abbr'>MQ</span>"
+        "<span class='sg-name'>Matchup Quality</span>"
+        "<span class='sg-desc'>Overall matchup grade — "
+        "<span style='color:#4ade80;'>ELITE</span> › "
+        "<span style='color:#86efac;'>STRONG</span> › "
+        "<span style='color:#fbbf24;'>AVG</span> › "
+        "<span style='color:#f97316;'>WEAK</span> › "
+        "<span style='color:#ef4444;'>DANGER</span></span>"
+        "</div>"
+    )
+
+    tier_rows = (
+        "<div class='sg-row'>"
+        "<span class='sg-abbr'>TIER</span>"
+        "<span class='sg-name'>Model Tier</span>"
+        "<span class='sg-desc'>"
+        "APEX ≥18% &nbsp;·&nbsp; ELITE ≥13% &nbsp;·&nbsp; EDGE ≥9% &nbsp;·&nbsp; "
+        "SIGNAL ≥6% &nbsp;·&nbsp; WATCH ≥3% &nbsp;·&nbsp; COLD &lt;3%"
+        "</span>"
+        "</div>"
+    )
+
+    st.markdown(
+        "<div class='sg-section'>BATTER STATS</div>"
+        + batter_rows
+        + "<div class='sg-section' style='margin-top:12px;'>PITCHER STATS</div>"
+        + pitcher_rows
+        + "<div class='sg-section' style='margin-top:12px;'>MATCHUP</div>"
+        + matchup_rows
+        + "<div class='sg-section' style='margin-top:12px;'>MODEL</div>"
+        + tier_rows,
+        unsafe_allow_html=True,
+    )
+
+
 def _add_legs_to_fd_slip(legs: list[dict], source_tab: str = "Parlays", source_section: str = "") -> int:
     """Merge parlay legs into the FanDuel slip and force sidebar rerender."""
     current = list(st.session_state.get("fd_slip", []))
@@ -4937,7 +5026,7 @@ def _render_full_slate_all_players(
             unsafe_allow_html=True,
         )
 
-    _legend_cols = st.columns([1, 1])
+    _legend_cols = st.columns([2, 2, 1])
     with _legend_cols[0]:
         st.markdown(_fs_tier_legend_html(), unsafe_allow_html=True)
     with _legend_cols[1]:
@@ -4955,6 +5044,11 @@ def _render_full_slate_all_players(
             "</div>",
             unsafe_allow_html=True,
         )
+    with _legend_cols[2]:
+        st.markdown("<div style='display:flex;justify-content:flex-end;align-items:center;height:100%;padding:2px 0;'>", unsafe_allow_html=True)
+        if st.button("📋 STAT GUIDE", key="fs_stat_guide_btn", help="View stat definitions"):
+            _show_stat_guide_dialog()
+        st.markdown("</div>", unsafe_allow_html=True)
     st.markdown(
         "<div style='font-size:9px;color:#333;padding:2px 4px;margin-bottom:4px;"
         "font-family:monospace;letter-spacing:0.5px;'>"
@@ -5375,100 +5469,26 @@ def _render_full_slate_all_players(
 
         st.markdown(_card_html(_game_html_fp, _build_game_html), unsafe_allow_html=True)
 
-        st.caption("Player controls: tactical quick-open buttons stay visible; the roster launcher keeps the rest accessible with fewer widgets.")
-        _priority_players: list[dict] = []
-        _priority_seen: set[str] = set()
-        for _candidate in game_players:
-            _candidate_name = _candidate.get("player_name", "")
-            _candidate_pid = str(_candidate.get("player_id") or _candidate_name)
-            _candidate_brl = _pf(_candidate.get("barrel_pct"), 0.0)
-            if (
-                _candidate_name in tac_qualified_names
-                or _candidate_name in qualified_names
-                or _candidate_brl >= 8.0
-            ) and _candidate_pid not in _priority_seen:
-                _priority_players.append(_candidate)
-                _priority_seen.add(_candidate_pid)
-        if not _priority_players:
-            for _candidate in game_players[:3]:
-                _candidate_pid = str(_candidate.get("player_id") or _candidate.get("player_name", ""))
-                if _candidate_pid not in _priority_seen:
-                    _priority_players.append(_candidate)
-                    _priority_seen.add(_candidate_pid)
-
-        _quick_players = _priority_players[:4]
-        _quick_cols = st.columns(max(1, len(_quick_players)))
-        for _btn_col, _btn_player in zip(_quick_cols, _quick_players):
-            with _btn_col:
-                _btn_name = _btn_player.get("player_name", "?")
-                _btn_spot = _btn_player.get("lineup_spot")
-                _btn_team = _btn_player.get("team", "")
-                _btn_pid = _btn_player.get("player_id") or _btn_name
-                _btn_label = f"{_btn_spot or '?'} · {_btn_name}"
-                if _btn_team:
-                    _btn_label = f"{_btn_label} ({_btn_team})"
-                if st.button(
-                    _btn_label,
-                    key=f"fs_open_{slate_ts}_{gk}_{_btn_pid}",
-                    width="stretch",
-                ):
-                    _open_player_modal(
-                        _btn_player,
-                        source_tab="Full Slate",
-                        source_section=source_section,
-                        interaction_source="full_slate.quick_open",
-                    )
-
-        _remaining_players = [p for p in game_players if str(p.get("player_id") or p.get("player_name", "")) not in _priority_seen]
-        if _remaining_players:
-            _launcher_key = f"fs_launch_sel_{_stable_key_token(slate_ts, source_section, gk)}"
-            _launcher_players = _quick_players + _remaining_players
-            _launcher_map = {
-                str(p.get("player_id") or p.get("player_name", "")): p
-                for p in _launcher_players
-            }
-            _launcher_options = list(_launcher_map.keys())
-            _launcher_index = 0
-            _launcher_default = st.session_state.get(_launcher_key)
-            if _launcher_default not in _launcher_map and _launcher_options:
-                _launcher_default = _launcher_options[0]
-                st.session_state[_launcher_key] = _launcher_default
-            for _idx, _option_pid in enumerate(_launcher_options):
-                if _option_pid == _launcher_default:
-                    _launcher_index = _idx
-                    break
-
-            def _format_launcher_option(pid: str) -> str:
-                _launcher_player = _launcher_map.get(pid)
-                if not _launcher_player:
-                    return "Unavailable player"
-                _lineup_spot = _launcher_player.get("lineup_spot") or "?"
-                _player_name = _launcher_player.get("player_name", "?")
-                _team = _launcher_player.get("team", "")
-                return f"{_lineup_spot} · {_player_name}{f' ({_team})' if _team else ''}"
-
-            _launch_cols = st.columns([4, 1])
-            with _launch_cols[0]:
-                _launch_pid = st.selectbox(
-                    "Open player",
-                    options=_launcher_options,
-                    index=_launcher_index,
-                    format_func=_format_launcher_option,
-                    key=_launcher_key,
-                    label_visibility="collapsed",
-                )
-            with _launch_cols[1]:
-                if st.button(
-                    "Open",
-                    key=f"fs_launch_btn_{_stable_key_token(slate_ts, source_section, gk)}",
-                    width="stretch",
-                ):
-                    _open_player_modal(
-                        _launcher_map[_launch_pid],
-                        source_tab="Full Slate",
-                        source_section=source_section,
-                        interaction_source="full_slate.launcher_open",
-                    )
+        # Name-click buttons: one per player, styled as plain-text links via .tac-btn
+        _gp_chunks = [game_players[i:i + 4] for i in range(0, len(game_players), 4)]
+        for _chunk in _gp_chunks:
+            _ncols = st.columns(max(1, len(_chunk)))
+            for _nc, _np in zip(_ncols, _chunk):
+                with _nc:
+                    _np_name = _np.get("player_name", "?")
+                    _np_pid = str(_np.get("player_id") or _np_name)
+                    st.markdown('<div class="tac-btn">', unsafe_allow_html=True)
+                    if st.button(
+                        _np_name,
+                        key=f"fs_name_{slate_ts}_{gk}_{_np_pid}",
+                    ):
+                        _open_player_modal(
+                            _np,
+                            source_tab="Full Slate",
+                            source_section=source_section,
+                            interaction_source="full_slate.name_click",
+                        )
+                    st.markdown('</div>', unsafe_allow_html=True)
 
     # Return-to-top
     st.markdown(
