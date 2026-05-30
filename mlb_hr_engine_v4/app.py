@@ -5129,7 +5129,7 @@ def _render_full_slate_all_players(
 
         n_game_qual = sum(1 for p in game_players if p.get("player_name") in qualified_names)
         _group_open_key = f"{_fs_zone_scope}_group_{_stable_key_token(slate_ts, source_section, gk)}"
-        _group_is_open = bool(st.session_state.get(_group_open_key, False))
+        _group_is_open = bool(st.session_state.get(_group_open_key, True))
         _summary_html = (
             f"<div style='background:#09090f;border:1px solid #171726;border-left:3px solid {pk_col if pk_col != '#888' else urg_col};"
             f"border-radius:8px;padding:10px 12px;'>"
@@ -5293,7 +5293,7 @@ def _render_full_slate_all_players(
                 # Format values for display
                 pa_s    = str(season_pa) if season_pa else "—"
                 avg_s   = f"{batting_avg:.3f}"[1:] if batting_avg else "—"
-                slg_s   = f"{slg:.3f}"[1:] if slg else "—"
+                slg_s   = f"{slg:.3f}"[1:] if slg is not None else "—"
                 babip_s = f"{babip:.3f}"[1:] if babip else "—"
                 gb_s    = f"{gb_pct:.1f}%" if gb_pct else "—"
                 hh_s    = f"{hard_hit:.1f}%" if hard_hit else "—"
