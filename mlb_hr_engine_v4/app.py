@@ -8407,8 +8407,11 @@ def tab_jig(data: dict):
         )
 
         if _jig_subview == "command_center":
+            st.info("Navigate to JIG Builder to view top targets.")
+
+        elif _jig_subview == "jig_builder":
             _mark_render_section(
-                "JIG.command_center",
+                "JIG.jig_builder",
                 fingerprint=f"{_jig_slate_ts}|{len(qualified)}",
                 dataset_size=len(qualified),
             )
@@ -8424,7 +8427,7 @@ def tab_jig(data: dict):
                 st.info("No players meet HVY thresholds — lower thresholds above.")
             else:
                 for entry in qualified[:3]:
-                    _hvy_card(entry, key_prefix="hvyq")
+                    _hvy_card(entry, key_prefix="hvyjb")
                 if len(qualified) > 3:
                     st.caption(f"Top 3 of {len(qualified)} qualified. See Top Targets tab for all.")
 
@@ -8478,8 +8481,11 @@ def tab_jig(data: dict):
                         _hvy_card(entry, key_prefix="hvyp")
 
         elif _jig_subview == "matchup_edge":
+            st.empty()
+
+        elif _jig_subview == "matchup":
             _mark_render_section(
-                "JIG.matchup_edge",
+                "JIG.matchup",
                 fingerprint=f"{_jig_slate_ts}|{len(scored)}",
                 dataset_size=len(scored),
             )
@@ -8541,7 +8547,7 @@ def tab_jig(data: dict):
                 _sel = st.dataframe(
                 _hvy_df, hide_index=True, width="stretch",
                     on_select="rerun", selection_mode="single-row",
-                    key=f"hvy_all_df_{_hvy_ver}",
+                    key=f"hvy_matchup_df_{_hvy_ver}",
                 )
                 _sel_rows = getattr(getattr(_sel, "selection", None), "rows", [])
                 if _sel_rows and 0 <= _sel_rows[0] < len(scored):
@@ -8549,8 +8555,8 @@ def tab_jig(data: dict):
                     _open_player_modal(
                         scored[_sel_rows[0]]["player"],
                         source_tab="JIG",
-                        source_section="JIG · Matchup Edge",
-                        interaction_source="jig.matchup_edge_table_select",
+                        source_section="JIG · Matchup",
+                        interaction_source="jig.matchup_table_select",
                     )
 
             if rows:
@@ -9120,6 +9126,176 @@ def tab_jig(data: dict):
                         unsafe_allow_html=True,
                     )
             _finish_heavy_render(_jig_full_started)
+
+        elif _jig_subview == "arsenal":
+            _mark_render_section(
+                "JIG.arsenal",
+                fingerprint=f"{_jig_slate_ts}|{len(qualified)}",
+                dataset_size=len(qualified),
+            )
+            _ar_with_data = [e for e in qualified if e["ctx"].get("pitcher_arsenal")]
+            if not _ar_with_data:
+                st.info("Select a player to load arsenal data.")
+            else:
+                for entry in _ar_with_data:
+                    p = entry["player"]
+                    ctx = entry["ctx"]
+                    hvy_mod = float(ctx.get("hvy_modifier", 1.0))
+                    _ar_mod_lbl = (
+                        "FAVORABLE" if hvy_mod >= 1.08 else
+                        "SUPPRESSOR" if hvy_mod < 0.92 else "NEUTRAL"
+                    )
+                    _ar_mod_col = (
+                        "#4ade80" if hvy_mod >= 1.08 else
+                        "#f87171" if hvy_mod < 0.92 else "#888"
+                    )
+                    st.markdown(
+                        f"<div style='margin:10px 0 2px;'>"
+                        f"<span style='font-size:12px;font-weight:700;color:#e0d8c8;'>"
+                        f"{html.escape(p.get('player_name', '?'))}</span>"
+                        f"<span style='font-size:10px;color:#888;margin-left:8px;'>"
+                        f"vs {html.escape(p.get('pitcher_name', 'TBD'))}</span>"
+                        f"<span style='font-size:9px;font-weight:700;color:{_ar_mod_col};"
+                        f"margin-left:8px;'>MOD {hvy_mod:.2f}× · {_ar_mod_lbl}</span>"
+                        f"</div>",
+                        unsafe_allow_html=True,
+                    )
+                    _render_pitch_mix_expander(
+                        ctx=ctx,
+                        p=p,
+                        key_prefix="jig_ar",
+                        expanded=True,
+                        slate_ts=_jig_slate_ts,
+                    )
+
+        elif _jig_subview == "power_profile":
+            _mark_render_section(
+                "JIG.power_profile",
+                fingerprint=f"{_jig_slate_ts}|{len(qualified)}",
+                dataset_size=len(qualified),
+            )
+            if not qualified:
+                st.info("No JIG-qualified players — lower thresholds above.")
+            else:
+                st.markdown(
+                    "<span style='color:#f97316;font-size:12px;font-weight:700;"
+                    "letter-spacing:1px;'>POWER PROFILE</span>"
+                    "<span style='color:#555;font-size:11px;margin-left:10px;'>"
+                    "JIG-qualified · sorted by Barrel%</span>",
+                    unsafe_allow_html=True,
+                )
+                _pp_rows = []
+                for entry in qualified:
+                    p = entry["player"]
+                    _pp_brl = _pf(p.get("barrel_pct"), 0.0)
+                    _pp_ev  = _pf(p.get("exit_velo"), 0.0)
+                    _pp_iso = _pf(p.get("xiso"), 0.0)
+                    _pp_la  = p.get("avg_launch_angle")
+                    _pp_fb  = _pf(p.get("fb_pct"), 0.0)
+                    _pp_shr = int(p.get("season_hr") or 0)
+                    _pp_spa = int(p.get("season_pa") or 0)
+                    _pp_fb_pa = _pp_spa * _pp_fb / 100.0
+                    _pp_hrfb  = f"{_pp_shr / _pp_fb_pa:.3f}" if _pp_fb_pa > 0 else "--"
+                    _pp_rows.append({
+                        "Player":     p.get("player_name", "?"),
+                        "Team":       p.get("team", ""),
+                        "Pitcher":    p.get("pitcher_name", "TBD"),
+                        "HVY":        entry["jig"],
+                        "_brl_raw":   _pp_brl,
+                        "Barrel%":    f"{_pp_brl:.1f}%" if _pp_brl else "--",
+                        "Exit Velo":  f"{_pp_ev:.1f}" if _pp_ev else "--",
+                        "xISO":       f"{_pp_iso:.3f}" if _pp_iso else "--",
+                        "Launch Ang": f"{float(_pp_la):.1f}°" if _pp_la is not None else "--",
+                        "HR/FB":      _pp_hrfb,
+                    })
+                _pp_rows.sort(key=lambda r: r["_brl_raw"], reverse=True)
+                for r in _pp_rows:
+                    del r["_brl_raw"]
+                st.dataframe(pd.DataFrame(_pp_rows), hide_index=True, width="stretch")
+
+        elif _jig_subview == "exploit":
+            _mark_render_section(
+                "JIG.exploit",
+                fingerprint=f"{_jig_slate_ts}|{len(qualified)}",
+                dataset_size=len(qualified),
+            )
+            st.markdown(
+                "<span style='color:#f97316;font-size:12px;font-weight:700;"
+                "letter-spacing:1px;'>EXPLOIT TARGETS</span>"
+                "<span style='color:#555;font-size:11px;margin-left:10px;'>"
+                "escalation tier · stack candidates by game</span>",
+                unsafe_allow_html=True,
+            )
+            if not qualified:
+                st.info("No JIG-qualified players for exploit targeting — lower thresholds above.")
+            else:
+                _ex_tier_order = {"S": 0, "A": 1, "B": 2, "C": 3}
+                from collections import defaultdict as _dd_ex
+                _ex_games: dict = _dd_ex(list)
+                for _ex_e in qualified:
+                    _ex_gk = (
+                        _ex_e["player"].get("game_pk") or
+                        f"{_ex_e['player'].get('team', '?')}-{_ex_e['player'].get('opponent', '?')}"
+                    )
+                    _ex_games[_ex_gk].append(_ex_e)
+                _ex_game_order = sorted(
+                    _ex_games.keys(),
+                    key=lambda gk: -_ex_games[gk][0]["jig"],
+                )
+                for _ex_gk in _ex_game_order:
+                    _ex_group = _ex_games[_ex_gk]
+                    _ex_p0   = _ex_group[0]["player"]
+                    _ex_home = _ex_p0.get("home_team", "")
+                    _ex_away = next(
+                        (e["player"].get("team", "") for e in _ex_group
+                         if e["player"].get("team") != _ex_home),
+                        _ex_p0.get("opponent", "?"),
+                    )
+                    st.markdown(
+                        f"<div style='background:#08060a;border-left:3px solid #f97316;"
+                        f"border-radius:3px;margin:10px 0 4px;padding:4px 10px;'>"
+                        f"<span style='font-size:12px;font-weight:800;color:#f97316;'>"
+                        f"{_ex_away} @ {_ex_home}</span>"
+                        f"<span style='font-size:9px;color:#555;margin-left:8px;'>"
+                        f"{len(_ex_group)} stack candidate"
+                        f"{'s' if len(_ex_group) != 1 else ''}"
+                        f"</span></div>",
+                        unsafe_allow_html=True,
+                    )
+                    _ex_sorted = sorted(
+                        _ex_group,
+                        key=lambda e: (
+                            _ex_tier_order.get(e["player"].get("confidence_tier", "C"), 3),
+                            -e["jig"],
+                        ),
+                    )
+                    for _ex_e in _ex_sorted:
+                        _ex_p    = _ex_e["player"]
+                        _ex_tier = _ex_p.get("confidence_tier", "C")
+                        _ex_tc   = {"S": "#FFD700", "A": "#4ade80", "B": "#facc15", "C": "#f87171"}.get(_ex_tier, "#888")
+                        _ex_hvy  = _ex_e["jig"]
+                        _ex_hcol = (
+                            "#f97316" if _ex_hvy >= 75 else
+                            "#facc15" if _ex_hvy >= 60 else "#60a5fa"
+                        )
+                        st.markdown(
+                            f"<div style='display:flex;align-items:center;gap:8px;"
+                            f"padding:3px 10px 3px 14px;border-bottom:1px solid #0c0803;'>"
+                            f"<span style='font-size:10px;font-weight:700;color:{_ex_tc};"
+                            f"min-width:16px;'>{_ex_tier}</span>"
+                            f"<span style='font-size:11px;color:#e0d8c8;font-weight:600;"
+                            f"min-width:120px;'>"
+                            f"{html.escape(_ex_p.get('player_name', '?'))}</span>"
+                            f"<span style='font-size:9px;color:#6b5033;"
+                            f"min-width:28px;'>{_ex_p.get('team', '?')}</span>"
+                            f"<span style='font-size:8px;color:#4a3a1a;'>HVY</span>"
+                            f"<span style='font-size:11px;font-weight:800;color:{_ex_hcol};"
+                            f"min-width:24px;'>{_ex_hvy:.0f}</span>"
+                            f"<span style='font-size:9px;color:#555;'>"
+                            f"vs {html.escape(_ex_p.get('pitcher_name', 'TBD'))}</span>"
+                            f"</div>",
+                            unsafe_allow_html=True,
+                        )
 
     # ── JIG — Pitch Mix Intelligence ──────────────────────────────────────────
     st.caption(
