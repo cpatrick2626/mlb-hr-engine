@@ -4780,6 +4780,7 @@ def _render_full_slate_all_players(
             return 9999
 
         sorted_gks = sorted(games.keys(), key=_gsk)
+        _FS_TIER_RANK = {"APEX": 0, "ELITE": 1, "EDGE": 2, "SIGNAL": 3, "WATCH": 4, "COLD": 5}
         game_rows = []
         if lens == "power_profile":
             _ps_key = lambda p: (p.get("team", ""), -(
@@ -4809,7 +4810,10 @@ def _render_full_slate_all_players(
                 + ((_pf(p.get("confidence"), 0) or 0) * 0.50)
             ))
         else:
-            _ps_key = lambda p: (p.get("team", ""), int(p.get("lineup_spot") or 99))
+            _ps_key = lambda p: (
+                _FS_TIER_RANK.get(_fs_tier_from_prob(float(p.get("model_prob") or 0)), 5),
+                -(float(p.get("model_prob") or 0)),
+            )
         for gk in sorted_gks:
             sorted_players = sorted(games[gk], key=_ps_key)
             game_rows.append((gk, sorted_players))
