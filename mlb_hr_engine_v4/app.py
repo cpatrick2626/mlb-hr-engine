@@ -4670,6 +4670,19 @@ def _fs_heatmap_color(value, column_key: str) -> dict:
     return {"bg": config.FS_HEATMAP_COLORS[bucket], "text": _TEXT_COLORS[bucket]}
 
 
+_FS_COLUMN_PRESETS: dict[str, list[str]] = {
+    "ALL":     ["tier","player","mq","pa","avg","slg",
+                "babip","gb","hh","ld","barrel","ev",
+                "la","pull","center","hr9","xwoba","hrpa","fanduel"],
+    "POWER":   ["tier","player","mq","barrel","ev",
+                "la","hrpa","hr9","fanduel"],
+    "CONTACT": ["tier","player","mq","pa","avg","slg",
+                "babip","gb","hh","ld","fanduel"],
+    "MATCHUP": ["tier","player","mq","hr9","pull",
+                "center","xwoba","fanduel"],
+}
+
+
 def _fs_tier_legend_html() -> str:
     """Inline tier legend strip for Full Slate header row."""
     items = []
@@ -4765,8 +4778,10 @@ def _fs_mq_pie_html(mq: str) -> str:
     )
 
 
-def _fs_table_header_html(include_game_cols: bool = False) -> str:
+def _fs_table_header_html(include_game_cols: bool = False, active_cols: list | None = None) -> str:
     """Shared Full Slate table header — single source of truth."""
+    if active_cols is None:
+        active_cols = _FS_COLUMN_PRESETS["ALL"]
     _cols = (
         "<th title='HR probability tier: APEX=≥18% / ELITE=≥13% / EDGE=≥9% / SIGNAL=≥6% / WATCH=≥3% / COLD=&lt;3%' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:36px;min-width:36px;max-width:36px;'>TIER</th>"
         "<th title='Batter name, team, and handedness' style='padding:4px 3px;color:#aaa;text-align:left;font-weight:700;font-size:9px;letter-spacing:0.8px;width:140px;min-width:140px;max-width:140px;'>PLAYER</th>"
@@ -4776,25 +4791,40 @@ def _fs_table_header_html(include_game_cols: bool = False) -> str:
             "<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:36px;min-width:36px;max-width:36px;'>TM</th>"
             "<th style='padding:4px 3px;color:#aaa;text-align:left;font-weight:700;font-size:9px;letter-spacing:0.8px;width:80px;min-width:80px;max-width:80px;'>GAME</th>"
         )
-    _cols += (
-        "<th title='Overall matchup quality vs opposing pitcher' style='padding:4px 2px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:110px;min-width:110px;max-width:110px;'>MATCHUP QUALITY</th>"
-        "<th title='Plate appearances this season' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:40px;min-width:40px;max-width:40px;'>PA</th>"
-        "<th title='Batting average this season' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:46px;min-width:46px;max-width:46px;'>AVG</th>"
-        "<th title='Slugging percentage this season' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:46px;min-width:46px;max-width:46px;'>SLG</th>"
-        "<th title='Batting average on balls in play' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:50px;min-width:50px;max-width:50px;'>BABIP</th>"
-        "<th title='Ground ball rate — lower is better for HR' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>GB%</th>"
-        "<th title='Hard hit rate — exit velocity above 95mph' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>HH%</th>"
-        "<th title='Line drive rate' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>LD%</th>"
-        "<th title='Barrel rate — optimal exit velo + launch angle' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>BARREL%</th>"
-        "<th title='Average exit velocity (mph)' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>EV</th>"
-        "<th title='Average launch angle (degrees)' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>LA°</th>"
-        "<th title='Pull rate — balls hit to pull side' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:48px;min-width:48px;max-width:48px;'>PULL%</th>"
-        "<th title='Center field rate' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>CENTER%</th>"
-        "<th title='Opposing pitcher HR allowed per 9 innings — higher = more vulnerable' style='padding:4px 3px;color:#f87171;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>OPP HR/9</th>"
-        "<th title='Expected weighted on-base average' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:50px;min-width:50px;max-width:50px;'>xwOBA</th>"
-        "<th title='Home run rate per plate appearance' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:50px;min-width:50px;max-width:50px;'>HR/PA</th>"
-        "<th title='FanDuel market odds — display only, does not affect ranking' style='padding:4px 3px;color:#f59e0b;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>FANDUEL</th>"
-    )
+    if "mq" in active_cols:
+        _cols += "<th title='Overall matchup quality vs opposing pitcher' style='padding:4px 2px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:110px;min-width:110px;max-width:110px;'>MATCHUP QUALITY</th>"
+    if "pa" in active_cols:
+        _cols += "<th title='Plate appearances this season' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:40px;min-width:40px;max-width:40px;'>PA</th>"
+    if "avg" in active_cols:
+        _cols += "<th title='Batting average this season' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:46px;min-width:46px;max-width:46px;'>AVG</th>"
+    if "slg" in active_cols:
+        _cols += "<th title='Slugging percentage this season' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:46px;min-width:46px;max-width:46px;'>SLG</th>"
+    if "babip" in active_cols:
+        _cols += "<th title='Batting average on balls in play' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:50px;min-width:50px;max-width:50px;'>BABIP</th>"
+    if "gb" in active_cols:
+        _cols += "<th title='Ground ball rate — lower is better for HR' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>GB%</th>"
+    if "hh" in active_cols:
+        _cols += "<th title='Hard hit rate — exit velocity above 95mph' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>HH%</th>"
+    if "ld" in active_cols:
+        _cols += "<th title='Line drive rate' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>LD%</th>"
+    if "barrel" in active_cols:
+        _cols += "<th title='Barrel rate — optimal exit velo + launch angle' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>BARREL%</th>"
+    if "ev" in active_cols:
+        _cols += "<th title='Average exit velocity (mph)' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>EV</th>"
+    if "la" in active_cols:
+        _cols += "<th title='Average launch angle (degrees)' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>LA°</th>"
+    if "pull" in active_cols:
+        _cols += "<th title='Pull rate — balls hit to pull side' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:48px;min-width:48px;max-width:48px;'>PULL%</th>"
+    if "center" in active_cols:
+        _cols += "<th title='Center field rate' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>CENTER%</th>"
+    if "hr9" in active_cols:
+        _cols += "<th title='Opposing pitcher HR allowed per 9 innings — higher = more vulnerable' style='padding:4px 3px;color:#f87171;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>OPP HR/9</th>"
+    if "xwoba" in active_cols:
+        _cols += "<th title='Expected weighted on-base average' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:50px;min-width:50px;max-width:50px;'>xwOBA</th>"
+    if "hrpa" in active_cols:
+        _cols += "<th title='Home run rate per plate appearance' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:50px;min-width:50px;max-width:50px;'>HR/PA</th>"
+    if "fanduel" in active_cols:
+        _cols += "<th title='FanDuel market odds — display only, does not affect ranking' style='padding:4px 3px;color:#f59e0b;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>FANDUEL</th>"
     return _cols
 
 
@@ -5026,7 +5056,7 @@ def _render_full_slate_all_players(
             unsafe_allow_html=True,
         )
 
-    _legend_cols = st.columns([2, 2, 1])
+    _legend_cols = st.columns([2, 2, 1, 1])
     with _legend_cols[0]:
         st.markdown(_fs_tier_legend_html(), unsafe_allow_html=True)
     with _legend_cols[1]:
@@ -5045,10 +5075,20 @@ def _render_full_slate_all_players(
             unsafe_allow_html=True,
         )
     with _legend_cols[2]:
+        st.radio(
+            "Columns",
+            options=["ALL", "POWER", "CONTACT", "MATCHUP"],
+            horizontal=True,
+            key="fs_col_preset",
+            label_visibility="collapsed",
+        )
+    with _legend_cols[3]:
         st.markdown("<div style='display:flex;justify-content:flex-end;align-items:center;height:100%;padding:2px 0;'>", unsafe_allow_html=True)
         if st.button("📋 STAT GUIDE", key="fs_stat_guide_btn", help="View stat definitions"):
             _show_stat_guide_dialog()
         st.markdown("</div>", unsafe_allow_html=True)
+    _fs_preset_key = st.session_state.get("fs_col_preset", "ALL")
+    _fs_active_cols = _FS_COLUMN_PRESETS.get(_fs_preset_key, _FS_COLUMN_PRESETS["ALL"])
     st.markdown(
         "<div style='font-size:9px;color:#333;padding:2px 4px;margin-bottom:4px;"
         "font-family:monospace;letter-spacing:0.5px;'>"
@@ -5109,37 +5149,55 @@ def _render_full_slate_all_players(
             _c_ctr  = _fs_heatmap_color(_pv_ctr,   'center_pct')
             _c_hr9  = _fs_heatmap_color(_pv_hr9,   'pitcher_hr9')
             _c_xw   = _fs_heatmap_color(_pv_xwoba, 'xwoba')
-            _pv_rows.append(
+            _pv_row = (
                 f"<tr style='background:{_pv_bg};border-bottom:1px solid #1a1a2e;min-height:44px;'>"
                 f"<td style='padding:6px 3px;text-align:center;width:36px;min-width:36px;max-width:36px;'>{_pv_tier_s}</td>"
                 f"<td style='padding:4px 4px;color:#60a5fa;font-size:10px;font-weight:700;width:140px;min-width:140px;max-width:140px;overflow:hidden;text-align:center;'><div style='display:flex;justify-content:center;align-items:center;text-align:center;'>{_pv_chip}<span style='font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px;display:inline-block;vertical-align:middle;'>{_pv_name}</span></div></td>"
                 f"<td style='padding:6px 3px;color:#888;font-size:9px;text-align:center;width:36px;min-width:36px;max-width:36px;'>{_pv_team}</td>"
                 f"<td style='padding:6px 3px;color:#555;font-size:8px;white-space:nowrap;width:80px;min-width:80px;max-width:80px;overflow:hidden;text-overflow:ellipsis;'>{_pv_game}</td>"
-                f"<td style='padding:4px 2px;text-align:center;width:110px;min-width:110px;max-width:110px;'>{_pv_mq_pie}</td>"
-                f"<td style='padding:6px 3px;background:{_c_spa['bg']};color:{_c_spa['text']};font-size:11px;text-align:center;width:40px;min-width:40px;max-width:40px;'>{str(_pv_spa) if _pv_spa else '—'}</td>"
-                f"<td style='padding:6px 3px;background:{_c_avg['bg']};color:{_c_avg['text']};font-size:11px;text-align:center;width:46px;min-width:46px;max-width:46px;'>{f'{_pv_avg:.3f}'[1:] if _pv_avg else '—'}</td>"
-                f"<td style='padding:6px 3px;background:{_c_slg['bg']};color:{_c_slg['text']};font-size:11px;text-align:center;width:46px;min-width:46px;max-width:46px;'>{f'{_pv_slg:.3f}'[1:] if _pv_slg else '—'}</td>"
-                f"<td style='padding:6px 3px;background:{_c_bab['bg']};color:{_c_bab['text']};font-size:11px;text-align:center;width:50px;min-width:50px;max-width:50px;'>{f'{_pv_babip:.3f}'[1:] if _pv_babip else '—'}</td>"
-                f"<td style='padding:6px 3px;background:{_c_gb['bg']};color:{_c_gb['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{f'{_pv_gb:.1f}%' if _pv_gb else '—'}</td>"
-                f"<td style='padding:6px 3px;background:{_c_hh['bg']};color:{_c_hh['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{f'{_pv_hh:.1f}%' if _pv_hh else '—'}</td>"
-                f"<td style='padding:6px 3px;background:{_c_ld['bg']};color:{_c_ld['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{f'{_pv_ld:.1f}%' if _pv_ld else '—'}</td>"
-                f"<td style='padding:6px 3px;background:{_c_brl['bg']};color:{_c_brl['text']};font-size:11px;font-weight:600;text-align:center;width:58px;min-width:58px;max-width:58px;'>{f'{_pv_brl:.1f}%' if _pv_brl else '—'}</td>"
-                f"<td style='padding:6px 3px;background:{_c_ev['bg']};color:{_c_ev['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{f'{_pv_ev:.1f}' if _pv_ev else '—'}</td>"
-                f"<td style='padding:6px 3px;background:{_c_la['bg']};color:{_c_la['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{f'{_pv_la:.1f}°' if _pv_la else '—'}</td>"
-                f"<td style='padding:6px 3px;background:{_c_pull['bg']};color:{_c_pull['text']};font-size:11px;text-align:center;width:48px;min-width:48px;max-width:48px;'>{f'{_pv_pull:.1f}%' if _pv_pull else '—'}</td>"
-                f"<td style='padding:6px 3px;background:{_c_ctr['bg']};color:{_c_ctr['text']};font-size:11px;text-align:center;width:58px;min-width:58px;max-width:58px;'>{f'{_pv_ctr:.1f}%' if _pv_ctr else '—'}</td>"
-                f"<td style='padding:6px 3px;background:{_c_hr9['bg']};color:{_c_hr9['text']};font-size:11px;font-weight:600;text-align:center;width:58px;min-width:58px;max-width:58px;'>{f'{_pv_hr9:.2f}' if _pv_hr9 else '—'}</td>"
-                f"<td style='padding:6px 3px;background:{_c_xw['bg']};color:{_c_xw['text']};font-size:11px;text-align:center;width:50px;min-width:50px;max-width:50px;'>{f'{_pv_xwoba:.3f}'[1:] if _pv_xwoba else '—'}</td>"
-                f"<td style='padding:6px 3px;color:#ccc;font-size:11px;text-align:center;width:50px;min-width:50px;max-width:50px;'>{f'{_pv_hrpa:.3f}'[1:] if _pv_hrpa else '—'}</td>"
-                f"<td style='padding:6px 3px;color:#f59e0b;font-size:11px;text-align:center;font-weight:600;width:58px;min-width:58px;max-width:58px;'>{_pv_fd_s}</td>"
-                f"</tr>"
             )
+            if "mq" in _fs_active_cols:
+                _pv_row += f"<td style='padding:4px 2px;text-align:center;width:110px;min-width:110px;max-width:110px;'>{_pv_mq_pie}</td>"
+            if "pa" in _fs_active_cols:
+                _pv_row += f"<td style='padding:6px 3px;background:{_c_spa['bg']};color:{_c_spa['text']};font-size:11px;text-align:center;width:40px;min-width:40px;max-width:40px;'>{str(_pv_spa) if _pv_spa else '—'}</td>"
+            if "avg" in _fs_active_cols:
+                _pv_row += f"<td style='padding:6px 3px;background:{_c_avg['bg']};color:{_c_avg['text']};font-size:11px;text-align:center;width:46px;min-width:46px;max-width:46px;'>{f'{_pv_avg:.3f}'[1:] if _pv_avg else '—'}</td>"
+            if "slg" in _fs_active_cols:
+                _pv_row += f"<td style='padding:6px 3px;background:{_c_slg['bg']};color:{_c_slg['text']};font-size:11px;text-align:center;width:46px;min-width:46px;max-width:46px;'>{f'{_pv_slg:.3f}'[1:] if _pv_slg else '—'}</td>"
+            if "babip" in _fs_active_cols:
+                _pv_row += f"<td style='padding:6px 3px;background:{_c_bab['bg']};color:{_c_bab['text']};font-size:11px;text-align:center;width:50px;min-width:50px;max-width:50px;'>{f'{_pv_babip:.3f}'[1:] if _pv_babip else '—'}</td>"
+            if "gb" in _fs_active_cols:
+                _pv_row += f"<td style='padding:6px 3px;background:{_c_gb['bg']};color:{_c_gb['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{f'{_pv_gb:.1f}%' if _pv_gb else '—'}</td>"
+            if "hh" in _fs_active_cols:
+                _pv_row += f"<td style='padding:6px 3px;background:{_c_hh['bg']};color:{_c_hh['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{f'{_pv_hh:.1f}%' if _pv_hh else '—'}</td>"
+            if "ld" in _fs_active_cols:
+                _pv_row += f"<td style='padding:6px 3px;background:{_c_ld['bg']};color:{_c_ld['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{f'{_pv_ld:.1f}%' if _pv_ld else '—'}</td>"
+            if "barrel" in _fs_active_cols:
+                _pv_row += f"<td style='padding:6px 3px;background:{_c_brl['bg']};color:{_c_brl['text']};font-size:11px;font-weight:600;text-align:center;width:58px;min-width:58px;max-width:58px;'>{f'{_pv_brl:.1f}%' if _pv_brl else '—'}</td>"
+            if "ev" in _fs_active_cols:
+                _pv_row += f"<td style='padding:6px 3px;background:{_c_ev['bg']};color:{_c_ev['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{f'{_pv_ev:.1f}' if _pv_ev else '—'}</td>"
+            if "la" in _fs_active_cols:
+                _pv_row += f"<td style='padding:6px 3px;background:{_c_la['bg']};color:{_c_la['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{f'{_pv_la:.1f}°' if _pv_la else '—'}</td>"
+            if "pull" in _fs_active_cols:
+                _pv_row += f"<td style='padding:6px 3px;background:{_c_pull['bg']};color:{_c_pull['text']};font-size:11px;text-align:center;width:48px;min-width:48px;max-width:48px;'>{f'{_pv_pull:.1f}%' if _pv_pull else '—'}</td>"
+            if "center" in _fs_active_cols:
+                _pv_row += f"<td style='padding:6px 3px;background:{_c_ctr['bg']};color:{_c_ctr['text']};font-size:11px;text-align:center;width:58px;min-width:58px;max-width:58px;'>{f'{_pv_ctr:.1f}%' if _pv_ctr else '—'}</td>"
+            if "hr9" in _fs_active_cols:
+                _pv_row += f"<td style='padding:6px 3px;background:{_c_hr9['bg']};color:{_c_hr9['text']};font-size:11px;font-weight:600;text-align:center;width:58px;min-width:58px;max-width:58px;'>{f'{_pv_hr9:.2f}' if _pv_hr9 else '—'}</td>"
+            if "xwoba" in _fs_active_cols:
+                _pv_row += f"<td style='padding:6px 3px;background:{_c_xw['bg']};color:{_c_xw['text']};font-size:11px;text-align:center;width:50px;min-width:50px;max-width:50px;'>{f'{_pv_xwoba:.3f}'[1:] if _pv_xwoba else '—'}</td>"
+            if "hrpa" in _fs_active_cols:
+                _pv_row += f"<td style='padding:6px 3px;color:#ccc;font-size:11px;text-align:center;width:50px;min-width:50px;max-width:50px;'>{f'{_pv_hrpa:.3f}'[1:] if _pv_hrpa else '—'}</td>"
+            if "fanduel" in _fs_active_cols:
+                _pv_row += f"<td style='padding:6px 3px;color:#f59e0b;font-size:11px;text-align:center;font-weight:600;width:58px;min-width:58px;max-width:58px;'>{_pv_fd_s}</td>"
+            _pv_row += "</tr>"
+            _pv_rows.append(_pv_row)
         _pv_html = (
             "<div style='overflow-x:auto;background:#09090f;border:1px solid #1a1a28;border-radius:4px;'>"
             "<table style='width:100%;border-collapse:collapse;font-family:monospace;font-size:9px;table-layout:fixed;'>"
             "<thead style='background:#0d0d1a;border-bottom:2px solid #2a2a3a;'>"
             "<tr>"
-            + _fs_table_header_html(include_game_cols=True)
+            + _fs_table_header_html(include_game_cols=True, active_cols=_fs_active_cols)
             + "</tr></thead><tbody>"
             + "".join(_pv_rows)
             + "</tbody></table></div>"
@@ -5271,6 +5329,7 @@ def _render_full_slate_all_players(
             slate_ts,
             source_section,
             gk,
+            st.session_state.get("fs_col_preset", "ALL"),
             tuple(
                 (
                     p.get("player_id") or p.get("player_name", ""),
@@ -5430,25 +5489,42 @@ def _render_full_slate_all_players(
                     f"<span style='color:#eee;font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px;'>{pname}</span>"
                     f"<span style='color:#888;font-size:9px;white-space:nowrap;'>{pteam} | {bats}</span>"
                     f"</div></div></td>"
-                    f"<td style='padding:4px 2px;text-align:center;width:110px;min-width:110px;max-width:110px;'>{mq_pie}</td>"
-                    f"<td style='padding:6px 3px;background:{_g_spa['bg']};color:{_g_spa['text']};font-size:11px;text-align:center;width:40px;min-width:40px;max-width:40px;'>{pa_s}</td>"
-                    f"<td style='padding:6px 3px;background:{_g_avg['bg']};color:{_g_avg['text']};font-size:11px;text-align:center;width:46px;min-width:46px;max-width:46px;'>{avg_s}</td>"
-                    f"<td style='padding:6px 3px;background:{_g_slg['bg']};color:{_g_slg['text']};font-size:11px;text-align:center;width:46px;min-width:46px;max-width:46px;'>{slg_s}</td>"
-                    f"<td style='padding:6px 3px;background:{_g_bab['bg']};color:{_g_bab['text']};font-size:11px;text-align:center;width:50px;min-width:50px;max-width:50px;'>{babip_s}</td>"
-                    f"<td style='padding:6px 3px;background:{_g_gb['bg']};color:{_g_gb['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{gb_s}</td>"
-                    f"<td style='padding:6px 3px;background:{_g_hh['bg']};color:{_g_hh['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{hh_s}</td>"
-                    f"<td style='padding:6px 3px;background:{_g_ld['bg']};color:{_g_ld['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{ld_s}</td>"
-                    f"<td style='padding:6px 3px;background:{_g_brl['bg']};color:{_g_brl['text']};font-size:11px;font-weight:600;text-align:center;border-radius:2px;width:58px;min-width:58px;max-width:58px;'>{brl_s}</td>"
-                    f"<td style='padding:6px 3px;background:{_g_ev['bg']};color:{_g_ev['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{ev_s}</td>"
-                    f"<td style='padding:6px 3px;background:{_g_la['bg']};color:{_g_la['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{la_s}</td>"
-                    f"<td style='padding:6px 3px;background:{_g_pull['bg']};color:{_g_pull['text']};font-size:11px;text-align:center;width:48px;min-width:48px;max-width:48px;'>{pull_s}</td>"
-                    f"<td style='padding:6px 3px;background:{_g_ctr['bg']};color:{_g_ctr['text']};font-size:11px;text-align:center;width:58px;min-width:58px;max-width:58px;'>{ctr_s}</td>"
-                    f"<td style='padding:6px 3px;background:{_g_hr9['bg']};color:{_g_hr9['text']};font-size:11px;font-weight:600;text-align:center;border-radius:2px;width:58px;min-width:58px;max-width:58px;'>{hr9_s}</td>"
-                    f"<td style='padding:6px 3px;background:{_g_xw['bg']};color:{_g_xw['text']};font-size:11px;text-align:center;width:50px;min-width:50px;max-width:50px;'>{xwoba_s}</td>"
-                    f"<td style='padding:6px 3px;color:#ccc;font-size:11px;text-align:center;width:50px;min-width:50px;max-width:50px;'>{hrpa_s}</td>"
-                    f"<td style='padding:6px 3px;color:#f59e0b;font-size:11px;text-align:center;font-weight:600;width:58px;min-width:58px;max-width:58px;'>{fd_s}</td>"
-                    f"</tr>"
                 )
+                if "mq" in _fs_active_cols:
+                    row_html += f"<td style='padding:4px 2px;text-align:center;width:110px;min-width:110px;max-width:110px;'>{mq_pie}</td>"
+                if "pa" in _fs_active_cols:
+                    row_html += f"<td style='padding:6px 3px;background:{_g_spa['bg']};color:{_g_spa['text']};font-size:11px;text-align:center;width:40px;min-width:40px;max-width:40px;'>{pa_s}</td>"
+                if "avg" in _fs_active_cols:
+                    row_html += f"<td style='padding:6px 3px;background:{_g_avg['bg']};color:{_g_avg['text']};font-size:11px;text-align:center;width:46px;min-width:46px;max-width:46px;'>{avg_s}</td>"
+                if "slg" in _fs_active_cols:
+                    row_html += f"<td style='padding:6px 3px;background:{_g_slg['bg']};color:{_g_slg['text']};font-size:11px;text-align:center;width:46px;min-width:46px;max-width:46px;'>{slg_s}</td>"
+                if "babip" in _fs_active_cols:
+                    row_html += f"<td style='padding:6px 3px;background:{_g_bab['bg']};color:{_g_bab['text']};font-size:11px;text-align:center;width:50px;min-width:50px;max-width:50px;'>{babip_s}</td>"
+                if "gb" in _fs_active_cols:
+                    row_html += f"<td style='padding:6px 3px;background:{_g_gb['bg']};color:{_g_gb['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{gb_s}</td>"
+                if "hh" in _fs_active_cols:
+                    row_html += f"<td style='padding:6px 3px;background:{_g_hh['bg']};color:{_g_hh['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{hh_s}</td>"
+                if "ld" in _fs_active_cols:
+                    row_html += f"<td style='padding:6px 3px;background:{_g_ld['bg']};color:{_g_ld['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{ld_s}</td>"
+                if "barrel" in _fs_active_cols:
+                    row_html += f"<td style='padding:6px 3px;background:{_g_brl['bg']};color:{_g_brl['text']};font-size:11px;font-weight:600;text-align:center;border-radius:2px;width:58px;min-width:58px;max-width:58px;'>{brl_s}</td>"
+                if "ev" in _fs_active_cols:
+                    row_html += f"<td style='padding:6px 3px;background:{_g_ev['bg']};color:{_g_ev['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{ev_s}</td>"
+                if "la" in _fs_active_cols:
+                    row_html += f"<td style='padding:6px 3px;background:{_g_la['bg']};color:{_g_la['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{la_s}</td>"
+                if "pull" in _fs_active_cols:
+                    row_html += f"<td style='padding:6px 3px;background:{_g_pull['bg']};color:{_g_pull['text']};font-size:11px;text-align:center;width:48px;min-width:48px;max-width:48px;'>{pull_s}</td>"
+                if "center" in _fs_active_cols:
+                    row_html += f"<td style='padding:6px 3px;background:{_g_ctr['bg']};color:{_g_ctr['text']};font-size:11px;text-align:center;width:58px;min-width:58px;max-width:58px;'>{ctr_s}</td>"
+                if "hr9" in _fs_active_cols:
+                    row_html += f"<td style='padding:6px 3px;background:{_g_hr9['bg']};color:{_g_hr9['text']};font-size:11px;font-weight:600;text-align:center;border-radius:2px;width:58px;min-width:58px;max-width:58px;'>{hr9_s}</td>"
+                if "xwoba" in _fs_active_cols:
+                    row_html += f"<td style='padding:6px 3px;background:{_g_xw['bg']};color:{_g_xw['text']};font-size:11px;text-align:center;width:50px;min-width:50px;max-width:50px;'>{xwoba_s}</td>"
+                if "hrpa" in _fs_active_cols:
+                    row_html += f"<td style='padding:6px 3px;color:#ccc;font-size:11px;text-align:center;width:50px;min-width:50px;max-width:50px;'>{hrpa_s}</td>"
+                if "fanduel" in _fs_active_cols:
+                    row_html += f"<td style='padding:6px 3px;color:#f59e0b;font-size:11px;text-align:center;font-weight:600;width:58px;min-width:58px;max-width:58px;'>{fd_s}</td>"
+                row_html += "</tr>"
                 table_rows.append(row_html)
 
             table_html = (
@@ -5456,7 +5532,7 @@ def _render_full_slate_all_players(
                 f"<table style='width:100%;border-collapse:collapse;font-family:monospace;font-size:9px;table-layout:fixed;'>"
                 f"<thead style='background:#0d0d1a;border-bottom:2px solid #2a2a3a;'>"
                 f"<tr>"
-                + _fs_table_header_html()
+                + _fs_table_header_html(active_cols=_fs_active_cols)
                 + f"</tr>"
                 f"</thead>"
                 f"<tbody>"
