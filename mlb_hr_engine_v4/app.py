@@ -4854,6 +4854,9 @@ def _render_full_slate_all_players(
         st.info("No players in today's slate.")
         return
 
+    if "fs_picked" not in st.session_state:
+        st.session_state["fs_picked"] = []
+
     # Hotspot containment: Full Slate regrouping/sorting used to rebuild on every rerun.
     # Cache one compact view-model until the player subset/fingerprint rotates.
     _fs_players_fp = (
@@ -5098,6 +5101,34 @@ def _render_full_slate_all_players(
         unsafe_allow_html=True,
     )
 
+    # ── PICKS strip ──────────────────────────────────────────────────────────
+    _fs_picks = st.session_state["fs_picked"]
+    if _fs_picks:
+        st.markdown(
+            "<span style='font-size:10px;font-weight:700;color:#aaa;font-family:monospace;"
+            "letter-spacing:1px;'>🎯 PICKS THIS SESSION</span>",
+            unsafe_allow_html=True,
+        )
+        _pick_chunks = [_fs_picks[i:i + 4] for i in range(0, len(_fs_picks), 4)]
+        for _pc in _pick_chunks:
+            _pccols = st.columns(max(1, len(_pc)))
+            for _pcc, _pk in zip(_pccols, _pc):
+                with _pcc:
+                    _pk_tcolor = config.FS_TIER_DISPLAY.get(
+                        _pk.get("tier_key", "COLD"), config.FS_TIER_DISPLAY["COLD"]
+                    )["color"]
+                    st.markdown(
+                        f"<span style='color:{_pk_tcolor};font-size:11px;font-family:monospace;"
+                        f"font-weight:700;'>{_pk['player_name']}</span>"
+                        f"<span style='color:#555;font-size:9px;'> {_pk.get('team','')}</span>",
+                        unsafe_allow_html=True,
+                    )
+                    st.link_button("📲 FD", _fanduel_url(_pk["player_name"]), width="stretch")
+        if st.button("✕ Clear Picks", key="fs_pick_clear"):
+            st.session_state["fs_picked"] = []
+            st.rerun()
+        st.divider()
+
     # ── Player view — flat table sorted by model_prob desc ──────────────────
     if _fs_view_mode == "player":
         _pv_all = sorted(all_players, key=lambda p: float(p.get("model_prob") or 0), reverse=True)
@@ -5203,6 +5234,34 @@ def _render_full_slate_all_players(
             + "</tbody></table></div>"
         )
         st.markdown(_pv_html, unsafe_allow_html=True)
+
+        # PICK buttons for player view
+        _pv_pick_chunks = [_pv_all[i:i + 4] for i in range(0, len(_pv_all), 4)]
+        for _pvpc in _pv_pick_chunks:
+            _pvpc_cols = st.columns(max(1, len(_pvpc)))
+            for _pvcc, _pvpp in zip(_pvpc_cols, _pvpc):
+                with _pvcc:
+                    _pvpp_name    = _pvpp.get("player_name", "?")
+                    _pvpp_pid     = str(_pvpp.get("player_id") or _pvpp_name)
+                    _pvpp_tk      = _fs_tier_from_prob(float(_pvpp.get("model_prob") or 0))
+                    _pvpp_already = any(
+                        d.get("player_id") == _pvpp_pid
+                        for d in st.session_state["fs_picked"]
+                    )
+                    if _pvpp_already:
+                        st.link_button("📲 FD", _fanduel_url(_pvpp_name), width="stretch")
+                    elif st.button(
+                        "＋ PICK",
+                        key=f"fs_pvpick_{slate_ts}_{_pvpp_pid}",
+                        use_container_width=True,
+                    ):
+                        st.session_state["fs_picked"].append({
+                            "player_id": _pvpp_pid,
+                            "player_name": _pvpp_name,
+                            "team": _pvpp.get("team", ""),
+                            "tier_key": _pvpp_tk,
+                        })
+                        st.rerun()
         return
 
     def _pit_vuln(factor: float) -> tuple:
@@ -5565,6 +5624,33 @@ def _render_full_slate_all_players(
                             interaction_source="full_slate.name_click",
                         )
                     st.markdown('</div>', unsafe_allow_html=True)
+
+        # PICK buttons for game view
+        for _pk_chunk in _gp_chunks:
+            _pk_cols = st.columns(max(1, len(_pk_chunk)))
+            for _pkc, _pkp in zip(_pk_cols, _pk_chunk):
+                with _pkc:
+                    _pkp_name    = _pkp.get("player_name", "?")
+                    _pkp_pid     = str(_pkp.get("player_id") or _pkp_name)
+                    _pkp_tk      = _fs_tier_from_prob(float(_pkp.get("model_prob") or 0))
+                    _pkp_already = any(
+                        d.get("player_id") == _pkp_pid
+                        for d in st.session_state["fs_picked"]
+                    )
+                    if _pkp_already:
+                        st.link_button("📲 FD", _fanduel_url(_pkp_name), width="stretch")
+                    elif st.button(
+                        "＋ PICK",
+                        key=f"fs_pick_{slate_ts}_{gk}_{_pkp_pid}",
+                        use_container_width=True,
+                    ):
+                        st.session_state["fs_picked"].append({
+                            "player_id": _pkp_pid,
+                            "player_name": _pkp_name,
+                            "team": _pkp.get("team", ""),
+                            "tier_key": _pkp_tk,
+                        })
+                        st.rerun()
 
     # Return-to-top
     st.markdown(
