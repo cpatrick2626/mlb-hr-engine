@@ -4933,7 +4933,7 @@ def _render_full_slate_all_players(
             unsafe_allow_html=True,
         )
 
-    _legend_cols = st.columns([1, 1])
+    _legend_cols = st.columns([2, 2, 1, 1, 1])
     with _legend_cols[0]:
         st.markdown(_fs_tier_legend_html(), unsafe_allow_html=True)
     with _legend_cols[1]:
@@ -4950,6 +4950,13 @@ def _render_full_slate_all_players(
             "<span style='color:#ef4444;'>&#9679; DANGER</span>"
             "</div>",
             unsafe_allow_html=True,
+        )
+    with _legend_cols[4]:
+        _fs_use_native = st.toggle(
+            "NATIVE",
+            key="fs_use_native_cols",
+            value=False,
+            help="Switch between HTML table (stable) and native columns (interactive)",
         )
     st.markdown(
         "<div style='font-size:9px;color:#333;padding:2px 4px;margin-bottom:4px;"
@@ -5047,6 +5054,19 @@ def _render_full_slate_all_players(
             + "</tbody></table></div>"
         )
         st.markdown(_pv_html, unsafe_allow_html=True)
+        return
+
+    _fs_use_native = st.session_state.get("fs_use_native_cols", False)
+    if _fs_use_native:
+        _render_full_slate_native_cols(
+            game_rows=_game_rows_shown,
+            pm_ctxs=pm_ctxs,
+            slate_ts=slate_ts,
+            source_section=source_section,
+            qualified_names=qualified_names,
+            tac_qualified_names=tac_qualified_names,
+            active_cols=[],
+        )
         return
 
     def _pit_vuln(factor: float) -> tuple:
@@ -5475,6 +5495,29 @@ def _render_full_slate_all_players(
         unsafe_allow_html=True,
     )
     _finish_heavy_render(_render_started)
+
+
+def _render_full_slate_native_cols(
+    game_rows: list,
+    pm_ctxs: dict,
+    slate_ts: str,
+    source_section: str,
+    qualified_names: set,
+    tac_qualified_names: set,
+    active_cols: list,
+) -> None:
+    """
+    Full Slate table rebuilt as native Streamlit columns.
+    Enables inline click interactions on tier, player name, and MQ columns.
+    Replaces HTML table + button strip pattern.
+    Phase 1: scaffold only — renders placeholder message.
+    Phase 2: full implementation.
+    """
+    st.info(
+        "🔧 NATIVE COLUMNS MODE — Phase 2 implementation "
+        "coming next session. Switch toggle OFF to return "
+        "to stable HTML table."
+    )
 
 
 def _derive_projected_market(model_prob: float) -> dict:
