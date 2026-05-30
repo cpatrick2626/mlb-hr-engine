@@ -3235,6 +3235,81 @@ def _elite_card_html(
     )
 
 
+@st.dialog("📊 Pitch Mix Intelligence", width="large")
+def _show_pitch_mix_modal() -> None:
+    """H2H HVY pitch matrix modal — shared for FS + JIG."""
+    player = st.session_state.get("pitch_mix_modal_player", {})
+    ctx    = st.session_state.get("pitch_mix_modal_ctx", {})
+    source = st.session_state.get("pitch_mix_modal_source", "")
+    slate_ts = st.session_state.get("slate_ts", "")
+
+    if not player or not ctx:
+        st.warning("No pitch mix data available for this player.")
+        return
+
+    pname   = player.get("player_name", "?")
+    pitcher = player.get("pitcher_name", "TBD")
+    team    = player.get("team", "")
+    bats    = player.get("batter_side", "")
+    mq      = player.get("matchup_quality", "AVG")
+
+    st.markdown(
+        f"<div style='margin-bottom:10px;'>"
+        f"<span style='font-size:15px;font-weight:700;"
+        f"color:#e0d8c8;'>{html.escape(pname)}</span>"
+        f"<span style='color:#555;font-size:11px;"
+        f"margin-left:8px;'>{team} · Bats {bats}</span>"
+        f"<span style='color:#888;font-size:11px;"
+        f"margin-left:12px;'>vs {html.escape(pitcher)}</span>"
+        f"<span style='color:#555;font-size:10px;"
+        f"margin-left:10px;'>MQ: {mq}</span>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+    h2h = ctx.get("h2h", {})
+    if h2h and h2h.get("pa", 0) > 0:
+        h2h_pa  = h2h.get("pa",  0)
+        h2h_hr  = h2h.get("hr",  0)
+        h2h_bb  = h2h.get("bb",  0)
+        h2h_k   = h2h.get("k",   0)
+        h2h_avg = h2h.get("avg", 0.0)
+        h2h_slg = h2h.get("slg", 0.0)
+        h2h_ops = h2h.get("ops", 0.0)
+        st.markdown(
+            "<span style='color:#aaa;font-size:10px;"
+            "letter-spacing:1px;font-weight:600;'>"
+            "H2H CAREER</span>",
+            unsafe_allow_html=True,
+        )
+        _h2h_cols = st.columns(7)
+        for col, lbl, val in zip(
+            _h2h_cols,
+            ["PA","HR","BB","K","AVG","SLG","OPS"],
+            [h2h_pa, h2h_hr, h2h_bb, h2h_k,
+             f"{h2h_avg:.3f}"[1:] if h2h_avg else "--",
+             f"{h2h_slg:.3f}"[1:] if h2h_slg else "--",
+             f"{h2h_ops:.3f}"[1:] if h2h_ops else "--"],
+        ):
+            col.metric(lbl, val)
+        st.divider()
+
+    _render_pitch_mix_expander(
+        ctx=ctx,
+        p=player,
+        key_prefix="pmmodal",
+        expanded=True,
+        slate_ts=slate_ts,
+    )
+
+    if st.button("Close", key="pm_modal_close"):
+        st.session_state.pop("show_pitch_mix_modal", None)
+        st.session_state.pop("pitch_mix_modal_player", None)
+        st.session_state.pop("pitch_mix_modal_ctx", None)
+        st.session_state.pop("pitch_mix_modal_source", None)
+        st.rerun()
+
+
 @st.dialog("⚾ Player Details", width="large")
 def _show_player_modal(player: dict):
     _record_widget_zone("modal.player_details", widget_count_estimate=3)
@@ -5651,6 +5726,28 @@ def _render_full_slate_all_players(
                             "tier_key": _pkp_tk,
                         })
                         st.rerun()
+
+        # MQ pitch mix buttons — one per player in this game group
+        for _mq_chunk in _gp_chunks:
+            _mq_cols = st.columns(max(1, len(_mq_chunk)))
+            for _mqc, _mqp in zip(_mq_cols, _mq_chunk):
+                with _mqc:
+                    _mqp_name = _mqp.get("player_name", "?")
+                    _mqp_pid  = str(_mqp.get("player_id") or _mqp_name)
+                    _mqp_ctx  = (pm_ctxs or {}).get(_mqp_pid, {})
+                    if _mqp_ctx:
+                        if st.button(
+                            f"📊 {_mqp_name[:12]}",
+                            key=f"fs_pm_{slate_ts}_{gk}_{_mqp_pid}",
+                            use_container_width=True,
+                        ):
+                            st.session_state["pitch_mix_modal_player"] = _mqp
+                            st.session_state["pitch_mix_modal_ctx"]    = _mqp_ctx
+                            st.session_state["show_pitch_mix_modal"]   = True
+                            st.session_state["pitch_mix_modal_source"] = "Full Slate"
+                            st.rerun()
+                    else:
+                        st.info("Load Full Slate to fetch pitch mix data")
 
     # Return-to-top
     st.markdown(
@@ -8748,6 +8845,27 @@ def tab_jig(data: dict):
             if rows:
                 st.caption("Full HVY cards with pitch mix breakdown → see Full Slate tab.")
 
+            # Pitch mix buttons — one per scored player
+            if scored:
+                _jig_pm_chunks = [scored[i:i + 4] for i in range(0, len(scored), 4)]
+                for _jig_pm_chunk in _jig_pm_chunks:
+                    _jig_pm_cols = st.columns(max(1, len(_jig_pm_chunk)))
+                    for _jig_pmc, _jig_pme in zip(_jig_pm_cols, _jig_pm_chunk):
+                        with _jig_pmc:
+                            _jig_pmp   = _jig_pme["player"]
+                            _jig_pmpid = str(_jig_pmp.get("player_id") or _jig_pmp.get("player_name", ""))
+                            _jig_pmctx = hvy_contexts.get(_jig_pmpid, {})
+                            if st.button(
+                                "📊 Pitch Mix",
+                                key=f"jig_pm_{_jig_pmpid}",
+                                use_container_width=True,
+                            ):
+                                st.session_state["pitch_mix_modal_player"] = _jig_pmp
+                                st.session_state["pitch_mix_modal_ctx"]    = _jig_pmctx
+                                st.session_state["show_pitch_mix_modal"]   = True
+                                st.session_state["pitch_mix_modal_source"] = "JIG"
+                                st.rerun()
+
         elif _jig_subview == "portfolio":
             _mark_render_section(
                 "JIG.portfolio",
@@ -10670,6 +10788,8 @@ def main():
     _selected_modal_player = st.session_state.get("selected_player_modal")
     if st.session_state.get("show_modal") and isinstance(_selected_modal_player, dict):
         _show_player_modal(_selected_modal_player)
+    if st.session_state.get("show_pitch_mix_modal"):
+        _show_pitch_mix_modal()
 
     # Read filter thresholds from session state first (sidebar sets them on each rerun)
     _min_ev   = float(st.session_state.get("min_ev",   config.MIN_EV_PCT))
