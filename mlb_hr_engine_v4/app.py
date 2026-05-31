@@ -5860,8 +5860,17 @@ def _render_full_slate_native_cols(
             if val is None:
                 return None
             if isinstance(val, str):
-                return float(val.rstrip('%')) if val.strip() else None
-            return float(val)
+                v = val.strip().rstrip('%')
+                if not v or v in ('--', '-', 'N/A', 'n/a'):
+                    return None
+                try:
+                    return float(v)
+                except ValueError:
+                    return None
+            try:
+                return float(val)
+            except (TypeError, ValueError):
+                return None
 
         for p in game_players:
             pid   = str(p.get("player_id") or p.get("player_name", ""))
