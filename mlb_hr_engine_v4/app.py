@@ -5065,7 +5065,7 @@ def _render_full_slate_all_players(
             source_section=source_section,
             qualified_names=qualified_names,
             tac_qualified_names=tac_qualified_names,
-            active_cols=[],
+            active_cols=list(_FS_NATIVE_DEFAULT_COLS),
         )
         return
 
@@ -5497,6 +5497,22 @@ def _render_full_slate_all_players(
     _finish_heavy_render(_render_started)
 
 
+_FS_NC_COL_RATIOS = {
+    "tier":    0.5,  "player":  2.0,  "mq":      1.5,
+    "pa":      0.5,  "avg":     0.6,  "slg":     0.6,
+    "babip":   0.7,  "gb":      0.6,  "hh":      0.6,
+    "ld":      0.6,  "barrel":  0.8,  "ev":      0.6,
+    "la":      0.6,  "pull":    0.65, "center":  0.8,
+    "hr9":     0.8,  "xwoba":   0.7,  "hrpa":    0.7,
+    "fanduel": 0.8,
+}
+_FS_NATIVE_DEFAULT_COLS = (
+    "tier", "player", "mq", "pa", "avg", "slg", "babip",
+    "gb", "hh", "ld", "barrel", "ev", "la", "pull",
+    "center", "hr9", "xwoba", "hrpa", "fanduel",
+)
+
+
 def _render_full_slate_native_cols(
     game_rows: list,
     pm_ctxs: dict,
@@ -5510,14 +5526,280 @@ def _render_full_slate_native_cols(
     Full Slate table rebuilt as native Streamlit columns.
     Enables inline click interactions on tier, player name, and MQ columns.
     Replaces HTML table + button strip pattern.
-    Phase 1: scaffold only — renders placeholder message.
-    Phase 2: full implementation.
     """
-    st.info(
-        "🔧 NATIVE COLUMNS MODE — Phase 2 implementation "
-        "coming next session. Switch toggle OFF to return "
-        "to stable HTML table."
-    )
+    _NC_HEADER_LABELS = {
+        "tier": "TIER", "player": "PLAYER", "mq": "MQ",
+        "pa": "PA", "avg": "AVG", "slg": "SLG",
+        "babip": "BABIP", "gb": "GB%", "hh": "HH%",
+        "ld": "LD%", "barrel": "BARREL%", "ev": "EV",
+        "la": "LA°", "pull": "PULL%", "center": "CENTER%",
+        "hr9": "OPP HR/9", "xwoba": "xwOBA",
+        "hrpa": "HR/PA", "fanduel": "FANDUEL",
+    }
+
+    ratios = [_FS_NC_COL_RATIOS.get(c, 0.6) for c in active_cols]
+    if not ratios:
+        st.info("No columns selected.")
+        return
+
+    # Header row
+    header_cols = st.columns(ratios)
+    for col, key in zip(header_cols, active_cols):
+        col.markdown(
+            f"<div style='font-size:9px;color:#aaa;"
+            f"font-weight:700;letter-spacing:0.8px;"
+            f"text-align:center;padding:4px 2px;"
+            f"border-bottom:2px solid #2a2a3a;'>"
+            f"{_NC_HEADER_LABELS.get(key,'')}</div>",
+            unsafe_allow_html=True,
+        )
+
+    for gk, game_players in game_rows:
+        if not game_players:
+            continue
+        p0        = game_players[0]
+        home_team = p0.get("home_team", "")
+        away_batters = [p for p in game_players if p.get("team") != home_team]
+        away_team = away_batters[0].get("team", "?") if away_batters else p0.get("opponent", "?")
+        gt     = _game_time_et(p0.get("game_time_utc", ""))
+        gt_str = gt.strftime("%I:%M %p ET").lstrip("0") if gt else "TBD"
+        venue  = _PF.get(home_team, {}).get("name", home_team)
+
+        st.markdown(
+            f"<div style='font-size:10px;font-weight:700;letter-spacing:1px;"
+            f"color:#aaa;padding:8px 4px 2px;border-top:1px solid #1e1e2e;margin-top:4px;'>"
+            f"{away_team} @ {home_team} &nbsp;·&nbsp; {gt_str} &nbsp;·&nbsp; "
+            f"<span style='color:#555;'>{venue}</span></div>",
+            unsafe_allow_html=True,
+        )
+
+        for p in game_players:
+            pid   = str(p.get("player_id") or p.get("player_name", ""))
+            pname = p.get("player_name", "?")
+            team  = p.get("team", "")
+            bats  = p.get("batter_side", "")
+
+            mp        = float(p.get("model_prob") or 0)
+            tier      = _fs_tier_from_prob(mp)
+            mq        = p.get("matchup_quality", "AVG")
+            season_pa = p.get("season_pa")
+            batting_avg = p.get("batting_avg")
+            slg       = p.get("actual_slg")
+            babip     = p.get("babip")
+            gb_pct    = p.get("gb_pct")
+            hard_hit  = p.get("hard_hit")
+            ld_pct    = p.get("ld_pct")
+            barrel    = p.get("barrel_pct")
+            ev        = p.get("exit_velo")
+            la        = p.get("avg_launch_angle")
+            pull      = p.get("pull_pct")
+            center    = p.get("center_pct")
+            hr9       = p.get("pitcher_hr9")
+            xwoba     = p.get("xwoba")
+            season_hr = int(p.get("season_hr") or 0)
+            fb_pct    = _pf(p.get("fb_pct"), 0.0)
+            fb_pa     = (season_pa or 0) * fb_pct / 100.0
+            hrpa      = round(season_hr / fb_pa, 3) if fb_pa > 0 else None
+            fd_raw    = p.get("fanduel_american")
+            fd_s      = (
+                f"+{fd_raw}" if fd_raw and fd_raw > 0
+                else str(fd_raw) if fd_raw else "—"
+            )
+
+            def _hc(val, key):
+                return _fs_heatmap_color(val, key)
+
+            _already_picked = any(
+                d.get("player_id") == pid
+                for d in st.session_state.get("fs_picked", [])
+            )
+
+            row_cols = st.columns(ratios)
+            for col, ckey in zip(row_cols, active_cols):
+
+                if ckey == "tier":
+                    col.markdown(_fs_tier_html(tier), unsafe_allow_html=True)
+                    if not _already_picked:
+                        if col.button(
+                            "＋",
+                            key=f"nc_pick_{slate_ts}_{pid}",
+                            help="Add to PICKS",
+                        ):
+                            st.session_state.setdefault("fs_picked", []).append(p)
+                            st.rerun()
+                    else:
+                        col.markdown(
+                            "<div style='color:#4ade80;font-size:9px;"
+                            "text-align:center;'>✓</div>",
+                            unsafe_allow_html=True,
+                        )
+
+                elif ckey == "player":
+                    col.markdown(
+                        f"<div style='font-size:10px;color:#888;'>"
+                        f"{team} | {bats}</div>",
+                        unsafe_allow_html=True,
+                    )
+                    if col.button(pname, key=f"nc_name_{slate_ts}_{pid}"):
+                        _open_player_modal(
+                            p,
+                            source_tab="Full Slate",
+                            source_section=source_section,
+                            interaction_source="full_slate.name_click",
+                        )
+
+                elif ckey == "mq":
+                    col.markdown(_fs_mq_pie_html(mq), unsafe_allow_html=True)
+                    ctx = pm_ctxs.get(pid, {})
+                    if ctx:
+                        if col.button(
+                            "📊",
+                            key=f"nc_mq_{slate_ts}_{pid}",
+                            help="View pitch mix",
+                        ):
+                            st.session_state["pitch_mix_modal_player"] = p
+                            st.session_state["pitch_mix_modal_ctx"] = ctx
+                            st.session_state["show_pitch_mix_modal"] = True
+                            st.session_state["pitch_mix_modal_source"] = "Full Slate"
+                            st.rerun()
+
+                elif ckey == "pa":
+                    col.markdown(
+                        f"<div style='text-align:center;font-size:11px;color:#ccc;'>"
+                        f"{season_pa or '—'}</div>",
+                        unsafe_allow_html=True,
+                    )
+
+                elif ckey == "avg":
+                    c = _hc(batting_avg, "batting_avg")
+                    col.markdown(
+                        f"<div style='background:{c['bg']};color:{c['text']};"
+                        f"text-align:center;font-size:11px;padding:2px;'>"
+                        f"{f'{batting_avg:.3f}'[1:] if batting_avg else '—'}</div>",
+                        unsafe_allow_html=True,
+                    )
+
+                elif ckey == "slg":
+                    c = _hc(slg, "actual_slg")
+                    col.markdown(
+                        f"<div style='background:{c['bg']};color:{c['text']};"
+                        f"text-align:center;font-size:11px;padding:2px;'>"
+                        f"{f'{slg:.3f}'[1:] if slg is not None else '—'}</div>",
+                        unsafe_allow_html=True,
+                    )
+
+                elif ckey == "babip":
+                    c = _hc(babip, "babip")
+                    col.markdown(
+                        f"<div style='background:{c['bg']};color:{c['text']};"
+                        f"text-align:center;font-size:11px;padding:2px;'>"
+                        f"{f'{babip:.3f}'[1:] if babip else '—'}</div>",
+                        unsafe_allow_html=True,
+                    )
+
+                elif ckey == "gb":
+                    c = _hc(gb_pct, "gb_pct")
+                    col.markdown(
+                        f"<div style='background:{c['bg']};color:{c['text']};"
+                        f"text-align:center;font-size:11px;padding:2px;'>"
+                        f"{f'{gb_pct:.1f}%' if gb_pct else '—'}</div>",
+                        unsafe_allow_html=True,
+                    )
+
+                elif ckey == "hh":
+                    c = _hc(hard_hit, "hard_hit")
+                    col.markdown(
+                        f"<div style='background:{c['bg']};color:{c['text']};"
+                        f"text-align:center;font-size:11px;padding:2px;'>"
+                        f"{f'{hard_hit:.1f}%' if hard_hit else '—'}</div>",
+                        unsafe_allow_html=True,
+                    )
+
+                elif ckey == "ld":
+                    c = _hc(ld_pct, "ld_pct")
+                    col.markdown(
+                        f"<div style='background:{c['bg']};color:{c['text']};"
+                        f"text-align:center;font-size:11px;padding:2px;'>"
+                        f"{f'{ld_pct:.1f}%' if ld_pct else '—'}</div>",
+                        unsafe_allow_html=True,
+                    )
+
+                elif ckey == "barrel":
+                    c = _hc(barrel, "barrel_pct")
+                    col.markdown(
+                        f"<div style='background:{c['bg']};color:{c['text']};"
+                        f"text-align:center;font-size:11px;font-weight:600;padding:2px;'>"
+                        f"{f'{barrel:.1f}%' if barrel else '—'}</div>",
+                        unsafe_allow_html=True,
+                    )
+
+                elif ckey == "ev":
+                    c = _hc(ev, "exit_velo")
+                    col.markdown(
+                        f"<div style='background:{c['bg']};color:{c['text']};"
+                        f"text-align:center;font-size:11px;padding:2px;'>"
+                        f"{f'{ev:.1f}' if ev else '—'}</div>",
+                        unsafe_allow_html=True,
+                    )
+
+                elif ckey == "la":
+                    c = _hc(la, "avg_launch_angle")
+                    col.markdown(
+                        f"<div style='background:{c['bg']};color:{c['text']};"
+                        f"text-align:center;font-size:11px;padding:2px;'>"
+                        f"{f'{float(la):.1f}°' if la is not None else '—'}</div>",
+                        unsafe_allow_html=True,
+                    )
+
+                elif ckey == "pull":
+                    c = _hc(pull, "pull_pct")
+                    col.markdown(
+                        f"<div style='background:{c['bg']};color:{c['text']};"
+                        f"text-align:center;font-size:11px;padding:2px;'>"
+                        f"{f'{pull:.1f}%' if pull else '—'}</div>",
+                        unsafe_allow_html=True,
+                    )
+
+                elif ckey == "center":
+                    c = _hc(center, "center_pct")
+                    col.markdown(
+                        f"<div style='background:{c['bg']};color:{c['text']};"
+                        f"text-align:center;font-size:11px;padding:2px;'>"
+                        f"{f'{center:.1f}%' if center else '—'}</div>",
+                        unsafe_allow_html=True,
+                    )
+
+                elif ckey == "hr9":
+                    c = _hc(hr9, "pitcher_hr9")
+                    col.markdown(
+                        f"<div style='background:{c['bg']};color:{c['text']};"
+                        f"text-align:center;font-size:11px;font-weight:600;padding:2px;'>"
+                        f"{f'{hr9:.2f}' if hr9 else '—'}</div>",
+                        unsafe_allow_html=True,
+                    )
+
+                elif ckey == "xwoba":
+                    c = _hc(xwoba, "xwoba")
+                    col.markdown(
+                        f"<div style='background:{c['bg']};color:{c['text']};"
+                        f"text-align:center;font-size:11px;padding:2px;'>"
+                        f"{f'{xwoba:.3f}'[1:] if xwoba else '—'}</div>",
+                        unsafe_allow_html=True,
+                    )
+
+                elif ckey == "hrpa":
+                    col.markdown(
+                        f"<div style='text-align:center;color:#ccc;font-size:11px;'>"
+                        f"{f'{hrpa:.3f}'[1:] if hrpa else '—'}</div>",
+                        unsafe_allow_html=True,
+                    )
+
+                elif ckey == "fanduel":
+                    col.markdown(
+                        f"<div style='text-align:center;color:#f59e0b;"
+                        f"font-size:11px;font-weight:600;'>{fd_s}</div>",
+                        unsafe_allow_html=True,
+                    )
 
 
 def _derive_projected_market(model_prob: float) -> dict:
