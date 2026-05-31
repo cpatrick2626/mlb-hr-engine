@@ -4853,56 +4853,6 @@ def _fs_mq_pie_html(mq: str) -> str:
     )
 
 
-def _fs_table_header_html(include_game_cols: bool = False, active_cols: list | None = None) -> str:
-    """Shared Full Slate table header — single source of truth."""
-    if active_cols is None:
-        active_cols = _FS_COLUMN_PRESETS["ALL"]
-    _cols = (
-        "<th title='HR probability tier: APEX=≥18% / ELITE=≥13% / EDGE=≥9% / SIGNAL=≥6% / WATCH=≥3% / COLD=&lt;3%' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:36px;min-width:36px;max-width:36px;'>TIER</th>"
-        "<th title='Batter name, team, and handedness' style='padding:4px 3px;color:#aaa;text-align:left;font-weight:700;font-size:9px;letter-spacing:0.8px;width:140px;min-width:140px;max-width:140px;'>PLAYER</th>"
-    )
-    if include_game_cols:
-        _cols += (
-            "<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:36px;min-width:36px;max-width:36px;'>TM</th>"
-            "<th style='padding:4px 3px;color:#aaa;text-align:left;font-weight:700;font-size:9px;letter-spacing:0.8px;width:80px;min-width:80px;max-width:80px;'>GAME</th>"
-        )
-    if "mq" in active_cols:
-        _cols += "<th title='Overall matchup quality vs opposing pitcher' style='padding:4px 2px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:110px;min-width:110px;max-width:110px;'>MATCHUP QUALITY</th>"
-    if "pa" in active_cols:
-        _cols += "<th title='Plate appearances this season' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:40px;min-width:40px;max-width:40px;'>PA</th>"
-    if "avg" in active_cols:
-        _cols += "<th title='Batting average this season' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:46px;min-width:46px;max-width:46px;'>AVG</th>"
-    if "slg" in active_cols:
-        _cols += "<th title='Slugging percentage this season' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:46px;min-width:46px;max-width:46px;'>SLG</th>"
-    if "babip" in active_cols:
-        _cols += "<th title='Batting average on balls in play' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:50px;min-width:50px;max-width:50px;'>BABIP</th>"
-    if "gb" in active_cols:
-        _cols += "<th title='Ground ball rate — lower is better for HR' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>GB%</th>"
-    if "hh" in active_cols:
-        _cols += "<th title='Hard hit rate — exit velocity above 95mph' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>HH%</th>"
-    if "ld" in active_cols:
-        _cols += "<th title='Line drive rate' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>LD%</th>"
-    if "barrel" in active_cols:
-        _cols += "<th title='Barrel rate — optimal exit velo + launch angle' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>BARREL%</th>"
-    if "ev" in active_cols:
-        _cols += "<th title='Average exit velocity (mph)' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>EV</th>"
-    if "la" in active_cols:
-        _cols += "<th title='Average launch angle (degrees)' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>LA°</th>"
-    if "pull" in active_cols:
-        _cols += "<th title='Pull rate — balls hit to pull side' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:48px;min-width:48px;max-width:48px;'>PULL%</th>"
-    if "center" in active_cols:
-        _cols += "<th title='Center field rate' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>CENTER%</th>"
-    if "hr9" in active_cols:
-        _cols += "<th title='Opposing pitcher HR allowed per 9 innings — higher = more vulnerable' style='padding:4px 3px;color:#f87171;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>OPP HR/9</th>"
-    if "xwoba" in active_cols:
-        _cols += "<th title='Expected weighted on-base average' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:50px;min-width:50px;max-width:50px;'>xwOBA</th>"
-    if "hrpa" in active_cols:
-        _cols += "<th title='Home run rate per plate appearance' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:50px;min-width:50px;max-width:50px;'>HR/PA</th>"
-    if "fanduel" in active_cols:
-        _cols += "<th title='FanDuel market odds — display only, does not affect ranking' style='padding:4px 3px;color:#f59e0b;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>FANDUEL</th>"
-    return _cols
-
-
 # ─── Full Slate "All Players" game-organized renderer ─────────────────────────
 
 def _render_full_slate_all_players(
@@ -5134,7 +5084,7 @@ def _render_full_slate_all_players(
             unsafe_allow_html=True,
         )
 
-    _legend_cols = st.columns([2, 2, 1, 1, 1, 1])
+    _legend_cols = st.columns([2, 2, 1, 1])
     with _legend_cols[0]:
         st.markdown(_fs_tier_legend_html(), unsafe_allow_html=True)
     with _legend_cols[1]:
@@ -5165,13 +5115,6 @@ def _render_full_slate_all_players(
         if st.button("📋 STAT GUIDE", key="fs_stat_guide_btn", help="View stat definitions"):
             _show_stat_guide_dialog()
         st.markdown("</div>", unsafe_allow_html=True)
-    with _legend_cols[4]:
-        _fs_use_native = st.toggle(
-            "NATIVE",
-            key="fs_use_native_cols",
-            value=False,
-            help="Switch between HTML table (stable) and native columns (interactive)",
-        )
     _fs_preset_key = st.session_state.get("fs_col_preset", "ALL")
     _fs_active_cols = _FS_COLUMN_PRESETS.get(_fs_preset_key, _FS_COLUMN_PRESETS["ALL"])
     st.markdown(
@@ -5211,573 +5154,16 @@ def _render_full_slate_all_players(
             st.rerun()
         st.divider()
 
-    # ── Player view — flat table sorted by model_prob desc ──────────────────
-    if _fs_view_mode == "player":
-        _pv_all = sorted(all_players, key=lambda p: float(p.get("model_prob") or 0), reverse=True)
-        _pv_rows = []
-        for _pv_ri, _pv_p in enumerate(_pv_all):
-            _pv_name   = _pv_p.get("player_name", "?")
-            _pv_team   = _pv_p.get("team", "?")
-            _pv_ht     = _pv_p.get("home_team", "")
-            _pv_game   = f"{_pv_p.get('opponent','?')}@{_pv_ht}" if _pv_ht else _pv_team
-            _pv_mp     = float(_pv_p.get("model_prob") or 0)
-            _pv_tk     = _fs_tier_from_prob(_pv_mp)
-            _pv_tier_s = _fs_tier_html(_pv_tk) if _pv_mp > 0 else "—"
-            _pv_mq     = _pv_p.get("matchup_quality", "AVG")
-            _pv_mq_pie = _fs_mq_pie_html(_pv_mq)
-            _pv_chip   = ("<span style='display:inline-block;width:7px;height:7px;"
-                          "border-radius:50%;background:#334155;margin-right:3px;"
-                          "vertical-align:middle;'></span>")
-            _pv_spa    = _pv_p.get("season_pa", 0)
-            _pv_avg    = _pv_p.get("batting_avg")
-            _pv_slg    = _pv_p.get("actual_slg")
-            _pv_babip  = _pv_p.get("babip")
-            _pv_gb     = _pf(_pv_p.get("gb_pct"), 0)
-            _pv_hh     = _pf(_pv_p.get("hard_hit"), 0)
-            _pv_ld     = _pf(_pv_p.get("ld_pct"), 0)
-            _pv_brl    = _pf(_pv_p.get("barrel_pct"), 0)
-            _pv_ev     = _pf(_pv_p.get("exit_velo"), 0)
-            _pv_la     = _pv_p.get("avg_launch_angle")
-            _pv_pull   = _pf(_pv_p.get("pull_pct"), 0)
-            _pv_ctr    = _pv_p.get("center_pct")
-            _pv_hr9    = _pv_p.get("pitcher_hr9", 0)
-            _pv_xwoba  = _pv_p.get("xwoba")
-            _pv_shr    = _pv_p.get("season_hr", 0)
-            _pv_hrpa   = round(_pv_shr / _pv_spa, 3) if _pv_spa > 0 else None
-            _pv_fd_raw = _pv_p.get("fanduel_american")
-            _pv_fd_s   = (f"+{_pv_fd_raw}" if _pv_fd_raw and _pv_fd_raw > 0
-                          else str(_pv_fd_raw) if _pv_fd_raw else "—")
-            _pv_bg = "#0d0d1a" if _pv_ri % 2 == 0 else "#111122"
-            _c_spa  = _fs_heatmap_color(_pv_spa,   'season_pa')
-            _c_avg  = _fs_heatmap_color(_pv_avg,   'batting_avg')
-            _c_slg  = _fs_heatmap_color(_pv_slg,   'actual_slg')
-            _c_bab  = _fs_heatmap_color(_pv_babip, 'babip')
-            _c_gb   = _fs_heatmap_color(_pv_gb,    'gb_pct')
-            _c_hh   = _fs_heatmap_color(_pv_hh,    'hard_hit')
-            _c_ld   = _fs_heatmap_color(_pv_ld,    'ld_pct')
-            _c_brl  = _fs_heatmap_color(_pv_brl,   'barrel_pct')
-            _c_ev   = _fs_heatmap_color(_pv_ev,    'exit_velo')
-            _c_la   = _fs_heatmap_color(_pv_la,    'avg_launch_angle')
-            _c_pull = _fs_heatmap_color(_pv_pull,  'pull_pct')
-            _c_ctr  = _fs_heatmap_color(_pv_ctr,   'center_pct')
-            _c_hr9  = _fs_heatmap_color(_pv_hr9,   'pitcher_hr9')
-            _c_xw   = _fs_heatmap_color(_pv_xwoba, 'xwoba')
-            _pv_row = (
-                f"<tr style='background:{_pv_bg};border-bottom:1px solid #1a1a2e;min-height:44px;'>"
-                f"<td style='padding:6px 3px;text-align:center;width:36px;min-width:36px;max-width:36px;'>{_pv_tier_s}</td>"
-                f"<td style='padding:4px 4px;color:#60a5fa;font-size:10px;font-weight:700;width:140px;min-width:140px;max-width:140px;overflow:hidden;text-align:center;'><div style='display:flex;justify-content:center;align-items:center;text-align:center;'>{_pv_chip}<span style='font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px;display:inline-block;vertical-align:middle;'>{_pv_name}</span></div></td>"
-                f"<td style='padding:6px 3px;color:#888;font-size:9px;text-align:center;width:36px;min-width:36px;max-width:36px;'>{_pv_team}</td>"
-                f"<td style='padding:6px 3px;color:#555;font-size:8px;white-space:nowrap;width:80px;min-width:80px;max-width:80px;overflow:hidden;text-overflow:ellipsis;'>{_pv_game}</td>"
-            )
-            if "mq" in _fs_active_cols:
-                _pv_row += f"<td style='padding:4px 2px;text-align:center;width:110px;min-width:110px;max-width:110px;'>{_pv_mq_pie}</td>"
-            if "pa" in _fs_active_cols:
-                _pv_row += f"<td style='padding:6px 3px;background:{_c_spa['bg']};color:{_c_spa['text']};font-size:11px;text-align:center;width:40px;min-width:40px;max-width:40px;'>{str(_pv_spa) if _pv_spa else '—'}</td>"
-            if "avg" in _fs_active_cols:
-                _pv_row += f"<td style='padding:6px 3px;background:{_c_avg['bg']};color:{_c_avg['text']};font-size:11px;text-align:center;width:46px;min-width:46px;max-width:46px;'>{f'{_pv_avg:.3f}'[1:] if _pv_avg else '—'}</td>"
-            if "slg" in _fs_active_cols:
-                _pv_row += f"<td style='padding:6px 3px;background:{_c_slg['bg']};color:{_c_slg['text']};font-size:11px;text-align:center;width:46px;min-width:46px;max-width:46px;'>{f'{_pv_slg:.3f}'[1:] if _pv_slg else '—'}</td>"
-            if "babip" in _fs_active_cols:
-                _pv_row += f"<td style='padding:6px 3px;background:{_c_bab['bg']};color:{_c_bab['text']};font-size:11px;text-align:center;width:50px;min-width:50px;max-width:50px;'>{f'{_pv_babip:.3f}'[1:] if _pv_babip else '—'}</td>"
-            if "gb" in _fs_active_cols:
-                _pv_row += f"<td style='padding:6px 3px;background:{_c_gb['bg']};color:{_c_gb['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{f'{_pv_gb:.1f}%' if _pv_gb else '—'}</td>"
-            if "hh" in _fs_active_cols:
-                _pv_row += f"<td style='padding:6px 3px;background:{_c_hh['bg']};color:{_c_hh['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{f'{_pv_hh:.1f}%' if _pv_hh else '—'}</td>"
-            if "ld" in _fs_active_cols:
-                _pv_row += f"<td style='padding:6px 3px;background:{_c_ld['bg']};color:{_c_ld['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{f'{_pv_ld:.1f}%' if _pv_ld else '—'}</td>"
-            if "barrel" in _fs_active_cols:
-                _pv_row += f"<td style='padding:6px 3px;background:{_c_brl['bg']};color:{_c_brl['text']};font-size:11px;font-weight:600;text-align:center;width:58px;min-width:58px;max-width:58px;'>{f'{_pv_brl:.1f}%' if _pv_brl else '—'}</td>"
-            if "ev" in _fs_active_cols:
-                _pv_row += f"<td style='padding:6px 3px;background:{_c_ev['bg']};color:{_c_ev['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{f'{_pv_ev:.1f}' if _pv_ev else '—'}</td>"
-            if "la" in _fs_active_cols:
-                _pv_row += f"<td style='padding:6px 3px;background:{_c_la['bg']};color:{_c_la['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{f'{_pv_la:.1f}°' if _pv_la else '—'}</td>"
-            if "pull" in _fs_active_cols:
-                _pv_row += f"<td style='padding:6px 3px;background:{_c_pull['bg']};color:{_c_pull['text']};font-size:11px;text-align:center;width:48px;min-width:48px;max-width:48px;'>{f'{_pv_pull:.1f}%' if _pv_pull else '—'}</td>"
-            if "center" in _fs_active_cols:
-                _pv_row += f"<td style='padding:6px 3px;background:{_c_ctr['bg']};color:{_c_ctr['text']};font-size:11px;text-align:center;width:58px;min-width:58px;max-width:58px;'>{f'{_pv_ctr:.1f}%' if _pv_ctr else '—'}</td>"
-            if "hr9" in _fs_active_cols:
-                _pv_row += f"<td style='padding:6px 3px;background:{_c_hr9['bg']};color:{_c_hr9['text']};font-size:11px;font-weight:600;text-align:center;width:58px;min-width:58px;max-width:58px;'>{f'{_pv_hr9:.2f}' if _pv_hr9 else '—'}</td>"
-            if "xwoba" in _fs_active_cols:
-                _pv_row += f"<td style='padding:6px 3px;background:{_c_xw['bg']};color:{_c_xw['text']};font-size:11px;text-align:center;width:50px;min-width:50px;max-width:50px;'>{f'{_pv_xwoba:.3f}'[1:] if _pv_xwoba else '—'}</td>"
-            if "hrpa" in _fs_active_cols:
-                _pv_row += f"<td style='padding:6px 3px;color:#ccc;font-size:11px;text-align:center;width:50px;min-width:50px;max-width:50px;'>{f'{_pv_hrpa:.3f}'[1:] if _pv_hrpa else '—'}</td>"
-            if "fanduel" in _fs_active_cols:
-                _pv_row += f"<td style='padding:6px 3px;color:#f59e0b;font-size:11px;text-align:center;font-weight:600;width:58px;min-width:58px;max-width:58px;'>{_pv_fd_s}</td>"
-            _pv_row += "</tr>"
-            _pv_rows.append(_pv_row)
-        _pv_html = (
-            "<div style='overflow-x:auto;background:#09090f;border:1px solid #1a1a28;border-radius:4px;'>"
-            "<table style='width:100%;border-collapse:collapse;font-family:monospace;font-size:9px;table-layout:fixed;'>"
-            "<thead style='background:#0d0d1a;border-bottom:2px solid #2a2a3a;'>"
-            "<tr>"
-            + _fs_table_header_html(include_game_cols=True, active_cols=_fs_active_cols)
-            + "</tr></thead><tbody>"
-            + "".join(_pv_rows)
-            + "</tbody></table></div>"
-        )
-        st.markdown(_pv_html, unsafe_allow_html=True)
-
-        # PICK buttons for player view
-        _pv_pick_chunks = [_pv_all[i:i + 4] for i in range(0, len(_pv_all), 4)]
-        for _pvpc in _pv_pick_chunks:
-            _pvpc_cols = st.columns(max(1, len(_pvpc)))
-            for _pvcc, _pvpp in zip(_pvpc_cols, _pvpc):
-                with _pvcc:
-                    _pvpp_name    = _pvpp.get("player_name", "?")
-                    _pvpp_pid     = str(_pvpp.get("player_id") or _pvpp_name)
-                    _pvpp_tk      = _fs_tier_from_prob(float(_pvpp.get("model_prob") or 0))
-                    _pvpp_already = any(
-                        d.get("player_id") == _pvpp_pid
-                        for d in st.session_state["fs_picked"]
-                    )
-                    if _pvpp_already:
-                        st.link_button("📲 FD", _fanduel_url(_pvpp_name), width="stretch")
-                    elif st.button(
-                        "＋ PICK",
-                        key=f"fs_pvpick_{slate_ts}_{_pvpp_pid}",
-                        use_container_width=True,
-                    ):
-                        st.session_state["fs_picked"].append({
-                            "player_id": _pvpp_pid,
-                            "player_name": _pvpp_name,
-                            "team": _pvpp.get("team", ""),
-                            "tier_key": _pvpp_tk,
-                        })
-                        st.rerun()
-        return
-
-    _fs_use_native = st.session_state.get("fs_use_native_cols", False)
-    if _fs_use_native:
-        _render_full_slate_native_cols(
-            game_rows=_game_rows_shown,
-            pm_ctxs=pm_ctxs,
-            slate_ts=slate_ts,
-            source_section=source_section,
-            qualified_names=qualified_names,
-            tac_qualified_names=tac_qualified_names,
-            active_cols=list(_FS_NATIVE_DEFAULT_COLS),
-        )
-        return
-
-    def _pit_vuln(factor: float) -> tuple:
-        """(label, color) for pitcher vulnerability display in Full Slate."""
-        if factor >= 1.20: return "ELITE TARGET", "#4ade80"
-        if factor >= 1.08: return "FAVORABLE",    "#86efac"
-        if factor >= 0.92: return "NEUTRAL",       "#3a3a3a"
-        if factor >= 0.80: return "TOUGH",         "#f97316"
-        return "SUPPRESSOR", "#f87171"
-
-    _render_started = _start_heavy_render(
-        "MAIN.full_slate.render",
-        fingerprint=f"{source_section}|{slate_ts}|{len(all_players)}|{len(_game_rows_shown)}",
-        dataset_size=len(all_players),
+    _render_full_slate_native_cols(
+        game_rows=_game_rows_shown,
+        pm_ctxs=pm_ctxs,
+        slate_ts=slate_ts,
+        source_section=source_section,
+        qualified_names=qualified_names,
+        tac_qualified_names=tac_qualified_names,
+        active_cols=list(_FS_NATIVE_DEFAULT_COLS),
+        view_mode=_fs_view_mode,
     )
-
-    for _ni, (gk, game_players) in enumerate(_game_rows_shown):
-        p0        = game_players[0]
-        home_team = p0.get("home_team", "")
-
-        home_batters = [p for p in game_players if p.get("team") == home_team]
-        away_batters = [p for p in game_players if p.get("team") != home_team]
-        away_team    = (away_batters[0].get("team", "") if away_batters
-                        else p0.get("opponent", "?"))
-
-        # home batters face the away pitcher; away batters face the home pitcher
-        away_pitcher    = home_batters[0].get("pitcher_name", "TBD") if home_batters else "TBD"
-        home_pitcher    = away_batters[0].get("pitcher_name", "TBD") if away_batters else "TBD"
-        away_pit_factor = float(home_batters[0].get("pitcher_factor", 1.0)) if home_batters else 1.0
-        home_pit_factor = float(away_batters[0].get("pitcher_factor", 1.0)) if away_batters else 1.0
-        away_pit_hand   = home_batters[0].get("pitcher_hand", "") if home_batters else ""
-        home_pit_hand   = away_batters[0].get("pitcher_hand", "") if away_batters else ""
-        away_vuln_lbl, away_vuln_col = _pit_vuln(away_pit_factor)
-        home_vuln_lbl, home_vuln_col = _pit_vuln(home_pit_factor)
-
-        gt     = _game_time_et(p0.get("game_time_utc", ""))
-        gt_str = gt.strftime("%I:%M %p ET").lstrip("0") if gt else "TBD"
-
-        _pid0   = p0.get("player_id") or p0.get("player_name", "")
-        urg_col = urgency_cache.get(_pid0, (gt_str, "#555", ""))[1]
-
-        pk     = float(p0.get("park_factor", 1.0) or 1.0)
-        wf     = float(p0.get("weather_factor", 1.0) or 1.0)
-        pk_col = "#4ade80" if pk >= 1.05 else "#f87171" if pk <= 0.95 else "#888"
-
-        # Venue name from park factors lookup
-        _venue = _PF.get(home_team, {}).get("name", "")
-
-        # HR environment score
-        _, _env_col, _env_lbl = _hr_env_score(p0)
-
-        # Live conditions strip
-        _w_dict  = p0.get("weather") or {}
-        _temp_f  = _w_dict.get("temp_f")
-        _wind_m  = _w_dict.get("wind_mph")
-        _wind_d  = _w_dict.get("wind_deg")
-        _hum_pct = _w_dict.get("humidity_pct")
-        _is_dome = p0.get("is_dome", False)
-        _cond_parts: list = []
-        if _temp_f is not None:
-            _tc = "#f87171" if _temp_f < 50 else "#86efac" if _temp_f > 80 else "#888"
-            _cond_parts.append(f"<span style='color:{_tc};'>{_temp_f:.0f}°F</span>")
-        if _is_dome:
-            _cond_parts.append("<span style='color:#475569;'>DOME</span>")
-        elif _wind_m is not None and _wind_d is not None:
-            _wdir  = _deg_to_compass(_wind_d)
-            _wc    = "#4ade80" if wf >= 1.04 else "#f87171" if wf <= 0.96 else "#666"
-            _cond_parts.append(
-                f"<span style='color:{_wc};'>{_wind_m:.0f}mph {_wdir}</span>"
-            )
-        if _hum_pct is not None and not _is_dome:
-            _hc = "#86efac" if _hum_pct > 70 else "#888"
-            _cond_parts.append(f"<span style='color:{_hc};'>{_hum_pct:.0f}%RH</span>")
-        _cond_parts.append(
-            f"<span style='color:{_env_col};font-weight:700;"
-            f"letter-spacing:0.5px;'>{_env_lbl}</span>"
-        )
-        _sep     = "<span style='color:#1e1e2e;margin:0 5px;'>·</span>"
-        _cond_html = _sep.join(_cond_parts)
-
-        n_game_qual = sum(1 for p in game_players if p.get("player_name") in qualified_names)
-        _group_open_key = f"{_fs_zone_scope}_group_{_stable_key_token(slate_ts, source_section, gk)}"
-        _group_is_open = bool(st.session_state.get(_group_open_key, True))
-        _summary_html = (
-            f"<div style='background:#09090f;border:1px solid #171726;border-left:3px solid {pk_col if pk_col != '#888' else urg_col};"
-            f"border-radius:8px;padding:10px 12px;'>"
-            f"<div style='display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;'>"
-            f"<div><div style='color:#f3f4f6;font-size:14px;font-weight:800;'>{away_team} @ {home_team}</div>"
-            f"<div style='color:#6b7280;font-size:10px;'>{gt_str} · Park {pk:.2f}x · {n_game_qual} qual</div></div>"
-            f"<div style='display:flex;flex-wrap:wrap;justify-content:flex-end;'>"
-            f"{_shell_badge_html('ENV', _env_lbl, _venue or 'park')}"
-            f"{_shell_badge_html(home_team[:3], away_vuln_lbl, away_pitcher[:18])}"
-            f"{_shell_badge_html(away_team[:3], home_vuln_lbl, home_pitcher[:18])}"
-            f"</div></div></div>"
-        )
-        _summary_cols = st.columns([6, 1])
-        with _summary_cols[0]:
-            st.markdown(_summary_html, unsafe_allow_html=True)
-        with _summary_cols[1]:
-            if st.button(
-                "Collapse" if _group_is_open else "Expand",
-                key=f"{_group_open_key}_btn",
-                width="stretch",
-            ):
-                _record_interaction("full_slate.group_toggle", rerun_source="full_slate_group_toggle")
-                st.session_state[_group_open_key] = not _group_is_open
-                st.rerun()
-        if not _group_is_open:
-            continue
-
-        _gh_border_col = pk_col if pk_col != "#888" else urg_col
-        _pm_fp = tuple(
-            (
-                p.get("player_id") or p.get("player_name", ""),
-                round(float(((pm_ctxs or {}).get(p.get("player_id"), {}) or {}).get("hvy_modifier", 0.0) or 0.0), 2),
-                int(bool(((pm_ctxs or {}).get(p.get("player_id"), {}) or {}).get("pitcher_arsenal"))),
-                int(bool(((pm_ctxs or {}).get(p.get("player_id"), {}) or {}).get("batter_vs"))),
-                int(bool(((pm_ctxs or {}).get(p.get("player_id"), {}) or {}).get("hand_splits"))),
-            )
-            for p in game_players
-        )
-        _game_html_fp = (
-            "full_slate_game",
-            slate_ts,
-            source_section,
-            gk,
-            st.session_state.get("fs_col_preset", "ALL"),
-            tuple(
-                (
-                    p.get("player_id") or p.get("player_name", ""),
-                    p.get("lineup_spot"),
-                    p.get("team") or "",
-                    round(_pf(p.get("barrel_pct"), 0.0), 1),
-                    round((_pf(p.get("model_prob"), 0.0) or 0.0) * 100, 1),
-                    p.get("ev_pct"),
-                    p.get("edge_pct"),
-                    p.get("confidence"),
-                    int((p.get("player_name") or "") in qualified_names),
-                    int((p.get("player_name") or "") in tac_qualified_names),
-                    int((p.get("player_name") or "") in steam_names),
-                    p.get("fanduel_american"),
-                )
-                for p in game_players
-            ),
-            _pm_fp,
-        )
-
-        def _build_game_html() -> str:
-            header_html = (
-            # Game command module — anchor ID for nav strip
-            f"<div id='gm{_ni}_{slate_ts}' style='background:#09090f;"
-            f"border-left:3px solid {_gh_border_col};"
-            f"border-top:1px solid #18182a;border-radius:4px;"
-            f"margin:18px 0 0;overflow:hidden;'>"
-
-            # Row 1 — matchup · time · park · env · qual count
-            f"<div style='display:flex;justify-content:space-between;align-items:center;"
-            f"flex-wrap:wrap;gap:4px;padding:6px 12px 3px;'>"
-            f"<span style='font-size:14px;font-weight:800;color:#60a5fa;"
-            f"letter-spacing:0.3px;'>{away_team} @ {home_team}</span>"
-            f"<span style='font-size:11px;color:{urg_col};font-weight:600;'>{gt_str}</span>"
-            f"<span style='font-size:10px;color:#888;'>Park "
-            f"<span style='color:{pk_col};font-weight:700;'>{pk:.2f}×</span></span>"
-            f"<span style='background:#0d0d1c;border:1px solid #1e1e30;border-radius:3px;"
-            f"padding:1px 7px;font-size:10px;color:{_env_col};font-weight:700;"
-            f"letter-spacing:1px;'>{_env_lbl}</span>"
-            f"<span style='font-size:10px;color:{('#4ade80' if n_game_qual >= 3 else '#555')};'>"
-            f"{n_game_qual} qual</span>"
-            f"</div>"
-
-            # Row 2 — venue + conditions strip
-            f"<div style='display:flex;align-items:center;flex-wrap:wrap;gap:6px;"
-            f"padding:2px 12px 4px;border-top:1px solid #101018;'>"
-            f"<span style='font-size:9px;color:#2e2e42;letter-spacing:0.5px;"
-            f"font-family:monospace;'>{_venue}</span>"
-            + (f"<span style='color:#181828;'>·</span>"
-               f"<span style='font-size:10px;'>{_cond_html}</span>" if _cond_parts else "")
-            + f"</div>"
-
-            # Row 3 — pitcher target zone
-            f"<div style='display:flex;align-items:center;flex-wrap:wrap;gap:0;"
-            f"padding:4px 12px 5px;border-top:1px solid #0e0e16;background:#06060c;'>"
-            f"<span style='font-size:8px;color:#2e2e45;letter-spacing:1.5px;"
-            f"text-transform:uppercase;margin-right:8px;font-family:monospace;'>TARGET</span>"
-            # Home batters vs away pitcher
-            f"<span style='font-size:10px;color:#a78bfa;font-weight:700;"
-            f"margin-right:4px;'>{home_team}</span>"
-            f"<span style='font-size:9px;color:#222233;margin-right:3px;'>vs</span>"
-            f"<span style='font-size:10px;color:#c8c8e0;margin-right:3px;'>{away_pitcher}</span>"
-            f"<span style='font-size:9px;color:#3a3a55;margin-right:5px;'>{away_pit_hand}</span>"
-            f"<span style='font-size:9px;color:{away_vuln_col};font-weight:700;"
-            f"letter-spacing:0.3px;'>{away_vuln_lbl}</span>"
-            f"<span style='color:#181828;margin:0 10px;'>│</span>"
-            # Away batters vs home pitcher
-            f"<span style='font-size:10px;color:#60a5fa;font-weight:700;"
-            f"margin-right:4px;'>{away_team}</span>"
-            f"<span style='font-size:9px;color:#222233;margin-right:3px;'>vs</span>"
-            f"<span style='font-size:10px;color:#c8c8e0;margin-right:3px;'>{home_pitcher}</span>"
-            f"<span style='font-size:9px;color:#3a3a55;margin-right:5px;'>{home_pit_hand}</span>"
-            f"<span style='font-size:9px;color:{home_vuln_col};font-weight:700;"
-            f"letter-spacing:0.3px;'>{home_vuln_lbl}</span>"
-            f"</div></div>"
-            )
-
-            # Tactical table render (Phase 4: Full Slate intelligent table)
-            # Columns: TIER | # | PLAYER | TEAM | BATS | MQ | PA | AVG | SLG | BABIP | GB% | HH% | LD% | BRL% | EV | LA° | PULL% | CTR% | OPP HR/9 | xwOBA | HR/PA | FD
-            table_rows = []
-            for _ri, p in enumerate(game_players):
-                pname  = p.get("player_name", "?")
-                pteam  = p.get("team", "?")
-                bats = p.get("batter_side", "?")
-                mq = p.get("matchup_quality", "AVG")
-                spot = p.get("lineup_spot") or "?"
-
-                season_pa = p.get("season_pa", 0)
-                batting_avg = p.get("batting_avg")
-                slg = p.get("actual_slg")
-                babip = p.get("babip")
-                gb_pct = _pf(p.get("gb_pct"), 0)
-                hard_hit = _pf(p.get("hard_hit"), 0)
-                ld_pct = _pf(p.get("ld_pct"), 0)
-                barrel_pct = _pf(p.get("barrel_pct"), 0)
-                exit_velo = _pf(p.get("exit_velo"), 0)
-                launch_angle = p.get("avg_launch_angle")
-                pull_pct = _pf(p.get("pull_pct"), 0)
-                center_pct = p.get("center_pct")
-                pitcher_hr9 = p.get("pitcher_hr9", 0)
-                xwoba = p.get("xwoba")
-                season_hr = p.get("season_hr", 0)
-                hr_pa = round(season_hr / season_pa, 3) if season_pa > 0 else None
-                model_prob_r = float(p.get("model_prob") or 0)
-                tier_key_r   = _fs_tier_from_prob(model_prob_r)
-                tier_s = _fs_tier_html(tier_key_r) if model_prob_r > 0 else "—"
-                fd_raw = p.get("fanduel_american")
-                fd_s = (f"+{fd_raw}" if fd_raw and fd_raw > 0
-                        else str(fd_raw) if fd_raw else "—")
-                _tc_color = config.TEAM_COLORS.get(pteam, "#334155")
-                team_chip = (
-                    f"<span style='display:inline-block;width:7px;height:7px;"
-                    f"border-radius:50%;background:{_tc_color};margin-right:3px;"
-                    f"vertical-align:middle;'></span>"
-                )
-                mq_pie = _fs_mq_pie_html(mq)
-
-                # Format values for display
-                pa_s    = str(season_pa) if season_pa else "—"
-                avg_s   = f"{batting_avg:.3f}"[1:] if batting_avg else "—"
-                slg_s   = f"{slg:.3f}"[1:] if slg is not None else "—"
-                babip_s = f"{babip:.3f}"[1:] if babip else "—"
-                gb_s    = f"{gb_pct:.1f}%" if gb_pct else "—"
-                hh_s    = f"{hard_hit:.1f}%" if hard_hit else "—"
-                ld_s    = f"{ld_pct:.1f}%" if ld_pct else "—"
-                brl_s   = f"{barrel_pct:.1f}%" if barrel_pct else "—"
-                ev_s    = f"{exit_velo:.1f}" if exit_velo else "—"
-                la_s    = f"{launch_angle:.1f}°" if launch_angle else "—"
-                pull_s  = f"{pull_pct:.1f}%" if pull_pct else "—"
-                ctr_s   = f"{center_pct:.1f}%" if center_pct else "—"
-                hr9_s   = f"{pitcher_hr9:.2f}" if pitcher_hr9 else "—"
-                xwoba_s = f"{xwoba:.3f}"[1:] if xwoba else "—"
-                hrpa_s  = f"{hr_pa:.3f}"[1:] if hr_pa else "—"
-
-                _row_bg = "#0d0d1a" if _ri % 2 == 0 else "#111122"
-                _g_spa  = _fs_heatmap_color(season_pa,    'season_pa')
-                _g_avg  = _fs_heatmap_color(batting_avg,  'batting_avg')
-                _g_slg  = _fs_heatmap_color(slg,          'actual_slg')
-                _g_bab  = _fs_heatmap_color(babip,        'babip')
-                _g_gb   = _fs_heatmap_color(gb_pct,       'gb_pct')
-                _g_hh   = _fs_heatmap_color(hard_hit,     'hard_hit')
-                _g_ld   = _fs_heatmap_color(ld_pct,       'ld_pct')
-                _g_brl  = _fs_heatmap_color(barrel_pct,   'barrel_pct')
-                _g_ev   = _fs_heatmap_color(exit_velo,    'exit_velo')
-                _g_la   = _fs_heatmap_color(launch_angle, 'avg_launch_angle')
-                _g_pull = _fs_heatmap_color(pull_pct,     'pull_pct')
-                _g_ctr  = _fs_heatmap_color(center_pct,   'center_pct')
-                _g_hr9  = _fs_heatmap_color(pitcher_hr9,  'pitcher_hr9')
-                _g_xw   = _fs_heatmap_color(xwoba,        'xwoba')
-                row_html = (
-                    f"<tr style='background:{_row_bg};border-bottom:1px solid #1a1a2e;min-height:44px;'>"
-                    f"<td style='padding:6px 3px;text-align:center;width:36px;min-width:36px;max-width:36px;'>{tier_s}</td>"
-                    f"<td style='padding:4px 4px;width:140px;min-width:140px;max-width:140px;overflow:hidden;text-align:center;'>"
-                    f"<div style='display:flex;justify-content:center;align-items:center;text-align:center;gap:4px;'>"
-                    f"{team_chip}"
-                    f"<div style='display:flex;flex-direction:column;line-height:1.2;align-items:center;text-align:center;'>"
-                    f"<span style='color:#eee;font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px;'>{pname}</span>"
-                    f"<span style='color:#888;font-size:9px;white-space:nowrap;'>{pteam} | {bats}</span>"
-                    f"</div></div></td>"
-                )
-                if "mq" in _fs_active_cols:
-                    row_html += f"<td style='padding:4px 2px;text-align:center;width:110px;min-width:110px;max-width:110px;'>{mq_pie}</td>"
-                if "pa" in _fs_active_cols:
-                    row_html += f"<td style='padding:6px 3px;background:{_g_spa['bg']};color:{_g_spa['text']};font-size:11px;text-align:center;width:40px;min-width:40px;max-width:40px;'>{pa_s}</td>"
-                if "avg" in _fs_active_cols:
-                    row_html += f"<td style='padding:6px 3px;background:{_g_avg['bg']};color:{_g_avg['text']};font-size:11px;text-align:center;width:46px;min-width:46px;max-width:46px;'>{avg_s}</td>"
-                if "slg" in _fs_active_cols:
-                    row_html += f"<td style='padding:6px 3px;background:{_g_slg['bg']};color:{_g_slg['text']};font-size:11px;text-align:center;width:46px;min-width:46px;max-width:46px;'>{slg_s}</td>"
-                if "babip" in _fs_active_cols:
-                    row_html += f"<td style='padding:6px 3px;background:{_g_bab['bg']};color:{_g_bab['text']};font-size:11px;text-align:center;width:50px;min-width:50px;max-width:50px;'>{babip_s}</td>"
-                if "gb" in _fs_active_cols:
-                    row_html += f"<td style='padding:6px 3px;background:{_g_gb['bg']};color:{_g_gb['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{gb_s}</td>"
-                if "hh" in _fs_active_cols:
-                    row_html += f"<td style='padding:6px 3px;background:{_g_hh['bg']};color:{_g_hh['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{hh_s}</td>"
-                if "ld" in _fs_active_cols:
-                    row_html += f"<td style='padding:6px 3px;background:{_g_ld['bg']};color:{_g_ld['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{ld_s}</td>"
-                if "barrel" in _fs_active_cols:
-                    row_html += f"<td style='padding:6px 3px;background:{_g_brl['bg']};color:{_g_brl['text']};font-size:11px;font-weight:600;text-align:center;border-radius:2px;width:58px;min-width:58px;max-width:58px;'>{brl_s}</td>"
-                if "ev" in _fs_active_cols:
-                    row_html += f"<td style='padding:6px 3px;background:{_g_ev['bg']};color:{_g_ev['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{ev_s}</td>"
-                if "la" in _fs_active_cols:
-                    row_html += f"<td style='padding:6px 3px;background:{_g_la['bg']};color:{_g_la['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{la_s}</td>"
-                if "pull" in _fs_active_cols:
-                    row_html += f"<td style='padding:6px 3px;background:{_g_pull['bg']};color:{_g_pull['text']};font-size:11px;text-align:center;width:48px;min-width:48px;max-width:48px;'>{pull_s}</td>"
-                if "center" in _fs_active_cols:
-                    row_html += f"<td style='padding:6px 3px;background:{_g_ctr['bg']};color:{_g_ctr['text']};font-size:11px;text-align:center;width:58px;min-width:58px;max-width:58px;'>{ctr_s}</td>"
-                if "hr9" in _fs_active_cols:
-                    row_html += f"<td style='padding:6px 3px;background:{_g_hr9['bg']};color:{_g_hr9['text']};font-size:11px;font-weight:600;text-align:center;border-radius:2px;width:58px;min-width:58px;max-width:58px;'>{hr9_s}</td>"
-                if "xwoba" in _fs_active_cols:
-                    row_html += f"<td style='padding:6px 3px;background:{_g_xw['bg']};color:{_g_xw['text']};font-size:11px;text-align:center;width:50px;min-width:50px;max-width:50px;'>{xwoba_s}</td>"
-                if "hrpa" in _fs_active_cols:
-                    row_html += f"<td style='padding:6px 3px;color:#ccc;font-size:11px;text-align:center;width:50px;min-width:50px;max-width:50px;'>{hrpa_s}</td>"
-                if "fanduel" in _fs_active_cols:
-                    row_html += f"<td style='padding:6px 3px;color:#f59e0b;font-size:11px;text-align:center;font-weight:600;width:58px;min-width:58px;max-width:58px;'>{fd_s}</td>"
-                row_html += "</tr>"
-                table_rows.append(row_html)
-
-            table_html = (
-                f"<div style='overflow-x:auto;background:#09090f;border:1px solid #1a1a28;border-radius:4px;'>"
-                f"<table style='width:100%;border-collapse:collapse;font-family:monospace;font-size:9px;table-layout:fixed;'>"
-                f"<thead style='background:#0d0d1a;border-bottom:2px solid #2a2a3a;'>"
-                f"<tr>"
-                + _fs_table_header_html(active_cols=_fs_active_cols)
-                + f"</tr>"
-                f"</thead>"
-                f"<tbody>"
-                + "".join(table_rows)
-                + f"</tbody>"
-                f"</table>"
-                f"</div>"
-            )
-            return header_html + table_html
-
-        st.markdown(_card_html(_game_html_fp, _build_game_html), unsafe_allow_html=True)
-
-        # Name-click buttons: one per player, styled as plain-text links via .tac-btn
-        _gp_chunks = [game_players[i:i + 4] for i in range(0, len(game_players), 4)]
-        for _chunk in _gp_chunks:
-            _ncols = st.columns(max(1, len(_chunk)))
-            for _nc, _np in zip(_ncols, _chunk):
-                with _nc:
-                    _np_name = _np.get("player_name", "?")
-                    _np_pid = str(_np.get("player_id") or _np_name)
-                    st.markdown('<div class="tac-btn">', unsafe_allow_html=True)
-                    if st.button(
-                        _np_name,
-                        key=f"fs_name_{slate_ts}_{gk}_{_np_pid}",
-                    ):
-                        _open_player_modal(
-                            _np,
-                            source_tab="Full Slate",
-                            source_section=source_section,
-                            interaction_source="full_slate.name_click",
-                        )
-                    st.markdown('</div>', unsafe_allow_html=True)
-
-        # PICK buttons for game view
-        for _pk_chunk in _gp_chunks:
-            _pk_cols = st.columns(max(1, len(_pk_chunk)))
-            for _pkc, _pkp in zip(_pk_cols, _pk_chunk):
-                with _pkc:
-                    _pkp_name    = _pkp.get("player_name", "?")
-                    _pkp_pid     = str(_pkp.get("player_id") or _pkp_name)
-                    _pkp_tk      = _fs_tier_from_prob(float(_pkp.get("model_prob") or 0))
-                    _pkp_already = any(
-                        d.get("player_id") == _pkp_pid
-                        for d in st.session_state["fs_picked"]
-                    )
-                    if _pkp_already:
-                        st.link_button("📲 FD", _fanduel_url(_pkp_name), width="stretch")
-                    elif st.button(
-                        "＋ PICK",
-                        key=f"fs_pick_{slate_ts}_{gk}_{_pkp_pid}",
-                        use_container_width=True,
-                    ):
-                        st.session_state["fs_picked"].append({
-                            "player_id": _pkp_pid,
-                            "player_name": _pkp_name,
-                            "team": _pkp.get("team", ""),
-                            "tier_key": _pkp_tk,
-                        })
-                        st.rerun()
-
-        # MQ pitch mix buttons — one per player in this game group
-        for _mq_chunk in _gp_chunks:
-            _mq_cols = st.columns(max(1, len(_mq_chunk)))
-            for _mqc, _mqp in zip(_mq_cols, _mq_chunk):
-                with _mqc:
-                    _mqp_name = _mqp.get("player_name", "?")
-                    _mqp_pid  = str(_mqp.get("player_id") or _mqp_name)
-                    _mqp_ctx  = (pm_ctxs or {}).get(_mqp_pid, {})
-                    if _mqp_ctx:
-                        if st.button(
-                            f"📊 {_mqp_name[:12]}",
-                            key=f"fs_pm_{slate_ts}_{gk}_{_mqp_pid}",
-                            use_container_width=True,
-                        ):
-                            st.session_state["pitch_mix_modal_player"] = _mqp
-                            st.session_state["pitch_mix_modal_ctx"]    = _mqp_ctx
-                            st.session_state["show_pitch_mix_modal"]   = True
-                            st.session_state["pitch_mix_modal_source"] = "Full Slate"
-                            st.rerun()
-                    else:
-                        st.info("Load Full Slate to fetch pitch mix data")
-
-    # Return-to-top
-    st.markdown(
-        "<div style='text-align:center;padding:14px 0 6px;"
-        "border-top:1px solid #16162a;margin-top:8px;'>"
-        "<a href='#fs_top' style='font-size:9px;color:#333;text-decoration:none;"
-        "letter-spacing:1.5px;font-family:monospace;'>▲ &nbsp;TOP</a></div>",
-        unsafe_allow_html=True,
-    )
-    _finish_heavy_render(_render_started)
 
 
 _FS_NC_COL_RATIOS = {
@@ -5804,6 +5190,7 @@ def _render_full_slate_native_cols(
     qualified_names: set,
     tac_qualified_names: set,
     active_cols: list,
+    view_mode: str = "game",
 ) -> None:
     """
     Full Slate table rebuilt as native Streamlit columns.
@@ -5837,40 +5224,54 @@ def _render_full_slate_native_cols(
             unsafe_allow_html=True,
         )
 
-    for gk, game_players in game_rows:
+    def _safe_float(val):
+        if val is None:
+            return None
+        if isinstance(val, str):
+            v = val.strip().rstrip('%')
+            if not v or v in ('--', '-', 'N/A', 'n/a'):
+                return None
+            try:
+                return float(v)
+            except ValueError:
+                return None
+        try:
+            return float(val)
+        except (TypeError, ValueError):
+            return None
+
+    def _hc(val, key):
+        return _fs_heatmap_color(val, key)
+
+    if view_mode == "player":
+        _iter_groups = [("_player_view", sorted(
+            [p for _, gps in game_rows for p in gps],
+            key=lambda p: float(p.get("model_prob") or 0),
+            reverse=True,
+        ))]
+    else:
+        _iter_groups = game_rows
+
+    for gk, game_players in _iter_groups:
         if not game_players:
             continue
-        p0        = game_players[0]
-        home_team = p0.get("home_team", "")
-        away_batters = [p for p in game_players if p.get("team") != home_team]
-        away_team = away_batters[0].get("team", "?") if away_batters else p0.get("opponent", "?")
-        gt     = _game_time_et(p0.get("game_time_utc", ""))
-        gt_str = gt.strftime("%I:%M %p ET").lstrip("0") if gt else "TBD"
-        venue  = home_team
 
-        st.markdown(
-            f"<div style='font-size:10px;font-weight:700;letter-spacing:1px;"
-            f"color:#aaa;padding:8px 4px 2px;border-top:1px solid #1e1e2e;margin-top:4px;'>"
-            f"{away_team} @ {home_team} &nbsp;·&nbsp; {gt_str} &nbsp;·&nbsp; "
-            f"<span style='color:#555;'>{venue}</span></div>",
-            unsafe_allow_html=True,
-        )
+        if gk != "_player_view":
+            p0        = game_players[0]
+            home_team = p0.get("home_team", "")
+            away_batters = [p for p in game_players if p.get("team") != home_team]
+            away_team = away_batters[0].get("team", "?") if away_batters else p0.get("opponent", "?")
+            gt     = _game_time_et(p0.get("game_time_utc", ""))
+            gt_str = gt.strftime("%I:%M %p ET").lstrip("0") if gt else "TBD"
+            venue  = home_team
 
-        def _safe_float(val):
-            if val is None:
-                return None
-            if isinstance(val, str):
-                v = val.strip().rstrip('%')
-                if not v or v in ('--', '-', 'N/A', 'n/a'):
-                    return None
-                try:
-                    return float(v)
-                except ValueError:
-                    return None
-            try:
-                return float(val)
-            except (TypeError, ValueError):
-                return None
+            st.markdown(
+                f"<div style='font-size:10px;font-weight:700;letter-spacing:1px;"
+                f"color:#aaa;padding:8px 4px 2px;border-top:1px solid #1e1e2e;margin-top:4px;'>"
+                f"{away_team} @ {home_team} &nbsp;·&nbsp; {gt_str} &nbsp;·&nbsp; "
+                f"<span style='color:#555;'>{venue}</span></div>",
+                unsafe_allow_html=True,
+            )
 
         for p in game_players:
             pid   = str(p.get("player_id") or p.get("player_name", ""))
@@ -5904,9 +5305,6 @@ def _render_full_slate_native_cols(
                 f"+{fd_raw}" if fd_raw and fd_raw > 0
                 else str(fd_raw) if fd_raw else "—"
             )
-
-            def _hc(val, key):
-                return _fs_heatmap_color(val, key)
 
             _already_picked = any(
                 d.get("player_id") == pid
