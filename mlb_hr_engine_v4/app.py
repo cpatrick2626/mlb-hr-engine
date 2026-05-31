@@ -3235,6 +3235,81 @@ def _elite_card_html(
     )
 
 
+@st.dialog("📊 Pitch Mix Intelligence", width="large")
+def _show_pitch_mix_modal() -> None:
+    """H2H HVY pitch matrix modal — shared for FS + JIG."""
+    player = st.session_state.get("pitch_mix_modal_player", {})
+    ctx    = st.session_state.get("pitch_mix_modal_ctx", {})
+    source = st.session_state.get("pitch_mix_modal_source", "")
+    slate_ts = st.session_state.get("slate_ts", "")
+
+    if not player or not ctx:
+        st.warning("No pitch mix data available for this player.")
+        return
+
+    pname   = player.get("player_name", "?")
+    pitcher = player.get("pitcher_name", "TBD")
+    team    = player.get("team", "")
+    bats    = player.get("batter_side", "")
+    mq      = player.get("matchup_quality", "AVG")
+
+    st.markdown(
+        f"<div style='margin-bottom:10px;'>"
+        f"<span style='font-size:15px;font-weight:700;"
+        f"color:#e0d8c8;'>{html.escape(pname)}</span>"
+        f"<span style='color:#555;font-size:11px;"
+        f"margin-left:8px;'>{team} · Bats {bats}</span>"
+        f"<span style='color:#888;font-size:11px;"
+        f"margin-left:12px;'>vs {html.escape(pitcher)}</span>"
+        f"<span style='color:#555;font-size:10px;"
+        f"margin-left:10px;'>MQ: {mq}</span>"
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+
+    h2h = ctx.get("h2h", {})
+    if h2h and h2h.get("pa", 0) > 0:
+        h2h_pa  = h2h.get("pa",  0)
+        h2h_hr  = h2h.get("hr",  0)
+        h2h_bb  = h2h.get("bb",  0)
+        h2h_k   = h2h.get("k",   0)
+        h2h_avg = h2h.get("avg", 0.0)
+        h2h_slg = h2h.get("slg", 0.0)
+        h2h_ops = h2h.get("ops", 0.0)
+        st.markdown(
+            "<span style='color:#aaa;font-size:10px;"
+            "letter-spacing:1px;font-weight:600;'>"
+            "H2H CAREER</span>",
+            unsafe_allow_html=True,
+        )
+        _h2h_cols = st.columns(7)
+        for col, lbl, val in zip(
+            _h2h_cols,
+            ["PA","HR","BB","K","AVG","SLG","OPS"],
+            [h2h_pa, h2h_hr, h2h_bb, h2h_k,
+             f"{h2h_avg:.3f}"[1:] if h2h_avg else "--",
+             f"{h2h_slg:.3f}"[1:] if h2h_slg else "--",
+             f"{h2h_ops:.3f}"[1:] if h2h_ops else "--"],
+        ):
+            col.metric(lbl, val)
+        st.divider()
+
+    _render_pitch_mix_expander(
+        ctx=ctx,
+        p=player,
+        key_prefix="pmmodal",
+        expanded=True,
+        slate_ts=slate_ts,
+    )
+
+    if st.button("Close", key="pm_modal_close"):
+        st.session_state.pop("show_pitch_mix_modal", None)
+        st.session_state.pop("pitch_mix_modal_player", None)
+        st.session_state.pop("pitch_mix_modal_ctx", None)
+        st.session_state.pop("pitch_mix_modal_source", None)
+        st.rerun()
+
+
 @st.dialog("⚾ Player Details", width="large")
 def _show_player_modal(player: dict):
     _record_widget_zone("modal.player_details", widget_count_estimate=3)
@@ -3483,6 +3558,95 @@ def _open_player_modal(
         origin_route=source_tab,
     )
     st.rerun()
+
+
+@st.dialog("📋 STAT GUIDE", width="large")
+def _show_stat_guide_dialog():
+    st.markdown(
+        "<style>"
+        ".sg-section{font-size:11px;font-weight:800;letter-spacing:2px;"
+        "color:#60a5fa;padding:8px 0 4px;border-bottom:1px solid #1a1a2e;"
+        "margin-bottom:6px;}"
+        ".sg-row{display:flex;align-items:baseline;gap:8px;padding:3px 0;"
+        "border-bottom:1px solid #111;}"
+        ".sg-abbr{font-family:monospace;font-size:12px;font-weight:700;"
+        "color:#f0c040;min-width:80px;flex-shrink:0;}"
+        ".sg-name{font-size:11px;color:#aaa;min-width:160px;flex-shrink:0;}"
+        ".sg-desc{font-size:11px;color:#777;flex:1;}"
+        ".sg-dir{font-size:11px;color:#4ade80;margin-left:6px;flex-shrink:0;}"
+        ".sg-dir-down{color:#f87171;}"
+        "</style>",
+        unsafe_allow_html=True,
+    )
+
+    def _sg_row(abbr, name, desc, direction="up"):
+        dir_cls = "sg-dir" if direction == "up" else "sg-dir sg-dir-down"
+        arrow = "↑ good" if direction == "up" else "↓ good"
+        return (
+            f"<div class='sg-row'>"
+            f"<span class='sg-abbr'>{abbr}</span>"
+            f"<span class='sg-name'>{name}</span>"
+            f"<span class='sg-desc'>{desc}</span>"
+            f"<span class='{dir_cls}'>{arrow}</span>"
+            f"</div>"
+        )
+
+    batter_rows = "".join([
+        _sg_row("PA",       "Plate Appearances",    "Sample size indicator — higher = more reliable"),
+        _sg_row("AVG",      "Batting Average",      "Hits per at-bat"),
+        _sg_row("SLG",      "Slugging %",           "Total bases per at-bat"),
+        _sg_row("BABIP",    "BA on Balls in Play",  "Luck / contact quality on batted balls"),
+        _sg_row("GB%",      "Ground Ball Rate",     "Lower = more fly balls, better for HR", "down"),
+        _sg_row("HH%",      "Hard Hit Rate",        "Exit velocity ≥ 95 mph"),
+        _sg_row("LD%",      "Line Drive Rate",      "Solid contact indicator"),
+        _sg_row("BARREL%",  "Barrel Rate",          "Optimal exit velocity + launch angle combination"),
+        _sg_row("EV",       "Exit Velocity",        "Average mph off the bat"),
+        _sg_row("LA°",      "Launch Angle",         "Average degrees off the bat"),
+        _sg_row("PULL%",    "Pull Rate",            "Balls hit to pull side"),
+        _sg_row("CENTER%",  "Center Field Rate",    "All-fields hitter indicator"),
+        _sg_row("xwOBA",    "Expected wOBA",        "Predicted overall offensive value"),
+        _sg_row("HR/PA",    "HR Rate",              "Home runs per plate appearance"),
+    ])
+
+    pitcher_rows = "".join([
+        _sg_row("OPP HR/9", "Opp HR Allowed per 9", "Higher = pitcher more vulnerable to HR (good for batter)"),
+    ])
+
+    matchup_rows = (
+        "<div class='sg-row'>"
+        "<span class='sg-abbr'>MQ</span>"
+        "<span class='sg-name'>Matchup Quality</span>"
+        "<span class='sg-desc'>Overall matchup grade — "
+        "<span style='color:#4ade80;'>ELITE</span> › "
+        "<span style='color:#86efac;'>STRONG</span> › "
+        "<span style='color:#fbbf24;'>AVG</span> › "
+        "<span style='color:#f97316;'>WEAK</span> › "
+        "<span style='color:#ef4444;'>DANGER</span></span>"
+        "</div>"
+    )
+
+    tier_rows = (
+        "<div class='sg-row'>"
+        "<span class='sg-abbr'>TIER</span>"
+        "<span class='sg-name'>Model Tier</span>"
+        "<span class='sg-desc'>"
+        "APEX ≥18% &nbsp;·&nbsp; ELITE ≥13% &nbsp;·&nbsp; EDGE ≥9% &nbsp;·&nbsp; "
+        "SIGNAL ≥6% &nbsp;·&nbsp; WATCH ≥3% &nbsp;·&nbsp; COLD &lt;3%"
+        "</span>"
+        "</div>"
+    )
+
+    st.markdown(
+        "<div class='sg-section'>BATTER STATS</div>"
+        + batter_rows
+        + "<div class='sg-section' style='margin-top:12px;'>PITCHER STATS</div>"
+        + pitcher_rows
+        + "<div class='sg-section' style='margin-top:12px;'>MATCHUP</div>"
+        + matchup_rows
+        + "<div class='sg-section' style='margin-top:12px;'>MODEL</div>"
+        + tier_rows,
+        unsafe_allow_html=True,
+    )
 
 
 def _add_legs_to_fd_slip(legs: list[dict], source_tab: str = "Parlays", source_section: str = "") -> int:
@@ -4581,6 +4745,19 @@ def _fs_heatmap_color(value, column_key: str) -> dict:
     return {"bg": config.FS_HEATMAP_COLORS[bucket], "text": _TEXT_COLORS[bucket]}
 
 
+_FS_COLUMN_PRESETS: dict[str, list[str]] = {
+    "ALL":     ["tier","player","mq","pa","avg","slg",
+                "babip","gb","hh","ld","barrel","ev",
+                "la","pull","center","hr9","xwoba","hrpa","fanduel"],
+    "POWER":   ["tier","player","mq","barrel","ev",
+                "la","hrpa","hr9","fanduel"],
+    "CONTACT": ["tier","player","mq","pa","avg","slg",
+                "babip","gb","hh","ld","fanduel"],
+    "MATCHUP": ["tier","player","mq","hr9","pull",
+                "center","xwoba","fanduel"],
+}
+
+
 def _fs_tier_legend_html() -> str:
     """Inline tier legend strip for Full Slate header row."""
     items = []
@@ -4676,8 +4853,10 @@ def _fs_mq_pie_html(mq: str) -> str:
     )
 
 
-def _fs_table_header_html(include_game_cols: bool = False) -> str:
+def _fs_table_header_html(include_game_cols: bool = False, active_cols: list | None = None) -> str:
     """Shared Full Slate table header — single source of truth."""
+    if active_cols is None:
+        active_cols = _FS_COLUMN_PRESETS["ALL"]
     _cols = (
         "<th title='HR probability tier: APEX=≥18% / ELITE=≥13% / EDGE=≥9% / SIGNAL=≥6% / WATCH=≥3% / COLD=&lt;3%' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:36px;min-width:36px;max-width:36px;'>TIER</th>"
         "<th title='Batter name, team, and handedness' style='padding:4px 3px;color:#aaa;text-align:left;font-weight:700;font-size:9px;letter-spacing:0.8px;width:140px;min-width:140px;max-width:140px;'>PLAYER</th>"
@@ -4687,25 +4866,40 @@ def _fs_table_header_html(include_game_cols: bool = False) -> str:
             "<th style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:36px;min-width:36px;max-width:36px;'>TM</th>"
             "<th style='padding:4px 3px;color:#aaa;text-align:left;font-weight:700;font-size:9px;letter-spacing:0.8px;width:80px;min-width:80px;max-width:80px;'>GAME</th>"
         )
-    _cols += (
-        "<th title='Overall matchup quality vs opposing pitcher' style='padding:4px 2px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:110px;min-width:110px;max-width:110px;'>MATCHUP QUALITY</th>"
-        "<th title='Plate appearances this season' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:40px;min-width:40px;max-width:40px;'>PA</th>"
-        "<th title='Batting average this season' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:46px;min-width:46px;max-width:46px;'>AVG</th>"
-        "<th title='Slugging percentage this season' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:46px;min-width:46px;max-width:46px;'>SLG</th>"
-        "<th title='Batting average on balls in play' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:50px;min-width:50px;max-width:50px;'>BABIP</th>"
-        "<th title='Ground ball rate — lower is better for HR' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>GB%</th>"
-        "<th title='Hard hit rate — exit velocity above 95mph' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>HH%</th>"
-        "<th title='Line drive rate' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>LD%</th>"
-        "<th title='Barrel rate — optimal exit velo + launch angle' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>BARREL%</th>"
-        "<th title='Average exit velocity (mph)' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>EV</th>"
-        "<th title='Average launch angle (degrees)' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>LA°</th>"
-        "<th title='Pull rate — balls hit to pull side' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:48px;min-width:48px;max-width:48px;'>PULL%</th>"
-        "<th title='Center field rate' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>CENTER%</th>"
-        "<th title='Opposing pitcher HR allowed per 9 innings — higher = more vulnerable' style='padding:4px 3px;color:#f87171;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>OPP HR/9</th>"
-        "<th title='Expected weighted on-base average' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:50px;min-width:50px;max-width:50px;'>xwOBA</th>"
-        "<th title='Home run rate per plate appearance' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:50px;min-width:50px;max-width:50px;'>HR/PA</th>"
-        "<th title='FanDuel market odds — display only, does not affect ranking' style='padding:4px 3px;color:#f59e0b;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>FANDUEL</th>"
-    )
+    if "mq" in active_cols:
+        _cols += "<th title='Overall matchup quality vs opposing pitcher' style='padding:4px 2px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:110px;min-width:110px;max-width:110px;'>MATCHUP QUALITY</th>"
+    if "pa" in active_cols:
+        _cols += "<th title='Plate appearances this season' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:40px;min-width:40px;max-width:40px;'>PA</th>"
+    if "avg" in active_cols:
+        _cols += "<th title='Batting average this season' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:46px;min-width:46px;max-width:46px;'>AVG</th>"
+    if "slg" in active_cols:
+        _cols += "<th title='Slugging percentage this season' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:46px;min-width:46px;max-width:46px;'>SLG</th>"
+    if "babip" in active_cols:
+        _cols += "<th title='Batting average on balls in play' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:50px;min-width:50px;max-width:50px;'>BABIP</th>"
+    if "gb" in active_cols:
+        _cols += "<th title='Ground ball rate — lower is better for HR' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>GB%</th>"
+    if "hh" in active_cols:
+        _cols += "<th title='Hard hit rate — exit velocity above 95mph' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>HH%</th>"
+    if "ld" in active_cols:
+        _cols += "<th title='Line drive rate' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>LD%</th>"
+    if "barrel" in active_cols:
+        _cols += "<th title='Barrel rate — optimal exit velo + launch angle' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>BARREL%</th>"
+    if "ev" in active_cols:
+        _cols += "<th title='Average exit velocity (mph)' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>EV</th>"
+    if "la" in active_cols:
+        _cols += "<th title='Average launch angle (degrees)' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:44px;min-width:44px;max-width:44px;'>LA°</th>"
+    if "pull" in active_cols:
+        _cols += "<th title='Pull rate — balls hit to pull side' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:48px;min-width:48px;max-width:48px;'>PULL%</th>"
+    if "center" in active_cols:
+        _cols += "<th title='Center field rate' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>CENTER%</th>"
+    if "hr9" in active_cols:
+        _cols += "<th title='Opposing pitcher HR allowed per 9 innings — higher = more vulnerable' style='padding:4px 3px;color:#f87171;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>OPP HR/9</th>"
+    if "xwoba" in active_cols:
+        _cols += "<th title='Expected weighted on-base average' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:50px;min-width:50px;max-width:50px;'>xwOBA</th>"
+    if "hrpa" in active_cols:
+        _cols += "<th title='Home run rate per plate appearance' style='padding:4px 3px;color:#aaa;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:50px;min-width:50px;max-width:50px;'>HR/PA</th>"
+    if "fanduel" in active_cols:
+        _cols += "<th title='FanDuel market odds — display only, does not affect ranking' style='padding:4px 3px;color:#f59e0b;text-align:center;font-weight:700;font-size:9px;letter-spacing:0.8px;width:58px;min-width:58px;max-width:58px;'>FANDUEL</th>"
     return _cols
 
 
@@ -4734,6 +4928,9 @@ def _render_full_slate_all_players(
     if not all_players:
         st.info("No players in today's slate.")
         return
+
+    if "fs_picked" not in st.session_state:
+        st.session_state["fs_picked"] = []
 
     # Hotspot containment: Full Slate regrouping/sorting used to rebuild on every rerun.
     # Cache one compact view-model until the player subset/fingerprint rotates.
@@ -4780,6 +4977,7 @@ def _render_full_slate_all_players(
             return 9999
 
         sorted_gks = sorted(games.keys(), key=_gsk)
+        _FS_TIER_RANK = {"APEX": 0, "ELITE": 1, "EDGE": 2, "SIGNAL": 3, "WATCH": 4, "COLD": 5}
         game_rows = []
         if lens == "power_profile":
             _ps_key = lambda p: (p.get("team", ""), -(
@@ -4809,7 +5007,10 @@ def _render_full_slate_all_players(
                 + ((_pf(p.get("confidence"), 0) or 0) * 0.50)
             ))
         else:
-            _ps_key = lambda p: (p.get("team", ""), int(p.get("lineup_spot") or 99))
+            _ps_key = lambda p: (
+                _FS_TIER_RANK.get(_fs_tier_from_prob(float(p.get("model_prob") or 0)), 5),
+                -(float(p.get("model_prob") or 0)),
+            )
         for gk in sorted_gks:
             sorted_players = sorted(games[gk], key=_ps_key)
             game_rows.append((gk, sorted_players))
@@ -4933,7 +5134,7 @@ def _render_full_slate_all_players(
             unsafe_allow_html=True,
         )
 
-    _legend_cols = st.columns([2, 2, 1, 1, 1])
+    _legend_cols = st.columns([2, 2, 1, 1, 1, 1])
     with _legend_cols[0]:
         st.markdown(_fs_tier_legend_html(), unsafe_allow_html=True)
     with _legend_cols[1]:
@@ -4951,6 +5152,19 @@ def _render_full_slate_all_players(
             "</div>",
             unsafe_allow_html=True,
         )
+    with _legend_cols[2]:
+        st.radio(
+            "Columns",
+            options=["ALL", "POWER", "CONTACT", "MATCHUP"],
+            horizontal=True,
+            key="fs_col_preset",
+            label_visibility="collapsed",
+        )
+    with _legend_cols[3]:
+        st.markdown("<div style='display:flex;justify-content:flex-end;align-items:center;height:100%;padding:2px 0;'>", unsafe_allow_html=True)
+        if st.button("📋 STAT GUIDE", key="fs_stat_guide_btn", help="View stat definitions"):
+            _show_stat_guide_dialog()
+        st.markdown("</div>", unsafe_allow_html=True)
     with _legend_cols[4]:
         _fs_use_native = st.toggle(
             "NATIVE",
@@ -4958,6 +5172,8 @@ def _render_full_slate_all_players(
             value=False,
             help="Switch between HTML table (stable) and native columns (interactive)",
         )
+    _fs_preset_key = st.session_state.get("fs_col_preset", "ALL")
+    _fs_active_cols = _FS_COLUMN_PRESETS.get(_fs_preset_key, _FS_COLUMN_PRESETS["ALL"])
     st.markdown(
         "<div style='font-size:9px;color:#333;padding:2px 4px;margin-bottom:4px;"
         "font-family:monospace;letter-spacing:0.5px;'>"
@@ -4966,6 +5182,34 @@ def _render_full_slate_all_players(
         "</div>",
         unsafe_allow_html=True,
     )
+
+    # ── PICKS strip ──────────────────────────────────────────────────────────
+    _fs_picks = st.session_state["fs_picked"]
+    if _fs_picks:
+        st.markdown(
+            "<span style='font-size:10px;font-weight:700;color:#aaa;font-family:monospace;"
+            "letter-spacing:1px;'>🎯 PICKS THIS SESSION</span>",
+            unsafe_allow_html=True,
+        )
+        _pick_chunks = [_fs_picks[i:i + 4] for i in range(0, len(_fs_picks), 4)]
+        for _pc in _pick_chunks:
+            _pccols = st.columns(max(1, len(_pc)))
+            for _pcc, _pk in zip(_pccols, _pc):
+                with _pcc:
+                    _pk_tcolor = config.FS_TIER_DISPLAY.get(
+                        _pk.get("tier_key", "COLD"), config.FS_TIER_DISPLAY["COLD"]
+                    )["color"]
+                    st.markdown(
+                        f"<span style='color:{_pk_tcolor};font-size:11px;font-family:monospace;"
+                        f"font-weight:700;'>{_pk['player_name']}</span>"
+                        f"<span style='color:#555;font-size:9px;'> {_pk.get('team','')}</span>",
+                        unsafe_allow_html=True,
+                    )
+                    st.link_button("📲 FD", _fanduel_url(_pk["player_name"]), width="stretch")
+        if st.button("✕ Clear Picks", key="fs_pick_clear"):
+            st.session_state["fs_picked"] = []
+            st.rerun()
+        st.divider()
 
     # ── Player view — flat table sorted by model_prob desc ──────────────────
     if _fs_view_mode == "player":
@@ -5018,42 +5262,88 @@ def _render_full_slate_all_players(
             _c_ctr  = _fs_heatmap_color(_pv_ctr,   'center_pct')
             _c_hr9  = _fs_heatmap_color(_pv_hr9,   'pitcher_hr9')
             _c_xw   = _fs_heatmap_color(_pv_xwoba, 'xwoba')
-            _pv_rows.append(
+            _pv_row = (
                 f"<tr style='background:{_pv_bg};border-bottom:1px solid #1a1a2e;min-height:44px;'>"
                 f"<td style='padding:6px 3px;text-align:center;width:36px;min-width:36px;max-width:36px;'>{_pv_tier_s}</td>"
                 f"<td style='padding:4px 4px;color:#60a5fa;font-size:10px;font-weight:700;width:140px;min-width:140px;max-width:140px;overflow:hidden;text-align:center;'><div style='display:flex;justify-content:center;align-items:center;text-align:center;'>{_pv_chip}<span style='font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px;display:inline-block;vertical-align:middle;'>{_pv_name}</span></div></td>"
                 f"<td style='padding:6px 3px;color:#888;font-size:9px;text-align:center;width:36px;min-width:36px;max-width:36px;'>{_pv_team}</td>"
                 f"<td style='padding:6px 3px;color:#555;font-size:8px;white-space:nowrap;width:80px;min-width:80px;max-width:80px;overflow:hidden;text-overflow:ellipsis;'>{_pv_game}</td>"
-                f"<td style='padding:4px 2px;text-align:center;width:110px;min-width:110px;max-width:110px;'>{_pv_mq_pie}</td>"
-                f"<td style='padding:6px 3px;background:{_c_spa['bg']};color:{_c_spa['text']};font-size:11px;text-align:center;width:40px;min-width:40px;max-width:40px;'>{str(_pv_spa) if _pv_spa else '—'}</td>"
-                f"<td style='padding:6px 3px;background:{_c_avg['bg']};color:{_c_avg['text']};font-size:11px;text-align:center;width:46px;min-width:46px;max-width:46px;'>{f'{_pv_avg:.3f}'[1:] if _pv_avg else '—'}</td>"
-                f"<td style='padding:6px 3px;background:{_c_slg['bg']};color:{_c_slg['text']};font-size:11px;text-align:center;width:46px;min-width:46px;max-width:46px;'>{f'{_pv_slg:.3f}'[1:] if _pv_slg else '—'}</td>"
-                f"<td style='padding:6px 3px;background:{_c_bab['bg']};color:{_c_bab['text']};font-size:11px;text-align:center;width:50px;min-width:50px;max-width:50px;'>{f'{_pv_babip:.3f}'[1:] if _pv_babip else '—'}</td>"
-                f"<td style='padding:6px 3px;background:{_c_gb['bg']};color:{_c_gb['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{f'{_pv_gb:.1f}%' if _pv_gb else '—'}</td>"
-                f"<td style='padding:6px 3px;background:{_c_hh['bg']};color:{_c_hh['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{f'{_pv_hh:.1f}%' if _pv_hh else '—'}</td>"
-                f"<td style='padding:6px 3px;background:{_c_ld['bg']};color:{_c_ld['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{f'{_pv_ld:.1f}%' if _pv_ld else '—'}</td>"
-                f"<td style='padding:6px 3px;background:{_c_brl['bg']};color:{_c_brl['text']};font-size:11px;font-weight:600;text-align:center;width:58px;min-width:58px;max-width:58px;'>{f'{_pv_brl:.1f}%' if _pv_brl else '—'}</td>"
-                f"<td style='padding:6px 3px;background:{_c_ev['bg']};color:{_c_ev['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{f'{_pv_ev:.1f}' if _pv_ev else '—'}</td>"
-                f"<td style='padding:6px 3px;background:{_c_la['bg']};color:{_c_la['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{f'{_pv_la:.1f}°' if _pv_la else '—'}</td>"
-                f"<td style='padding:6px 3px;background:{_c_pull['bg']};color:{_c_pull['text']};font-size:11px;text-align:center;width:48px;min-width:48px;max-width:48px;'>{f'{_pv_pull:.1f}%' if _pv_pull else '—'}</td>"
-                f"<td style='padding:6px 3px;background:{_c_ctr['bg']};color:{_c_ctr['text']};font-size:11px;text-align:center;width:58px;min-width:58px;max-width:58px;'>{f'{_pv_ctr:.1f}%' if _pv_ctr else '—'}</td>"
-                f"<td style='padding:6px 3px;background:{_c_hr9['bg']};color:{_c_hr9['text']};font-size:11px;font-weight:600;text-align:center;width:58px;min-width:58px;max-width:58px;'>{f'{_pv_hr9:.2f}' if _pv_hr9 else '—'}</td>"
-                f"<td style='padding:6px 3px;background:{_c_xw['bg']};color:{_c_xw['text']};font-size:11px;text-align:center;width:50px;min-width:50px;max-width:50px;'>{f'{_pv_xwoba:.3f}'[1:] if _pv_xwoba else '—'}</td>"
-                f"<td style='padding:6px 3px;color:#ccc;font-size:11px;text-align:center;width:50px;min-width:50px;max-width:50px;'>{f'{_pv_hrpa:.3f}'[1:] if _pv_hrpa else '—'}</td>"
-                f"<td style='padding:6px 3px;color:#f59e0b;font-size:11px;text-align:center;font-weight:600;width:58px;min-width:58px;max-width:58px;'>{_pv_fd_s}</td>"
-                f"</tr>"
             )
+            if "mq" in _fs_active_cols:
+                _pv_row += f"<td style='padding:4px 2px;text-align:center;width:110px;min-width:110px;max-width:110px;'>{_pv_mq_pie}</td>"
+            if "pa" in _fs_active_cols:
+                _pv_row += f"<td style='padding:6px 3px;background:{_c_spa['bg']};color:{_c_spa['text']};font-size:11px;text-align:center;width:40px;min-width:40px;max-width:40px;'>{str(_pv_spa) if _pv_spa else '—'}</td>"
+            if "avg" in _fs_active_cols:
+                _pv_row += f"<td style='padding:6px 3px;background:{_c_avg['bg']};color:{_c_avg['text']};font-size:11px;text-align:center;width:46px;min-width:46px;max-width:46px;'>{f'{_pv_avg:.3f}'[1:] if _pv_avg else '—'}</td>"
+            if "slg" in _fs_active_cols:
+                _pv_row += f"<td style='padding:6px 3px;background:{_c_slg['bg']};color:{_c_slg['text']};font-size:11px;text-align:center;width:46px;min-width:46px;max-width:46px;'>{f'{_pv_slg:.3f}'[1:] if _pv_slg else '—'}</td>"
+            if "babip" in _fs_active_cols:
+                _pv_row += f"<td style='padding:6px 3px;background:{_c_bab['bg']};color:{_c_bab['text']};font-size:11px;text-align:center;width:50px;min-width:50px;max-width:50px;'>{f'{_pv_babip:.3f}'[1:] if _pv_babip else '—'}</td>"
+            if "gb" in _fs_active_cols:
+                _pv_row += f"<td style='padding:6px 3px;background:{_c_gb['bg']};color:{_c_gb['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{f'{_pv_gb:.1f}%' if _pv_gb else '—'}</td>"
+            if "hh" in _fs_active_cols:
+                _pv_row += f"<td style='padding:6px 3px;background:{_c_hh['bg']};color:{_c_hh['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{f'{_pv_hh:.1f}%' if _pv_hh else '—'}</td>"
+            if "ld" in _fs_active_cols:
+                _pv_row += f"<td style='padding:6px 3px;background:{_c_ld['bg']};color:{_c_ld['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{f'{_pv_ld:.1f}%' if _pv_ld else '—'}</td>"
+            if "barrel" in _fs_active_cols:
+                _pv_row += f"<td style='padding:6px 3px;background:{_c_brl['bg']};color:{_c_brl['text']};font-size:11px;font-weight:600;text-align:center;width:58px;min-width:58px;max-width:58px;'>{f'{_pv_brl:.1f}%' if _pv_brl else '—'}</td>"
+            if "ev" in _fs_active_cols:
+                _pv_row += f"<td style='padding:6px 3px;background:{_c_ev['bg']};color:{_c_ev['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{f'{_pv_ev:.1f}' if _pv_ev else '—'}</td>"
+            if "la" in _fs_active_cols:
+                _pv_row += f"<td style='padding:6px 3px;background:{_c_la['bg']};color:{_c_la['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{f'{_pv_la:.1f}°' if _pv_la else '—'}</td>"
+            if "pull" in _fs_active_cols:
+                _pv_row += f"<td style='padding:6px 3px;background:{_c_pull['bg']};color:{_c_pull['text']};font-size:11px;text-align:center;width:48px;min-width:48px;max-width:48px;'>{f'{_pv_pull:.1f}%' if _pv_pull else '—'}</td>"
+            if "center" in _fs_active_cols:
+                _pv_row += f"<td style='padding:6px 3px;background:{_c_ctr['bg']};color:{_c_ctr['text']};font-size:11px;text-align:center;width:58px;min-width:58px;max-width:58px;'>{f'{_pv_ctr:.1f}%' if _pv_ctr else '—'}</td>"
+            if "hr9" in _fs_active_cols:
+                _pv_row += f"<td style='padding:6px 3px;background:{_c_hr9['bg']};color:{_c_hr9['text']};font-size:11px;font-weight:600;text-align:center;width:58px;min-width:58px;max-width:58px;'>{f'{_pv_hr9:.2f}' if _pv_hr9 else '—'}</td>"
+            if "xwoba" in _fs_active_cols:
+                _pv_row += f"<td style='padding:6px 3px;background:{_c_xw['bg']};color:{_c_xw['text']};font-size:11px;text-align:center;width:50px;min-width:50px;max-width:50px;'>{f'{_pv_xwoba:.3f}'[1:] if _pv_xwoba else '—'}</td>"
+            if "hrpa" in _fs_active_cols:
+                _pv_row += f"<td style='padding:6px 3px;color:#ccc;font-size:11px;text-align:center;width:50px;min-width:50px;max-width:50px;'>{f'{_pv_hrpa:.3f}'[1:] if _pv_hrpa else '—'}</td>"
+            if "fanduel" in _fs_active_cols:
+                _pv_row += f"<td style='padding:6px 3px;color:#f59e0b;font-size:11px;text-align:center;font-weight:600;width:58px;min-width:58px;max-width:58px;'>{_pv_fd_s}</td>"
+            _pv_row += "</tr>"
+            _pv_rows.append(_pv_row)
         _pv_html = (
             "<div style='overflow-x:auto;background:#09090f;border:1px solid #1a1a28;border-radius:4px;'>"
             "<table style='width:100%;border-collapse:collapse;font-family:monospace;font-size:9px;table-layout:fixed;'>"
             "<thead style='background:#0d0d1a;border-bottom:2px solid #2a2a3a;'>"
             "<tr>"
-            + _fs_table_header_html(include_game_cols=True)
+            + _fs_table_header_html(include_game_cols=True, active_cols=_fs_active_cols)
             + "</tr></thead><tbody>"
             + "".join(_pv_rows)
             + "</tbody></table></div>"
         )
         st.markdown(_pv_html, unsafe_allow_html=True)
+
+        # PICK buttons for player view
+        _pv_pick_chunks = [_pv_all[i:i + 4] for i in range(0, len(_pv_all), 4)]
+        for _pvpc in _pv_pick_chunks:
+            _pvpc_cols = st.columns(max(1, len(_pvpc)))
+            for _pvcc, _pvpp in zip(_pvpc_cols, _pvpc):
+                with _pvcc:
+                    _pvpp_name    = _pvpp.get("player_name", "?")
+                    _pvpp_pid     = str(_pvpp.get("player_id") or _pvpp_name)
+                    _pvpp_tk      = _fs_tier_from_prob(float(_pvpp.get("model_prob") or 0))
+                    _pvpp_already = any(
+                        d.get("player_id") == _pvpp_pid
+                        for d in st.session_state["fs_picked"]
+                    )
+                    if _pvpp_already:
+                        st.link_button("📲 FD", _fanduel_url(_pvpp_name), width="stretch")
+                    elif st.button(
+                        "＋ PICK",
+                        key=f"fs_pvpick_{slate_ts}_{_pvpp_pid}",
+                        use_container_width=True,
+                    ):
+                        st.session_state["fs_picked"].append({
+                            "player_id": _pvpp_pid,
+                            "player_name": _pvpp_name,
+                            "team": _pvpp.get("team", ""),
+                            "tier_key": _pvpp_tk,
+                        })
+                        st.rerun()
         return
 
     _fs_use_native = st.session_state.get("fs_use_native_cols", False)
@@ -5149,7 +5439,7 @@ def _render_full_slate_all_players(
 
         n_game_qual = sum(1 for p in game_players if p.get("player_name") in qualified_names)
         _group_open_key = f"{_fs_zone_scope}_group_{_stable_key_token(slate_ts, source_section, gk)}"
-        _group_is_open = bool(st.session_state.get(_group_open_key, False))
+        _group_is_open = bool(st.session_state.get(_group_open_key, True))
         _summary_html = (
             f"<div style='background:#09090f;border:1px solid #171726;border-left:3px solid {pk_col if pk_col != '#888' else urg_col};"
             f"border-radius:8px;padding:10px 12px;'>"
@@ -5193,6 +5483,7 @@ def _render_full_slate_all_players(
             slate_ts,
             source_section,
             gk,
+            st.session_state.get("fs_col_preset", "ALL"),
             tuple(
                 (
                     p.get("player_id") or p.get("player_name", ""),
@@ -5313,7 +5604,7 @@ def _render_full_slate_all_players(
                 # Format values for display
                 pa_s    = str(season_pa) if season_pa else "—"
                 avg_s   = f"{batting_avg:.3f}"[1:] if batting_avg else "—"
-                slg_s   = f"{slg:.3f}"[1:] if slg else "—"
+                slg_s   = f"{slg:.3f}"[1:] if slg is not None else "—"
                 babip_s = f"{babip:.3f}"[1:] if babip else "—"
                 gb_s    = f"{gb_pct:.1f}%" if gb_pct else "—"
                 hh_s    = f"{hard_hit:.1f}%" if hard_hit else "—"
@@ -5352,25 +5643,42 @@ def _render_full_slate_all_players(
                     f"<span style='color:#eee;font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px;'>{pname}</span>"
                     f"<span style='color:#888;font-size:9px;white-space:nowrap;'>{pteam} | {bats}</span>"
                     f"</div></div></td>"
-                    f"<td style='padding:4px 2px;text-align:center;width:110px;min-width:110px;max-width:110px;'>{mq_pie}</td>"
-                    f"<td style='padding:6px 3px;background:{_g_spa['bg']};color:{_g_spa['text']};font-size:11px;text-align:center;width:40px;min-width:40px;max-width:40px;'>{pa_s}</td>"
-                    f"<td style='padding:6px 3px;background:{_g_avg['bg']};color:{_g_avg['text']};font-size:11px;text-align:center;width:46px;min-width:46px;max-width:46px;'>{avg_s}</td>"
-                    f"<td style='padding:6px 3px;background:{_g_slg['bg']};color:{_g_slg['text']};font-size:11px;text-align:center;width:46px;min-width:46px;max-width:46px;'>{slg_s}</td>"
-                    f"<td style='padding:6px 3px;background:{_g_bab['bg']};color:{_g_bab['text']};font-size:11px;text-align:center;width:50px;min-width:50px;max-width:50px;'>{babip_s}</td>"
-                    f"<td style='padding:6px 3px;background:{_g_gb['bg']};color:{_g_gb['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{gb_s}</td>"
-                    f"<td style='padding:6px 3px;background:{_g_hh['bg']};color:{_g_hh['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{hh_s}</td>"
-                    f"<td style='padding:6px 3px;background:{_g_ld['bg']};color:{_g_ld['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{ld_s}</td>"
-                    f"<td style='padding:6px 3px;background:{_g_brl['bg']};color:{_g_brl['text']};font-size:11px;font-weight:600;text-align:center;border-radius:2px;width:58px;min-width:58px;max-width:58px;'>{brl_s}</td>"
-                    f"<td style='padding:6px 3px;background:{_g_ev['bg']};color:{_g_ev['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{ev_s}</td>"
-                    f"<td style='padding:6px 3px;background:{_g_la['bg']};color:{_g_la['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{la_s}</td>"
-                    f"<td style='padding:6px 3px;background:{_g_pull['bg']};color:{_g_pull['text']};font-size:11px;text-align:center;width:48px;min-width:48px;max-width:48px;'>{pull_s}</td>"
-                    f"<td style='padding:6px 3px;background:{_g_ctr['bg']};color:{_g_ctr['text']};font-size:11px;text-align:center;width:58px;min-width:58px;max-width:58px;'>{ctr_s}</td>"
-                    f"<td style='padding:6px 3px;background:{_g_hr9['bg']};color:{_g_hr9['text']};font-size:11px;font-weight:600;text-align:center;border-radius:2px;width:58px;min-width:58px;max-width:58px;'>{hr9_s}</td>"
-                    f"<td style='padding:6px 3px;background:{_g_xw['bg']};color:{_g_xw['text']};font-size:11px;text-align:center;width:50px;min-width:50px;max-width:50px;'>{xwoba_s}</td>"
-                    f"<td style='padding:6px 3px;color:#ccc;font-size:11px;text-align:center;width:50px;min-width:50px;max-width:50px;'>{hrpa_s}</td>"
-                    f"<td style='padding:6px 3px;color:#f59e0b;font-size:11px;text-align:center;font-weight:600;width:58px;min-width:58px;max-width:58px;'>{fd_s}</td>"
-                    f"</tr>"
                 )
+                if "mq" in _fs_active_cols:
+                    row_html += f"<td style='padding:4px 2px;text-align:center;width:110px;min-width:110px;max-width:110px;'>{mq_pie}</td>"
+                if "pa" in _fs_active_cols:
+                    row_html += f"<td style='padding:6px 3px;background:{_g_spa['bg']};color:{_g_spa['text']};font-size:11px;text-align:center;width:40px;min-width:40px;max-width:40px;'>{pa_s}</td>"
+                if "avg" in _fs_active_cols:
+                    row_html += f"<td style='padding:6px 3px;background:{_g_avg['bg']};color:{_g_avg['text']};font-size:11px;text-align:center;width:46px;min-width:46px;max-width:46px;'>{avg_s}</td>"
+                if "slg" in _fs_active_cols:
+                    row_html += f"<td style='padding:6px 3px;background:{_g_slg['bg']};color:{_g_slg['text']};font-size:11px;text-align:center;width:46px;min-width:46px;max-width:46px;'>{slg_s}</td>"
+                if "babip" in _fs_active_cols:
+                    row_html += f"<td style='padding:6px 3px;background:{_g_bab['bg']};color:{_g_bab['text']};font-size:11px;text-align:center;width:50px;min-width:50px;max-width:50px;'>{babip_s}</td>"
+                if "gb" in _fs_active_cols:
+                    row_html += f"<td style='padding:6px 3px;background:{_g_gb['bg']};color:{_g_gb['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{gb_s}</td>"
+                if "hh" in _fs_active_cols:
+                    row_html += f"<td style='padding:6px 3px;background:{_g_hh['bg']};color:{_g_hh['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{hh_s}</td>"
+                if "ld" in _fs_active_cols:
+                    row_html += f"<td style='padding:6px 3px;background:{_g_ld['bg']};color:{_g_ld['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{ld_s}</td>"
+                if "barrel" in _fs_active_cols:
+                    row_html += f"<td style='padding:6px 3px;background:{_g_brl['bg']};color:{_g_brl['text']};font-size:11px;font-weight:600;text-align:center;border-radius:2px;width:58px;min-width:58px;max-width:58px;'>{brl_s}</td>"
+                if "ev" in _fs_active_cols:
+                    row_html += f"<td style='padding:6px 3px;background:{_g_ev['bg']};color:{_g_ev['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{ev_s}</td>"
+                if "la" in _fs_active_cols:
+                    row_html += f"<td style='padding:6px 3px;background:{_g_la['bg']};color:{_g_la['text']};font-size:11px;text-align:center;width:44px;min-width:44px;max-width:44px;'>{la_s}</td>"
+                if "pull" in _fs_active_cols:
+                    row_html += f"<td style='padding:6px 3px;background:{_g_pull['bg']};color:{_g_pull['text']};font-size:11px;text-align:center;width:48px;min-width:48px;max-width:48px;'>{pull_s}</td>"
+                if "center" in _fs_active_cols:
+                    row_html += f"<td style='padding:6px 3px;background:{_g_ctr['bg']};color:{_g_ctr['text']};font-size:11px;text-align:center;width:58px;min-width:58px;max-width:58px;'>{ctr_s}</td>"
+                if "hr9" in _fs_active_cols:
+                    row_html += f"<td style='padding:6px 3px;background:{_g_hr9['bg']};color:{_g_hr9['text']};font-size:11px;font-weight:600;text-align:center;border-radius:2px;width:58px;min-width:58px;max-width:58px;'>{hr9_s}</td>"
+                if "xwoba" in _fs_active_cols:
+                    row_html += f"<td style='padding:6px 3px;background:{_g_xw['bg']};color:{_g_xw['text']};font-size:11px;text-align:center;width:50px;min-width:50px;max-width:50px;'>{xwoba_s}</td>"
+                if "hrpa" in _fs_active_cols:
+                    row_html += f"<td style='padding:6px 3px;color:#ccc;font-size:11px;text-align:center;width:50px;min-width:50px;max-width:50px;'>{hrpa_s}</td>"
+                if "fanduel" in _fs_active_cols:
+                    row_html += f"<td style='padding:6px 3px;color:#f59e0b;font-size:11px;text-align:center;font-weight:600;width:58px;min-width:58px;max-width:58px;'>{fd_s}</td>"
+                row_html += "</tr>"
                 table_rows.append(row_html)
 
             table_html = (
@@ -5378,7 +5686,7 @@ def _render_full_slate_all_players(
                 f"<table style='width:100%;border-collapse:collapse;font-family:monospace;font-size:9px;table-layout:fixed;'>"
                 f"<thead style='background:#0d0d1a;border-bottom:2px solid #2a2a3a;'>"
                 f"<tr>"
-                + _fs_table_header_html()
+                + _fs_table_header_html(active_cols=_fs_active_cols)
                 + f"</tr>"
                 f"</thead>"
                 f"<tbody>"
@@ -5391,100 +5699,75 @@ def _render_full_slate_all_players(
 
         st.markdown(_card_html(_game_html_fp, _build_game_html), unsafe_allow_html=True)
 
-        st.caption("Player controls: tactical quick-open buttons stay visible; the roster launcher keeps the rest accessible with fewer widgets.")
-        _priority_players: list[dict] = []
-        _priority_seen: set[str] = set()
-        for _candidate in game_players:
-            _candidate_name = _candidate.get("player_name", "")
-            _candidate_pid = str(_candidate.get("player_id") or _candidate_name)
-            _candidate_brl = _pf(_candidate.get("barrel_pct"), 0.0)
-            if (
-                _candidate_name in tac_qualified_names
-                or _candidate_name in qualified_names
-                or _candidate_brl >= 8.0
-            ) and _candidate_pid not in _priority_seen:
-                _priority_players.append(_candidate)
-                _priority_seen.add(_candidate_pid)
-        if not _priority_players:
-            for _candidate in game_players[:3]:
-                _candidate_pid = str(_candidate.get("player_id") or _candidate.get("player_name", ""))
-                if _candidate_pid not in _priority_seen:
-                    _priority_players.append(_candidate)
-                    _priority_seen.add(_candidate_pid)
+        # Name-click buttons: one per player, styled as plain-text links via .tac-btn
+        _gp_chunks = [game_players[i:i + 4] for i in range(0, len(game_players), 4)]
+        for _chunk in _gp_chunks:
+            _ncols = st.columns(max(1, len(_chunk)))
+            for _nc, _np in zip(_ncols, _chunk):
+                with _nc:
+                    _np_name = _np.get("player_name", "?")
+                    _np_pid = str(_np.get("player_id") or _np_name)
+                    st.markdown('<div class="tac-btn">', unsafe_allow_html=True)
+                    if st.button(
+                        _np_name,
+                        key=f"fs_name_{slate_ts}_{gk}_{_np_pid}",
+                    ):
+                        _open_player_modal(
+                            _np,
+                            source_tab="Full Slate",
+                            source_section=source_section,
+                            interaction_source="full_slate.name_click",
+                        )
+                    st.markdown('</div>', unsafe_allow_html=True)
 
-        _quick_players = _priority_players[:4]
-        _quick_cols = st.columns(max(1, len(_quick_players)))
-        for _btn_col, _btn_player in zip(_quick_cols, _quick_players):
-            with _btn_col:
-                _btn_name = _btn_player.get("player_name", "?")
-                _btn_spot = _btn_player.get("lineup_spot")
-                _btn_team = _btn_player.get("team", "")
-                _btn_pid = _btn_player.get("player_id") or _btn_name
-                _btn_label = f"{_btn_spot or '?'} · {_btn_name}"
-                if _btn_team:
-                    _btn_label = f"{_btn_label} ({_btn_team})"
-                if st.button(
-                    _btn_label,
-                    key=f"fs_open_{slate_ts}_{gk}_{_btn_pid}",
-                    width="stretch",
-                ):
-                    _open_player_modal(
-                        _btn_player,
-                        source_tab="Full Slate",
-                        source_section=source_section,
-                        interaction_source="full_slate.quick_open",
+        # PICK buttons for game view
+        for _pk_chunk in _gp_chunks:
+            _pk_cols = st.columns(max(1, len(_pk_chunk)))
+            for _pkc, _pkp in zip(_pk_cols, _pk_chunk):
+                with _pkc:
+                    _pkp_name    = _pkp.get("player_name", "?")
+                    _pkp_pid     = str(_pkp.get("player_id") or _pkp_name)
+                    _pkp_tk      = _fs_tier_from_prob(float(_pkp.get("model_prob") or 0))
+                    _pkp_already = any(
+                        d.get("player_id") == _pkp_pid
+                        for d in st.session_state["fs_picked"]
                     )
+                    if _pkp_already:
+                        st.link_button("📲 FD", _fanduel_url(_pkp_name), width="stretch")
+                    elif st.button(
+                        "＋ PICK",
+                        key=f"fs_pick_{slate_ts}_{gk}_{_pkp_pid}",
+                        use_container_width=True,
+                    ):
+                        st.session_state["fs_picked"].append({
+                            "player_id": _pkp_pid,
+                            "player_name": _pkp_name,
+                            "team": _pkp.get("team", ""),
+                            "tier_key": _pkp_tk,
+                        })
+                        st.rerun()
 
-        _remaining_players = [p for p in game_players if str(p.get("player_id") or p.get("player_name", "")) not in _priority_seen]
-        if _remaining_players:
-            _launcher_key = f"fs_launch_sel_{_stable_key_token(slate_ts, source_section, gk)}"
-            _launcher_players = _quick_players + _remaining_players
-            _launcher_map = {
-                str(p.get("player_id") or p.get("player_name", "")): p
-                for p in _launcher_players
-            }
-            _launcher_options = list(_launcher_map.keys())
-            _launcher_index = 0
-            _launcher_default = st.session_state.get(_launcher_key)
-            if _launcher_default not in _launcher_map and _launcher_options:
-                _launcher_default = _launcher_options[0]
-                st.session_state[_launcher_key] = _launcher_default
-            for _idx, _option_pid in enumerate(_launcher_options):
-                if _option_pid == _launcher_default:
-                    _launcher_index = _idx
-                    break
-
-            def _format_launcher_option(pid: str) -> str:
-                _launcher_player = _launcher_map.get(pid)
-                if not _launcher_player:
-                    return "Unavailable player"
-                _lineup_spot = _launcher_player.get("lineup_spot") or "?"
-                _player_name = _launcher_player.get("player_name", "?")
-                _team = _launcher_player.get("team", "")
-                return f"{_lineup_spot} · {_player_name}{f' ({_team})' if _team else ''}"
-
-            _launch_cols = st.columns([4, 1])
-            with _launch_cols[0]:
-                _launch_pid = st.selectbox(
-                    "Open player",
-                    options=_launcher_options,
-                    index=_launcher_index,
-                    format_func=_format_launcher_option,
-                    key=_launcher_key,
-                    label_visibility="collapsed",
-                )
-            with _launch_cols[1]:
-                if st.button(
-                    "Open",
-                    key=f"fs_launch_btn_{_stable_key_token(slate_ts, source_section, gk)}",
-                    width="stretch",
-                ):
-                    _open_player_modal(
-                        _launcher_map[_launch_pid],
-                        source_tab="Full Slate",
-                        source_section=source_section,
-                        interaction_source="full_slate.launcher_open",
-                    )
+        # MQ pitch mix buttons — one per player in this game group
+        for _mq_chunk in _gp_chunks:
+            _mq_cols = st.columns(max(1, len(_mq_chunk)))
+            for _mqc, _mqp in zip(_mq_cols, _mq_chunk):
+                with _mqc:
+                    _mqp_name = _mqp.get("player_name", "?")
+                    _mqp_pid  = str(_mqp.get("player_id") or _mqp_name)
+                    _mqp_ctx  = (pm_ctxs or {}).get(_mqp_pid, {})
+                    if _mqp_ctx:
+                        if st.button(
+                            f"📊 {_mqp_name[:12]}",
+                            key=f"fs_pm_{slate_ts}_{gk}_{_mqp_pid}",
+                            use_container_width=True,
+                        ):
+                            st.session_state["pitch_mix_modal_player"] = _mqp
+                            st.session_state["pitch_mix_modal_ctx"]    = _mqp_ctx
+                            st.session_state["show_pitch_mix_modal"]   = True
+                            st.session_state["pitch_mix_modal_source"] = "Full Slate"
+                            st.rerun()
+                    else:
+                        st.info("Load Full Slate to fetch pitch mix data")
 
     # Return-to-top
     st.markdown(
@@ -6488,11 +6771,10 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
 
     # ── T2 routing: derive sub-room from authoritative active_sub_room key ──────
     _MAIN_SUB_ROOM_MAP = {
-        "Full Slate": "full_slate",
-        "Command Center": "command_center",
-        "Top Targets": "top_targets",
-        "Match Edge": "matchup_edge",
-        "Portfolio": "portfolio",
+        "Full Slate":      "full_slate",
+        "Top Targets":     "top_targets",
+        "Matchup Hunter":  "matchup_edge",
+        "Deploy":          "command_center",
     }
     _main_subview = _MAIN_SUB_ROOM_MAP.get(
         _navstate.get_active_sub_room(st.session_state), "full_slate"
@@ -8721,19 +9003,23 @@ def tab_jig(data: dict):
 
         # ── T2 routing: derive sub-room from authoritative active_sub_room key ──
         _JIG_SUB_ROOM_MAP = {
-            "JIG Builder": "command_center",
-            "Top Targets": "top_targets",
-            "Match Edge": "matchup_edge",
-            "Full Slate": "full_slate",
-            "Portfolio": "portfolio",
+            "JIG Builder":   "jig_builder",
+            "Full Slate":    "full_slate",
+            "Matchup":       "matchup",
+            "Arsenal":       "arsenal",
+            "Power Profile": "power_profile",
+            "Exploit":       "exploit",
         }
         _jig_subview = _JIG_SUB_ROOM_MAP.get(
             _navstate.get_active_sub_room(st.session_state), "command_center"
         )
 
         if _jig_subview == "command_center":
+            st.info("Navigate to JIG Builder to view top targets.")
+
+        elif _jig_subview == "jig_builder":
             _mark_render_section(
-                "JIG.command_center",
+                "JIG.jig_builder",
                 fingerprint=f"{_jig_slate_ts}|{len(qualified)}",
                 dataset_size=len(qualified),
             )
@@ -8749,7 +9035,7 @@ def tab_jig(data: dict):
                 st.info("No players meet HVY thresholds — lower thresholds above.")
             else:
                 for entry in qualified[:3]:
-                    _hvy_card(entry, key_prefix="hvyq")
+                    _hvy_card(entry, key_prefix="hvyjb")
                 if len(qualified) > 3:
                     st.caption(f"Top 3 of {len(qualified)} qualified. See Top Targets tab for all.")
 
@@ -8803,8 +9089,11 @@ def tab_jig(data: dict):
                         _hvy_card(entry, key_prefix="hvyp")
 
         elif _jig_subview == "matchup_edge":
+            st.empty()
+
+        elif _jig_subview == "matchup":
             _mark_render_section(
-                "JIG.matchup_edge",
+                "JIG.matchup",
                 fingerprint=f"{_jig_slate_ts}|{len(scored)}",
                 dataset_size=len(scored),
             )
@@ -8866,7 +9155,7 @@ def tab_jig(data: dict):
                 _sel = st.dataframe(
                 _hvy_df, hide_index=True, width="stretch",
                     on_select="rerun", selection_mode="single-row",
-                    key=f"hvy_all_df_{_hvy_ver}",
+                    key=f"hvy_matchup_df_{_hvy_ver}",
                 )
                 _sel_rows = getattr(getattr(_sel, "selection", None), "rows", [])
                 if _sel_rows and 0 <= _sel_rows[0] < len(scored):
@@ -8874,12 +9163,33 @@ def tab_jig(data: dict):
                     _open_player_modal(
                         scored[_sel_rows[0]]["player"],
                         source_tab="JIG",
-                        source_section="JIG · Matchup Edge",
-                        interaction_source="jig.matchup_edge_table_select",
+                        source_section="JIG · Matchup",
+                        interaction_source="jig.matchup_table_select",
                     )
 
             if rows:
                 st.caption("Full HVY cards with pitch mix breakdown → see Full Slate tab.")
+
+            # Pitch mix buttons — one per scored player
+            if scored:
+                _jig_pm_chunks = [scored[i:i + 4] for i in range(0, len(scored), 4)]
+                for _jig_pm_chunk in _jig_pm_chunks:
+                    _jig_pm_cols = st.columns(max(1, len(_jig_pm_chunk)))
+                    for _jig_pmc, _jig_pme in zip(_jig_pm_cols, _jig_pm_chunk):
+                        with _jig_pmc:
+                            _jig_pmp   = _jig_pme["player"]
+                            _jig_pmpid = str(_jig_pmp.get("player_id") or _jig_pmp.get("player_name", ""))
+                            _jig_pmctx = hvy_contexts.get(_jig_pmpid, {})
+                            if st.button(
+                                "📊 Pitch Mix",
+                                key=f"jig_pm_{_jig_pmpid}",
+                                use_container_width=True,
+                            ):
+                                st.session_state["pitch_mix_modal_player"] = _jig_pmp
+                                st.session_state["pitch_mix_modal_ctx"]    = _jig_pmctx
+                                st.session_state["show_pitch_mix_modal"]   = True
+                                st.session_state["pitch_mix_modal_source"] = "JIG"
+                                st.rerun()
 
         elif _jig_subview == "portfolio":
             _mark_render_section(
@@ -9445,6 +9755,176 @@ def tab_jig(data: dict):
                         unsafe_allow_html=True,
                     )
             _finish_heavy_render(_jig_full_started)
+
+        elif _jig_subview == "arsenal":
+            _mark_render_section(
+                "JIG.arsenal",
+                fingerprint=f"{_jig_slate_ts}|{len(qualified)}",
+                dataset_size=len(qualified),
+            )
+            _ar_with_data = [e for e in qualified if e["ctx"].get("pitcher_arsenal")]
+            if not _ar_with_data:
+                st.info("Select a player to load arsenal data.")
+            else:
+                for entry in _ar_with_data:
+                    p = entry["player"]
+                    ctx = entry["ctx"]
+                    hvy_mod = float(ctx.get("hvy_modifier", 1.0))
+                    _ar_mod_lbl = (
+                        "FAVORABLE" if hvy_mod >= 1.08 else
+                        "SUPPRESSOR" if hvy_mod < 0.92 else "NEUTRAL"
+                    )
+                    _ar_mod_col = (
+                        "#4ade80" if hvy_mod >= 1.08 else
+                        "#f87171" if hvy_mod < 0.92 else "#888"
+                    )
+                    st.markdown(
+                        f"<div style='margin:10px 0 2px;'>"
+                        f"<span style='font-size:12px;font-weight:700;color:#e0d8c8;'>"
+                        f"{html.escape(p.get('player_name', '?'))}</span>"
+                        f"<span style='font-size:10px;color:#888;margin-left:8px;'>"
+                        f"vs {html.escape(p.get('pitcher_name', 'TBD'))}</span>"
+                        f"<span style='font-size:9px;font-weight:700;color:{_ar_mod_col};"
+                        f"margin-left:8px;'>MOD {hvy_mod:.2f}× · {_ar_mod_lbl}</span>"
+                        f"</div>",
+                        unsafe_allow_html=True,
+                    )
+                    _render_pitch_mix_expander(
+                        ctx=ctx,
+                        p=p,
+                        key_prefix="jig_ar",
+                        expanded=True,
+                        slate_ts=_jig_slate_ts,
+                    )
+
+        elif _jig_subview == "power_profile":
+            _mark_render_section(
+                "JIG.power_profile",
+                fingerprint=f"{_jig_slate_ts}|{len(qualified)}",
+                dataset_size=len(qualified),
+            )
+            if not qualified:
+                st.info("No JIG-qualified players — lower thresholds above.")
+            else:
+                st.markdown(
+                    "<span style='color:#f97316;font-size:12px;font-weight:700;"
+                    "letter-spacing:1px;'>POWER PROFILE</span>"
+                    "<span style='color:#555;font-size:11px;margin-left:10px;'>"
+                    "JIG-qualified · sorted by Barrel%</span>",
+                    unsafe_allow_html=True,
+                )
+                _pp_rows = []
+                for entry in qualified:
+                    p = entry["player"]
+                    _pp_brl = _pf(p.get("barrel_pct"), 0.0)
+                    _pp_ev  = _pf(p.get("exit_velo"), 0.0)
+                    _pp_iso = _pf(p.get("xiso"), 0.0)
+                    _pp_la  = p.get("avg_launch_angle")
+                    _pp_fb  = _pf(p.get("fb_pct"), 0.0)
+                    _pp_shr = int(p.get("season_hr") or 0)
+                    _pp_spa = int(p.get("season_pa") or 0)
+                    _pp_fb_pa = _pp_spa * _pp_fb / 100.0
+                    _pp_hrfb  = f"{_pp_shr / _pp_fb_pa:.3f}" if _pp_fb_pa > 0 else "--"
+                    _pp_rows.append({
+                        "Player":     p.get("player_name", "?"),
+                        "Team":       p.get("team", ""),
+                        "Pitcher":    p.get("pitcher_name", "TBD"),
+                        "HVY":        entry["jig"],
+                        "_brl_raw":   _pp_brl,
+                        "Barrel%":    f"{_pp_brl:.1f}%" if _pp_brl else "--",
+                        "Exit Velo":  f"{_pp_ev:.1f}" if _pp_ev else "--",
+                        "xISO":       f"{_pp_iso:.3f}" if _pp_iso else "--",
+                        "Launch Ang": f"{float(_pp_la):.1f}°" if _pp_la is not None else "--",
+                        "HR/FB":      _pp_hrfb,
+                    })
+                _pp_rows.sort(key=lambda r: r["_brl_raw"], reverse=True)
+                for r in _pp_rows:
+                    del r["_brl_raw"]
+                st.dataframe(pd.DataFrame(_pp_rows), hide_index=True, width="stretch")
+
+        elif _jig_subview == "exploit":
+            _mark_render_section(
+                "JIG.exploit",
+                fingerprint=f"{_jig_slate_ts}|{len(qualified)}",
+                dataset_size=len(qualified),
+            )
+            st.markdown(
+                "<span style='color:#f97316;font-size:12px;font-weight:700;"
+                "letter-spacing:1px;'>EXPLOIT TARGETS</span>"
+                "<span style='color:#555;font-size:11px;margin-left:10px;'>"
+                "escalation tier · stack candidates by game</span>",
+                unsafe_allow_html=True,
+            )
+            if not qualified:
+                st.info("No JIG-qualified players for exploit targeting — lower thresholds above.")
+            else:
+                _ex_tier_order = {"S": 0, "A": 1, "B": 2, "C": 3}
+                from collections import defaultdict as _dd_ex
+                _ex_games: dict = _dd_ex(list)
+                for _ex_e in qualified:
+                    _ex_gk = (
+                        _ex_e["player"].get("game_pk") or
+                        f"{_ex_e['player'].get('team', '?')}-{_ex_e['player'].get('opponent', '?')}"
+                    )
+                    _ex_games[_ex_gk].append(_ex_e)
+                _ex_game_order = sorted(
+                    _ex_games.keys(),
+                    key=lambda gk: -_ex_games[gk][0]["jig"],
+                )
+                for _ex_gk in _ex_game_order:
+                    _ex_group = _ex_games[_ex_gk]
+                    _ex_p0   = _ex_group[0]["player"]
+                    _ex_home = _ex_p0.get("home_team", "")
+                    _ex_away = next(
+                        (e["player"].get("team", "") for e in _ex_group
+                         if e["player"].get("team") != _ex_home),
+                        _ex_p0.get("opponent", "?"),
+                    )
+                    st.markdown(
+                        f"<div style='background:#08060a;border-left:3px solid #f97316;"
+                        f"border-radius:3px;margin:10px 0 4px;padding:4px 10px;'>"
+                        f"<span style='font-size:12px;font-weight:800;color:#f97316;'>"
+                        f"{_ex_away} @ {_ex_home}</span>"
+                        f"<span style='font-size:9px;color:#555;margin-left:8px;'>"
+                        f"{len(_ex_group)} stack candidate"
+                        f"{'s' if len(_ex_group) != 1 else ''}"
+                        f"</span></div>",
+                        unsafe_allow_html=True,
+                    )
+                    _ex_sorted = sorted(
+                        _ex_group,
+                        key=lambda e: (
+                            _ex_tier_order.get(e["player"].get("confidence_tier", "C"), 3),
+                            -e["jig"],
+                        ),
+                    )
+                    for _ex_e in _ex_sorted:
+                        _ex_p    = _ex_e["player"]
+                        _ex_tier = _ex_p.get("confidence_tier", "C")
+                        _ex_tc   = {"S": "#FFD700", "A": "#4ade80", "B": "#facc15", "C": "#f87171"}.get(_ex_tier, "#888")
+                        _ex_hvy  = _ex_e["jig"]
+                        _ex_hcol = (
+                            "#f97316" if _ex_hvy >= 75 else
+                            "#facc15" if _ex_hvy >= 60 else "#60a5fa"
+                        )
+                        st.markdown(
+                            f"<div style='display:flex;align-items:center;gap:8px;"
+                            f"padding:3px 10px 3px 14px;border-bottom:1px solid #0c0803;'>"
+                            f"<span style='font-size:10px;font-weight:700;color:{_ex_tc};"
+                            f"min-width:16px;'>{_ex_tier}</span>"
+                            f"<span style='font-size:11px;color:#e0d8c8;font-weight:600;"
+                            f"min-width:120px;'>"
+                            f"{html.escape(_ex_p.get('player_name', '?'))}</span>"
+                            f"<span style='font-size:9px;color:#6b5033;"
+                            f"min-width:28px;'>{_ex_p.get('team', '?')}</span>"
+                            f"<span style='font-size:8px;color:#4a3a1a;'>HVY</span>"
+                            f"<span style='font-size:11px;font-weight:800;color:{_ex_hcol};"
+                            f"min-width:24px;'>{_ex_hvy:.0f}</span>"
+                            f"<span style='font-size:9px;color:#555;'>"
+                            f"vs {html.escape(_ex_p.get('pitcher_name', 'TBD'))}</span>"
+                            f"</div>",
+                            unsafe_allow_html=True,
+                        )
 
     # ── JIG — Pitch Mix Intelligence ──────────────────────────────────────────
     st.caption(
@@ -10633,6 +11113,8 @@ def main():
     _selected_modal_player = st.session_state.get("selected_player_modal")
     if st.session_state.get("show_modal") and isinstance(_selected_modal_player, dict):
         _show_player_modal(_selected_modal_player)
+    if st.session_state.get("show_pitch_mix_modal"):
+        _show_pitch_mix_modal()
 
     # Read filter thresholds from session state first (sidebar sets them on each rerun)
     _min_ev   = float(st.session_state.get("min_ev",   config.MIN_EV_PCT))

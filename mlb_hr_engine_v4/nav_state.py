@@ -29,18 +29,18 @@ SECTIONS: tuple[str, ...] = (
 # STRATEGY / HITS / PERFORMANCE are direct sections — no sub-room ownership.
 SUB_ROOMS: dict[str, tuple[str, ...]] = {
     SECTION_MAIN: (
-        "Power Profile",
-        "Matchup Edge",
         "Full Slate",
-        "Deployment Edge",
-        "Portfolio",
+        "Top Targets",
+        "Matchup Hunter",
+        "Deploy",
     ),
     SECTION_JIG: (
         "JIG Builder",
-        "Top Targets",
-        "Match Edge",
         "Full Slate",
-        "Portfolio",
+        "Matchup",
+        "Arsenal",
+        "Power Profile",
+        "Exploit",
     ),
     SECTION_STRATEGY: (),
     SECTION_HITS: (),
@@ -50,7 +50,7 @@ SUB_ROOMS: dict[str, tuple[str, ...]] = {
 
 # ── Default sub-room per section ──────────────────────────────────────────────
 SECTION_DEFAULTS: dict[str, str] = {
-    SECTION_MAIN: "Power Profile",
+    SECTION_MAIN: "Full Slate",
     SECTION_JIG: "JIG Builder",
     SECTION_STRATEGY: "",
     SECTION_HITS: "",
