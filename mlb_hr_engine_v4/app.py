@@ -5266,10 +5266,17 @@ def _render_full_slate_native_cols(
             venue  = home_team
 
             st.markdown(
-                f"<div style='font-size:10px;font-weight:700;letter-spacing:1px;"
-                f"color:#aaa;padding:8px 4px 2px;border-top:1px solid #1e1e2e;margin-top:4px;'>"
-                f"{away_team} @ {home_team} &nbsp;·&nbsp; {gt_str} &nbsp;·&nbsp; "
-                f"<span style='color:#555;'>{venue}</span></div>",
+                f"<div style='margin:12px 0 4px;"
+                f"border-left:3px solid #1e3a2a;"
+                f"padding:4px 10px;"
+                f"background:#08080f;"
+                f"border-radius:0 3px 3px 0;'>"
+                f"<span style='font-size:11px;font-weight:700;"
+                f"color:#aaa;letter-spacing:0.5px;'>"
+                f"{away_team} @ {home_team}</span>"
+                f"<span style='color:#444;font-size:10px;"
+                f"margin-left:8px;'>{gt_str}</span>"
+                f"</div>",
                 unsafe_allow_html=True,
             )
 
@@ -5315,59 +5322,122 @@ def _render_full_slate_native_cols(
             for col, ckey in zip(row_cols, active_cols):
 
                 if ckey == "tier":
-                    col.markdown(_fs_tier_html(tier), unsafe_allow_html=True)
-                    if not _already_picked:
-                        if col.button(
-                            "＋",
-                            key=f"nc_pick_{slate_ts}_{pid}",
-                            help="Add to PICKS",
-                        ):
-                            st.session_state.setdefault("fs_picked", []).append(p)
-                            st.rerun()
-                    else:
-                        col.markdown(
-                            "<div style='color:#4ade80;font-size:9px;"
-                            "text-align:center;'>✓</div>",
-                            unsafe_allow_html=True,
-                        )
-
-                elif ckey == "player":
+                    _tier_cfg = config.FS_TIER_DISPLAY.get(
+                        tier, config.FS_TIER_DISPLAY["COLD"]
+                    )
+                    _tc  = _tier_cfg["color"]
+                    _tg  = _tier_cfg["glow"]
+                    _tlbl = _tier_cfg["label"]
                     col.markdown(
-                        f"<style>div:has(.fs-player-name)+.stButton button{{"
-                        f"background:none!important;border:none!important;"
-                        f"padding:2px 0!important;color:#e0d8c8!important;"
-                        f"font-size:12px!important;font-weight:600!important;"
-                        f"text-decoration:underline!important;"
-                        f"text-align:left!important;box-shadow:none!important;"
-                        f"min-height:0!important;cursor:pointer!important;}}"
-                        f"</style>"
-                        f"<div style='font-size:10px;color:#888;'>"
-                        f"{team} | {bats}</div>"
-                        f"<div class='fs-player-name'></div>",
+                        f"<a href='{_fanduel_url(pname)}' target='_blank'"
+                        f" style='text-decoration:none;'>"
+                        f"<div style='"
+                        f"color:{_tc};"
+                        f"font-size:9px;"
+                        f"font-weight:800;"
+                        f"letter-spacing:0.12em;"
+                        f"font-family:Barlow Condensed,sans-serif;"
+                        f"text-transform:uppercase;"
+                        f"text-shadow:0 0 8px {_tg};"
+                        f"text-align:center;"
+                        f"white-space:nowrap;"
+                        f"background:rgba(8,12,16,0.6);"
+                        f"box-shadow:inset 0 0 0 1.5px {_tg},"
+                        f"0 0 8px {_tg};"
+                        f"border-radius:4px;"
+                        f"padding:5px 10px;"
+                        f"display:inline-block;"
+                        f"min-width:48px;"
+                        f"cursor:pointer;"
+                        f"'>{_tlbl}</div></a>",
                         unsafe_allow_html=True,
                     )
-                    if col.button(pname, key=f"nc_name_{slate_ts}_{pid}"):
+
+                elif ckey == "player":
+                    _dot_color = config.TEAM_COLORS.get(team, "#555")
+                    col.markdown(
+                        f"<style>"
+                        f"div:has(.fs-nc-pname)+.stButton button{{"
+                        f"background:none!important;"
+                        f"border:none!important;"
+                        f"padding:0!important;"
+                        f"color:#f1f5f3!important;"
+                        f"font-size:12px!important;"
+                        f"font-weight:600!important;"
+                        f"font-family:Barlow Condensed,sans-serif!important;"
+                        f"text-align:left!important;"
+                        f"box-shadow:none!important;"
+                        f"min-height:0!important;"
+                        f"line-height:1.2!important;"
+                        f"cursor:pointer!important;"
+                        f"width:100%!important;}}"
+                        f"</style>"
+                        f"<div class='fs-nc-pname'></div>",
+                        unsafe_allow_html=True,
+                    )
+                    if col.button(
+                        pname,
+                        key=f"nc_name_{slate_ts}_{pid}",
+                    ):
                         _open_player_modal(
                             p,
                             source_tab="Full Slate",
                             source_section=source_section,
                             interaction_source="full_slate.name_click",
                         )
+                    col.markdown(
+                        f"<div style='font-size:9px;color:#6b7872;"
+                        f"margin-top:-4px;'>"
+                        f"<span style='color:{_dot_color};'>●</span>"
+                        f" {team} | {bats}</div>",
+                        unsafe_allow_html=True,
+                    )
 
                 elif ckey == "mq":
-                    col.markdown(_fs_mq_pie_html(mq), unsafe_allow_html=True)
+                    _mq_cfg = {
+                        "ELITE":  ("#4ade80", "ELITE MATCHUP"),
+                        "STRONG": ("#86efac", "STRONG MATCHUP"),
+                        "AVG":    ("#fbbf24", "AVG MATCHUP"),
+                        "WEAK":   ("#f97316", "WEAK MATCHUP"),
+                        "DANGER": ("#ef4444", "DANGER MATCHUP"),
+                    }
+                    _mq_color, _mq_label = _mq_cfg.get(
+                        mq, ("#fbbf24", "AVG MATCHUP")
+                    )
                     ctx = pm_ctxs.get(pid, {})
                     if ctx:
+                        col.markdown(
+                            f"<style>"
+                            f"div:has(.fs-nc-mq-{pid})+.stButton button{{"
+                            f"background:none!important;"
+                            f"border:none!important;"
+                            f"padding:0!important;"
+                            f"box-shadow:none!important;"
+                            f"min-height:0!important;"
+                            f"width:100%!important;"
+                            f"cursor:pointer!important;}}"
+                            f"</style>"
+                            f"<div class='fs-nc-mq-{pid}'></div>"
+                            f"{_fs_mq_pie_html(mq)}",
+                            unsafe_allow_html=True,
+                        )
                         if col.button(
-                            "📊",
+                            _mq_label,
                             key=f"nc_mq_{slate_ts}_{pid}",
-                            help="View pitch mix",
                         ):
                             st.session_state["pitch_mix_modal_player"] = p
-                            st.session_state["pitch_mix_modal_ctx"] = ctx
-                            st.session_state["show_pitch_mix_modal"] = True
+                            st.session_state["pitch_mix_modal_ctx"]    = ctx
+                            st.session_state["show_pitch_mix_modal"]   = True
                             st.session_state["pitch_mix_modal_source"] = "Full Slate"
                             st.rerun()
+                    else:
+                        col.markdown(
+                            f"{_fs_mq_pie_html(mq)}"
+                            f"<div style='font-size:8px;color:#555;"
+                            f"text-align:center;margin-top:2px;'>"
+                            f"{_mq_label}</div>",
+                            unsafe_allow_html=True,
+                        )
 
                 elif ckey == "pa":
                     col.markdown(
@@ -5380,7 +5450,8 @@ def _render_full_slate_native_cols(
                     c = _hc(batting_avg, "batting_avg")
                     col.markdown(
                         f"<div style='background:{c['bg']};color:{c['text']};"
-                        f"text-align:center;font-size:11px;padding:2px;'>"
+                        f"text-align:center;font-size:11px;padding:3px 2px;"
+                        f"border-radius:3px;'>"
                         f"{f'{batting_avg:.3f}'[1:] if batting_avg else '—'}</div>",
                         unsafe_allow_html=True,
                     )
@@ -5389,7 +5460,8 @@ def _render_full_slate_native_cols(
                     c = _hc(slg, "actual_slg")
                     col.markdown(
                         f"<div style='background:{c['bg']};color:{c['text']};"
-                        f"text-align:center;font-size:11px;padding:2px;'>"
+                        f"text-align:center;font-size:11px;padding:3px 2px;"
+                        f"border-radius:3px;'>"
                         f"{f'{slg:.3f}'[1:] if slg is not None else '—'}</div>",
                         unsafe_allow_html=True,
                     )
@@ -5398,7 +5470,8 @@ def _render_full_slate_native_cols(
                     c = _hc(babip, "babip")
                     col.markdown(
                         f"<div style='background:{c['bg']};color:{c['text']};"
-                        f"text-align:center;font-size:11px;padding:2px;'>"
+                        f"text-align:center;font-size:11px;padding:3px 2px;"
+                        f"border-radius:3px;'>"
                         f"{f'{babip:.3f}'[1:] if babip else '—'}</div>",
                         unsafe_allow_html=True,
                     )
@@ -5407,7 +5480,8 @@ def _render_full_slate_native_cols(
                     c = _hc(gb_pct, "gb_pct")
                     col.markdown(
                         f"<div style='background:{c['bg']};color:{c['text']};"
-                        f"text-align:center;font-size:11px;padding:2px;'>"
+                        f"text-align:center;font-size:11px;padding:3px 2px;"
+                        f"border-radius:3px;'>"
                         f"{f'{gb_pct:.1f}%' if gb_pct else '—'}</div>",
                         unsafe_allow_html=True,
                     )
@@ -5416,7 +5490,8 @@ def _render_full_slate_native_cols(
                     c = _hc(hard_hit, "hard_hit")
                     col.markdown(
                         f"<div style='background:{c['bg']};color:{c['text']};"
-                        f"text-align:center;font-size:11px;padding:2px;'>"
+                        f"text-align:center;font-size:11px;padding:3px 2px;"
+                        f"border-radius:3px;'>"
                         f"{f'{hard_hit:.1f}%' if hard_hit else '—'}</div>",
                         unsafe_allow_html=True,
                     )
@@ -5425,7 +5500,8 @@ def _render_full_slate_native_cols(
                     c = _hc(ld_pct, "ld_pct")
                     col.markdown(
                         f"<div style='background:{c['bg']};color:{c['text']};"
-                        f"text-align:center;font-size:11px;padding:2px;'>"
+                        f"text-align:center;font-size:11px;padding:3px 2px;"
+                        f"border-radius:3px;'>"
                         f"{f'{ld_pct:.1f}%' if ld_pct else '—'}</div>",
                         unsafe_allow_html=True,
                     )
@@ -5434,7 +5510,8 @@ def _render_full_slate_native_cols(
                     c = _hc(barrel, "barrel_pct")
                     col.markdown(
                         f"<div style='background:{c['bg']};color:{c['text']};"
-                        f"text-align:center;font-size:11px;font-weight:600;padding:2px;'>"
+                        f"text-align:center;font-size:11px;font-weight:600;padding:3px 2px;"
+                        f"border-radius:3px;'>"
                         f"{f'{barrel:.1f}%' if barrel else '—'}</div>",
                         unsafe_allow_html=True,
                     )
@@ -5443,7 +5520,8 @@ def _render_full_slate_native_cols(
                     c = _hc(ev, "exit_velo")
                     col.markdown(
                         f"<div style='background:{c['bg']};color:{c['text']};"
-                        f"text-align:center;font-size:11px;padding:2px;'>"
+                        f"text-align:center;font-size:11px;padding:3px 2px;"
+                        f"border-radius:3px;'>"
                         f"{f'{ev:.1f}' if ev else '—'}</div>",
                         unsafe_allow_html=True,
                     )
@@ -5452,7 +5530,8 @@ def _render_full_slate_native_cols(
                     c = _hc(la, "avg_launch_angle")
                     col.markdown(
                         f"<div style='background:{c['bg']};color:{c['text']};"
-                        f"text-align:center;font-size:11px;padding:2px;'>"
+                        f"text-align:center;font-size:11px;padding:3px 2px;"
+                        f"border-radius:3px;'>"
                         f"{f'{float(la):.1f}°' if la is not None else '—'}</div>",
                         unsafe_allow_html=True,
                     )
@@ -5461,7 +5540,8 @@ def _render_full_slate_native_cols(
                     c = _hc(pull, "pull_pct")
                     col.markdown(
                         f"<div style='background:{c['bg']};color:{c['text']};"
-                        f"text-align:center;font-size:11px;padding:2px;'>"
+                        f"text-align:center;font-size:11px;padding:3px 2px;"
+                        f"border-radius:3px;'>"
                         f"{f'{pull:.1f}%' if pull else '—'}</div>",
                         unsafe_allow_html=True,
                     )
@@ -5470,7 +5550,8 @@ def _render_full_slate_native_cols(
                     c = _hc(center, "center_pct")
                     col.markdown(
                         f"<div style='background:{c['bg']};color:{c['text']};"
-                        f"text-align:center;font-size:11px;padding:2px;'>"
+                        f"text-align:center;font-size:11px;padding:3px 2px;"
+                        f"border-radius:3px;'>"
                         f"{f'{center:.1f}%' if center else '—'}</div>",
                         unsafe_allow_html=True,
                     )
@@ -5479,7 +5560,8 @@ def _render_full_slate_native_cols(
                     c = _hc(hr9, "pitcher_hr9")
                     col.markdown(
                         f"<div style='background:{c['bg']};color:{c['text']};"
-                        f"text-align:center;font-size:11px;font-weight:600;padding:2px;'>"
+                        f"text-align:center;font-size:11px;font-weight:600;padding:3px 2px;"
+                        f"border-radius:3px;'>"
                         f"{f'{hr9:.2f}' if hr9 else '—'}</div>",
                         unsafe_allow_html=True,
                     )
@@ -5488,7 +5570,8 @@ def _render_full_slate_native_cols(
                     c = _hc(xwoba, "xwoba")
                     col.markdown(
                         f"<div style='background:{c['bg']};color:{c['text']};"
-                        f"text-align:center;font-size:11px;padding:2px;'>"
+                        f"text-align:center;font-size:11px;padding:3px 2px;"
+                        f"border-radius:3px;'>"
                         f"{f'{xwoba:.3f}'[1:] if xwoba else '—'}</div>",
                         unsafe_allow_html=True,
                     )
