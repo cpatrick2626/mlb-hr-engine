@@ -5856,31 +5856,38 @@ def _render_full_slate_native_cols(
             unsafe_allow_html=True,
         )
 
+        def _safe_float(val):
+            if val is None:
+                return None
+            if isinstance(val, str):
+                return float(val.rstrip('%')) if val.strip() else None
+            return float(val)
+
         for p in game_players:
             pid   = str(p.get("player_id") or p.get("player_name", ""))
             pname = p.get("player_name", "?")
             team  = p.get("team", "")
             bats  = p.get("batter_side", "")
 
-            mp        = float(p.get("model_prob") or 0)
+            mp        = _safe_float(p.get("model_prob")) or 0.0
             tier      = _fs_tier_from_prob(mp)
             mq        = p.get("matchup_quality", "AVG")
             season_pa = p.get("season_pa")
-            batting_avg = p.get("batting_avg")
-            slg       = p.get("actual_slg")
-            babip     = p.get("babip")
-            gb_pct    = p.get("gb_pct")
-            hard_hit  = p.get("hard_hit")
-            ld_pct    = p.get("ld_pct")
-            barrel    = p.get("barrel_pct")
-            ev        = p.get("exit_velo")
-            la        = p.get("avg_launch_angle")
-            pull      = p.get("pull_pct")
-            center    = p.get("center_pct")
-            hr9       = p.get("pitcher_hr9")
-            xwoba     = p.get("xwoba")
+            batting_avg = _safe_float(p.get("batting_avg"))
+            slg       = _safe_float(p.get("actual_slg"))
+            babip     = _safe_float(p.get("babip"))
+            gb_pct    = _safe_float(p.get("gb_pct"))
+            hard_hit  = _safe_float(p.get("hard_hit"))
+            ld_pct    = _safe_float(p.get("ld_pct"))
+            barrel    = _safe_float(p.get("barrel_pct"))
+            ev        = _safe_float(p.get("exit_velo"))
+            la        = _safe_float(p.get("avg_launch_angle"))
+            pull      = _safe_float(p.get("pull_pct"))
+            center    = _safe_float(p.get("center_pct"))
+            hr9       = _safe_float(p.get("pitcher_hr9"))
+            xwoba     = _safe_float(p.get("xwoba"))
             season_hr = int(p.get("season_hr") or 0)
-            fb_pct    = _pf(p.get("fb_pct"), 0.0)
+            fb_pct    = _safe_float(p.get("fb_pct")) or 0.0
             fb_pa     = (season_pa or 0) * fb_pct / 100.0
             hrpa      = round(season_hr / fb_pa, 3) if fb_pa > 0 else None
             fd_raw    = p.get("fanduel_american")
