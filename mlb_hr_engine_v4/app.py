@@ -5846,7 +5846,7 @@ def _render_full_slate_native_cols(
         away_team = away_batters[0].get("team", "?") if away_batters else p0.get("opponent", "?")
         gt     = _game_time_et(p0.get("game_time_utc", ""))
         gt_str = gt.strftime("%I:%M %p ET").lstrip("0") if gt else "TBD"
-        venue  = _PF.get(home_team, {}).get("name", home_team)
+        venue  = home_team
 
         st.markdown(
             f"<div style='font-size:10px;font-weight:700;letter-spacing:1px;"
