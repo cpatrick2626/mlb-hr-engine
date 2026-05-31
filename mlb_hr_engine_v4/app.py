@@ -5333,8 +5333,17 @@ def _render_full_slate_native_cols(
 
                 elif ckey == "player":
                     col.markdown(
+                        f"<style>div:has(.fs-player-name)+.stButton button{{"
+                        f"background:none!important;border:none!important;"
+                        f"padding:2px 0!important;color:#e0d8c8!important;"
+                        f"font-size:12px!important;font-weight:600!important;"
+                        f"text-decoration:underline!important;"
+                        f"text-align:left!important;box-shadow:none!important;"
+                        f"min-height:0!important;cursor:pointer!important;}}"
+                        f"</style>"
                         f"<div style='font-size:10px;color:#888;'>"
-                        f"{team} | {bats}</div>",
+                        f"{team} | {bats}</div>"
+                        f"<div class='fs-player-name'></div>",
                         unsafe_allow_html=True,
                     )
                     if col.button(pname, key=f"nc_name_{slate_ts}_{pid}"):
