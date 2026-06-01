@@ -657,6 +657,12 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded }) {
   const [colOpen, setColOpen] = React.useState(false);
   const [colInfo, setColInfo] = React.useState(null);
   const [sortState, setSortState] = React.useState(null);
+  const [dataVersion, setDataVersion] = React.useState(0);
+  React.useEffect(() => {
+    const handler = () => setDataVersion(v => v + 1);
+    window.addEventListener("hrEngineDataLoaded", handler);
+    return () => window.removeEventListener("hrEngineDataLoaded", handler);
+  }, []);
   const onSort = (key) => setSortState((s) => s && s.key === key ? { key, dir: s.dir === "desc" ? "asc" : "desc" } : { key, dir: "desc" });
   const onReorder = (fromKey, toKey) => setColPref((p) => { if (fromKey === toKey) return p; const o = p.order.filter((k) => k !== fromKey); o.splice(o.indexOf(toKey), 0, fromKey); return { ...p, order: o }; });
   React.useEffect(() => { try { localStorage.setItem("fsmColPref", JSON.stringify(colPref)); } catch (e) {} }, [colPref]);

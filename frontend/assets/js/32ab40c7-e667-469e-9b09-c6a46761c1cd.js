@@ -67,6 +67,12 @@ const StrategyRail = ({ onViewAll }) => {
   const [count, setCount] = React.useState(3);
   const [start, setStart] = React.useState(0);
   const pausedRef = React.useRef(false);
+  const [dataVersion, setDataVersion] = React.useState(0);
+  React.useEffect(() => {
+    const handler = () => setDataVersion(v => v + 1);
+    window.addEventListener("hrEngineDataLoaded", handler);
+    return () => window.removeEventListener("hrEngineDataLoaded", handler);
+  }, []);
   const rows = window.LEADERBOARD_ROWS || [];
 
   React.useEffect(() => {
