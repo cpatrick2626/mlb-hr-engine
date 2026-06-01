@@ -153,6 +153,10 @@ async def get_slate():
             odds = (f"+{fd_raw}" if fd_raw and fd_raw > 0
                     else str(fd_raw) if fd_raw else None)
 
+            away = (p.get("opponent") or p.get("team") or "away").upper()
+            home = (p.get("home_team") or p.get("team") or "home").upper()
+            derived_game_id = f"{away}-{home}".lower().replace(" ", "-")
+
             leaderboard_rows.append({
                 "id":       p.get("player_id") or p.get("player_name", "").lower().replace(" ", "-"),
                 "name":     p.get("player_name"),
@@ -176,14 +180,16 @@ async def get_slate():
                 "hrpa":     hrpa,
                 "hrprob":   round(model_prob * 100, 1),
                 "tier":     tier,
-                "gameId":   p.get("game_id") or f"{p.get('team','').lower()}-game",
+                "gameId":   derived_game_id,
                 "odds":     odds,
                 "hr":       season_hr,
             })
 
         seen_games = {}
         for p in players:
-            gid = p.get("game_id") or f"{p.get('team','').lower()}-game"
+            _away = (p.get("opponent") or p.get("team") or "away").upper()
+            _home = (p.get("home_team") or p.get("team") or "home").upper()
+            gid = f"{_away}-{_home}".lower().replace(" ", "-")
             if gid not in seen_games:
                 seen_games[gid] = {
                     "id":       gid,
