@@ -825,7 +825,7 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded }) {
 
       {/* BODY */}
       {view === "player" ?
-      <div className="fsm-tablewrap"><FsmTable rows={pool} cols={activeCols} showGame={true} onBatter={openBatter} onPitch={openPitch} onReorder={onReorder} onSort={onSort} sortState={sortState} /></div> :
+      <div className="fsm-tablewrap fsm-scroll-container"><FsmTable rows={pool} cols={activeCols} showGame={true} onBatter={openBatter} onPitch={openPitch} onReorder={onReorder} onSort={onSort} sortState={sortState} /></div> :
 
       gamesToShow.map((game) => {
         const gameRows = pool.filter((r) => r.gameId === game.id);
@@ -833,7 +833,7 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded }) {
         return (
           <div className="fsm-gameblock" key={game.id} id={`fsm-game-${game.id}`}>
               <FsmGameHeader game={game} n={gameRows.length} />
-              <div className="fsm-tablewrap"><FsmTable rows={gameRows} cols={activeCols} onBatter={openBatter} onPitch={openPitch} onReorder={onReorder} onSort={onSort} sortState={sortState} /></div>
+              <div className="fsm-tablewrap fsm-scroll-container"><FsmTable rows={gameRows} cols={activeCols} onBatter={openBatter} onPitch={openPitch} onReorder={onReorder} onSort={onSort} sortState={sortState} /></div>
             </div>);
 
       })

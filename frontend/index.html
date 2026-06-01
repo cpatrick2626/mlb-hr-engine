@@ -3638,6 +3638,18 @@ html, body { height: 100%; overflow: hidden; }
 .fsm-ht.is-weak   { background: #3d0a10; color: #ff8a93; }
 .fsm-ht.is-danger { background: #2a0a10; color: #ff3344; }
 .fsm-ht.is-na     { color: var(--fg-4); }
+
+@media (max-width: 768px) {
+  /* Allow full page horizontal scroll on mobile */
+  body { overflow-x: auto; min-width: 1200px; }
+
+  /* Full slate matrix horizontal scroll container */
+  .fsm-scroll-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    width: 100%;
+  }
+}
 </style>
 </head>
 <body>
