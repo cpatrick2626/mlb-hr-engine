@@ -117,6 +117,26 @@ async def redeem(body: dict, user=Depends(require_auth)):
     return {"status": "ok", "message": "Beta access granted!"}
 
 
+def _pct(val):
+    """Strip % suffix and return float, or None if missing."""
+    if val is None:
+        return None
+    try:
+        return round(float(str(val).replace("%", "").strip()), 1)
+    except (ValueError, TypeError):
+        return None
+
+
+def _flt(val):
+    """Cast to float, or None if missing."""
+    if val is None:
+        return None
+    try:
+        return round(float(str(val).replace("%", "").strip()), 1)
+    except (ValueError, TypeError):
+        return None
+
+
 # ── Full Slate ─────────────────────────────────────────────────────────────────
 
 @app.get("/api/slate")
@@ -164,19 +184,19 @@ async def get_slate():
                 "bats":     p.get("batter_side"),
                 "quality":  quality,
                 "pa":       season_pa,
-                "avg":      p.get("batting_avg"),
-                "slg":      p.get("actual_slg"),
-                "babip":    p.get("babip"),
-                "gb":       p.get("gb_pct"),
-                "hh":       p.get("hard_hit"),
-                "ld":       p.get("ld_pct"),
-                "barrel":   p.get("barrel_pct"),
-                "ev":       p.get("exit_velo"),
-                "la":       p.get("avg_launch_angle"),
-                "pull":     p.get("pull_pct"),
+                "avg":      _flt(p.get("batting_avg")),
+                "slg":      _flt(p.get("actual_slg")),
+                "babip":    _flt(p.get("babip")),
+                "gb":       _pct(p.get("gb_pct")),
+                "hh":       _pct(p.get("hard_hit")),
+                "ld":       _pct(p.get("ld_pct")),
+                "barrel":   _pct(p.get("barrel_pct")),
+                "ev":       _flt(p.get("exit_velo")),
+                "la":       _flt(p.get("avg_launch_angle")),
+                "pull":     _pct(p.get("pull_pct")),
                 "center":   p.get("center_pct"),
                 "opphr":    p.get("pitcher_hr9"),
-                "xwoba":    p.get("xwoba"),
+                "xwoba":    _flt(p.get("xwoba")),
                 "hrpa":     hrpa,
                 "hrprob":   round(model_prob * 100, 1),
                 "tier":     tier,
