@@ -45,9 +45,10 @@ const TEAM_COLOR = {
 };
 
 /* today's slate — supplied by the data file (window.SLATE_GAMES) */
-const FSM_GAMES = window.SLATE_GAMES || [
-{ id: "tor-mia", away: "TOR", home: "MIA", park: "loanDepot Park", time: "7:10 PM ET",
-  weather: "Roof Closed · 72°F", wind: "Calm", hrFactor: 0.94, teams: ["TOR", "MIA"] }];
+const getFSMGames = () => window.SLATE_GAMES && window.SLATE_GAMES.length > 0
+  ? window.SLATE_GAMES
+  : [{ id: "tor-mia", away: "TOR", home: "MIA", park: "loanDepot Park", time: "7:10 PM ET",
+       weather: "Roof Closed · 72°F", wind: "Calm", hrFactor: 0.94, teams: ["TOR", "MIA"] }];
 
 
 /* formatters */
@@ -326,7 +327,7 @@ const FSM_PFIRST = ["Tanner", "Bryce", "Logan", "Spencer", "Garrett", "Hunter", 
 const FSM_PLAST = ["Sandoval", "Whitlock", "Karras", "Beaumont", "Okada", "Reyes", "Hollis", "Vargas", "Pemberton", "Costa", "Lindgren", "Mahoney", "Ferro", "Nakamura", "Brennan"];
 
 function fsmPitchData(row) {
-  const game = FSM_GAMES.find((g) => g.id === row.gameId);
+  const game = getFSMGames().find((g) => g.id === row.gameId);
   const opp = game ? game.teams.find((t) => t !== row.teamAbbr) : "OPP";
   const rng = fsmSeeded(fsmHash(row.gameId + ":" + opp));
   const pick = (a) => a[Math.floor(rng() * a.length)];
@@ -361,7 +362,7 @@ function FsmStat({ label, value, color }) {
 function FsmBatterCard({ row, onClose, onPitch }) {
   const t = FSM_TIERS[row.tier] || FSM_TIERS.COLD;
   const m = FSM_MATCHUP[row.quality] || FSM_MATCHUP.AVG;
-  const game = FSM_GAMES.find((g) => g.id === row.gameId);
+  const game = getFSMGames().find((g) => g.id === row.gameId);
   const pd = fsmPitchData(row);
   const groups = [
   { title: "POWER & CONTACT", keys: ["avg", "slg", "babip", "xwoba", "barrel", "hrpa"] },
@@ -694,7 +695,7 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded }) {
   };
 
   const pool = sorted.filter((r) => (selGame === "all" || r.gameId === selGame) && passGroup(r) && passFocus(r));
-  const gamesToShow = selGame === "all" ? FSM_GAMES : FSM_GAMES.filter((g) => g.id === selGame);
+  const gamesToShow = selGame === "all" ? getFSMGames() : getFSMGames().filter((g) => g.id === selGame);
 
   const noteBits = [];
   if (group !== "all") noteBits.push(group === "qualified" ? "QUALIFIED" : "ELITE TARGETS");
@@ -711,7 +712,7 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded }) {
       {embedded ? (
         <div className="fsm-embed-head">
           <span className="fsm-embed-title">PLAYER TARGETS <b>{pool.length}</b></span>
-          <span className="fsm-embed-sub"><span className="fsm-live"><i className="fsm-live__dot" />LIVE</span> · {FSM_GAMES.length} GAMES · UPD {timer} AGO</span>
+          <span className="fsm-embed-sub"><span className="fsm-live"><i className="fsm-live__dot" />LIVE</span> · {getFSMGames().length} GAMES · UPD {timer} AGO</span>
         </div>
       ) : (
       <div className="fsm-topbar">
@@ -722,7 +723,7 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded }) {
         <div className="fsm-topbar__status">
           <span className="fsm-live"><i className="fsm-live__dot" />LIVE</span>
           <span className="fsm-stat-pill">{pool.length} / {total} BATTERS</span>
-          <span className="fsm-stat-pill">{FSM_GAMES.length} GAMES</span>
+          <span className="fsm-stat-pill">{getFSMGames().length} GAMES</span>
           <span className="fsm-clock">UPD {timer} AGO</span>
         </div>
       </div>
@@ -753,8 +754,8 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded }) {
           <span className="fsm-gamesel__label">GAMES</span>
           <span className="fsm-gamesel__field">
             <select value={selGame} onChange={(e) => setSelGame(e.target.value)}>
-              <option value="all">All games · {FSM_GAMES.length}</option>
-              {FSM_GAMES.map((g) =>
+              <option value="all">All games · {getFSMGames().length}</option>
+              {getFSMGames().map((g) =>
               <option key={g.id} value={g.id}>{g.away} @ {g.home} · {g.time}</option>
               )}
             </select>
@@ -813,8 +814,8 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded }) {
       {/* GAME-NAV CHIPS — one-click jump to each game */}
       {view === "game" &&
       <div className="fsm-gamenav">
-          <button className={selGame === "all" ? "is-on" : ""} onClick={() => setSelGame("all")}>ALL · {FSM_GAMES.length}</button>
-          {FSM_GAMES.map((g) =>
+          <button className={selGame === "all" ? "is-on" : ""} onClick={() => setSelGame("all")}>ALL · {getFSMGames().length}</button>
+          {getFSMGames().map((g) =>
         <button key={g.id} className={selGame === g.id ? "is-on" : ""} onClick={() => setSelGame(g.id)}>
               {g.away} @ {g.home}
             </button>
