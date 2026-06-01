@@ -3640,14 +3640,66 @@ html, body { height: 100%; overflow: hidden; }
 .fsm-ht.is-na     { color: var(--fg-4); }
 
 @media (max-width: 768px) {
-  /* Allow full page horizontal scroll on mobile */
-  body { overflow-x: auto; min-width: 1200px; }
+  body { overflow-x: hidden; }
 
-  /* Full slate matrix horizontal scroll container */
+  /* Lens tab strip — horizontal scroll */
+  .md-lenstabs {
+    overflow-x: auto;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+    flex-wrap: nowrap !important;
+  }
+
+  /* Individual lens tabs — no shrink */
+  .md-lenstab {
+    flex-shrink: 0;
+  }
+
+  /* Game navigation strip — horizontal scroll */
+  .fsm-gamenav {
+    overflow-x: auto;
+    white-space: nowrap;
+    -webkit-overflow-scrolling: touch;
+    flex-wrap: nowrap !important;
+  }
+
+  /* Filter row and focus radio group — wrap instead of clip */
+  .fsm-filters,
+  .fsm-rg__opts,
+  .hr-cc__filters-line {
+    flex-wrap: wrap !important;
+    gap: 6px;
+  }
+
+  /* Full slate matrix table — horizontal scroll */
   .fsm-scroll-container {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
     width: 100%;
+  }
+
+  /* Live targets banner — let marquee scroll naturally */
+  .md-marquee {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Navigation panel — hide on portrait */
+  .md-nav {
+    display: none;
+  }
+
+  /* Tactical Command Center button — shrink */
+  .md-cc-btn {
+    font-size: 11px;
+    padding: 4px 8px;
+  }
+}
+
+@media (max-width: 768px) and (orientation: landscape) {
+  /* Navigation panel — restore on landscape */
+  .md-nav {
+    display: block;
   }
 }
 </style>
