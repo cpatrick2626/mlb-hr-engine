@@ -1,0 +1,201 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Design Tokens ───────────────────────────────────────────── */
+:root {
+  --bg-void:         #010305;
+  --bg-base:         #030508;
+  --bg-panel:        #060C15;
+  --bg-panel-header: #04080F;
+  --bg-panel-hover:  #080F1A;
+
+  --border-dim:      rgba(255, 255, 255, 0.04);
+  --border-panel:    rgba(255, 255, 255, 0.07);
+  --border-bracket:  rgba(255, 255, 255, 0.16);
+  --border-bracket-dim: rgba(255, 255, 255, 0.07);
+
+  --text-primary:    #C4D0DE;
+  --text-secondary:  #4A5E70;
+  --text-dim:        #202E3A;
+  --text-code:       #7A90A8;
+
+  --critical:        #DC2626;
+  --critical-muted:  rgba(220, 38, 38, 0.18);
+  --critical-glow:   0 0 12px rgba(220, 38, 38, 0.35);
+
+  --high:            #D97706;
+  --high-muted:      rgba(217, 119, 6, 0.14);
+  --high-glow:       0 0 10px rgba(217, 119, 6, 0.28);
+
+  --moderate:        #0EA5E9;
+  --moderate-muted:  rgba(14, 165, 233, 0.10);
+  --moderate-glow:   0 0 8px rgba(14, 165, 233, 0.20);
+
+  --live:            #10B981;
+  --live-glow:       0 0 8px rgba(16, 185, 129, 0.50);
+}
+
+@layer base {
+  body {
+    font-family: var(--font-jetbrains-mono, 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace);
+    font-feature-settings: 'tnum' 1, 'kern' 1, 'ss01' 1;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    background-color: var(--bg-base);
+    color: var(--text-primary);
+  }
+
+  /* Barlow Condensed for display zones */
+  .font-display {
+    font-family: var(--font-barlow, 'Barlow Condensed', 'Barlow', system-ui, sans-serif);
+  }
+}
+
+@layer utilities {
+  /* ── Tactical micro-grid underlay ── */
+  .tactical-grid {
+    background-image:
+      linear-gradient(rgba(255, 255, 255, 0.020) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255, 255, 255, 0.020) 1px, transparent 1px);
+    background-size: 20px 20px;
+  }
+
+  /* ── Compressed scanline depth ── */
+  .scanline {
+    background-image: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 3px,
+      rgba(255, 255, 255, 0.006) 3px,
+      rgba(255, 255, 255, 0.006) 4px
+    );
+  }
+
+  /* ── Panel top-edge shimmer ── */
+  .panel-shimmer::before {
+    content: '';
+    position: absolute;
+    inset-inline: 0;
+    top: 0;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(255, 255, 255, 0.055) 30%,
+      rgba(255, 255, 255, 0.095) 50%,
+      rgba(255, 255, 255, 0.055) 70%,
+      transparent 100%
+    );
+    pointer-events: none;
+    z-index: 10;
+  }
+
+  /* ── Inner depth gradient (glass-ish) ── */
+  .panel-depth::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.010) 0%,
+      rgba(255, 255, 255, 0.003) 30%,
+      transparent 70%
+    );
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  /* ── Workspace tab indicator ── */
+  .tab-indicator::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 16px;
+    right: 16px;
+    height: 1px;
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(196, 208, 222, 0.50) 40%,
+      rgba(196, 208, 222, 0.70) 50%,
+      rgba(196, 208, 222, 0.50) 60%,
+      transparent 100%
+    );
+  }
+
+  /* ── Primary workspace (MAIN/JIG) tab indicator ── */
+  .tab-indicator-primary::after {
+    background: linear-gradient(
+      90deg,
+      transparent 0%,
+      rgba(196, 208, 222, 0.65) 35%,
+      rgba(220, 232, 248, 0.90) 50%,
+      rgba(196, 208, 222, 0.65) 65%,
+      transparent 100%
+    );
+  }
+}
+
+/* ── Animations ───────────────────────────────────────────────── */
+@keyframes pulse-beacon {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.40; }
+}
+
+@keyframes pulse-alert {
+  0%, 100% {
+    opacity: 1;
+    box-shadow: 0 0 6px rgba(220, 38, 38, 0.80);
+  }
+  50% {
+    opacity: 0.55;
+    box-shadow: 0 0 2px rgba(220, 38, 38, 0.35);
+  }
+}
+
+@keyframes pulse-live {
+  0%, 100% {
+    opacity: 1;
+    box-shadow: 0 0 5px rgba(16, 185, 129, 0.70);
+  }
+  50% {
+    opacity: 0.60;
+    box-shadow: 0 0 2px rgba(16, 185, 129, 0.30);
+  }
+}
+
+@keyframes enter-left {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes enter-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+/* Animation utility classes */
+.animate-pulse-beacon  { animation: pulse-beacon 2.6s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+.animate-pulse-alert   { animation: pulse-alert 1.7s ease-in-out infinite; }
+.animate-pulse-live    { animation: pulse-live 2.0s ease-in-out infinite; }
+.animate-enter-left    { animation: enter-left 0.20s ease-out forwards; opacity: 0; }
+.animate-enter-fade    { animation: enter-fade 0.25s ease-out forwards; opacity: 0; }
+
+/* Stagger delays for list entries */
+.stagger-1  { animation-delay: 0.04s; }
+.stagger-2  { animation-delay: 0.08s; }
+.stagger-3  { animation-delay: 0.12s; }
+.stagger-4  { animation-delay: 0.16s; }
+.stagger-5  { animation-delay: 0.20s; }
+.stagger-6  { animation-delay: 0.24s; }
+.stagger-7  { animation-delay: 0.28s; }
+.stagger-8  { animation-delay: 0.32s; }
+.stagger-9  { animation-delay: 0.36s; }
+.stagger-10 { animation-delay: 0.40s; }

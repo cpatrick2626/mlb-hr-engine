@@ -22,7 +22,7 @@ import config
 
 _SESSION = requests.Session()
 _SESSION.headers.update({
-    "User-Agent": "Mozilla/5.0 (compatible; MLB-HR-Engine/2.0)",
+    "User-Agent": "Mozilla/5.0 (compatible; Codex-HR-Engine/2.0)",
     "Accept": "text/csv,application/json,*/*",
 })
 
@@ -184,3 +184,4 @@ def _parse_leaderboard_csv(raw: str) -> dict[int, dict]:
             continue
 
     return result
+

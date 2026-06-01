@@ -1,211 +1,723 @@
 """
-Baseball Savant (Statcast) client — no API key required.
+Baseball Savant (Statcast) client — three-source, production-grade implementation.
 
-Pulls aggregate leaderboard data for:
-  - Batters: barrel%, exit velocity, hard-hit%, xSLG
-  - Pitchers: barrel% against, exit velo against, hard-hit% against
+Data sources (all free, no API key):
+  1. /leaderboard/statcast        → barrel%, exit velo, sweet spot%, hard hit%, xSLG
+  2. /leaderboard/batted-ball     → GB%, FB%, LD%, IFFB%, Pull%, Straight%, Oppo%
+  3. /leaderboard/expected_statistics → xBA, xSLG, xwOBA, xISO (contact quality cross-check)
 
-Data is cached in memory for the session (one fetch per run).
+All three are merged per player_id. Current year is primary; prior year fills
+missing players for early-season coverage. statcast leaderboard takes precedence
+on any overlapping fields.
 
-Key insight: Statcast metrics (barrel%, exit velo) stabilize in ~50 PA,
-far faster than HR/PA (~300 PA). This makes them especially valuable
-in early-season models where HR sample sizes are tiny.
+Batter power multiplier (7 signals, evidence-based weights):
+  Barrel%      40%  — ~57% of barrels become HRs; the most HR-specific metric
+  FB%          15%  — HRs require air balls; high FB% = more HR opportunities
+  Sweet Spot%  12%  — LA 8-32°: partially independent of barrel; broader contact quality
+  Pull%        10%  — ~43% of MLB HRs are pulled; fully independent signal
+  xSLG         10%  — contact quality proxy; reduced (redundant with barrel cluster)
+  Hard Hit%     8%  — EV >95 mph; reduced (correlated with barrel/EV cluster)
+  Exit Velo     5%  — raw power ceiling
+
+Pitcher contact-quality factor (4 signals):
+  Barrel% against  45%  — primary HR-vulnerability metric
+  FB% against      25%  — more flies allowed = more HR exposure
+  Hard Hit% against 15% — high-EV contact rate allowed
+  Exit Velo against 15% — average raw contact quality
 """
 
 import io
 import csv
 import requests
-from functools import lru_cache
 from typing import Optional
+from concurrent.futures import ThreadPoolExecutor
 
 import config
+from clients.session_utils import configure_session
 
-_SESSION = requests.Session()
+_SESSION = configure_session(requests.Session())
 _SESSION.headers.update({
-    "User-Agent": "Mozilla/5.0 (compatible; MLB-HR-Engine/2.0)",
-    "Accept": "text/csv,application/json,*/*",
+    "User-Agent": (
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,text/csv,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Referer": "https://baseballsavant.mlb.com/",
 })
 
-# League averages (2026 MLB season, statcast leaderboard) used for normalization
-LEAGUE_AVG_BARREL_RATE = 0.052    # barrel per PA (5.2%)
-LEAGUE_AVG_EXIT_VELO   = 88.9     # mph avg_hit_speed
-LEAGUE_AVG_HARD_HIT    = 0.394    # EV > 95 mph per BIP
-LEAGUE_AVG_XSLG        = 0.405    # expected SLG from contact quality (2024 MLB)
+# ── Module-level aliases — all canonical values live in config.py ─────────────
+PRIOR_YEAR_TRUST    = config.PRIOR_YEAR_TRUST
+MIN_CURRENT_YEAR_PA = config.MIN_CURRENT_YEAR_PA
+LEAGUE_AVG_BARREL_RATE = config.LEAGUE_AVG_BARREL_RATE
+LEAGUE_AVG_FB_PCT      = config.LEAGUE_AVG_FB_PCT
+LEAGUE_AVG_EXIT_VELO   = config.LEAGUE_AVG_EXIT_VELO
+LEAGUE_AVG_HARD_HIT    = config.LEAGUE_AVG_HARD_HIT
+LEAGUE_AVG_XSLG        = config.LEAGUE_AVG_XSLG
+LEAGUE_AVG_SWEET_SPOT  = config.LEAGUE_AVG_SWEET_SPOT
+LEAGUE_AVG_PULL_PCT    = config.LEAGUE_AVG_PULL_PCT
+LEAGUE_AVG_GB_PCT      = config.LEAGUE_AVG_GB_PCT
+LEAGUE_AVG_LD_PCT      = config.LEAGUE_AVG_LD_PCT
+LEAGUE_AVG_IFFB_PCT    = config.LEAGUE_AVG_IFFB_PCT
+LEAGUE_AVG_STR_PCT     = config.LEAGUE_AVG_STR_PCT
+LEAGUE_AVG_OPPO_PCT    = config.LEAGUE_AVG_OPPO_PCT
 
-# Conversion: ~57% of barrels result in HRs
-BARREL_TO_HR_RATE = 0.57
+# Fields blended between current and prior Statcast seasons (shared by batter + pitcher tiers)
+_BATTER_BLEND_KEYS = (
+    "barrel_rate", "exit_velocity_avg", "hard_hit_pct",
+    "sweet_spot_pct", "xslg", "fb_pct", "gb_pct",
+    "ld_pct", "pull_pct", "pu_pct", "str_pct", "oppo_pct", "xba",
+)
+_PITCHER_BLEND_KEYS = (
+    "barrel_rate", "exit_velocity_avg", "hard_hit_pct",
+    "sweet_spot_pct", "xslg", "fb_pct", "gb_pct",
+    "ld_pct", "pull_pct", "pu_pct", "str_pct", "oppo_pct",
+)
 
 
-def get_batter_statcast(year: int = None) -> dict[int, dict]:
+# ── Public API ─────────────────────────────────────────────────────────────────
+
+def get_batter_statcast(year: int = None, player_ids: set[int] = None) -> dict[int, dict]:
     """
-    Fetch batter Statcast leaderboard. Returns dict keyed by MLBAM player_id.
-    Falls back to prior year if current year has insufficient data.
+    Full batter dataset: statcast + batted-ball + expected stats merged per player_id.
+
+    Args:
+        year: Season year (defaults to current)
+        player_ids: Optional set of player IDs to filter (for performance)
+
+    Three-tier prior-year coverage (runs every call regardless of curr size):
+      Tier 1 — current-year data with >= MIN_CURRENT_YEAR_PA: full trust, no flag
+      Tier 2 — current-year data but sparse (< MIN_CURRENT_YEAR_PA PA): signals
+               linearly blended with prior-year; statcast_source = "blended"
+      Tier 3 — no current-year data at all: use prior-year with trust discount;
+               statcast_source = "prior"
     """
     year = year or config.CURRENT_SEASON
-    data = _fetch_leaderboard("batter", year)
 
-    # If current season is sparse (< 100 rows), blend with prior year
-    if len(data) < 100:
-        prior = _fetch_leaderboard("batter", year - 1)
-        # Fill in gaps from prior year for players not yet in current year
-        for pid, stats in prior.items():
-            if pid not in data:
-                stats["season"] = year - 1
-                data[pid] = stats
+    # Fetch current and prior year data in parallel for better performance
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        future_curr = executor.submit(_merge_batter_sources, year, player_ids)
+        future_prior = executor.submit(_merge_batter_sources, year - 1, player_ids)
 
-    return data
+        curr = future_curr.result()
+        prior = future_prior.result()
+
+    # Tier 3: player has zero current-year data
+    for pid, stats in prior.items():
+        if pid not in curr:
+            curr[pid] = {**stats, "season": year - 1, "statcast_source": "prior"}
+
+    # Tier 2: player has current-year data but PA count is too small to fully trust
+    for pid in list(curr.keys()):
+        if curr[pid].get("statcast_source"):
+            continue   # already flagged as prior
+        curr_pa = curr[pid].get("pa", 0)
+        if 0 < curr_pa < MIN_CURRENT_YEAR_PA and pid in prior:
+            trust   = curr_pa / MIN_CURRENT_YEAR_PA   # 0..1 over 0..50 PA
+            blended = dict(curr[pid])
+            for key in _BATTER_BLEND_KEYS:
+                cv = curr[pid].get(key)
+                pv = prior[pid].get(key)
+                if cv is not None and pv is not None:
+                    blended[key] = cv * trust + pv * (1.0 - trust)
+                elif pv is not None:
+                    blended[key] = pv
+            blended["statcast_source"] = "blended"
+            curr[pid] = blended
+
+    return curr
 
 
-def get_pitcher_statcast(year: int = None) -> dict[int, dict]:
-    """Fetch pitcher Statcast leaderboard (quality of contact allowed)."""
+def get_pitcher_statcast(year: int = None, player_ids: set[int] = None) -> dict[int, dict]:
+    """
+    Full pitcher dataset: statcast + batted-ball merged per player_id.
+
+    Three-tier prior-year coverage (always fetches both years in parallel):
+      Tier 1 — current-year data with >= MIN_CURRENT_YEAR_PA BF: full trust, no flag
+      Tier 2 — current-year data but sparse (< MIN_CURRENT_YEAR_PA BF): signals
+               linearly blended with prior-year; statcast_source = "blended"
+      Tier 3 — no current-year data at all: use prior-year with trust discount;
+               statcast_source = "prior"
+    """
     year = year or config.CURRENT_SEASON
-    data = _fetch_leaderboard("pitcher", year)
-    if len(data) < 50:
-        prior = _fetch_leaderboard("pitcher", year - 1)
-        for pid, stats in prior.items():
-            if pid not in data:
-                stats["season"] = year - 1
-                data[pid] = stats
-    return data
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        future_curr  = executor.submit(_merge_pitcher_sources, year,     player_ids)
+        future_prior = executor.submit(_merge_pitcher_sources, year - 1, player_ids)
+        curr  = future_curr.result()
+        prior = future_prior.result()
+
+    # Tier 3: pitcher has zero current-year data
+    for pid, stats in prior.items():
+        if pid not in curr:
+            curr[pid] = {**stats, "season": year - 1, "statcast_source": "prior"}
+
+    # Tier 2: pitcher has current data but BF count is too small to fully trust
+    for pid in list(curr.keys()):
+        if curr[pid].get("statcast_source"):
+            continue   # already flagged as prior
+        curr_pa = curr[pid].get("pa", 0)
+        if 0 < curr_pa < MIN_CURRENT_YEAR_PA and pid in prior:
+            trust   = curr_pa / MIN_CURRENT_YEAR_PA
+            blended = dict(curr[pid])
+            for key in _PITCHER_BLEND_KEYS:
+                cv = curr[pid].get(key)
+                pv = prior[pid].get(key)
+                if cv is not None and pv is not None:
+                    blended[key] = cv * trust + pv * (1.0 - trust)
+                elif pv is not None:
+                    blended[key] = pv
+            blended["statcast_source"] = "blended"
+            curr[pid] = blended
+
+    return curr
 
 
-LEAGUE_AVG_LAUNCH_ANGLE = 12.5   # degrees — typical MLB avg launch angle
+def batter_power_multiplier(
+    player_id: int,
+    batter_data: dict[int, dict],
+) -> float:
+    """Composite power multiplier, all signals normalized to league avg = 1.0."""
+    stats = dict(batter_data.get(player_id) or {})
 
-def _launch_angle_factor(avg_la: float) -> float:
-    """
-    HR sweet spot is 20–35°. Penalise heavy ground-ball hitters (<15°)
-    and pop-up hitters (>40°). Gaussian centred at 27°, spread 11°.
-    """
-    import math
-    dist = avg_la - 27.0
-    raw  = math.exp(-(dist ** 2) / (2 * 11.0 ** 2))   # 1.0 at 27°, ~0.5 at 38°/16°
-    return max(0.86, min(1.13, 0.87 + 0.26 * raw))
-
-
-def batter_power_multiplier(player_id: int, batter_data: dict[int, dict]) -> float:
-    """
-    Power multiplier: barrel% (45%) + xSLG (20%) + launch angle (15%) + hard hit% (10%) + exit velo (10%).
-    Barrel% is most HR-specific. Hard hit% adds margin signal beyond barrel alone.
-    >1.0 = above-average power; <1.0 = below-average.
-    """
-    stats = batter_data.get(player_id)
     if not stats:
         return 1.0
 
-    barrel_rate = stats.get("barrel_rate", LEAGUE_AVG_BARREL_RATE)
-    ev          = stats.get("exit_velocity_avg", LEAGUE_AVG_EXIT_VELO)
-    avg_la      = stats.get("avg_launch_angle")
-    xslg        = stats.get("xslg", LEAGUE_AVG_XSLG)
-    hard_hit    = stats.get("hard_hit_pct", LEAGUE_AVG_HARD_HIT)
+    pa = stats.get("pa", 0) or 0
 
-    barrel_mult   = barrel_rate / LEAGUE_AVG_BARREL_RATE
-    ev_mult       = 1.0 + (ev - LEAGUE_AVG_EXIT_VELO) / 100.0
-    la_mult       = _launch_angle_factor(float(avg_la)) if avg_la is not None else 1.0
-    xslg_mult     = xslg / LEAGUE_AVG_XSLG
-    hard_hit_mult = hard_hit / LEAGUE_AVG_HARD_HIT
+    barrel_rate  = _safe(stats, "barrel_rate",      LEAGUE_AVG_BARREL_RATE, lo=0.0,   hi=0.30)
+    ev           = _safe(stats, "exit_velocity_avg", LEAGUE_AVG_EXIT_VELO,   lo=60.0,  hi=120.0)
+    xslg         = _safe(stats, "xslg",             LEAGUE_AVG_XSLG,        lo=0.05,  hi=1.20)
+    hard_hit     = _safe(stats, "hard_hit_pct",     LEAGUE_AVG_HARD_HIT,    lo=0.0,   hi=0.80)
+    sweet_spot   = _safe(stats, "sweet_spot_pct",   LEAGUE_AVG_SWEET_SPOT,  lo=0.0,   hi=0.70)
+    fb_pct       = _safe(stats, "fb_pct",           LEAGUE_AVG_FB_PCT,      lo=0.05,  hi=0.70)
+    pull_pct     = _safe(stats, "pull_pct",         LEAGUE_AVG_PULL_PCT,    lo=0.10,  hi=0.75)
 
-    composite = (barrel_mult * 0.45 + xslg_mult * 0.20 + la_mult * 0.15
-                 + hard_hit_mult * 0.10 + ev_mult * 0.10)
-    return round(max(0.60, min(1.60, composite)), 3)
+    # Per-metric stabilization: shrink each signal toward league avg based on sample PA.
+    # Half-lives from config — each metric has its own stabilization rate.
+    _stab = config.STATCAST_STABILIZATION_PA
+    barrel_rate = _stabilize_metric(barrel_rate, LEAGUE_AVG_BARREL_RATE, pa, _stab["barrel_rate"])
+    ev          = _stabilize_metric(ev,          LEAGUE_AVG_EXIT_VELO,   pa, _stab["exit_velocity_avg"])
+    xslg        = _stabilize_metric(xslg,        LEAGUE_AVG_XSLG,        pa, _stab["xslg"])
+    hard_hit    = _stabilize_metric(hard_hit,    LEAGUE_AVG_HARD_HIT,    pa, _stab["hard_hit_pct"])
+    sweet_spot  = _stabilize_metric(sweet_spot,  LEAGUE_AVG_SWEET_SPOT,  pa, _stab["sweet_spot_pct"])
+    fb_pct      = _stabilize_metric(fb_pct,      LEAGUE_AVG_FB_PCT,      pa, _stab["fb_pct"])
+    pull_pct    = _stabilize_metric(pull_pct,    LEAGUE_AVG_PULL_PCT,    pa, _stab["pull_pct"])
+
+    # Lower barrel floor (0.30 vs 0.40): true zero-barrel players score meaningfully lower.
+    barrel_mult     = _clamp(barrel_rate  / LEAGUE_AVG_BARREL_RATE,  0.30, 2.50)
+    ev_mult         = _clamp(1.0 + (ev - LEAGUE_AVG_EXIT_VELO) / 100.0, 0.85, 1.20)
+    xslg_mult       = _clamp(xslg         / LEAGUE_AVG_XSLG,         0.50, 2.00)
+    hard_hit_mult   = _clamp(hard_hit     / LEAGUE_AVG_HARD_HIT,     0.60, 1.70)
+    sweet_spot_mult = _clamp(sweet_spot   / LEAGUE_AVG_SWEET_SPOT,   0.65, 1.55)
+    fb_mult         = _clamp(fb_pct       / LEAGUE_AVG_FB_PCT,       0.55, 1.70)
+    pull_mult       = _clamp(pull_pct     / LEAGUE_AVG_PULL_PCT,     0.65, 1.55)
+
+    # Quality-conditioned FB%: gates the positive deviation by barrel quality.
+    # Guards against weak fly-ball hitters (high FB%, low barrel%) getting
+    # undeserved power boosts. Savant fb_pct already excludes popups, so the
+    # remaining risk is low-exit-velocity outfield flies → gating on barrel is correct.
+    # Negative deviations (ground-ball hitters) are NOT gated — their suppression is kept.
+    if config.FB_QUALITY_GATE_ENABLED:
+        barrel_quality = min(1.0, barrel_mult)          # normalize to [0.30, 1.0]
+        gate = (config.FB_QUALITY_GATE_FLOOR
+                + (1.0 - config.FB_QUALITY_GATE_FLOOR) * barrel_quality)
+        fb_deviation = fb_mult - 1.0
+        fb_effective = (1.0 + fb_deviation * gate) if fb_deviation > 0 else fb_mult
+    else:
+        fb_effective = fb_mult
+
+    # Weight rationale (post-FB% promotion, 2026-05-16):
+    # Barrel%   → 40%: most HR-specific; independent of FB rate
+    # FB%       → 20% (+5pp): #2 raw predictor per 2026 signal ranking; quality-gated
+    # Sweet%    → 10% (-2pp): weakest batter signal per 2026 signal ranking
+    # Pull%     → 10%: independent direction signal (short porch HR conversion)
+    # xSLG      →  8% (-2pp): correlated with barrel (r~0.75); weight reduced
+    # Hard Hit  →  8%: EV>95mph; partially independent from barrel
+    # Exit Velo →  4% (-1pp): mostly captured by barrel and hard-hit
+    # Fixed weight sum (barrel+sweet+pull+xslg+hh+ev) = 0.80; FB fills 0.20 → total=1.00
+    composite = (
+        barrel_mult       * 0.40
+        + fb_effective    * config.FB_PCT_WEIGHT
+        + sweet_spot_mult * 0.10
+        + pull_mult       * 0.10
+        + xslg_mult       * 0.08
+        + hard_hit_mult   * 0.08
+        + ev_mult         * 0.04
+    )
+    raw_composite = _clamp(composite, 0.45, 1.75)
+
+    # Prior-year-only data: shrink the deviation from 1.0 by PRIOR_YEAR_TRUST.
+    # Year-to-year correlation on power metrics is ~0.75-0.80; 0.85 is slightly
+    # optimistic but avoids under-predicting established power hitters.
+    # "blended" source already has signals weighted by current/prior PA mix — no extra discount.
+    source = stats.get("statcast_source", "current")
+    if source == "prior":
+        raw_composite = 1.0 + PRIOR_YEAR_TRUST * (raw_composite - 1.0)
+
+    return round(_clamp(raw_composite, 0.45, 1.75), 3)
 
 
-def pitcher_contact_suppressor(pitcher_id: int, pitcher_data: dict[int, dict]) -> float:
+def pitcher_contact_suppressor(
+    pitcher_id: int,
+    pitcher_data: dict[int, dict],
+) -> float:
     """
-    Return a contact-quality factor for the pitcher (how hard contact they allow).
-    <1.0 = suppresses hard contact (good pitcher)
-    >1.0 = allows hard contact (homer-prone pitcher)
+    4-signal pitcher contact quality factor.
+    <1.0 = suppresses hard contact (good pitcher); >1.0 = homer-prone.
     """
-    stats = pitcher_data.get(pitcher_id)
+    stats = dict(pitcher_data.get(pitcher_id) or {})
+
     if not stats:
         return 1.0
 
-    barrel_against = stats.get("barrel_rate", LEAGUE_AVG_BARREL_RATE)
-    ev_against = stats.get("exit_velocity_avg", LEAGUE_AVG_EXIT_VELO)
+    pa = stats.get("pa", 0) or 0
 
-    barrel_mult = barrel_against / LEAGUE_AVG_BARREL_RATE
-    ev_mult = 1.0 + (ev_against - LEAGUE_AVG_EXIT_VELO) / 100.0
+    barrel_against   = _safe(stats, "barrel_rate",       LEAGUE_AVG_BARREL_RATE, lo=0.0,  hi=0.25)
+    ev_against       = _safe(stats, "exit_velocity_avg", LEAGUE_AVG_EXIT_VELO,   lo=60.0, hi=120.0)
+    hard_hit_against = _safe(stats, "hard_hit_pct",      LEAGUE_AVG_HARD_HIT,    lo=0.0,  hi=0.80)
+    fb_against       = _safe(stats, "fb_pct",            LEAGUE_AVG_FB_PCT,      lo=0.05, hi=0.70)
 
-    composite = barrel_mult * 0.70 + ev_mult * 0.30
-    return round(max(0.60, min(1.60, composite)), 3)
+    _stab = config.STATCAST_STABILIZATION_PA
+    barrel_against   = _stabilize_metric(barrel_against,   LEAGUE_AVG_BARREL_RATE, pa, _stab["barrel_rate"])
+    ev_against       = _stabilize_metric(ev_against,       LEAGUE_AVG_EXIT_VELO,   pa, _stab["exit_velocity_avg"])
+    hard_hit_against = _stabilize_metric(hard_hit_against, LEAGUE_AVG_HARD_HIT,    pa, _stab["hard_hit_pct"])
+    fb_against       = _stabilize_metric(fb_against,       LEAGUE_AVG_FB_PCT,      pa, _stab["fb_pct"])
+
+    barrel_mult  = _clamp(barrel_against   / LEAGUE_AVG_BARREL_RATE, 0.40, 2.50)
+    fb_mult      = _clamp(fb_against       / LEAGUE_AVG_FB_PCT,      0.55, 1.70)
+    hh_mult      = _clamp(hard_hit_against / LEAGUE_AVG_HARD_HIT,    0.60, 1.70)
+    ev_mult      = _clamp(1.0 + (ev_against - LEAGUE_AVG_EXIT_VELO) / 100.0, 0.85, 1.20)
+
+    composite = (
+        barrel_mult * 0.45
+        + fb_mult   * 0.25
+        + hh_mult   * 0.15
+        + ev_mult   * 0.15
+    )
+
+    # Mirror batter treatment: shrink prior-year-only pitcher data toward neutral.
+    # Year-to-year correlation on contact quality metrics is ~0.75-0.80; 0.85
+    # is slightly optimistic but avoids under-weighting established suppressors.
+    # "blended" is already PA-weighted — no extra discount needed.
+    source = stats.get("statcast_source", "current")
+    if source == "prior":
+        composite = 1.0 + PRIOR_YEAR_TRUST * (composite - 1.0)
+
+    # Upper bound reduced 1.75→1.50: batter power multiplier also clamps at 1.75 but is
+    # further damped 0.45x in statcast_blended_rate; pitcher contact suppressor feeds raw
+    # into pitcher_combined_factor at 40% weight with no equivalent damping. 1.50 aligns
+    # the effective ceiling with what the damped batter signal can produce.
+    return round(_clamp(composite, 0.55, 1.50), 3)
 
 
-def statcast_summary(player_id: int, batter_data: dict[int, dict]) -> dict:
-    """Return display-ready Statcast summary for a player."""
-    stats = batter_data.get(player_id, {})
-    brl   = stats.get("barrel_rate", 0)
-    ev    = stats.get("exit_velocity_avg", 0)
-    la    = stats.get("avg_launch_angle")
-    xslg  = stats.get("xslg")
+def pull_air_pct_from_fractions(
+    pull_pct: Optional[float],
+    fb_pct: Optional[float],
+    ld_pct: Optional[float],
+) -> Optional[float]:
+    """
+    Canonical Pull AIR% on a 0–100 scale: pulled share × airborne share,
+    using Statcast batted-ball rates as fractions (0–1).
+
+    Matches the legacy HVY display-scale formula pull * (fb + ld) / 100 when
+    pull, fb, ld are expressed as whole percentages.
+    """
+    if pull_pct is None or fb_pct is None or ld_pct is None:
+        return None
+    try:
+        p, f, l = float(pull_pct), float(fb_pct), float(ld_pct)
+    except (TypeError, ValueError):
+        return None
+    return round(100.0 * p * (f + l), 4)
+
+
+def statcast_summary(
+    player_id: int,
+    batter_data: dict[int, dict],
+) -> dict:
+    """Return display-ready Statcast fields. Returns '--' for any missing value."""
+    stats = dict(batter_data.get(player_id) or {})
+
+    def _pct(key):
+        v = stats.get(key)
+        return f"{float(v)*100:.1f}%" if v is not None else "--"
+
+    def _num(key, decimals=1):
+        v = stats.get(key)
+        return f"{float(v):.{decimals}f}" if v is not None else "--"
+
     return {
-        "barrel_pct":        f"{brl*100:.1f}%" if brl else "",
-        "exit_velo":         f"{ev:.1f}" if ev else "",
-        "hard_hit":          f"{stats.get('hard_hit_pct', 0)*100:.1f}%",
-        "avg_launch_angle":  round(float(la), 1) if la is not None else None,
-        "xslg":              round(xslg, 3) if xslg is not None else None,
-        "season":            stats.get("season", config.CURRENT_SEASON),
+        "barrel_pct":      _pct("barrel_rate"),
+        "exit_velo":       _num("exit_velocity_avg"),
+        "hard_hit":        _pct("hard_hit_pct"),
+        "sweet_spot_pct":  _pct("sweet_spot_pct"),
+        "avg_launch_angle": round(float(stats["avg_launch_angle"]), 1)
+                            if stats.get("avg_launch_angle") is not None else "--",
+        "xslg":            round(float(stats["xslg"]), 3)
+                            if stats.get("xslg") is not None else None,
+        "fb_pct":          _pct("fb_pct"),
+        "gb_pct":          _pct("gb_pct"),
+        "ld_pct":          _pct("ld_pct"),
+        "pull_pct":        _pct("pull_pct"),
+        "pull_air_pct":    pull_air_pct_from_fractions(
+            stats.get("pull_pct"), stats.get("fb_pct"), stats.get("ld_pct"),
+        ),
+        "oppo_pct":        _pct("oppo_pct"),
+        "season":          stats.get("season", config.CURRENT_SEASON),
+        "statcast_source": stats.get("statcast_source", "current"),
     }
 
 
-# ── Internal ──────────────────────────────────────────────────────────────────
 
-@lru_cache(maxsize=8)
-def _fetch_leaderboard(player_type: str, year: int) -> dict:
+# ── Internal merge helpers ─────────────────────────────────────────────────────
+
+def _merge_batter_sources(year: int, player_ids: set[int] = None) -> dict[int, dict]:
+    """Merge statcast + batted-ball + expected stats for batters.
+
+    Args:
+        year: Season year
+        player_ids: Optional set of player IDs to filter (for performance)
     """
-    Cached fetch of Statcast exit-velocity/barrel leaderboard CSV.
-    player_type: "batter" or "pitcher"
-    Endpoint columns: brl_pa (barrel/PA%), avg_hit_speed (exit velo), ev95percent (hard hit%)
+    # Convert set to frozenset for caching
+    frozen_ids = frozenset(player_ids) if player_ids else None
+
+    # Fetch all three sources in parallel for improved performance
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        # Submit all fetch tasks concurrently
+        future_sc = executor.submit(_fetch_leaderboard, "batter", year, frozen_ids)
+        future_bb = executor.submit(_fetch_batted_ball, "batter", year, frozen_ids)
+        future_xst = executor.submit(_fetch_expected_stats, "batter", year, frozen_ids)
+
+        # Collect results as they complete
+        sc = future_sc.result()
+        bb = future_bb.result()
+        xst = future_xst.result()
+
+    merged: dict[int, dict] = {}
+
+    # If filtering, only merge requested players
+    pids_to_merge = set(sc) | set(bb) | set(xst)
+    if player_ids:
+        pids_to_merge &= player_ids
+
+    for pid in pids_to_merge:
+        row: dict = {}
+        row.update(xst.get(pid) or {})   # lowest priority
+        row.update(bb.get(pid)  or {})   # batted-ball fills direction stats
+        row.update(sc.get(pid)  or {})   # statcast has highest priority
+        if row:
+            merged[pid] = row
+    return merged
+
+
+def _merge_pitcher_sources(year: int, player_ids: set[int] = None) -> dict[int, dict]:
+    """Merge statcast + batted-ball for pitchers.
+
+    Args:
+        year: Season year
+        player_ids: Optional set of player IDs to filter (for performance)
     """
+    # Convert set to frozenset for caching
+    frozen_ids = frozenset(player_ids) if player_ids else None
+
+    # Fetch both sources in parallel for improved performance
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        # Submit both fetch tasks concurrently
+        future_sc = executor.submit(_fetch_leaderboard, "pitcher", year, frozen_ids)
+        future_bb = executor.submit(_fetch_batted_ball, "pitcher", year, frozen_ids)
+
+        # Collect results as they complete
+        sc = future_sc.result()
+        bb = future_bb.result()
+
+    merged: dict[int, dict] = {}
+
+    # If filtering, only merge requested players
+    pids_to_merge = set(sc) | set(bb)
+    if player_ids:
+        pids_to_merge &= player_ids
+
+    for pid in pids_to_merge:
+        row: dict = {}
+        row.update(bb.get(pid) or {})
+        row.update(sc.get(pid) or {})
+        if row:
+            merged[pid] = row
+    return merged
+
+
+# ── Cached fetch functions ─────────────────────────────────────────────────────
+# Manual success-only cache: lru_cache would permanently cache {} on failure,
+# blocking retries for the rest of the session if Savant is temporarily down.
+
+_FETCH_CACHE: dict = {}
+
+
+def _fetch_leaderboard(player_type: str, year: int, player_ids: frozenset[int] = None) -> dict[int, dict]:
+    """Fetch leaderboard data with optional filtering."""
+    key = ("lb", player_type, year, player_ids)
+    if key in _FETCH_CACHE:
+        return _FETCH_CACHE[key]
     url = (
         "https://baseballsavant.mlb.com/leaderboard/statcast"
-        f"?type={player_type}&year={year}&position=&team=&min=10&csv=true"
+        f"?type={player_type}&year={year}&position=&team=&min=1&csv=true"
     )
     try:
-        resp = _SESSION.get(url, timeout=20)
+        resp = _SESSION.get(url, timeout=25)
         if resp.status_code != 200:
             return {}
-        return _parse_leaderboard_csv(resp.text)
+        result = _parse_statcast_csv(resp.text, year=year, player_ids=player_ids)
+        _FETCH_CACHE[key] = result
+        return result
     except Exception as e:
-        print(f"[statcast] Fetch failed ({player_type} {year}): {e}")
+        print(f"[statcast] leaderboard fetch failed ({player_type} {year}): {e}")
         return {}
 
 
-def _parse_leaderboard_csv(raw: str) -> dict[int, dict]:
-    """Parse Baseball Savant statcast leaderboard CSV keyed by MLBAM player_id."""
+def _fetch_batted_ball(player_type: str, year: int, player_ids: frozenset[int] = None) -> dict[int, dict]:
+    """Fetch batted ball data with optional filtering."""
+    key = ("bb", player_type, year, player_ids)
+    if key in _FETCH_CACHE:
+        return _FETCH_CACHE[key]
+    url = (
+        "https://baseballsavant.mlb.com/leaderboard/batted-ball"
+        f"?type={player_type}&year={year}&min=1&csv=true"
+    )
+    try:
+        resp = _SESSION.get(url, timeout=25)
+        if resp.status_code != 200:
+            return {}
+        result = _parse_batted_ball_csv(resp.text, player_ids=player_ids)
+        _FETCH_CACHE[key] = result
+        return result
+    except Exception as e:
+        print(f"[statcast] batted-ball fetch failed ({player_type} {year}): {e}")
+        return {}
+
+
+def _fetch_expected_stats(player_type: str, year: int, player_ids: frozenset[int] = None) -> dict[int, dict]:
+    """Fetch expected stats data with optional filtering."""
+    key = ("es", player_type, year, player_ids)
+    if key in _FETCH_CACHE:
+        return _FETCH_CACHE[key]
+    url = (
+        "https://baseballsavant.mlb.com/leaderboard/expected_statistics"
+        f"?type={player_type}&year={year}&min=1&csv=true"
+    )
+    try:
+        resp = _SESSION.get(url, timeout=25)
+        if resp.status_code != 200:
+            return {}
+        result = _parse_expected_stats_csv(resp.text, player_ids=player_ids)
+        _FETCH_CACHE[key] = result
+        return result
+    except Exception as e:
+        print(f"[statcast] expected-stats fetch failed ({player_type} {year}): {e}")
+        return {}
+
+
+# ── CSV parsers ────────────────────────────────────────────────────────────────
+
+def _parse_statcast_csv(raw: str, year: int = None, player_ids: frozenset[int] = None) -> dict[int, dict]:
+    """Parse Statcast CSV with optional filtering.
+
+    Args:
+        raw: Raw CSV text
+        year: Season year
+        player_ids: Optional frozenset of player IDs to filter
+    """
+    _year = year or config.CURRENT_SEASON
     result: dict[int, dict] = {}
-    # Strip BOM if present
     reader = csv.DictReader(io.StringIO(raw.lstrip("\ufeff")))
+
+    def _f(row, *keys, div: float = 1.0, allow_negative: bool = False) -> Optional[float]:
+        for k in keys:
+            v = row.get(k)
+            if v not in (None, "", "null", "NA", "N/A"):
+                try:
+                    f = float(v) / div
+                    return f if (allow_negative or f >= 0) else None
+                except ValueError:
+                    pass
+        return None
 
     for row in reader:
         try:
-            pid = int(row.get("player_id", 0))
+            pid = int(row.get("player_id") or 0)
             if not pid:
                 continue
 
-            bip = int(row.get("attempts", 0) or 0)
-            # brl_pa is barrel per PA as a percentage — convert to rate
-            barrel_rate_pa = float(row.get("brl_pa", 0) or 0) / 100.0
-            barrel_bip_rate = float(row.get("brl_percent", 0) or 0) / 100.0
-            # ev95percent: % of batted balls with EV > 95 mph (hard-hit proxy)
-            hard_hit = float(row.get("ev95percent", 0) or 0) / 100.0
-            ev = float(row.get("avg_hit_speed", 0) or 0)
+            # Early filter: skip players not in the filter set
+            if player_ids and pid not in player_ids:
+                continue
 
-            avg_la_raw = row.get("avg_launch_angle") or row.get("launch_angle_avg")
-            avg_la = float(avg_la_raw) if avg_la_raw else None
+            barrel_rate = _f(row, "brl_pa",           div=100.0)
+            ev          = _f(row, "avg_hit_speed",     "exit_velocity_avg")
+            hard_hit    = _f(row, "ev95percent",       "hard_hit_percent", div=100.0)
+            avg_la      = _f(row, "avg_hit_angle", "avg_launch_angle", "launch_angle_avg", allow_negative=True)
+            sweet_spot  = _f(row, "sweet_spot_percent","anglesweetspotpercent",
+                              "sweet_spot_pct",         div=100.0)
+            xslg        = _f(row, "xslg", "expected_slg", "xSLG")
+            pa          = _f(row, "pa", "attempts")
 
-            xslg_raw = row.get("xslg") or row.get("expected_slg")
-            xslg = float(xslg_raw) if xslg_raw else None
+            # Range validation — reject values outside physical/statistical bounds
+            if barrel_rate is not None and not (0.0 <= barrel_rate <= 0.35):
+                barrel_rate = None
+            if ev is not None and not (60.0 <= ev <= 125.0):
+                ev = None
+            if hard_hit is not None and not (0.0 <= hard_hit <= 1.0):
+                hard_hit = None
+            if avg_la is not None and not (-90.0 <= avg_la <= 90.0):
+                avg_la = None
+            if sweet_spot is not None and not (0.0 <= sweet_spot <= 1.0):
+                sweet_spot = None
+            if xslg is not None and not (0.0 <= xslg <= 4.0):
+                xslg = None
 
-            result[pid] = {
-                "pa": bip,
-                "barrel_rate": barrel_rate_pa,
-                "barrel_bip_rate": barrel_bip_rate,
-                "hard_hit_pct": hard_hit,
-                "exit_velocity_avg": ev,
-                "avg_launch_angle": avg_la,
-                "xslg": xslg,
-                "season": config.CURRENT_SEASON,
-            }
+            row_out: dict = {"season": _year}
+            if barrel_rate is not None: row_out["barrel_rate"]       = barrel_rate
+            if ev          is not None: row_out["exit_velocity_avg"] = ev
+            if hard_hit    is not None: row_out["hard_hit_pct"]      = hard_hit
+            if avg_la      is not None: row_out["avg_launch_angle"]  = avg_la
+            if sweet_spot  is not None: row_out["sweet_spot_pct"]    = sweet_spot
+            if xslg        is not None: row_out["xslg"]              = xslg
+            if pa          is not None: row_out["pa"]                = int(pa)
+
+            result[pid] = row_out
         except (ValueError, KeyError):
             continue
 
     return result
+
+
+def _parse_batted_ball_csv(raw: str, player_ids: frozenset[int] = None) -> dict[int, dict]:
+    """Parse batted ball CSV with optional filtering.
+
+    Args:
+        raw: Raw CSV text
+        player_ids: Optional frozenset of player IDs to filter
+    """
+    result: dict[int, dict] = {}
+    reader = csv.DictReader(io.StringIO(raw.lstrip("\ufeff")))
+
+    def _pct(row, *keys) -> Optional[float]:
+        for k in keys:
+            v = row.get(k)
+            if v not in (None, "", "null", "NA", "N/A"):
+                try:
+                    f = float(v)
+                    # Baseball Savant switched from percentage (0-100) to decimal (0-1)
+                    # columns named *_rate. Detect by range: <=1.5 is already a fraction.
+                    if f > 1.5:
+                        f /= 100.0
+                    return f if 0.0 <= f <= 1.0 else None
+                except ValueError:
+                    pass
+        return None
+
+    for row in reader:
+        try:
+            # Baseball Savant uses "id" in batted-ball CSV, "player_id" in others
+            pid = int(row.get("player_id") or row.get("id") or 0)
+            if not pid:
+                continue
+
+            # Early filter: skip players not in the filter set
+            if player_ids and pid not in player_ids:
+                continue
+
+            row_out = {
+                # Current column names (*_rate, decimal 0-1); legacy names as fallback
+                "gb_pct":   _pct(row, "gb_rate",       "gb_percent",           "gb"),
+                "fb_pct":   _pct(row, "fb_rate",       "fb_percent",           "fb"),
+                "ld_pct":   _pct(row, "ld_rate",       "ld_percent",           "ld"),
+                "pu_pct":   _pct(row, "pu_rate",       "pu_percent",           "iff_percent", "ifb_percent"),
+                "pull_pct": _pct(row, "pull_rate",     "pull_percent",         "pull"),
+                "str_pct":  _pct(row, "straight_rate", "straightaway_percent", "center_percent"),
+                "oppo_pct": _pct(row, "oppo_rate",     "oppo_percent",         "opposite_percent"),
+            }
+            if any(v is not None for v in row_out.values()):
+                result[pid] = row_out
+        except (ValueError, KeyError):
+            continue
+
+    return result
+
+
+def _parse_expected_stats_csv(raw: str, player_ids: frozenset[int] = None) -> dict[int, dict]:
+    """Parse expected stats CSV with optional filtering.
+
+    Args:
+        raw: Raw CSV text
+        player_ids: Optional frozenset of player IDs to filter
+    """
+    result: dict[int, dict] = {}
+    reader = csv.DictReader(io.StringIO(raw.lstrip("\ufeff")))
+
+    def _f(row, *keys) -> Optional[float]:
+        for k in keys:
+            v = row.get(k)
+            if v not in (None, "", "null", "NA", "N/A"):
+                try:
+                    return float(v)
+                except ValueError:
+                    pass
+        return None
+
+    for row in reader:
+        try:
+            pid = int(row.get("player_id") or 0)
+            if not pid:
+                continue
+
+            # Early filter: skip players not in the filter set
+            if player_ids and pid not in player_ids:
+                continue
+
+            xslg  = _f(row, "xslg",  "est_slg", "x_slg",  "expected_slg")
+            xwoba = _f(row, "xwoba", "est_woba", "x_woba")
+            xba   = _f(row, "xba",   "est_ba",  "x_ba")
+            row_out: dict = {}
+            if xslg  is not None: row_out["xslg"]  = xslg
+            if xwoba is not None: row_out["xwoba"] = xwoba
+            if xba   is not None: row_out["xba"]   = xba
+            if row_out:
+                result[pid] = row_out
+        except (ValueError, KeyError):
+            continue
+
+    return result
+
+
+# ── Utility ────────────────────────────────────────────────────────────────────
+
+def _safe(d: dict, key: str, default: float,
+          lo: float = 0.0, hi: float = float("inf")) -> float:
+    """Get a float from dict, fall back to default, validate range."""
+    v = d.get(key)
+    if v is None:
+        return default
+    try:
+        f = float(v)
+        return f if lo <= f <= hi else default
+    except (TypeError, ValueError):
+        return default
+
+
+def _clamp(v: float, lo: float, hi: float) -> float:
+    return max(lo, min(hi, v))
+
+
+def _stabilize_metric(value: float, league_avg: float, pa: int, half_life: int) -> float:
+    """Shrink metric toward league average using Bayesian half-life stabilization.
+    trust = pa / (pa + half_life): at pa == half_life the signal is 50% reliable."""
+    trust = pa / (pa + half_life) if pa > 0 else 0.0
+    return trust * value + (1.0 - trust) * league_avg
+
+
+def clear_all_caches() -> None:
+    """Clear Statcast fetch cache. Call before Force Refresh so next load
+    fetches fresh leaderboard, batted-ball, and expected-stats data."""
+    _FETCH_CACHE.clear()

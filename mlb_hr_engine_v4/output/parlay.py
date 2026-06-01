@@ -9,22 +9,252 @@ Parlay assumptions:
 """
 
 import itertools
+from typing import Optional
 
 import config
 from engine.market import american_to_decimal, decimal_to_american
 from engine.ev import expected_value_pct
 
 
-def build_best_parlay(ranked_picks: list[dict]) -> dict | None:
+# ── Profile definitions ────────────────────────────────────────────────────────
+
+def _parse_pct(val) -> Optional[float]:
+    """Parse '5.2%' → 0.052, or 0.052 → 0.052. Returns None for '--' or invalid."""
+    if val is None or val == "--":
+        return None
+    try:
+        s = str(val).replace("%", "").strip()
+        f = float(s)
+        return f / 100.0 if f > 1.5 else f
+    except (ValueError, TypeError):
+        return None
+
+
+def _parse_float(val) -> Optional[float]:
+    """Parse a numeric string or float. Returns None for '--' or invalid."""
+    if val is None or val == "--":
+        return None
+    try:
+        return float(str(val).strip())
+    except (ValueError, TypeError):
+        return None
+
+
+def _score_pure_power(player: dict) -> float:
+    """
+    💣 PURE POWER + LIFT — Most Reliable HR Profile.
+    Signals: xSLG (power ceiling), barrel%, launch angle in 10-25° sweet zone.
+    """
+    score = 0.0
+
+    # xSLG: normalised around league avg 0.405; elite players near 0.600+
+    xslg = _parse_float(player.get("xslg"))
+    if xslg is not None:
+        score += min(2.0, max(0.0, (xslg - 0.300) / 0.250)) * 0.40
+
+    # Barrel%: 10% barrel rate is elite; weights most heavily
+    barrel = _parse_pct(player.get("barrel_pct"))
+    if barrel is not None:
+        score += min(2.0, max(0.0, barrel / 0.10)) * 0.40
+
+    # Launch angle sweet zone bonus
+    la = _parse_float(player.get("avg_launch_angle"))
+    if la is not None:
+        if 10.0 <= la <= 25.0:
+            score += 0.20      # ideal HR angle band
+        elif 8.0 <= la <= 30.0:
+            score += 0.10
+
+    return score
+
+
+def _score_hidden_power(player: dict) -> float:
+    """
+    ⚡ HIDDEN POWER (BREAKOUT EDGE) — Best For Value.
+    Signals: exit velocity, hard-hit% (proxy for blasts), xSLGdiff > 0
+    (xSLG > actual SLG = player underperforming expected contact quality — breakout candidate).
+    """
+    score = 0.0
+
+    # Exit velocity: normalised; 95+ mph is elite contact
+    ev = _parse_float(player.get("exit_velo"))
+    if ev is not None:
+        score += min(2.0, max(0.0, (ev - 82.0) / 14.0)) * 0.35
+
+    # Hard-hit% (proxy for blasts_contact): 50%+ is elite
+    hh = _parse_pct(player.get("hard_hit"))
+    if hh is not None:
+        score += min(2.0, max(0.0, hh / 0.50)) * 0.35
+
+    # xSLGdiff = xSLG − actual SLG: positive means underperforming expected → hidden power
+    xslg_diff = _parse_float(player.get("xslg_diff"))
+    if xslg_diff is not None:
+        if xslg_diff > 0:
+            score += min(1.0, xslg_diff / 0.100) * 0.30
+        elif xslg_diff < -0.05:
+            score -= 0.10   # slight penalty for over-performers (regression risk)
+
+    return score
+
+
+def _score_consistent_damage(player: dict) -> float:
+    """
+    🎯 CONSISTENT DAMAGE PROFILE — Safe + Parlay Builder.
+    Signals: sweet spot% (solid contact proxy), hard-hit%, fly ball%.
+    """
+    score = 0.0
+
+    # Sweet spot% (LA 8-32°, proxy for solidcontact_percent): 40%+ is elite
+    ss = _parse_pct(player.get("sweet_spot_pct"))
+    if ss is not None:
+        score += min(2.0, max(0.0, ss / 0.40)) * 0.35
+
+    # Hard-hit%
+    hh = _parse_pct(player.get("hard_hit"))
+    if hh is not None:
+        score += min(2.0, max(0.0, hh / 0.50)) * 0.35
+
+    # Fly ball%: more fly balls = more HR opportunities; 35%+ is elite (Savant fb_rate scale)
+    fb = _parse_pct(player.get("fb_pct"))
+    if fb is not None:
+        score += min(2.0, max(0.0, fb / 0.35)) * 0.30
+
+    return score
+
+
+_PROFILES = [
+    {
+        "key":      "pure_power",
+        "name":     "💣 PURE POWER + LIFT",
+        "subtitle": "MOST RELIABLE HR PROFILE",
+        "desc":     "Targets elite xSLG, barrel rate, and launch angle in the 10–25° sweet zone.",
+        "score_fn": _score_pure_power,
+    },
+    {
+        "key":      "hidden_power",
+        "name":     "⚡ HIDDEN POWER (BREAKOUT EDGE)",
+        "subtitle": "BEST FOR VALUE",
+        "desc":     "Targets hard exit velocity and xSLG > actual SLG — players underperforming their expected contact quality.",
+        "score_fn": _score_hidden_power,
+    },
+    {
+        "key":      "consistent_damage",
+        "name":     "🎯 CONSISTENT DAMAGE PROFILE",
+        "subtitle": "SAFE + PARLAY BUILDER",
+        "desc":     "Targets sweet spot%, hard-hit%, and fly ball% — consistent damage production regardless of matchup.",
+        "score_fn": _score_consistent_damage,
+    },
+]
+
+
+def build_profile_parlays(
+    all_players: list[dict],
+    n_combos: int = 3,
+    leg_size: int = 3,
+) -> list[dict]:
+    """
+    Build top-N diverse combos for each of the 3 stat profiles.
+    Candidates drawn from top-20 profile scorers; ranked 60% by EV, 40% by profile fit.
+    Returns a list of profile result dicts (one per profile).
+    """
+    # Require positive EV — profile parlays should never include -EV legs
+    # even if those players have elite Statcast metrics.
+    pool = [p for p in all_players
+            if p.get("best_american") and p.get("model_prob", 0) > 0
+            and p.get("ev_pct", 0) > 0]
+
+    results = []
+    for profile in _PROFILES:
+        score_fn = profile["score_fn"]
+
+        # Score all eligible players on this profile
+        scored_players = sorted(
+            [(score_fn(p), p) for p in pool],
+            key=lambda x: x[0], reverse=True,
+        )
+        candidates = [p for _, p in scored_players[:min(20, len(scored_players))]]
+
+        if len(candidates) < leg_size:
+            results.append({**profile, "score_fn": None, "combos": []})
+            continue
+
+        # Evaluate every combination within the candidate pool
+        scored_combos = []
+        for combo in itertools.combinations(candidates, leg_size):
+            if not _games_diverse(combo):
+                continue
+            parlay = _evaluate_parlay(list(combo))
+            parlay["profile_score"] = sum(score_fn(leg) for leg in combo) / leg_size
+            scored_combos.append(parlay)
+
+        if not scored_combos:
+            results.append({**profile, "score_fn": None, "combos": []})
+            continue
+
+        # Normalise both dimensions then blend
+        max_ev = max(c["ev_pct"]       for c in scored_combos) or 1.0
+        max_ps = max(c["profile_score"] for c in scored_combos) or 1.0
+        for c in scored_combos:
+            ev_norm = c["ev_pct"]        / max_ev
+            ps_norm = c["profile_score"] / max_ps
+            c["combo_rank"] = 0.60 * ev_norm + 0.40 * ps_norm
+        scored_combos.sort(key=lambda x: x["combo_rank"], reverse=True)
+
+        # Pick diverse top-N — zero player overlap between any two selected combos.
+        # Combo 1 = best group; Combo 2 shares no players with Combo 1;
+        # Combo 3 shares no players with Combo 1 or 2.
+        selected: list[dict] = []
+        used_player_ids: set = set()
+        for candidate in scored_combos:
+            if len(selected) >= n_combos:
+                break
+            cids = {leg["player_id"] for leg in candidate["legs"]}
+            if cids & used_player_ids:   # any overlap → skip
+                continue
+            selected.append(candidate)
+            used_player_ids |= cids
+
+        results.append({**profile, "score_fn": None, "combos": selected})
+
+    return results
+
+
+def _game_key(leg: dict) -> str:
+    """Unique key for the game a player is in. Both home and away players share home_team."""
+    gk = leg.get("game_pk")
+    return str(gk) if gk else leg.get("home_team", "")
+
+
+def _candidate_pool(picks: list[dict]) -> list[dict]:
+    """
+    Filter to picks with odds and positive edge×confidence, then rank by
+    edge_pct × confidence — the product of how much edge we have and how
+    reliable that edge signal is. More predictive than model_prob alone.
+    """
+    eligible = [
+        p for p in picks
+        if p.get("best_american")
+        and p.get("model_prob", 0) > 0
+        and p.get("edge_pct", 0) > 0
+    ]
+    eligible.sort(
+        key=lambda p: p.get("edge_pct", 0) * p.get("confidence", 0),
+        reverse=True,
+    )
+    return eligible[:config.PARLAY_CANDIDATE_POOL]
+
+
+def build_best_parlay(ranked_picks: list[dict]) -> Optional[dict]:
     """Single best parlay across all leg counts (used by CLI display)."""
-    pool = [p for p in ranked_picks[:config.PARLAY_CANDIDATE_POOL]
-            if p.get("best_american") and p.get("model_prob", 0) > 0]
+    pool = _candidate_pool(ranked_picks)
     if len(pool) < config.PARLAY_MIN_LEGS:
         return None
-    best: dict | None = None
+    best: Optional[dict] = None
     best_ev = float("-inf")
     for n_legs in range(config.PARLAY_MIN_LEGS, config.PARLAY_MAX_LEGS + 1):
         for combo in itertools.combinations(pool, n_legs):
+            if not _games_diverse(combo):
+                continue
             parlay = _evaluate_parlay(list(combo))
             if parlay["ev_pct"] > best_ev:
                 best_ev = parlay["ev_pct"]
@@ -41,11 +271,11 @@ def build_auto_parlays(
     Build N diverse top-EV combos for each leg size.
     Returns {2: [combo, combo, combo], 3: [...], 4: [...]}.
 
-    Diversity rule: each new combo must differ by at least 1 player from
-    every already-selected combo of the same leg size.
+    Candidates ranked by edge_pct × confidence. Game-diversity enforced:
+    no two legs may come from the same game. Combo diversity: each selected
+    combo must differ by at least 1 player from every already-selected combo.
     """
-    pool = [p for p in ranked_picks[:config.PARLAY_CANDIDATE_POOL]
-            if p.get("best_american") and p.get("model_prob", 0) > 0]
+    pool = _candidate_pool(ranked_picks)
 
     result: dict[int, list[dict]] = {}
     for n_legs in leg_sizes:
@@ -53,21 +283,20 @@ def build_auto_parlays(
             result[n_legs] = []
             continue
 
-        # Score every combination
         scored = []
         for combo in itertools.combinations(pool, n_legs):
+            if not _games_diverse(combo):
+                continue
             scored.append(_evaluate_parlay(list(combo)))
         scored.sort(key=lambda x: x["ev_pct"], reverse=True)
 
-        # Pick diverse top-N
         selected: list[dict] = []
         for candidate in scored:
             if len(selected) >= n_combos:
                 break
             cids = {leg["player_id"] for leg in candidate["legs"]}
-            # Reject if every player already appears in a selected combo
             too_similar = any(
-                len(cids & {leg["player_id"] for leg in sel["legs"]}) == n_legs
+                len(cids & {leg["player_id"] for leg in sel["legs"]}) > 1
                 for sel in selected
             )
             if not too_similar:
@@ -78,37 +307,52 @@ def build_auto_parlays(
     return result
 
 
+def _games_diverse(combo) -> bool:
+    """True when every leg comes from a different game."""
+    keys = [_game_key(leg) for leg in combo]
+    return len(keys) == len(set(keys))
+
+
 def _evaluate_parlay(legs: list[dict]) -> dict:
     combined_prob = 1.0
     combined_decimal = 1.0
+    combined_ev_prob = 1.0
 
     for leg in legs:
-        combined_prob *= leg["model_prob"]
+        model_p = leg["model_prob"]
+        market_p = leg.get("market_no_vig_prob", 0)
+        # Cap each leg's EV probability at 1.4× market no-vig — same cap as
+        # single-pick EV (pipeline.py) — prevents per-leg edges from compounding
+        # into absurd parlay EV on long-shot lines (+2000, +3000).
+        ev_model_p = min(model_p, market_p * 1.4) if market_p > 0 else model_p
+        combined_prob    *= model_p
+        combined_ev_prob *= ev_model_p
         combined_decimal *= american_to_decimal(leg["best_american"])
 
-    # Parlay pays combined_decimal − 1 on a win
-    ev_pct = expected_value_pct(combined_prob, combined_decimal)
+    ev_pct = expected_value_pct(combined_ev_prob, combined_decimal)
     combined_american = decimal_to_american(combined_decimal)
 
     return {
-        "legs": legs,
-        "n_legs": len(legs),
-        "combined_prob": round(combined_prob, 4),
+        "legs":              legs,
+        "n_legs":            len(legs),
+        "combined_prob":     round(combined_prob, 4),
+        "combined_ev_prob":  round(combined_ev_prob, 4),
         "combined_prob_pct": round(combined_prob * 100, 2),
-        "combined_decimal": round(combined_decimal, 2),
+        "combined_decimal":  round(combined_decimal, 2),
         "combined_american": combined_american,
-        "ev_pct": round(ev_pct, 2),
+        "ev_pct":            round(ev_pct, 2),
     }
 
 
 def parlay_bet_size(parlay: dict, bankroll: float = None) -> float:
     """Kelly-sized parlay bet (more conservative: use 1/8 Kelly for parlays)."""
     if bankroll is None:
-        import config as cfg
-        bankroll = cfg.BANKROLL
+        bankroll = config.BANKROLL
 
     dec = parlay["combined_decimal"]
-    p = parlay["combined_prob"]
+    # Use combined_ev_prob (capped at 1.4× market per leg) to match the EV
+    # calculation — consistent with how single-leg EV is computed.
+    p = parlay.get("combined_ev_prob", parlay["combined_prob"])
     b = dec - 1.0
     if b <= 0 or p <= 0:
         return 0.0

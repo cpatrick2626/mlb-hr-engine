@@ -56,7 +56,7 @@ def _color_conf(conf: float) -> str:
 def print_header(target_date: str = None) -> None:
     day = target_date or date.today().strftime("%Y-%m-%d")
     console.print(Panel(
-        f"[bold white]MLB HOME RUN PROP BETTING ENGINE[/bold white]\n"
+        f"[bold white]CODEX HR ENGINE[/bold white]\n"
         f"[dim]Date: {day}  |  Bankroll: ${config.BANKROLL:,.0f}  |  Kelly Fraction: {config.KELLY_FRACTION:.0%}[/dim]",
         style="bold blue",
         box=box.DOUBLE_EDGE,

@@ -1,4 +1,4 @@
-"""
+﻿"""
 Fetch actual game outcomes (HR yes/no per batter) from MLB Stats API box scores.
 Used by the backtest runner to compare model predictions vs reality.
 """
@@ -11,7 +11,7 @@ import requests
 
 MLB_API = "https://statsapi.mlb.com/api/v1"
 _SESSION = requests.Session()
-_SESSION.headers.update({"User-Agent": "MLB-HR-Engine/3.0"})
+_SESSION.headers.update({"User-Agent": "Codex-HR-Engine/3.0"})
 
 
 def get_date_range(start_date: str, end_date: str) -> list[str]:
@@ -45,12 +45,13 @@ def get_game_results(date_str: str) -> list[dict]:
             rows = _parse_boxscore(game, box)
             results.extend(rows)
             time.sleep(0.15)  # be polite to the API
-        except Exception:
+        except Exception as e:
+            print(f"[outcomes] skip game {game.get('game_pk', '?')}: {e}")
             continue
     return results
 
 
-# ── Internal ──────────────────────────────────────────────────────────────────
+# â”€â”€ Internal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def _get(path: str, params: dict = None) -> dict:
     resp = _SESSION.get(f"{MLB_API}{path}", params=params, timeout=15)
@@ -63,7 +64,7 @@ def _get_schedule_final(date_str: str) -> list[dict]:
     data = _get("/schedule", {
         "sportId": 1,
         "date": date_str,
-        "hydrate": "probablePitcher,team,lineups",
+        "hydrate": "team",
     })
     games = []
     for date_entry in data.get("dates", []):
@@ -74,10 +75,9 @@ def _get_schedule_final(date_str: str) -> list[dict]:
             home = g.get("teams", {}).get("home", {})
             away = g.get("teams", {}).get("away", {})
             games.append({
-                "game_pk":    g.get("gamePk"),
-                "home_team":  home.get("team", {}).get("abbreviation", ""),
-                "away_team":  away.get("team", {}).get("abbreviation", ""),
-                "lineups":    g.get("lineups", {}),
+                "game_pk":   g.get("gamePk"),
+                "home_team": home.get("team", {}).get("abbreviation", ""),
+                "away_team": away.get("team", {}).get("abbreviation", ""),
             })
     return games
 
@@ -114,7 +114,7 @@ def _parse_boxscore(game: dict, box: dict) -> list[dict]:
                 order = int(order_str)
             except ValueError:
                 continue
-            # Only starting batters (100, 200, ..., 900) — bench guys are 101, 201, etc.
+            # Only starting batters (100, 200, ..., 900) â€” bench guys are 101, 201, etc.
             if order % 100 != 0:
                 continue
             lineup_spot = order // 100
@@ -136,3 +136,4 @@ def _parse_boxscore(game: dict, box: dict) -> list[dict]:
             })
 
     return rows
+

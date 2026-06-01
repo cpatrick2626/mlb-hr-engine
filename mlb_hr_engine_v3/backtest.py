@@ -1,5 +1,5 @@
-"""
-MLB HR Engine v3 — Backtest Runner
+﻿"""
+Codex HR Engine v3 â€” Backtest Runner
 ====================================
 Scores the v3 model against actual historical game results and prints
 a calibration report showing how well predicted probabilities match reality.
@@ -16,7 +16,7 @@ Output:
 
 Note:
   Uses current season stats (not stats-as-of-date), so early-season results
-  have minimal look-ahead bias — most 2026 PA are < 30, so prior-year stats
+  have minimal look-ahead bias â€” most 2026 PA are < 30, so prior-year stats
   are used anyway. Later in the season, treat calibration as approximate.
 """
 
@@ -60,7 +60,7 @@ def run():
     start_date, end_date = parse_args()
     dates = get_date_range(start_date, end_date)
 
-    console.print(f"\n[bold blue]MLB HR ENGINE v3 — BACKTEST[/bold blue]")
+    console.print(f"\n[bold blue]CODEX HR ENGINE v3 â€” BACKTEST[/bold blue]")
     console.print(f"[dim]Date range: {start_date} to {end_date}  ({len(dates)} days)[/dim]\n")
 
     # Pre-fetch Statcast once (cached for the whole session)
@@ -106,7 +106,7 @@ def run():
         console.print(f"[dim]Skipped {len(skipped_dates)} date(s) with no games or errors.[/dim]\n")
 
     if not all_rows:
-        console.print("[red]No data collected — cannot generate report.[/red]")
+        console.print("[red]No data collected â€” cannot generate report.[/red]")
         sys.exit(1)
 
     console.print(f"[dim]Collected {len(all_rows)} batter-game records across "
@@ -126,3 +126,4 @@ if __name__ == "__main__":
         import traceback
         traceback.print_exc()
         sys.exit(1)
+

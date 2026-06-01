@@ -1,5 +1,5 @@
-"""
-MLB Stats API client — free, no API key required.
+﻿"""
+MLB Stats API client â€” free, no API key required.
 Docs: https://statsapi.mlb.com/docs/
 """
 
@@ -12,7 +12,7 @@ import config
 
 MLB_API = "https://statsapi.mlb.com/api/v1"
 _SESSION = requests.Session()
-_SESSION.headers.update({"User-Agent": "MLB-HR-Engine/1.0"})
+_SESSION.headers.update({"User-Agent": "Codex-HR-Engine/1.0"})
 
 
 def _get(path: str, params: dict = None) -> dict:
@@ -169,7 +169,7 @@ def get_player_recent_stats(player_id: int) -> dict:
 
 def get_pitcher_season_stats(pitcher_id: int) -> dict:
     """
-    Pitching stats — current season with prior-year fallback.
+    Pitching stats â€” current season with prior-year fallback.
     Includes airOuts for HR/FB calculation (v2 enhancement).
     """
     try:
@@ -235,7 +235,7 @@ def get_player_platoon_splits(player_id: int) -> dict:
 
 
 def get_player_info(player_id: int) -> dict:
-    """Minimal bio — bats, position, full name."""
+    """Minimal bio â€” bats, position, full name."""
     try:
         data = _get(f"/people/{player_id}", {"hydrate": "currentTeam"})
         people = data.get("people", [])
@@ -250,3 +250,4 @@ def _first_splits(data: dict) -> Optional[dict]:
         return None
     splits = stats_list[0].get("splits", [])
     return splits[0] if splits else None
+

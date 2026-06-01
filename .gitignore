@@ -1,5 +1,6 @@
 # Python
 __pycache__/
+**/__pycache__/
 *.pyc
 *.pyo
 *.pyd
@@ -11,21 +12,71 @@ build/
 # Environment / secrets
 .env
 *.env
-.streamlit/secrets.toml
 
 # Tracking data (generated at runtime — not source code)
-mlb_hr_engine_v1/tracking/*.csv
-mlb_hr_engine_v2/tracking/*.csv
+codex_hr_engine_v1/tracking/*.csv
+codex_hr_engine_v2/tracking/*.csv
+mlb_hr_engine_v4/tracking/*.csv
+mlb_hr_engine_v4/tracking/*.bak
+
+# Runtime caches and generated data files
+mlb_hr_engine_v4/data/odds_cache.json
+fb_pct_raw_data.csv
 
 # Compare script temp outputs
 compare_v1.json
 compare_v2.json
 
 # Manual odds (user-filled, not source code)
-mlb_hr_engine_v1/manual_odds.csv
-mlb_hr_engine_v2/manual_odds.csv
+codex_hr_engine_v1/manual_odds.csv
+codex_hr_engine_v2/manual_odds.csv
+
+# Fly.io
+.fly/
 
 # OS
 .DS_Store
 Thumbs.db
 desktop.ini
+# Local temp / runtime junk
+.pycache_tmp/
+logs/
+*.log
+
+# Local notes / scratch files
+New Text Document.txt
+
+# Streamlit runtime/cache
+.streamlit/
+!.streamlit/config.toml
+.streamlit/secrets.toml
+
+# Runtime learning state
+tracking/*.json
+mlb_hr_engine_v4/tracking/*.json
+
+# Generated reports/outputs
+reports/
+**/reports/
+portfolio_analysis_output.txt
+temp/
+tmp/
+cache/temp/
+.claude/settings.local.json
+
+# Obsidian vault - local only files
+MLB HR ENGINE/.obsidian/workspace.json
+MLB HR ENGINE/.obsidian/workspace-mobile.json
+MLB HR ENGINE/.obsidian/graph.json
+
+# Allow vault reports to be committed
+!MLB HR ENGINE/reports/
+
+# Obsidian plugin binaries — do not commit
+MLB HR ENGINE/.obsidian/plugins/*/main.js
+MLB HR ENGINE/.obsidian/plugins/*/data.json
+MLB HR ENGINE/.obsidian/plugins/*/styles.css
+MLB HR ENGINE/.obsidian/plugins/*/manifest.json
+
+# Obsidian config files — keep these
+# community-plugins.json and app.json already tracked

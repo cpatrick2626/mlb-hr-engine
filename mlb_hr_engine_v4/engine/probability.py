@@ -12,54 +12,170 @@ import math
 from typing import Optional
 
 import config
-from data.park_factors import get_park
+from data.park_factors import get_park, get_park_hr_factor
 from clients import weather as weather_client
 
 
-def base_hr_rate(season_stats: dict, recent_stats: dict) -> float:
+def base_hr_rate(
+    season_stats: dict,
+    recent_stats: dict,
+    statcast_mult: float = 1.0,
+    recent_weight: float | None = None,
+    barrel_rate: float = 0.0,
+) -> float:
     season_pa = int(season_stats.get("plateAppearances", 0))
     season_hr = int(season_stats.get("homeRuns", 0))
     recent_pa = int(recent_stats.get("plateAppearances", 0))
     recent_hr = int(recent_stats.get("homeRuns", 0))
 
+    # When Statcast signals below-average power, reduce the Bayesian regression target
+    # proportionally. This prevents the league-mean anchor from inflating predictions for
+    # true contact hitters who are never going to hit HRs. Only adjusts downward (mult >= 1
+    # keeps the unbiased league-avg prior so power hitters aren't double-boosted here).
+    # Floor lowered 0.40→0.30: a player with statcast_mult=0.25 was anchored to 40% of
+    # league avg (over-prediction); 0.30 floor is more faithful to the signal. The zero-HR
+    # suppressor (lines ~75-89) provides additional discounting on top of this anchor.
+    #
+    # Elite regression target ceiling (Session 23): for confirmed high-barrel hitters
+    # (barrel_rate >= ELITE_REG_TARGET_BARREL_THRESHOLD), the ceiling is raised above 1.0
+    # so the Bayesian anchor reflects their elevated power level rather than pulling them
+    # toward league average. Analysis: V1a variant improved Brier by 0.00027 with zero
+    # change to barrel<8% batters. Rollback: ELITE_REG_TARGET_ENABLED=False in config.py.
+    if (getattr(config, "ELITE_REG_TARGET_ENABLED", False)
+            and statcast_mult > 1.0
+            and barrel_rate >= getattr(config, "ELITE_REG_TARGET_BARREL_THRESHOLD", 0.08)):
+        ceiling = getattr(config, "ELITE_REG_TARGET_CEILING", 1.5)
+        reg_target_adj = max(0.30, min(ceiling, statcast_mult))
+    else:
+        reg_target_adj = max(0.30, min(1.0, statcast_mult))
+    regression_target = config.LEAGUE_AVG_HR_PA * reg_target_adj
+
+    # Adaptive regression: reduce prior weight as sample grows, floored at 50% of
+    # REGRESSION_PA so the league-mean anchor never disappears entirely.
+    # Reduced floor 0.55→0.50: lets established hitters (300+ PA) carry slightly more
+    # weight on their own observed rate; addresses 10-15% bucket under-prediction.
+    # Dynamic prior: scale REGRESSION_PA down as sample builds.
+    # At 0 PA: full 200 PA prior. At 300 PA: ~100 PA prior. Floor at 80 PA
+    # so the league-mean anchor never disappears for even large samples.
+    # This lets elite hitters (high barrel%, high season HR rate) escape the
+    # league-mean anchor faster without removing the prior entirely.
+    _dynamic_reg = max(80, int(config.REGRESSION_PA * max(0.40, 1.0 - season_pa / 500.0)))
+    effective_reg = (_dynamic_reg
+                     if season_pa > 0 else config.REGRESSION_PA)
     regressed_season = (
-        (season_hr + config.REGRESSION_PA * config.LEAGUE_AVG_HR_PA)
-        / (season_pa + config.REGRESSION_PA)
-    ) if season_pa > 0 else config.LEAGUE_AVG_HR_PA
+        (season_hr + effective_reg * regression_target)
+        / (season_pa + effective_reg)
+    ) if season_pa > 0 else regression_target
 
     if recent_pa >= config.MIN_RECENT_PA:
         recent_rate = recent_hr / recent_pa
         recent_trust = min(recent_pa / 100.0, 1.0)
         blended_recent = recent_rate * recent_trust + regressed_season * (1 - recent_trust)
-        rate = config.RECENT_WEIGHT * blended_recent + config.SEASON_WEIGHT * regressed_season
+        _rw = config.RECENT_WEIGHT if recent_weight is None else recent_weight
+        rate = _rw * blended_recent + (1.0 - _rw) * regressed_season
     else:
         rate = regressed_season
 
-    # ISO adjustment: stabilizes in ~150-200 PA vs ~300 PA for HR/PA.
-    # Fades to zero influence once sample is large enough to trust HR/PA directly.
+    # ISO adjustment: stabilizes in ~150 PA vs ~300 PA for HR/PA.
+    # Fades linearly from 20% weight at 0 PA to 0% at 150 PA — matches stabilization point.
     try:
         slg = float(season_stats.get("sluggingPercentage", 0) or 0)
         avg = float(season_stats.get("avg", 0) or 0)
         iso = max(0.0, slg - avg)
         if iso > 0 and season_pa >= 30:
             iso_mult = max(0.70, min(1.50, iso / config.LEAGUE_AVG_ISO))
-            iso_trust = max(0.0, min(0.20, 1.0 - season_pa / 300.0))
+            iso_trust = max(0.0, 0.20 * (1.0 - min(season_pa / 150.0, 1.0)))
             rate = rate * (1.0 - iso_trust) + rate * iso_mult * iso_trust
     except (ValueError, TypeError):
         pass
 
-    return max(rate, 0.001)
+    # Zero-HR evidence suppressor: zero HRs through significant PA is strong contact-hitter
+    # signal the Bayesian regression can't fully capture due to its regression floor.
+    # Threshold lowered 50→30 PA: backtest showed 0-5% bucket over-predicts by 0.8pp
+    # across all runs; early-season batters with 30-49 PA and 0 HRs were getting no discount.
+    # Scales from 0.95x at 30 PA down to 0.50x at 250+ PA; no effect when season_hr > 0.
+    if season_hr == 0 and season_pa >= 30:
+        zero_hr_trust = max(0.50, 1.0 - 0.50 * min(season_pa / 250.0, 1.0))
+        rate = rate * zero_hr_trust
+
+    # Very-low-HR suppressor: extends contact-hitter discounting to players with 1-2 HRs
+    # whose observed rate is below 40% of league avg (< ~1.1% HR/PA). Bayesian regression
+    # still pulls them toward league mean despite near-zero power evidence.
+    # Fades in from 100→250 PA so small-sample 1-HR batters aren't penalised too early.
+    elif season_hr in (1, 2) and season_pa >= 100:
+        obs_rate = season_hr / season_pa
+        threshold = config.LEAGUE_AVG_HR_PA * 0.40
+        if obs_rate < threshold:
+            low_hr_fac = max(0.75, obs_rate / threshold)
+            pa_trust = min(1.0, (season_pa - 100) / 150.0)
+            rate = rate * (1.0 - pa_trust * (1.0 - low_hr_fac))
+
+    return max(0.001, min(0.15, rate))
 
 
-def statcast_blended_rate(raw_rate: float, statcast_power_mult: float, season_pa: int) -> float:
+def statcast_blended_rate(
+    raw_rate: float,
+    statcast_power_mult: float,
+    season_pa: int,
+    statcast_pa: int = 0,
+    statcast_source: str = "current",
+) -> float:
     """
     Blend raw HR/PA with Statcast power adjustment.
     When sample is small (early season), weight Statcast more — it stabilizes in ~50 PA.
+    Asymmetric boost: when multiplier signals suppression (mult < 1), give Statcast
+    extra weight so true contact/speed players get pulled down more aggressively.
+    This is one-sided — we don't amplify the upside here, as the adaptive regression
+    already lets large-sample power hitters rise closer to their true rate.
+
+    statcast_pa: PA count in the Statcast source (0 = unknown or prior-year full season).
+    statcast_source: "current", "blended", or "prior".
+      - "current" with statcast_pa < 30: halve Statcast weight — multiplier built from
+        too few batted balls to trust fully.
+      - "prior" or "blended": prior-year data is a full season; use full base weight.
     """
-    statcast_weight = max(0.15, 1.0 - (season_pa / 350.0))
+    # Floor raised 0.15→0.18: at 350+ PA, Statcast now contributes 18% vs 15% of the
+    # blended rate — small but systematic lift for established hitters in the 10-15% bucket.
+    pa_weight = max(0.18, 1.0 - (season_pa / 350.0))
+
+    # Reduce Statcast weight when current-year sample is sparse.
+    # Only applies to "blended" players (curr_pa < MIN_CURRENT_YEAR_PA=50) — "current"
+    # players by definition have >= 50 PA so 0 < pa < 50 is never true for them.
+    # "prior" is a full prior season and earns full base weight.
+    if statcast_source == "blended" and 0 < statcast_pa < config.MIN_CURRENT_YEAR_PA:
+        pa_weight *= 0.50
+
+    suppression_signal = max(0.0, 1.0 - statcast_power_mult)
+    boost = min(0.20, 0.40 * suppression_signal)
+    statcast_weight = min(0.65, pa_weight + boost)
     raw_weight = 1.0 - statcast_weight
-    statcast_rate = raw_rate * statcast_power_mult
-    return max(raw_weight * raw_rate + statcast_weight * statcast_rate, 0.001)
+
+    # Damp Statcast upside so base pa_weight doesn't double-boost elite power hitters.
+    # 0.42 factor — nudged down from 0.45 after backtest confirmed 20-25% still over-predicted.
+    # 0.44 was tested post-pitcher-inversion-fix but had no effect on 10-15% bucket (+0.9pp gap
+    # is structural, not driven by this factor) and slightly hurt 25-30% calibration.
+    if statcast_power_mult > 1.0:
+        effective_mult = 1.0 + (statcast_power_mult - 1.0) * 0.42
+    else:
+        effective_mult = statcast_power_mult
+
+    statcast_rate = raw_rate * effective_mult
+    return max(0.001, min(0.15, raw_weight * raw_rate + statcast_weight * statcast_rate))
+
+
+def early_season_suppressor(season_pa: int, statcast_source: str) -> float:
+    """
+    Reduces HR rate when relying on prior-year Statcast with sparse current-season PA.
+    Without current-year batted-ball validation, prior-year data over-predicts average hitters.
+
+    source="prior"  : 0.80x at 0 PA → 1.0x at 100 PA (pure prior-year, no 2026 signal)
+    source="blended": 0.88x at 0 PA → 1.0x at 100 PA (some current data, less discount)
+    source="current": no discount — player has established 2026 Statcast form
+    """
+    if statcast_source == "current" or season_pa >= 100:
+        return 1.0
+    base = 0.80 if statcast_source == "prior" else 0.88
+    return round(base + (1.0 - base) * min(season_pa / 100.0, 1.0), 3)
 
 
 def batter_k_suppressor(season_stats: dict) -> float:
@@ -73,8 +189,10 @@ def batter_k_suppressor(season_stats: dict) -> float:
     if pa < 50:
         return 1.0
     k_pct = k / pa
-    factor = 1.0 - max(0.0, 0.60 * (k_pct - 0.225))
-    return round(max(0.85, min(1.0, factor)), 3)
+    # Reduced 0.60→0.45: Statcast barrel%/exit velo already captures much of the
+    # contact-quality impact of high K rates; 0.60 was partially double-counting.
+    factor = 1.0 - max(0.0, 0.45 * (k_pct - 0.225))
+    return round(max(0.87, min(1.0, factor)), 3)
 
 
 def pitcher_recent_factor(recent_pitcher_stats: dict) -> float:
@@ -90,21 +208,41 @@ def pitcher_recent_factor(recent_pitcher_stats: dict) -> float:
     recent_hr9 = (hrs / ip) * 9.0
     reg_ip = 30
     regressed = (recent_hr9 * ip + config.LEAGUE_AVG_HR9 * reg_ip) / (ip + reg_ip)
-    direction = config.LEAGUE_AVG_HR9 / max(regressed, 0.1)
+    direction = regressed / config.LEAGUE_AVG_HR9
     trust = min(ip / 40.0, 0.30)
     return round(max(0.80, min(1.20, 1.0 + trust * (direction - 1.0))), 3)
 
 
+def pitcher_fatigue_factor(days_rest: int) -> float:
+    """
+    Adjusts pitcher HR allowance based on days since last start.
+    Short rest → more HRs; standard 5-day rest → baseline.
+    Extra rest (6+ days): no adjustment. Research on extra-rest HR rates is
+    ambiguous; prior 0.99→0.97 linear decay assumed pitcher advantage with no
+    empirical backtest support and could mis-price batters facing rested pitchers.
+    """
+    if days_rest <= 2:
+        return 1.08
+    if days_rest == 3:
+        return 1.04
+    if days_rest == 4:
+        return 1.01
+    return 1.00  # standard 5-day rotation and all extra rest: no adjustment
+
+
 def pitcher_hr_factor(pitcher_stats: dict) -> float:
     """
-    v2: HR/FB composite (blends HR/9 with HR per fly ball).
+    HR/FB composite (blends HR/9 with HR per fly ball).
     HR/FB separates fly ball rate from HR conversion rate — more predictive.
     MLB Stats API: homeRuns + airOuts => fly balls faced.
     """
-    innings_str = pitcher_stats.get("inningsPitched", "0.0")
+    innings_raw = pitcher_stats.get("inningsPitched", "0.0")
     try:
-        parts = str(innings_str).split(".")
-        ip = int(parts[0]) + int(parts[1]) / 3.0 if len(parts) > 1 else float(innings_str)
+        if isinstance(innings_raw, (int, float)):
+            ip = float(innings_raw)
+        else:
+            parts = str(innings_raw).split(".")
+            ip = int(parts[0]) + int(parts[1]) / 3.0 if len(parts) > 1 else float(innings_raw)
     except Exception:
         ip = 0.0
 
@@ -118,16 +256,15 @@ def pitcher_hr_factor(pitcher_stats: dict) -> float:
     hr9 = (hrs / ip) * 9.0
     reg_ip = 50
     reg_hr9 = (hr9 * ip + config.LEAGUE_AVG_HR9 * reg_ip) / (ip + reg_ip)
-    hr9_factor = config.LEAGUE_AVG_HR9 / max(reg_hr9, 0.1)
+    hr9_factor = reg_hr9 / config.LEAGUE_AVG_HR9
 
     # HR/FB component
     fly_balls = hrs + air_outs
-    LEAGUE_HR_FB = 0.125
     if fly_balls > 20:
         hr_fb = hrs / fly_balls
         reg_fb = 100
-        reg_hr_fb = (hr_fb * fly_balls + LEAGUE_HR_FB * reg_fb) / (fly_balls + reg_fb)
-        hr_fb_factor = reg_hr_fb / LEAGUE_HR_FB
+        reg_hr_fb = (hr_fb * fly_balls + config.LEAGUE_HR_FB * reg_fb) / (fly_balls + reg_fb)
+        hr_fb_factor = reg_hr_fb / config.LEAGUE_HR_FB
         fb_trust = min(fly_balls / 200.0, 1.0)
         combined = (1.0 - fb_trust) * hr9_factor + fb_trust * hr_fb_factor
     else:
@@ -138,32 +275,40 @@ def pitcher_hr_factor(pitcher_stats: dict) -> float:
 
 def pitcher_k_gb_suppressor(pitcher_stats: dict) -> float:
     """
-    K% + GB% combined suppressor.
-    K% → fewer balls in play → fewer HR opportunities.
+    K% + GB% + BB% combined suppressor.
+    K%  → fewer balls in play → fewer HR opportunities (most stable metric, r~0.85 YoY).
     GB% → fewer fly balls → lower HR conversion rate.
-    Both are more stable indicators than raw HR/9.
+    BB% → poor command → more hittable counts → more HRs (each 1pp above avg adds ~0.4%).
     """
     k  = int(pitcher_stats.get("strikeOuts", 0))
+    bb = int(pitcher_stats.get("baseOnBalls", 0))
     bf = int(pitcher_stats.get("battersFaced", 0))
     go = int(pitcher_stats.get("groundOuts", 0))
     ao = int(pitcher_stats.get("airOuts", 0))
 
-    # K% factor — 22.5% is league avg; each 5pp above reduces HR prob ~4%
+    # K% factor — 22.5% league avg; each 5pp above reduces HR prob ~4%
     if bf >= 30:
-        k_pct  = k / bf
+        k_pct    = k / bf
         k_factor = max(0.82, min(1.12, 1.0 - 0.80 * (k_pct - 0.225)))
     else:
         k_factor = 1.0
 
-    # GB% factor — 44% is league avg on outs; high GB = strong HR suppressor
+    # GB% factor — 44% league avg on outs; high GB = strong HR suppressor
     total_outs = go + ao
     if total_outs >= 50:
-        gb_pct   = go / total_outs
+        gb_pct    = go / total_outs
         gb_factor = max(0.86, min(1.12, 1.0 - 0.45 * (gb_pct - 0.44)))
     else:
         gb_factor = 1.0
 
-    return max(0.76, min(1.18, k_factor * gb_factor))
+    # BB% factor — 8.5% league avg; high walk rate signals poor command → more HRs
+    if bf >= 30:
+        bb_pct    = bb / bf
+        bb_factor = max(0.92, min(1.08, 1.0 + 0.50 * (bb_pct - 0.085)))
+    else:
+        bb_factor = 1.0
+
+    return max(0.72, min(1.20, k_factor * gb_factor * bb_factor))
 
 
 def pitcher_combined_factor(
@@ -172,12 +317,15 @@ def pitcher_combined_factor(
     k_gb_fac: float = 1.0,
 ) -> float:
     """
-    Weighted blend of three independent pitcher HR signals:
-      40% HR/FB rate (most HR-specific)
-      35% Statcast contact quality against
-      25% K% + GB% suppressor (ball-in-play profile)
+    Weighted geometric mean of three independent pitcher HR signals:
+      40% Statcast contact quality against (barrel%, FB%, EV against) — most HR-specific
+      35% HR/FB rate — direct but noisy (YoY r~0.30); regressed heavily
+      25% K% + GB% + BB% suppressor — stable (K% YoY r~0.85), adds command signal
+
+    Shifted 5% weight from HR/FB to K/GB/BB: HR/FB is the noisiest signal and regresses
+    heavily to the mean; K% and BB% are more stable and improve year-to-year discrimination.
     """
-    combined = pitcher_hr_fac * 0.45 + statcast_contact_fac * 0.35 + k_gb_fac * 0.20
+    combined = (statcast_contact_fac ** 0.40) * (pitcher_hr_fac ** 0.35) * (k_gb_fac ** 0.25)
     return max(0.55, min(1.60, combined))
 
 
@@ -200,7 +348,10 @@ def platoon_factor(splits: dict, pitcher_hand: str, batter_side: str, season_pa:
     vl_pa   = splits.get("vl_pa", 0)
     vr_pa   = splits.get("vr_pa", 0)
 
-    if not split_rate or (vl_rate + vr_rate) == 0:
+    if split_rate is None or (vl_rate == 0 and vr_rate == 0):
+        # split_rate is None: player has no PA logged vs this pitcher hand this season.
+        # both rates == 0: player has PA vs both hands but 0 HRs — total_rate = 0, can't regress;
+        # fall back to handedness heuristic rather than divide by zero.
         b, p = batter_side[0].upper(), pitcher_hand[0].upper()
         if b == "S":
             return 1.03
@@ -211,8 +362,14 @@ def platoon_factor(splits: dict, pitcher_hand: str, batter_side: str, season_pa:
     total_rate = ((vl_rate * vl_pa + vr_rate * vr_pa) / total_pa
                   if total_pa > 0 else (vl_rate + vr_rate) / 2.0)
 
-    # Bayesian shrinkage — use actual split PA if available, else season proxy
-    n = split_pa if split_pa > 0 else int(season_pa * 0.4)
+    # Bayesian shrinkage — use actual split PA if available.
+    # Proxy: ~28% of MLB PA come vs LHP, ~72% vs RHP (league-wide averages).
+    if split_pa > 0:
+        n = split_pa
+    elif split_key == "vl":
+        n = int(season_pa * 0.28)
+    else:
+        n = int(season_pa * 0.72)
     SHRINK = 50   # standard constant: 50 PA to trust a split halfway
     trust     = n / (n + SHRINK)
     regressed = trust * split_rate + (1 - trust) * total_rate
@@ -227,60 +384,95 @@ def expected_pa(lineup_spot: Optional[int]) -> float:
     return config.DEFAULT_PA
 
 
-def fly_ball_adjusted_park_factor(park_factor: float, season_stats: dict) -> float:
-    """
-    Scale park HR impact by batter's fly-ball tendency.
-    A batter who hits more fly balls benefits more (or suffers more) from park HR factor.
-    League avg fly-ball rate: ~18% of AB.
-    """
-    fly_balls = int(season_stats.get("flyBalls", 0))
-    ab        = int(season_stats.get("atBats", 1))
-    if ab < 80 or fly_balls == 0:
-        return park_factor
+_LEAGUE_AVG_FB_PCT = config.LEAGUE_AVG_FB_PCT  # canonical source: config.py
+_FB_PARK_SCALE     = config.FB_PARK_SCALE      # FB% deviation scaling; tunable via config
 
-    fb_pct     = fly_balls / ab
-    league_fb  = 0.18
-    fb_dev     = (fb_pct - league_fb) / league_fb   # % above/below avg
-    adjusted   = 1.0 + (park_factor - 1.0) * (1.0 + 0.30 * fb_dev)
+def fly_ball_adjusted_park_factor(park_factor: float, statcast_fb_pct: float = None) -> float:
+    """
+    Scale park HR impact by batter's Statcast fly-ball rate (fb_pct from batted-ball CSV).
+    A high-FB% batter benefits more from a HR-friendly park (and suffers more in a suppressor).
+    Falls back to raw park factor when Statcast fb_pct is unavailable.
+    Scaling magnitude controlled by config.FB_PARK_SCALE (default 0.30).
+    """
+    if statcast_fb_pct is None:
+        return park_factor
+    fb_dev   = (statcast_fb_pct - _LEAGUE_AVG_FB_PCT) / _LEAGUE_AVG_FB_PCT
+    adjusted = 1.0 + (park_factor - 1.0) * (1.0 + _FB_PARK_SCALE * fb_dev)
     return max(0.70, min(1.45, adjusted))
 
 
-def park_factor(home_team: str, batter_is_home: bool) -> float:
+def park_factor(home_team: str, batter_side: str = "") -> float:
+    if batter_side:
+        return get_park_hr_factor(home_team, batter_side)
     return get_park(home_team).get("hr_factor", 1.0)
 
 
-def weather_factor(home_team: str) -> tuple[float, dict]:
-    park = get_park(home_team)
-    is_dome = home_team in weather_client.DOME_TEAMS
-    weather = weather_client.get_game_weather(park["lat"], park["lon"])
-    t_factor = weather_client.temp_factor(weather["temp_f"])
-    w_factor = weather_client.wind_factor(weather["wind_mph"], weather["wind_deg"], is_dome)
-    return max(0.80, min(1.20, t_factor * w_factor)), weather
+_MAX_GAME_HR_PROB = config.MAX_GAME_HR_PROB  # canonical source: config.py
+
+
+def _moderate_context(combined: float, power_mult: float) -> float:
+    """Cap context multiplier for sub-average power batters.
+    Guards against contact batters reaching ≥15% probability solely via context
+    stacking (e.g. park + hittable pitcher + platoon). Elite batters (power_mult≥1.0)
+    are unaffected. Negative context (combined<1.0) is never modified.
+    Controlled by CONTEXT_MODERATION_ENABLED and CONTEXT_MODERATION_LOW_POWER_CAP.
+    """
+    if not getattr(config, "CONTEXT_MODERATION_ENABLED", False):
+        return combined
+    if combined <= 1.0 or power_mult >= 1.0:
+        return combined
+    cap = getattr(config, "CONTEXT_MODERATION_LOW_POWER_CAP", 1.25)
+    return min(combined, cap)
 
 
 def game_hr_probability(
     hr_rate: float, exp_pa: float,
     pk_factor: float = 1.0, pitcher_fac: float = 1.0,
     w_factor: float = 1.0, plat_factor: float = 1.0,
+    power_mult: float = 1.0,
 ) -> float:
-    # Cap combined multiplier — prevents extreme stacking of park + pitcher + weather + platoon
+    try:
+        hr_rate = float(hr_rate)
+        exp_pa = float(exp_pa)
+        pk_factor = float(pk_factor)
+        pitcher_fac = float(pitcher_fac)
+        w_factor = float(w_factor)
+        plat_factor = float(plat_factor)
+        power_mult = float(power_mult)
+    except (TypeError, ValueError):
+        return 0.001
+
+    if not all(math.isfinite(v) for v in (
+        hr_rate, exp_pa, pk_factor, pitcher_fac, w_factor, plat_factor, power_mult
+    )):
+        return 0.001
+
+    hr_rate = max(0.0, hr_rate)
+    exp_pa = max(0.0, exp_pa)
+
+    # Cap combined multiplier — prevents extreme stacking across all factors.
+    # 1.50 ceiling: Coors (1.28) + hittable pitcher + strong platoon edge still fits.
     combined = pk_factor * pitcher_fac * w_factor * plat_factor
-    combined = max(0.42, min(1.82, combined))
+    combined = _moderate_context(combined, power_mult)
+    combined = max(0.42, min(1.50, combined))
     lam = hr_rate * combined * exp_pa
-    return max(0.001, min(0.999, 1.0 - math.exp(-lam)))
+    if not math.isfinite(lam):
+        return 0.001
+    prob = max(0.001, 1.0 - math.exp(-lam))
+    return min(prob, _MAX_GAME_HR_PROB)
 
 
 def hot_streak_factor(short_form: dict, season_stats: dict) -> float:
     """
-    Detect hot/cold form over the last 14 days vs season average.
-    Conservative — capped at ±8% to avoid over-reacting to small samples.
+    Detect hot/cold form over the last SHORT_FORM_GAMES games vs season average.
+    Capped at ±12%: a 3× hot rate yields ~7% boost; true ice-cold streaks reach -11%.
     """
     short_pa = int(short_form.get("plateAppearances", 0))
     short_hr = int(short_form.get("homeRuns", 0))
     season_pa = int(season_stats.get("plateAppearances", 0))
     season_hr = int(season_stats.get("homeRuns", 0))
 
-    if short_pa < 15 or season_pa < 50:
+    if short_pa < 15 or season_pa < 30:
         return 1.0
     season_rate = season_hr / season_pa
     if season_rate < 0.005:
@@ -288,35 +480,64 @@ def hot_streak_factor(short_form: dict, season_stats: dict) -> float:
 
     short_rate = short_hr / short_pa
     relative   = short_rate / season_rate
-    # tanh softens extreme ratios; max ±8% adjustment
-    factor = 1.0 + 0.08 * math.tanh(math.log(max(relative, 0.05)) / 1.5)
-    return max(0.93, min(1.08, factor))
+    # tanh softens extreme ratios; expanded from ±8% — prior ceiling left hot streaks underweighted
+    factor = 1.0 + 0.12 * math.tanh(math.log(max(relative, 0.05)) / 1.5)
+    return max(0.89, min(1.12, factor))
 
 
 def confidence_score(
-    season_pa: int, recent_pa: int,
-    model_prob: float, market_prob: float,
-    has_statcast: bool = False,
+    season_pa: int,
+    model_prob: float,
+    market_prob: float,
+    statcast_source: str = "none",
     barrel_rate: float = 0.0,
     pitcher_hr9: float = 0.0,
+    lineup_confirmed: bool = True,
+    n_books: int = 1,
+    platoon_factor: float = 1.0,
 ) -> float:
     """
-    Confidence score 0-100.
-    Threshold bonuses: Barrel > 12% (+5), Pitcher HR/9 > 1.4 (+4).
+    Confidence score 0–100. Four components, calibration-earned.
+
+      Data Quality    0–30  season PA + Statcast source reliability
+      Contact Quality 0–20  barrel% vs league average (canonical HR metric)
+      Pitcher Matchup 0–20  HR/9 deviation + platoon edge
+      Market Signal   0–30  edge SNR + book consensus
+      Penalty          –8   lineup not confirmed
     """
-    sample_conf    = min(season_pa / 400.0, 1.0) * 35.0
-    recent_conf    = min(recent_pa / 80.0,  1.0) * 20.0
-    statcast_bonus = 8.0 if has_statcast else 0.0
+    # ── 1. Data Quality (0–30) ─────────────────────────────────────────────────
+    pa_conf   = min(season_pa / 350.0, 1.0) * 18.0
+    _SC_BONUS = {"current": 12.0, "blended": 8.0, "prior": 5.0}
+    sc_conf   = _SC_BONUS.get(statcast_source, 0.0)
+    data_quality = pa_conf + sc_conf                                   # 0–30
 
-    # Threshold bonuses (from the weighted factor list)
-    barrel_bonus  = 5.0 if barrel_rate > 0.12 else 0.0          # Barrel > 12%
-    pitcher_bonus = 4.0 if pitcher_hr9 > 1.4  else 0.0          # Pitcher HR/9 > 1.4
+    # ── 2. Contact Quality (0–20) ─────────────────────────────────────────────
+    barrel_dev      = (barrel_rate - config.LEAGUE_AVG_BARREL_RATE) / max(config.LEAGUE_AVG_BARREL_RATE, 0.001)
+    contact_quality = max(0.0, min(20.0, 10.0 + 10.0 * barrel_dev))  # 0–20
 
-    edge = abs(model_prob - market_prob)
-    se   = math.sqrt(model_prob * (1 - model_prob) / max(season_pa, 1))
-    snr  = min(edge / (se + 0.01), 3.0) / 3.0
-    edge_conf = snr * 28.0
+    # ── 3. Pitcher Matchup (0–20) ──────────────────────────────────────────────
+    if pitcher_hr9 > 0 and config.LEAGUE_AVG_HR9 > 0:
+        hr9_dev  = (pitcher_hr9 - config.LEAGUE_AVG_HR9) / config.LEAGUE_AVG_HR9
+        hr9_conf = max(0.0, min(12.0, 6.0 + 6.0 * hr9_dev))
+    else:
+        hr9_conf = 6.0    # neutral when pitcher data unavailable
 
-    total = (sample_conf + recent_conf + edge_conf
-             + statcast_bonus + barrel_bonus + pitcher_bonus)
-    return round(min(total, 100.0), 1)
+    plat_conf       = max(0.0, min(8.0, 4.0 + 8.0 * (platoon_factor - 1.0)))
+    pitcher_matchup = hr9_conf + plat_conf                             # 0–20
+
+    # ── 4. Market Signal (0–30) ────────────────────────────────────────────────
+    # Edge signal: how far model diverges from market (0-21 points)
+    # Normalized: 5pp edge = full score, scales linearly below
+    edge       = abs(model_prob - market_prob)
+    edge_conf  = min(edge / 0.05, 1.0) * 21.0
+
+    # Book consensus: more books agreeing = stronger market signal (0-9 points)
+    books_conf = 9.0 if n_books >= 3 else (6.0 if n_books == 2 else 4.0)
+
+    market_signal = edge_conf + books_conf
+
+    # ── 5. Penalty ─────────────────────────────────────────────────────────────
+    penalty = 0.0 if lineup_confirmed else -8.0
+
+    total = data_quality + contact_quality + pitcher_matchup + market_signal + penalty
+    return round(min(max(total, 0.0), 100.0), 1)

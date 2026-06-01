@@ -56,7 +56,7 @@ def _color_conf(conf: float) -> str:
 def print_header(target_date: str = None) -> None:
     day = target_date or date.today().strftime("%Y-%m-%d")
     console.print(Panel(
-        f"[bold white]MLB HOME RUN PROP BETTING ENGINE[/bold white]\n"
+        f"[bold white]CODEX HR ENGINE[/bold white]\n"
         f"[dim]Date: {day}  |  Bankroll: ${config.BANKROLL:,.0f}  |  Kelly Fraction: {config.KELLY_FRACTION:.0%}[/dim]",
         style="bold blue",
         box=box.DOUBLE_EDGE,
@@ -123,9 +123,9 @@ def print_top_picks(ranked_picks: list[dict]) -> None:
 
 
 def print_model_probabilities(all_players: list[dict], top_n: int = 20) -> None:
-    """v2: includes Statcast barrel% and power multiplier columns."""
+    """Print top-N batter model probabilities with Statcast barrel% and power multiplier columns."""
     console.print(Panel(
-        f"[bold white]MODEL HR PROBABILITIES — TOP {top_n} [dim](v2: Statcast enhanced)[/dim][/bold white]",
+        f"[bold white]MODEL HR PROBABILITIES — TOP {top_n}[/bold white]",
         style="dim blue",
         expand=False,
     ))
@@ -160,7 +160,8 @@ def print_model_probabilities(all_players: list[dict], top_n: int = 20) -> None:
         brl = p.get("barrel_pct", "")
         brl_str = f"[bold]{brl}[/bold]" if brl else "[dim]--[/dim]"
 
-        ev_str = p.get("exit_velo", "") or "[dim]--[/dim]"
+        ev_val = p.get("exit_velo")
+        ev_str = ev_val if (ev_val and ev_val != "--") else "[dim]--[/dim]"
         spot_str = str(p.get("lineup_spot")) if p.get("lineup_spot") else "?"
 
         table.add_row(

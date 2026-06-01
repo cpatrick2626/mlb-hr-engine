@@ -10,6 +10,10 @@ probability bucket as a conservative estimate (since we don't have historical od
 """
 
 import math
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+import config
 from rich.console import Console
 from rich.table import Table
 from rich.panel import Panel
@@ -40,7 +44,7 @@ BUCKET_AVG_ODDS = {
     "30%+":    200,
 }
 
-FLAT_BET = 10.0  # dollars per pick in P&L simulation
+FLAT_BET = config.BACKTEST_FLAT_BET
 
 
 def calibration_report(rows: list[dict], date_range: str) -> None:
@@ -76,12 +80,13 @@ def calibration_report(rows: list[dict], date_range: str) -> None:
     cal_table.add_column("Actual HR%",    width=12, justify="right", no_wrap=True)
     cal_table.add_column("Diff",          width=10, justify="right", no_wrap=True)
     cal_table.add_column("Brier contrib", width=14, justify="right", no_wrap=True)
+    cal_table.add_column("%Curr SC",      width=10, justify="right", no_wrap=True)
 
     brier_sum = 0.0
     for lo, hi, label in BUCKETS:
         bucket = [r for r in rows if lo <= r.get("model_prob", 0) < hi]
         if not bucket:
-            cal_table.add_row(label, "0", "--", "--", "--", "--", "--")
+            cal_table.add_row(label, "0", "--", "--", "--", "--", "--", "--")
             continue
         n        = len(bucket)
         hits     = sum(1 for r in bucket if r.get("hit_hr"))
@@ -91,6 +96,7 @@ def calibration_report(rows: list[dict], date_range: str) -> None:
         brier    = sum((r.get("model_prob", 0) - int(r.get("hit_hr", False)))**2
                        for r in bucket)
         brier_sum += brier
+        curr_pct = sum(1 for r in bucket if r.get("sc_source") == "current") / n
 
         diff_color = "green" if abs(diff) < 0.03 else ("yellow" if abs(diff) < 0.07 else "red")
         cal_table.add_row(
@@ -101,12 +107,16 @@ def calibration_report(rows: list[dict], date_range: str) -> None:
             f"{act_rate*100:.1f}%",
             f"[{diff_color}]{diff*100:+.1f}pp[/{diff_color}]",
             f"{brier:.2f}",
+            f"{curr_pct*100:.0f}%",
         )
 
     console.print(cal_table)
     brier_score = brier_sum / total if total else 0
+    trivial_brier = actual_rate * (1 - actual_rate)  # Brier of a model that predicts the base rate for everyone
+    skill_target  = trivial_brier - 0.005            # meaningful skill: ~5pp better than trivial
     console.print(f"[dim]Brier Score: {brier_score:.4f}  "
-                  f"(lower = better calibration; 0.0 = perfect, ~0.030 = typical for HR props)[/dim]\n")
+                  f"(trivial base-rate model: {trivial_brier:.4f}; "
+                  f"skilled target: <{skill_target:.4f})[/dim]\n")
 
     # ── P&L simulation table ──────────────────────────────────────────────────
     console.print(Panel("[bold white]SIMULATED P&L — Flat $10 per pick at estimated odds[/bold white]",
@@ -137,7 +147,7 @@ def calibration_report(rows: list[dict], date_range: str) -> None:
             mp = r.get("model_prob", 0)
             odds = _est_odds(mp)
             if r.get("hit_hr"):
-                pnl += (odds / 100) * FLAT_BET if odds > 0 else (100 / abs(odds)) * FLAT_BET
+                pnl += (odds / 100) * FLAT_BET
             else:
                 pnl -= FLAT_BET
         roi = pnl / total_bet * 100 if total_bet > 0 else 0
@@ -161,6 +171,13 @@ def calibration_report(rows: list[dict], date_range: str) -> None:
 
     # ── Top performers vs misses ──────────────────────────────────────────────
     _print_top_performers(rows)
+
+    # ── Feature importance ────────────────────────────────────────────────────
+    try:
+        from backtest.feature_importance import report as _fi_report
+        _fi_report(rows)
+    except Exception as _e:
+        console.print(f"[dim]Feature importance skipped: {_e}[/dim]")
 
 
 def _est_odds(model_prob: float) -> int:

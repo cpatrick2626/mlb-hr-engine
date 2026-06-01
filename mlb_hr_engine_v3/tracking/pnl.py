@@ -1,14 +1,14 @@
-"""
-P&L Tracker — logs picks daily and tracks outcomes + profit/loss.
+﻿"""
+P&L Tracker â€” logs picks daily and tracks outcomes + profit/loss.
 
-Files written to mlb_hr_engine_v2/tracking/:
-  picks_log.csv    — every pick ever made (auto-appended each run)
-  results.csv      — picks with outcome filled in (HR yes/no, profit)
+Files written to codex_hr_engine_v2/tracking/:
+  picks_log.csv    â€” every pick ever made (auto-appended each run)
+  results.csv      â€” picks with outcome filled in (HR yes/no, profit)
 
 Workflow:
-  1. main.py calls log_picks() each run → appends to picks_log.csv
+  1. main.py calls log_picks() each run â†’ appends to picks_log.csv
   2. After games end, run:  python tracking/update_results.py
-     → auto-fetches MLB game results and calculates P&L
+     â†’ auto-fetches MLB game results and calculates P&L
   3. display.py calls pnl_summary() to show running totals at the bottom
 """
 
@@ -167,7 +167,7 @@ def pnl_summary() -> dict:
     }
 
 
-# ── Internal helpers ──────────────────────────────────────────────────────────
+# â”€â”€ Internal helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def _append_rows(path: Path, fields: list[str], rows: list[dict]) -> None:
     write_header = not path.exists()
@@ -214,3 +214,4 @@ def _check_player_hr_yesterday(player_id: int, date_str: str) -> bool | None:
         return False
     except Exception:
         return None
+

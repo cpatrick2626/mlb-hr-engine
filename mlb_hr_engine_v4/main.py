@@ -1,11 +1,11 @@
-"""
-MLB HR Prop Betting Engine -- v4
+﻿"""
+Codex HR Engine -- v4
 =================================
 Enhancements over v3:
   - Streamlit web dashboard:  streamlit run app.py
       Tab 1: Today's Picks table
-      Tab 2: Parlays — Auto (2/3/4-leg top-EV combos) + Manual builder
-      Tab 3: Performance — P&L history, CLV tracking
+      Tab 2: Parlays â€” Auto (2/3/4-leg top-EV combos) + Manual builder
+      Tab 3: Performance â€” P&L history, CLV tracking
   - All v3 features: backtest framework, Statcast, platoon splits, P&L + CLV
 
 Run:  python main.py          (CLI)
@@ -16,7 +16,7 @@ Run:  python main.py          (CLI)
 import sys
 import json
 import traceback
-from datetime import date, timedelta
+from datetime import date
 
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn
@@ -65,26 +65,35 @@ def run(dump_json_path: str = None):
     odds_source  = data["odds_source"]
     batter_data  = data["batter_data"]
 
-    # ── Tracking (CLI-only) ───────────────────────────────────────────────────
+    # â”€â”€ Tracking (CLI-only) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if ranked:
         logged = pnl_tracker.log_picks(ranked, model_version=MODEL_VERSION)
         clv_tracker.log_opening_lines(ranked)
         if logged:
             console.print(f"[dim]Logged {logged} picks -> tracking/picks_log.csv[/dim]\n")
+        # Attempt CLV update with current odds — fills in closing lines if run near first pitch.
+        # Safe to call multiple times: overwrites only today's rows.
+        try:
+            clv_results = clv_tracker.fetch_and_compute_clv(target_date)
+            filled = sum(1 for r in clv_results if r.get("clv_pct"))
+            if filled:
+                console.print(f"[dim]CLV updated: {filled}/{len(clv_results)} picks have closing lines[/dim]\n")
+        except Exception as e:
+            if not quiet:
+                console.print(f"[dim]CLV update skipped: {e}[/dim]")
     try:
-        yesterday = (date.today() - timedelta(days=1)).isoformat()
-        yest_outcomes = pnl_tracker.fetch_yesterday_outcomes(MODEL_VERSION)
-        if yest_outcomes:
-            pnl_tracker.update_results(yesterday, yest_outcomes, MODEL_VERSION)
-            console.print(f"[dim]Updated {len(yest_outcomes)} yesterday outcomes[/dim]\n")
-    except Exception:
-        pass
+        settled = pnl_tracker.settle_all_unsettled()
+        if settled:
+            total = sum(settled.values())
+            console.print(f"[dim]Settled {total} pick(s) across {len(settled)} date(s)[/dim]\n")
+    except Exception as e:
+        if not quiet:
+            console.print(f"[dim]Outcome settlement skipped: {e}[/dim]")
 
-    # ── Display ───────────────────────────────────────────────────────────────
+    # â”€â”€ Display â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if not quiet:
         if odds_source == "none":
             display.print_no_odds_warning(api_key_set=bool(config.ODDS_API_KEY))
-            odds_api.write_shopping_list(all_by_model[:30])
         else:
             console.print(f"[dim]Odds source: {odds_source} | Statcast: {len(batter_data)} batters[/dim]\n")
 
@@ -98,10 +107,10 @@ def run(dump_json_path: str = None):
         display.print_pnl(pnl_tracker.pnl_summary(), clv_tracker.clv_summary())
         display.print_summary(stats)
 
-    # ── JSON dump (compare mode) ──────────────────────────────────────────────
+    # â”€â”€ JSON dump (compare mode) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if dump_json_path:
         dump = {
-            "version": "v2",
+            "version": MODEL_VERSION,
             "date": target_date,
             "stats": stats,
             "odds_source": odds_source,
@@ -126,3 +135,4 @@ if __name__ == "__main__":
     except Exception as e:
         console.print(f"\n[red bold]Fatal error:[/red bold] {e}")
         traceback.print_exc(); sys.exit(1)
+

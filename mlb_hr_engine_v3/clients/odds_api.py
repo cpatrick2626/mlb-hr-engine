@@ -4,7 +4,7 @@ Free tier: 500 requests/month. https://the-odds-api.com
 
 MANUAL ODDS FALLBACK
 If the API is unreachable (e.g. corporate network), you can enter odds manually:
-  1. Run the engine once — it saves mlb_hr_engine/manual_odds.csv with today's top players.
+  1. Run the engine once — it saves codex_hr_engine_v3/manual_odds.csv with today's top players.
   2. Open that CSV and fill in the 'american_odds' column from any sportsbook.
   3. Re-run — the engine loads the CSV automatically.
 
@@ -173,3 +173,4 @@ def _get_event_props(event_id: str) -> list[dict]:
 
 def _normalize(name: str) -> str:
     return name.lower().strip()
+

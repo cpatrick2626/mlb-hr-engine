@@ -1,0 +1,41 @@
+name: Daily MLB HR Pipeline
+
+on:
+  schedule:
+    # 10:00 AM ET = 14:00 UTC (adjust for EDT/EST: EDT is UTC-4, EST is UTC-5)
+    # Run at 14:05 to let lineups post before we fetch
+    - cron: '5 14 * * *'
+  workflow_dispatch:
+    inputs:
+      date:
+        description: 'Date to run (YYYY-MM-DD). Leave blank for today.'
+        required: false
+
+jobs:
+  run-pipeline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: mlb_hr_engine_v4/requirements-api.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements-api.txt
+        working-directory: mlb_hr_engine_v4
+
+      - name: Run pipeline
+        env:
+          ODDS_API_KEY:          ${{ secrets.ODDS_API_KEY }}
+          SUPABASE_URL:          ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY:  ${{ secrets.SUPABASE_SERVICE_KEY }}
+          TARGET_DATE:           ${{ inputs.date }}
+        run: python -m api.cron ${{ inputs.date }}
+        working-directory: mlb_hr_engine_v4

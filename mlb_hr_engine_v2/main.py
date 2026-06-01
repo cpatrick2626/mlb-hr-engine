@@ -1,5 +1,5 @@
-"""
-MLB HR Prop Betting Engine -- v2
+﻿"""
+Codex HR Engine -- v2
 =================================
 Enhancements over v1:
   - Statcast barrel%/exit velocity blended into power estimate
@@ -267,7 +267,7 @@ def run(dump_json_path: str = None):
         display.print_pnl(pnl_tracker.pnl_summary(), clv_tracker.clv_summary())
         display.print_summary(stats)
 
-    # ── JSON dump (compare mode) ──────────────────────────────────────────────
+    # â”€â”€ JSON dump (compare mode) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if dump_json_path:
         data = {
             "version": "v2",
@@ -295,3 +295,4 @@ if __name__ == "__main__":
     except Exception as e:
         console.print(f"\n[red bold]Fatal error:[/red bold] {e}")
         traceback.print_exc(); sys.exit(1)
+

@@ -1,7 +1,7 @@
-"""
-MLB HR Prop Betting Engine
+﻿"""
+Codex HR Engine
 ==========================
-Entry point — orchestrates the full pipeline:
+Entry point â€” orchestrates the full pipeline:
 
   1. Pull today's MLB schedule + lineups + probable pitchers
   2. Build HR probability for each starting batter
@@ -17,7 +17,7 @@ Usage:
 
 Requirements:
   pip install -r requirements.txt
-  Copy .env.example → .env and add your ODDS_API_KEY
+  Copy .env.example â†’ .env and add your ODDS_API_KEY
 """
 
 import sys
@@ -39,9 +39,9 @@ from output import ranker, parlay as parlay_engine, display
 console = Console(legacy_windows=False, highlight=False)
 
 
-# ──────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # Player Profile Builder
-# ──────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def build_player_profile(
     player_id: int,
@@ -133,9 +133,9 @@ def build_player_profile(
     }
 
 
-# ──────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # Market Matching
-# ──────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def match_odds(player: dict, all_props: list[dict]) -> dict:
     """
@@ -174,9 +174,9 @@ def match_odds(player: dict, all_props: list[dict]) -> dict:
     return player
 
 
-# ──────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # EV + Sizing
-# ──────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def enrich_with_ev(player: dict) -> dict:
     """Add EV%, Edge%, confidence, bet size to a player profile."""
@@ -200,9 +200,9 @@ def enrich_with_ev(player: dict) -> dict:
     return player
 
 
-# ──────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # Main Pipeline
-# ──────────────────────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 def _serializable(players: list) -> list:
     """Strip non-JSON-serializable fields (e.g. raw weather dict)."""
@@ -231,7 +231,7 @@ def run(dump_json_path: str = None) -> None:
         console=progress_console,
     ) as progress:
 
-        # ── Step 1: Schedule ─────────────────────────────────────────────────
+        # â”€â”€ Step 1: Schedule â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         task = progress.add_task("Fetching today's MLB schedule...", total=None)
         try:
             games = mlb_stats.get_today_schedule(target_date)
@@ -246,7 +246,7 @@ def run(dump_json_path: str = None) -> None:
                 console.print(f"[yellow]No MLB games found for {target_date}.[/yellow]")
             return
 
-        # ── Step 2: Market Odds ───────────────────────────────────────────────
+        # â”€â”€ Step 2: Market Odds â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         progress.update(task, description="Fetching market odds...")
         all_props: list[dict] = []
         try:
@@ -256,7 +256,7 @@ def run(dump_json_path: str = None) -> None:
         except Exception as e:
             console.print(f"[yellow]Odds error: {e}[/yellow]")
 
-        # ── Step 3: Build Player Profiles ─────────────────────────────────────
+        # â”€â”€ Step 3: Build Player Profiles â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         for game in games:
             home = game["home_team"]
             away = game["away_team"]
@@ -297,18 +297,18 @@ def run(dump_json_path: str = None) -> None:
                         if profile:
                             all_players.append(profile)
                     except Exception:
-                        # Log but continue — one failed profile shouldn't stop the run
+                        # Log but continue â€” one failed profile shouldn't stop the run
                         pass
 
         stats["players"] = len(all_players)
 
-        # ── Step 4: Match Odds + Compute EV ──────────────────────────────────
+        # â”€â”€ Step 4: Match Odds + Compute EV â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         progress.update(task, description="Matching odds and computing EV...")
         for p in all_players:
             match_odds(p, all_props)
             enrich_with_ev(p)
 
-        # ── Step 5: Filter ────────────────────────────────────────────────────
+        # â”€â”€ Step 5: Filter â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         qualified: list[dict] = []
         for p in all_players:
             passed, reasons = filters.apply_filters(p)
@@ -323,11 +323,11 @@ def run(dump_json_path: str = None) -> None:
 
         progress.update(task, description="Ranking picks...")
 
-    # ── Step 6: Rank ──────────────────────────────────────────────────────────
+    # â”€â”€ Step 6: Rank â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     ranked = ranker.rank_picks(qualified)
     all_by_model = ranker.rank_all_by_model(all_players)
 
-    # ── Step 7: Output ────────────────────────────────────────────────────────
+    # â”€â”€ Step 7: Output â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if not quiet:
         if odds_source == "none":
             display.print_no_odds_warning(api_key_set=bool(config.ODDS_API_KEY))
@@ -353,7 +353,7 @@ def run(dump_json_path: str = None) -> None:
 
         display.print_summary(stats)
 
-    # ── JSON dump (compare mode) ──────────────────────────────────────────────
+    # â”€â”€ JSON dump (compare mode) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if dump_json_path:
         data = {
             "version": "v1",
@@ -383,3 +383,4 @@ if __name__ == "__main__":
         console.print(f"\n[red bold]Fatal error:[/red bold] {e}")
         traceback.print_exc()
         sys.exit(1)
+
