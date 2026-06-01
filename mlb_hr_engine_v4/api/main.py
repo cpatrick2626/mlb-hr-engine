@@ -191,15 +191,21 @@ async def get_slate():
             _home = (p.get("home_team") or p.get("team") or "home").upper()
             gid = f"{_away}-{_home}".lower().replace(" ", "-")
             if gid not in seen_games:
+                _w = p.get("weather")
+                _weather_str = (
+                    f"{_w.get('temp_f', '')}°F · {_w.get('wind_mph', '')} mph"
+                    if isinstance(_w, dict)
+                    else str(_w) if _w else ""
+                )
                 seen_games[gid] = {
                     "id":       gid,
                     "away":     p.get("opponent", ""),
                     "home":     p.get("home_team", p.get("team", "")),
                     "park":     p.get("venue", ""),
                     "time":     p.get("game_time", ""),
-                    "weather":  p.get("weather", ""),
+                    "weather":  _weather_str,
                     "wind":     p.get("wind", ""),
-                    "hrFactor": float(p.get("park_factor") or 1.0),
+                    "hrFactor": round(float(p.get("park_factor") or 1.0), 3),
                     "teams":    [],
                 }
 
