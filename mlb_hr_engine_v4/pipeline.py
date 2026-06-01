@@ -26,7 +26,10 @@ from engine import market as mkt, probability as prob, ev as ev_engine, sizing, 
 from engine import calibration as _cal
 from output import ranker, parlay as parlay_engine
 from output.parlay import build_profile_parlays
-from tracking import adaptive_weights as _aw
+try:
+    from tracking import adaptive_weights as _aw
+except ImportError:
+    _aw = None
 
 
 # ── Core helpers (same logic as v3 main.py, extracted here) ──────────────────
@@ -123,7 +126,7 @@ def _build_player_profile(
     sc_source  = sc_stats.get("statcast_source", "current" if sc_stats else "none")
     sc_barrel  = float(sc_stats.get("barrel_rate") or 0.0)
     raw_rate   = prob.base_hr_rate(season_stats, recent_stats, statcast_mult=power_mult,
-                                    recent_weight=_aw.get("recent_weight"),
+                                    recent_weight=_aw.get("recent_weight") if _aw is not None else None,
                                     barrel_rate=sc_barrel)
     hr_rate    = prob.statcast_blended_rate(
         raw_rate, power_mult, season_pa,
@@ -219,7 +222,7 @@ def _build_player_profile(
     # the Statcast signal. Coefficient adaptive (default 0.20, tuned by auto-learn).
     batter_excess  = max(0.0, power_mult - 1.0)
     pitcher_excess = max(0.0, pit_factor - 1.0)
-    _ic = _aw.get("interaction_coeff", 0.20)
+    _ic = _aw.get("interaction_coeff", 0.20) if _aw is not None else 0.20
     interaction    = batter_excess * pitcher_excess * _ic
 
     early_supp    = prob.early_season_suppressor(season_pa, sc_source)
@@ -236,7 +239,7 @@ def _build_player_profile(
         model_prob = round(model_prob * 0.82, 4)
 
     # Apply adaptive calibration scale (moves model_prob toward observed hit rate)
-    model_prob = round(_aw.apply_prob_scale(model_prob), 4)
+    model_prob = round(_aw.apply_prob_scale(model_prob), 4) if _aw is not None else model_prob
     # Apply post-model probability calibration (monotone → ranking preserved)
     # barrel_rate passed for elite tier Platt (ELITE_PLATT_ENABLED in config.py)
     model_prob = round(_cal.apply_calibration(model_prob, barrel_rate=sc_barrel), 4)
@@ -479,7 +482,8 @@ def load_game_data(
         from tracking import auto_learn as _al
         result = _al.auto_apply_safe()
         if result.get("applied"):
-            _aw.invalidate_cache()
+            if _aw is not None:
+                _aw.invalidate_cache()
             _cb(f"Adaptive weights updated: {', '.join(result['applied'])}")
     except Exception as _e:
         print(f"[pipeline] auto_apply_safe skipped: {_e}")
