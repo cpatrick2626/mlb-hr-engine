@@ -3643,14 +3643,16 @@ html, body { height: 100%; overflow: hidden; }
   html, body {
     overflow-x: hidden;
     width: 100%;
+    height: auto;
+    overflow-y: auto;
   }
 
-  /* Scale entire app to 45% on portrait phone */
-  #root {
-    transform: scale(0.45);
-    transform-origin: top left;
-    width: 222%;
-    overflow: hidden;
+  #root,
+  [class*="md-shell"],
+  [class*="master"] {
+    height: auto !important;
+    min-height: 100vh;
+    overflow: visible !important;
   }
 }
 
@@ -3660,6 +3662,12 @@ html, body { height: 100%; overflow: hidden; }
   .fsm-scroll-container {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
+  }
+  .md-nav {
+    overflow-y: auto !important;
+    height: 100vh;
+    position: sticky;
+    top: 0;
   }
 }
 </style>
