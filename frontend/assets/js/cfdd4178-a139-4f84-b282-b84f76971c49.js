@@ -90,6 +90,12 @@ const JigBuilder = ({ eyebrow }) =>
 
 const Stage = ({ engine, lens, ccOpen, onCloseCC, appliedFilters, onApplyFilters, onClearFilters, onOpenPlayer }) => {
   const eyebrow = `${engine.name}${engine.suffix ? " " + engine.suffix : ""}${lens ? "  /  " + lens.name.toUpperCase() : ""}`;
+  const [dataVersion, setDataVersion] = React.useState(0);
+  React.useEffect(() => {
+    const handler = () => setDataVersion(v => v + 1);
+    window.addEventListener("hrEngineDataLoaded", handler);
+    return () => window.removeEventListener("hrEngineDataLoaded", handler);
+  }, []);
   let body;
 
   // Active-filter status shown on the room header (count + result count + clear).
