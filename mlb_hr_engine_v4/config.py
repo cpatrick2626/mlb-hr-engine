@@ -282,11 +282,11 @@ FS_TIER_DISPLAY: dict = {
 # 5-bucket color ramp applied to numeric columns in the Full Slate table.
 # Thresholds are fixed cutoffs, not dynamic percentiles.
 FS_HEATMAP_COLORS: dict = {
-    "ELITE":   "#0e3a20",   # --heat-warm
-    "STRONG":  "#14291a",   # between warm and mid
-    "AVERAGE": "#0a1014",   # --bg-base
-    "WEAK":    "#3d0a10",   # between cool and cold
-    "DANGER":  "#2a0a10",   # --heat-cold
+    "ELITE":   "rgba(14,58,32,0.7)",    # --heat-elite bg
+    "STRONG":  "rgba(20,41,26,0.7)",    # --heat-strong bg
+    "AVERAGE": "rgba(22,28,24,0.7)",    # --heat-avg bg
+    "WEAK":    "rgba(61,10,16,0.7)",    # --heat-weak bg
+    "DANGER":  "rgba(42,10,16,0.7)",    # --heat-danger bg
 }
 
 # ── HR ENGINE DESIGN TOKENS ──────────────────────────────────────────────────
@@ -335,11 +335,19 @@ FS_HEATMAP_THRESHOLDS: dict = {
 # ── Full Slate Heatmap Text Colors ────────────────────────────────────────────
 # Text colors for heatmap cells — references HRE design tokens.
 FS_HEATMAP_TEXT_COLORS: dict = {
-    "ELITE":   HRE_GREEN_500,   # "#1aff66"
-    "STRONG":  HRE_GREEN_300,   # "#6dffae"
-    "AVERAGE": HRE_FG_2,        # "#b8c2c0"
-    "WEAK":    HRE_RED_300,     # "#ff8a93"
-    "DANGER":  HRE_RED_500,     # "#ff3344"
+    "ELITE":   "#1aff66",   # --green-500
+    "STRONG":  "#6dffae",   # --green-300
+    "AVERAGE": "#d8e0dc",   # --fg-1 warm
+    "WEAK":    "#ff8a93",   # --red-300
+    "DANGER":  "#ff3344",   # --red-500
+}
+
+FS_HEATMAP_SHADOWS: dict = {
+    "ELITE":   "inset 0 0 0 1.5px rgba(26,255,102,0.6), 0 0 12px -4px rgba(26,255,102,0.5)",
+    "STRONG":  "inset 0 0 0 1.5px rgba(109,255,174,0.4)",
+    "AVERAGE": "inset 0 0 0 1.5px rgba(180,220,200,0.18)",
+    "WEAK":    "inset 0 0 0 1.5px rgba(255,138,147,0.45)",
+    "DANGER":  "inset 0 0 0 1.5px rgba(255,51,68,0.6), 0 0 12px -4px rgba(255,51,68,0.5)",
 }
 
 # ── Full Slate Matchup Quality Pie Colors ─────────────────────────────────────

@@ -4732,7 +4732,11 @@ def _fs_heatmap_color(value, column_key: str) -> dict:
     _TEXT_COLORS = config.FS_HEATMAP_TEXT_COLORS
     thresholds = config.FS_HEATMAP_THRESHOLDS.get(column_key)
     if thresholds is None or value is None:
-        return {"bg": config.FS_HEATMAP_COLORS["AVERAGE"], "text": _TEXT_COLORS["AVERAGE"]}
+        return {
+            "bg":     config.FS_HEATMAP_COLORS["AVERAGE"],
+            "text":   config.FS_HEATMAP_TEXT_COLORS["AVERAGE"],
+            "shadow": config.FS_HEATMAP_SHADOWS["AVERAGE"],
+        }
     v = float(value)
     t0, t1, t2, t3 = thresholds
     if column_key in _INVERTED:
@@ -4742,7 +4746,11 @@ def _fs_heatmap_color(value, column_key: str) -> dict:
     elif v >= t2: bucket = "AVERAGE"
     elif v >= t3: bucket = "WEAK"
     else:         bucket = "DANGER"
-    return {"bg": config.FS_HEATMAP_COLORS[bucket], "text": _TEXT_COLORS[bucket]}
+    return {
+        "bg":     config.FS_HEATMAP_COLORS[bucket],
+        "text":   config.FS_HEATMAP_TEXT_COLORS[bucket],
+        "shadow": config.FS_HEATMAP_SHADOWS[bucket],
+    }
 
 
 _FS_COLUMN_PRESETS: dict[str, list[str]] = {
@@ -5450,6 +5458,7 @@ def _render_full_slate_native_cols(
                     c = _hc(batting_avg, "batting_avg")
                     col.markdown(
                         f"<div style='background:{c['bg']};color:{c['text']};"
+                        f"box-shadow:{c['shadow']};"
                         f"text-align:center;font-size:11px;padding:3px 2px;"
                         f"border-radius:3px;'>"
                         f"{f'{batting_avg:.3f}'[1:] if batting_avg else '—'}</div>",
@@ -5460,6 +5469,7 @@ def _render_full_slate_native_cols(
                     c = _hc(slg, "actual_slg")
                     col.markdown(
                         f"<div style='background:{c['bg']};color:{c['text']};"
+                        f"box-shadow:{c['shadow']};"
                         f"text-align:center;font-size:11px;padding:3px 2px;"
                         f"border-radius:3px;'>"
                         f"{f'{slg:.3f}'[1:] if slg is not None else '—'}</div>",
@@ -5470,6 +5480,7 @@ def _render_full_slate_native_cols(
                     c = _hc(babip, "babip")
                     col.markdown(
                         f"<div style='background:{c['bg']};color:{c['text']};"
+                        f"box-shadow:{c['shadow']};"
                         f"text-align:center;font-size:11px;padding:3px 2px;"
                         f"border-radius:3px;'>"
                         f"{f'{babip:.3f}'[1:] if babip else '—'}</div>",
@@ -5480,6 +5491,7 @@ def _render_full_slate_native_cols(
                     c = _hc(gb_pct, "gb_pct")
                     col.markdown(
                         f"<div style='background:{c['bg']};color:{c['text']};"
+                        f"box-shadow:{c['shadow']};"
                         f"text-align:center;font-size:11px;padding:3px 2px;"
                         f"border-radius:3px;'>"
                         f"{f'{gb_pct:.1f}%' if gb_pct else '—'}</div>",
@@ -5490,6 +5502,7 @@ def _render_full_slate_native_cols(
                     c = _hc(hard_hit, "hard_hit")
                     col.markdown(
                         f"<div style='background:{c['bg']};color:{c['text']};"
+                        f"box-shadow:{c['shadow']};"
                         f"text-align:center;font-size:11px;padding:3px 2px;"
                         f"border-radius:3px;'>"
                         f"{f'{hard_hit:.1f}%' if hard_hit else '—'}</div>",
@@ -5500,6 +5513,7 @@ def _render_full_slate_native_cols(
                     c = _hc(ld_pct, "ld_pct")
                     col.markdown(
                         f"<div style='background:{c['bg']};color:{c['text']};"
+                        f"box-shadow:{c['shadow']};"
                         f"text-align:center;font-size:11px;padding:3px 2px;"
                         f"border-radius:3px;'>"
                         f"{f'{ld_pct:.1f}%' if ld_pct else '—'}</div>",
@@ -5510,6 +5524,7 @@ def _render_full_slate_native_cols(
                     c = _hc(barrel, "barrel_pct")
                     col.markdown(
                         f"<div style='background:{c['bg']};color:{c['text']};"
+                        f"box-shadow:{c['shadow']};"
                         f"text-align:center;font-size:11px;font-weight:600;padding:3px 2px;"
                         f"border-radius:3px;'>"
                         f"{f'{barrel:.1f}%' if barrel else '—'}</div>",
@@ -5520,6 +5535,7 @@ def _render_full_slate_native_cols(
                     c = _hc(ev, "exit_velo")
                     col.markdown(
                         f"<div style='background:{c['bg']};color:{c['text']};"
+                        f"box-shadow:{c['shadow']};"
                         f"text-align:center;font-size:11px;padding:3px 2px;"
                         f"border-radius:3px;'>"
                         f"{f'{ev:.1f}' if ev else '—'}</div>",
@@ -5530,6 +5546,7 @@ def _render_full_slate_native_cols(
                     c = _hc(la, "avg_launch_angle")
                     col.markdown(
                         f"<div style='background:{c['bg']};color:{c['text']};"
+                        f"box-shadow:{c['shadow']};"
                         f"text-align:center;font-size:11px;padding:3px 2px;"
                         f"border-radius:3px;'>"
                         f"{f'{float(la):.1f}°' if la is not None else '—'}</div>",
@@ -5540,6 +5557,7 @@ def _render_full_slate_native_cols(
                     c = _hc(pull, "pull_pct")
                     col.markdown(
                         f"<div style='background:{c['bg']};color:{c['text']};"
+                        f"box-shadow:{c['shadow']};"
                         f"text-align:center;font-size:11px;padding:3px 2px;"
                         f"border-radius:3px;'>"
                         f"{f'{pull:.1f}%' if pull else '—'}</div>",
@@ -5550,6 +5568,7 @@ def _render_full_slate_native_cols(
                     c = _hc(center, "center_pct")
                     col.markdown(
                         f"<div style='background:{c['bg']};color:{c['text']};"
+                        f"box-shadow:{c['shadow']};"
                         f"text-align:center;font-size:11px;padding:3px 2px;"
                         f"border-radius:3px;'>"
                         f"{f'{center:.1f}%' if center else '—'}</div>",
@@ -5560,6 +5579,7 @@ def _render_full_slate_native_cols(
                     c = _hc(hr9, "pitcher_hr9")
                     col.markdown(
                         f"<div style='background:{c['bg']};color:{c['text']};"
+                        f"box-shadow:{c['shadow']};"
                         f"text-align:center;font-size:11px;font-weight:600;padding:3px 2px;"
                         f"border-radius:3px;'>"
                         f"{f'{hr9:.2f}' if hr9 else '—'}</div>",
@@ -5570,6 +5590,7 @@ def _render_full_slate_native_cols(
                     c = _hc(xwoba, "xwoba")
                     col.markdown(
                         f"<div style='background:{c['bg']};color:{c['text']};"
+                        f"box-shadow:{c['shadow']};"
                         f"text-align:center;font-size:11px;padding:3px 2px;"
                         f"border-radius:3px;'>"
                         f"{f'{xwoba:.3f}'[1:] if xwoba else '—'}</div>",
