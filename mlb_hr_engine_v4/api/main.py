@@ -22,6 +22,9 @@ import os
 import logging
 from datetime import date
 
+from dotenv import load_dotenv
+load_dotenv()
+
 from fastapi import FastAPI, Depends, HTTPException, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -112,6 +115,98 @@ async def redeem(body: dict, user=Depends(require_auth)):
     if not redeem_invite(code, user_id):
         raise HTTPException(status_code=400, detail="Invalid or already-used invite code.")
     return {"status": "ok", "message": "Beta access granted!"}
+
+
+# ── Full Slate ─────────────────────────────────────────────────────────────────
+
+@app.get("/api/slate")
+async def get_slate():
+    """
+    Returns today's Full Slate data in React frontend shape.
+    No auth required — public endpoint for the React dashboard.
+    Runs the pipeline and maps output to LEADERBOARD_ROWS + SLATE_GAMES format.
+    """
+    try:
+        from pipeline import load_game_data
+        data = load_game_data()
+        players = data.get("all_players", [])
+
+        leaderboard_rows = []
+        for p in players:
+            model_prob = float(p.get("model_prob") or 0)
+            season_pa = int(p.get("season_pa") or 0)
+            season_hr = int(p.get("season_hr") or 0)
+            hrpa = round(season_hr / season_pa, 3) if season_pa > 0 else None
+
+            if model_prob >= 0.18:   tier = "APEX"
+            elif model_prob >= 0.13: tier = "ELITE"
+            elif model_prob >= 0.09: tier = "EDGE"
+            elif model_prob >= 0.06: tier = "SIGNAL"
+            elif model_prob >= 0.03: tier = "WATCH"
+            else:                    tier = "COLD"
+
+            mq_map = {"ELITE": "ELITE", "STRONG": "STRONG", "AVG": "AVG",
+                      "WEAK": "WEAK", "DANGER": "DANGER"}
+            quality = mq_map.get(p.get("matchup_quality", "AVG"), "AVG")
+
+            fd_raw = p.get("fanduel_american")
+            odds = (f"+{fd_raw}" if fd_raw and fd_raw > 0
+                    else str(fd_raw) if fd_raw else None)
+
+            leaderboard_rows.append({
+                "id":       p.get("player_id") or p.get("player_name", "").lower().replace(" ", "-"),
+                "name":     p.get("player_name"),
+                "teamAbbr": p.get("team"),
+                "bats":     p.get("batter_side"),
+                "quality":  quality,
+                "pa":       season_pa,
+                "avg":      p.get("batting_avg"),
+                "slg":      p.get("actual_slg"),
+                "babip":    p.get("babip"),
+                "gb":       p.get("gb_pct"),
+                "hh":       p.get("hard_hit"),
+                "ld":       p.get("ld_pct"),
+                "barrel":   p.get("barrel_pct"),
+                "ev":       p.get("exit_velo"),
+                "la":       p.get("avg_launch_angle"),
+                "pull":     p.get("pull_pct"),
+                "center":   p.get("center_pct"),
+                "opphr":    p.get("pitcher_hr9"),
+                "xwoba":    p.get("xwoba"),
+                "hrpa":     hrpa,
+                "hrprob":   round(model_prob * 100, 1),
+                "tier":     tier,
+                "gameId":   p.get("game_id") or f"{p.get('team','').lower()}-game",
+                "odds":     odds,
+                "hr":       season_hr,
+            })
+
+        seen_games = {}
+        for p in players:
+            gid = p.get("game_id") or f"{p.get('team','').lower()}-game"
+            if gid not in seen_games:
+                seen_games[gid] = {
+                    "id":       gid,
+                    "away":     p.get("opponent", ""),
+                    "home":     p.get("home_team", p.get("team", "")),
+                    "park":     p.get("venue", ""),
+                    "time":     p.get("game_time", ""),
+                    "weather":  p.get("weather", ""),
+                    "wind":     p.get("wind", ""),
+                    "hrFactor": float(p.get("park_factor") or 1.0),
+                    "teams":    [],
+                }
+
+        import datetime as _dt
+        return {
+            "leaderboard_rows": leaderboard_rows,
+            "slate_games":      list(seen_games.values()),
+            "generated_at":     _dt.datetime.utcnow().isoformat(),
+        }
+
+    except Exception as e:
+        log.error(f"[/api/slate] {e}", exc_info=True)
+        return {"error": str(e), "leaderboard_rows": [], "slate_games": []}
 
 
 # ── Internals ──────────────────────────────────────────────────────────────────
