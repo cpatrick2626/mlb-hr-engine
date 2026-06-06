@@ -308,7 +308,7 @@ async def get_slate():
                 "xslg":     _flt(p.get("xslg")),
                 "fb":       _pct(p.get("fb_pct")),
                 "sweet":    _pct(p.get("sweet_spot_pct")),
-                "obp":      _flt(p.get("xba")),
+                "obp":      _flt(p.get("actual_obp")),
                 "woba":     _flt(p.get("xwoba")),
                 "bbpct":    None,
                 "kpct":     None,

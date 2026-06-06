@@ -137,6 +137,7 @@ def _build_player_profile(
 
     # Derived contact-quality fields used by profile-based parlay scoring
     actual_slg = float(season_stats.get("sluggingPercentage", 0) or 0)
+    actual_obp = float(season_stats.get("onBasePercentage", 0) or 0)
     xba_float  = _safe_float(sc_stats.get("xba"))
     xslg_float = _safe_float(sc_stats.get("xslg"))
 
@@ -317,6 +318,7 @@ def _build_player_profile(
         "xiso": xiso,
         "xslg_diff": xslg_diff,
         "actual_slg": round(actual_slg, 3),
+        "actual_obp": round(actual_obp, 3),
         "batting_avg": season_avg,
         "babip": season_babip,
         "xwoba": xwoba_raw,

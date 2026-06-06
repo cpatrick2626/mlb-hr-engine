@@ -697,7 +697,7 @@ def _fetch_batch_stats(player_ids: list[int]) -> None:
             for stat_group in stats_list:
                 stat_type = stat_group.get("type", {}).get("displayName", "")
 
-                if stat_type == "season":
+                if stat_type in ("season", "regularSeason"):
                     splits = stat_group.get("splits", [])
                     if splits:
                         season_stats = splits[0].get("stat", {})
@@ -809,7 +809,7 @@ def _fetch_batch_pitcher_stats(pitcher_ids: list[int]) -> None:
             for stat_group in stats_list:
                 stat_type = stat_group.get("type", {}).get("displayName", "")
 
-                if stat_type == "season":
+                if stat_type in ("season", "regularSeason"):
                     splits = stat_group.get("splits", [])
                     if splits:
                         _BULK_PITCHER_STATS_CACHE[pitcher_id] = splits[0].get("stat", {})
