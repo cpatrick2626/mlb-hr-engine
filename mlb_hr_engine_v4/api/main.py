@@ -19,6 +19,7 @@ For reliability, always prefer the GH Actions cron path.
 """
 
 import os
+import copy
 import logging
 from datetime import date
 
@@ -137,6 +138,36 @@ def _flt(val):
         return None
 
 
+def _jig_score(p):
+    """
+    JIG tactical HVY base score.
+    Matches app.py:8260-8270 formula exactly.
+    xSLG×0.25 + Barrel×0.20 + ISO×0.15 + PullAir×0.15 + HardHit×0.15 + SweetSpot×0.10
+    All inputs raw Statcast — no model_prob, no composite, no HVY modifier.
+    """
+    def _f(val):
+        if val is None: return 0.0
+        try: return float(str(val).replace("%","").strip())
+        except: return 0.0
+
+    xslg     = _f(p.get("xslg"))
+    barrel   = _f(p.get("barrel_pct"))
+    iso      = _f(p.get("xiso"))
+    pull_air = _f(p.get("pull_air_pct"))
+    hard_hit = _f(p.get("hard_hit"))
+    sweet    = _f(p.get("sweet_spot_pct"))
+
+    return round(
+        xslg     * 0.25 +
+        barrel   * 0.20 +
+        iso      * 0.15 +
+        pull_air * 0.15 +
+        hard_hit * 0.15 +
+        sweet    * 0.10,
+        4
+    )
+
+
 # ── Full Slate ─────────────────────────────────────────────────────────────────
 
 @app.get("/api/slate")
@@ -222,6 +253,24 @@ async def get_slate():
                 "hrfb":     _flt(p.get("hr_rate")),
             })
 
+        # JIG list — same players, sorted by HVY base score descending
+        jig_rows = sorted(
+            [copy.copy(r) for r in leaderboard_rows],
+            key=lambda r: _jig_score(
+                next((p for p in players
+                      if (p.get("player_name") or "") == (r.get("name") or "")),
+                     {})
+            ),
+            reverse=True
+        )
+
+        # Add jig_score field to each JIG row for display
+        for r in jig_rows:
+            p = next((p for p in players
+                       if (p.get("player_name") or "") == (r.get("name") or "")),
+                      {})
+            r["jigScore"] = _jig_score(p)
+
         seen_games = {}
         for p in players:
             _away = (p.get("opponent") or p.get("team") or "away").upper()
@@ -248,9 +297,10 @@ async def get_slate():
 
         import datetime as _dt
         return {
-            "leaderboard_rows": leaderboard_rows,
-            "slate_games":      list(seen_games.values()),
-            "generated_at":     _dt.datetime.utcnow().isoformat(),
+            "leaderboard_rows":     leaderboard_rows,
+            "leaderboard_rows_jig": jig_rows,
+            "slate_games":          list(seen_games.values()),
+            "generated_at":         _dt.datetime.utcnow().isoformat(),
         }
 
     except Exception as e:
