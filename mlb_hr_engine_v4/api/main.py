@@ -322,6 +322,9 @@ async def get_slate():
                 "blast":    None,
                 "maxev":    None,
                 "hrfb":     _flt(p.get("hr_rate")),
+                "pitcher_name":      p.get("pitcher_name", None),
+                "pitcher_confirmed": p.get("pitcher_confirmed", False),
+                "pitcher_id":        p.get("pitcher_id", None),
             })
 
         leaderboard_rows.sort(

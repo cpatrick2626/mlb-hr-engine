@@ -323,15 +323,11 @@ const FSM_PITCH_TYPES = [
 { code: "CH", name: "Change", vlo: 82, vhi: 89 },
 { code: "CB", name: "Curve", vlo: 76, vhi: 83 }];
 
-const FSM_PFIRST = ["Tanner", "Bryce", "Logan", "Spencer", "Garrett", "Hunter", "Kenji", "Marco", "Dylan", "Easton", "Carlos", "Reese", "Jaden", "Cole", "Aaron", "Miguel"];
-const FSM_PLAST = ["Sandoval", "Whitlock", "Karras", "Beaumont", "Okada", "Reyes", "Hollis", "Vargas", "Pemberton", "Costa", "Lindgren", "Mahoney", "Ferro", "Nakamura", "Brennan"];
-
 function fsmPitchData(row) {
   const game = getFSMGames().find((g) => g.id === row.gameId);
   const opp = game ? game.teams.find((t) => t !== row.teamAbbr) : "OPP";
   const rng = fsmSeeded(fsmHash(row.gameId + ":" + opp));
-  const pick = (a) => a[Math.floor(rng() * a.length)];
-  const pitcher = { name: pick(FSM_PFIRST) + " " + pick(FSM_PLAST), team: opp, throws: rng() < 0.5 ? "L" : "R" };
+  const pitcher = { name: row.pitcher_name || "TBD", team: opp, throws: rng() < 0.5 ? "L" : "R" };
   const rest = [...FSM_PITCH_TYPES.slice(1)].sort(() => rng() - 0.5);
   const chosen = [FSM_PITCH_TYPES[0], ...rest.slice(0, 3 + (rng() < 0.5 ? 1 : 0))];
   const weights = chosen.map((p, i) => i === 0 ? 0.34 + rng() * 0.18 : 0.06 + rng() * 0.22);
@@ -364,6 +360,8 @@ function FsmBatterCard({ row, onClose, onPitch }) {
   const m = FSM_MATCHUP[row.quality] || FSM_MATCHUP.AVG;
   const game = getFSMGames().find((g) => g.id === row.gameId);
   const pd = fsmPitchData(row);
+  const pitcherDisplay = row.pitcher_name ? row.pitcher_name : "TBD";
+  const pitcherConfirmed = row.pitcher_confirmed === true;
   const groups = [
   { title: "POWER & CONTACT", keys: ["avg", "slg", "babip", "xwoba", "barrel", "hrpa"] },
   { title: "BATTED-BALL PROFILE", keys: ["ev", "la", "hh", "gb", "ld", "pull", "center"] }];
@@ -389,7 +387,7 @@ function FsmBatterCard({ row, onClose, onPitch }) {
         <span className="fsm-pie fsm-pie--lg" style={{ background: fsmPie(m.q, m.color) }} />
         <div className="fsm-card__mtext">
           <span className="fsm-card__mq" style={{ color: m.color }}>{row.quality} MATCHUP</span>
-          <span className="fsm-card__msub">vs {pd.pitcher.name} ({pd.pitcher.team} · {pd.pitcher.throws}HP) · OPP HR/9 {fsmStatVal("opphr", row)}{game ? ` · PARK HR ${game.hrFactor.toFixed(2)}×` : ""}</span>
+          <span className="fsm-card__msub">vs <span className="fsm-pitcher-name">{pitcherDisplay}</span>{!pitcherConfirmed && (<span className="fsm-tbd-badge">TBD</span>)} ({pd.pitcher.team} · {pd.pitcher.throws}HP) · OPP HR/9 {fsmStatVal("opphr", row)}{game ? ` · PARK HR ${game.hrFactor.toFixed(2)}×` : ""}</span>
         </div>
         <button className="fsm-card__pitchbtn" onClick={onPitch}>PITCH MIX ANALYSIS →</button>
       </div>
