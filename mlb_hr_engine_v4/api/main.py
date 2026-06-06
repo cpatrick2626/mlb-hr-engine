@@ -253,6 +253,11 @@ async def get_slate():
                 "hrfb":     _flt(p.get("hr_rate")),
             })
 
+        leaderboard_rows.sort(
+            key=lambda r: float(r.get("hrprob") or 0),
+            reverse=True
+        )
+
         # JIG list — same players, sorted by HVY base score descending
         jig_rows = sorted(
             [copy.copy(r) for r in leaderboard_rows],
