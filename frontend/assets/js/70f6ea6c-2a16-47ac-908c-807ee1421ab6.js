@@ -9,7 +9,7 @@ window._dataLoaded = false;
 
 (async function loadSlateData() {
   try {
-    const res = await fetch("https://mlb-hr-api.fly.dev/api/slate");
+    const res = await fetch("https://mlb-hr-api.fly.dev/api/slate?t=" + Date.now());
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     window.LEADERBOARD_ROWS = data.leaderboard_rows || [];

@@ -33,7 +33,7 @@ function MasterDashboard() {
 
   // Fetch live slate data after React mounts so hrEngineDataLoaded fires after listeners attach.
   React.useEffect(() => {
-    fetch("https://mlb-hr-api.fly.dev/api/slate")
+    fetch("https://mlb-hr-api.fly.dev/api/slate?t=" + Date.now())
       .then(r => r.json())
       .then(data => {
         if (data.leaderboard_rows?.length) {
