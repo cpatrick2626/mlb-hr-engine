@@ -137,7 +137,7 @@ const Stage = ({ engine, lens, ccOpen, onCloseCC, appliedFilters, onApplyFilters
       </div>;
 
   } else if (lens && lens.id === "topTargets") {
-    const base = LEADERBOARD_ROWS.filter((r) => r.tier === "ELITE" || r.tier === "EDGE");
+    const base = (window.LEADERBOARD_ROWS || []).filter((r) => r.tier === "ELITE" || r.tier === "EDGE");
     const rows = applyRoomFilters(base, appliedFilters);
     body =
     <div className="md-room">
