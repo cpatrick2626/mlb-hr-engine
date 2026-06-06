@@ -116,6 +116,6 @@ window.countActiveFilters = function (f) {
   if (f.minHH > d.minHH) n++;
   if (f.minEV > d.minEV) n++;
   if (f.sortKey && f.sortKey !== "none") n++;
-  if (f.maxPlayers && f.maxPlayers < d.maxPlayers) n++;
+  if (f.maxPlayers != null && f.maxPlayers !== d.maxPlayers) n++;
   return n;
 };
