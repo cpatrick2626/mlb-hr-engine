@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { CommandHeader } from '@/components/dashboard/command-header'
 import type { WorkspaceId } from '@/components/dashboard/command-header'
 import { EscalationFeed } from '@/components/dashboard/escalation-feed'
@@ -122,12 +122,55 @@ function StandbyWorkspace({ workspace }: { workspace: WorkspaceId }) {
   )
 }
 
+// ─── API → component field mapper ────────────────────────────────────────────
+
+type ApiRow = Record<string, unknown>
+
+function mapTier(t: unknown): ThreatRankRow['tier'] {
+  const s = String(t ?? '').toUpperCase()
+  if (s === 'CRITICAL') return 'CRITICAL'
+  if (s === 'STRONG' || s === 'EDGE') return 'HIGH'
+  if (s === 'SIGNAL' || s === 'QUALITY') return 'MODERATE'
+  return 'LOW'
+}
+
+function mapApiRow(row: ApiRow, idx: number): ThreatRankRow {
+  return {
+    rank:        idx + 1,
+    player:      String(row.name      ?? ''),
+    team:        String(row.teamAbbr  ?? ''),
+    pos:         String(row.bats      ?? '—'),
+    threatScore: Number(row.hrprob    ?? 0),
+    modelProb:   Number(row.hrpa      ?? 0),
+    evPct:       Number(row.hh        ?? 0),
+    edgePct:     Number(row.jigScore  ?? 0),
+    barrelPct:   Number(row.barrel    ?? 0),
+    tier:        mapTier(row.tier),
+  }
+}
+
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 
 const GRID = 'flex-1 min-h-0 grid grid-cols-12 grid-rows-2 gap-[6px] p-[6px]'
 
 export default function DashboardPage() {
   const [activeWorkspace, setActiveWorkspace] = useState<WorkspaceId>('main')
+  const [mainRows, setMainRows] = useState<ThreatRankRow[]>(MOCK_RANKINGS)
+  const [jigRows, setJigRows]   = useState<ThreatRankRow[]>(JIG_RANKINGS)
+
+  useEffect(() => {
+    fetch('https://mlb-hr-api.fly.dev/api/slate')
+      .then(r => r.json())
+      .then(data => {
+        if (Array.isArray(data.leaderboard_rows) && data.leaderboard_rows.length) {
+          setMainRows(data.leaderboard_rows.map(mapApiRow))
+        }
+        if (Array.isArray(data.leaderboard_rows_jig) && data.leaderboard_rows_jig.length) {
+          setJigRows(data.leaderboard_rows_jig.map(mapApiRow))
+        }
+      })
+      .catch(err => console.warn('HR Engine API fetch failed:', err))
+  }, [])
 
   return (
     <div className="h-screen flex flex-col bg-[#030508] overflow-hidden">
@@ -158,7 +201,7 @@ export default function DashboardPage() {
             <MatchupIntelPanel rows={MOCK_MATCHUPS} />
           </Panel>
           <Panel label="Threat Rankings"        zoneId="RNK-01" status="ACTIVE"               className="col-start-9 col-span-4 row-start-2">
-            <ThreatRankingsTable rows={MOCK_RANKINGS} />
+            <ThreatRankingsTable rows={mainRows} />
           </Panel>
         </div>
       )}
@@ -170,7 +213,7 @@ export default function DashboardPage() {
             <EscalationFeed events={JIG_ESCALATIONS} />
           </Panel>
           <Panel label="JIG — Qualified Picks"  zoneId="JIG-RNK" status="ACTIVE"               className="col-start-3 col-span-5 row-start-1 row-span-2">
-            <ThreatRankingsTable rows={JIG_RANKINGS} />
+            <ThreatRankingsTable rows={jigRows} />
           </Panel>
           <Panel label="JIG Matchup Matrix"     zoneId="JIG-MTH" status="ACTIVE" accent="sky"   className="col-start-8 col-span-5 row-start-1">
             <MatchupIntelPanel rows={JIG_MATCHUPS} />
