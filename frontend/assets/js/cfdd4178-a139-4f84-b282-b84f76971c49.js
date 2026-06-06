@@ -122,13 +122,16 @@ const Stage = ({ engine, lens, ccOpen, onCloseCC, appliedFilters, onApplyFilters
 
 
   } else if (lens && lens.id === "fullSlate") {
-    const rows = applyRoomFilters(LEADERBOARD_ROWS, appliedFilters);
+    const sourceRows = engine.id === "jig"
+      ? (window.LEADERBOARD_ROWS_JIG || [])
+      : (window.LEADERBOARD_ROWS || []);
+    const rows = applyRoomFilters(sourceRows, appliedFilters);
     const nf = countActiveFilters(appliedFilters);
     body =
     <div className="md-room">
         <FullSlateMatrix
         rows={rows}
-        total={LEADERBOARD_ROWS.length}
+        total={sourceRows.length}
         onOpen={onOpenPlayer}
         filterNote={nf > 0 ? `${nf} ACTIVE FILTER${nf > 1 ? "S" : ""}` : "NO ACTIVE FILTERS"} />
       </div>;
