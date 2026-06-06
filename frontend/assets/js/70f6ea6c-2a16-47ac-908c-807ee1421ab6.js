@@ -1,29 +1,5 @@
-/* HR Engine — Live data loader.
-   Fetches from FastAPI at mlb-hr-api.fly.dev/api/slate.
-   Falls back to empty arrays if API is unavailable. */
+/* HR Engine — Data loader stub. Globals initialized here; live fetch handled by MasterDashboard. */
 
 window.LEADERBOARD_ROWS = [];
 window.LEADERBOARD_ROWS_JIG = [];
 window.SLATE_GAMES = [];
-window._dataLoaded = false;
-
-(async function loadSlateData() {
-  try {
-    const res = await fetch("https://mlb-hr-api.fly.dev/api/slate?t=" + Date.now());
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    window.LEADERBOARD_ROWS = data.leaderboard_rows || [];
-    window.LEADERBOARD_ROWS_JIG = data.leaderboard_rows_jig || [];
-    window.SLATE_GAMES = data.slate_games || [];
-    window._dataLoaded = true;
-    // Dispatch event so React components can re-render with live data
-    window.dispatchEvent(new CustomEvent("hrEngineDataLoaded", { detail: data }));
-  } catch (err) {
-    console.warn("HR Engine: failed to load live data, using empty slate.", err);
-    window.LEADERBOARD_ROWS = [];
-    window.LEADERBOARD_ROWS_JIG = [];
-    window.SLATE_GAMES = [];
-    window._dataLoaded = false;
-    window.dispatchEvent(new CustomEvent("hrEngineDataLoaded", { detail: {} }));
-  }
-})();
