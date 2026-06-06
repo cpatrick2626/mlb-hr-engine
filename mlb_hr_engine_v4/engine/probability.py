@@ -462,6 +462,36 @@ def game_hr_probability(
     return min(prob, _MAX_GAME_HR_PROB)
 
 
+def h2h_factor(h2h: dict) -> float:
+    """
+    Head-to-head career multiplier.
+    Regresses to 1.0 at low PA sample.
+    Range: [0.93, 1.14] per doctrine.
+    """
+    if not h2h:
+        return 1.0
+    pa   = h2h.get("pa", 0)
+    hr   = h2h.get("hr", 0)
+    slg  = h2h.get("slg", 0) or 0
+
+    if pa < 5:
+        return 1.0
+
+    # PA-based confidence weight: 0% at <10 PA, 100% at ≥50 PA
+    weight = min(max((pa - 10) / 40, 0.0), 1.0)
+
+    # HR rate vs league avg (LEAGUE_AVG_HR_FB * LEAGUE_AVG_FB_PCT ≈ 0.027)
+    league_hr_pa = 0.027
+    batter_hr_pa = hr / pa if pa > 0 else league_hr_pa
+    raw_ratio    = batter_hr_pa / league_hr_pa
+
+    # Blend toward neutral at low sample
+    blended = 1.0 + weight * (raw_ratio - 1.0)
+
+    # Clamp to doctrine range [0.93, 1.14]
+    return max(0.93, min(1.14, blended))
+
+
 def hot_streak_factor(short_form: dict, season_stats: dict) -> float:
     """
     Detect hot/cold form over the last SHORT_FORM_GAMES games vs season average.

@@ -31,6 +31,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from api.auth import require_auth, require_beta
 from api.cache import get_picks, store_picks, list_runs, redeem_invite
+from clients.arsenal import get_pitcher_arsenal, arsenal_matchup_factor
+from clients.pitch_mix import get_batter_vs_pitches, get_pitcher_pitch_stats
 
 log = logging.getLogger("uvicorn.error")
 
@@ -138,34 +140,102 @@ def _flt(val):
         return None
 
 
-def _jig_score(p):
+def _jig_score(player: dict, arsenal_data: dict | None = None) -> float:
     """
-    JIG tactical HVY base score.
-    Matches app.py:8260-8270 formula exactly.
-    xSLG×0.25 + Barrel×0.20 + ISO×0.15 + PullAir×0.15 + HardHit×0.15 + SweetSpot×0.10
-    All inputs raw Statcast — no model_prob, no composite, no HVY modifier.
+    JIG tactical exploit score.
+    Inputs: raw Statcast contact/power profile + optional
+    arsenal/pitch-mix signals.
+    No model_prob. No HVY modifier (display-only per doctrine).
     """
-    def _f(val):
-        if val is None: return 0.0
-        try: return float(str(val).replace("%","").strip())
-        except: return 0.0
+    def _f(key):
+        v = player.get(key, 0)
+        if isinstance(v, str):
+            v = v.replace("%", "").strip()
+        try:
+            return float(v)
+        except (ValueError, TypeError):
+            return 0.0
 
-    xslg     = _f(p.get("xslg"))
-    barrel   = _f(p.get("barrel_pct"))
-    iso      = _f(p.get("xiso"))
-    pull_air = _f(p.get("pull_air_pct"))
-    hard_hit = _f(p.get("hard_hit"))
-    sweet    = _f(p.get("sweet_spot_pct"))
+    # --- Contact/power base (0.78 weight) ---
+    xslg        = _f("xslg")        * 0.20
+    barrel      = _f("barrel_pct")  * 0.17
+    xiso        = _f("xiso")        * 0.12
+    pull_air    = _f("pull_air_pct")* 0.11
+    hard_hit    = _f("hard_hit")    * 0.11
+    sweet_spot  = _f("sweet_spot_pct") * 0.07
+    base_score  = xslg + barrel + xiso + pull_air + hard_hit + sweet_spot
 
-    return round(
-        xslg     * 0.25 +
-        barrel   * 0.20 +
-        iso      * 0.15 +
-        pull_air * 0.15 +
-        hard_hit * 0.15 +
-        sweet    * 0.10,
-        4
-    )
+    # --- Tactical signals (0.22 weight) ---
+    arsenal_signal  = 0.0
+    pitch_dmg_signal = 0.0
+    pitch_mix_signal = 0.0
+
+    pitcher_id  = player.get("pitcher_id")
+    batter_id   = player.get("batter_id") or player.get("player_id")
+    batter_side = player.get("batter_side", "")
+
+    if arsenal_data and pitcher_id:
+        try:
+            # Arsenal vulnerability [0.82, 1.20] → normalize to [0, 1]
+            raw = arsenal_matchup_factor(pitcher_id, arsenal_data, batter_side)
+            arsenal_signal = ((raw - 0.82) / (1.20 - 0.82)) * 0.12
+        except Exception as e:
+            log.warning("JIG arsenal_signal fallback | player=%s pitcher=%s err=%s",
+                player.get("player_name", "?"), pitcher_id, e)
+            arsenal_signal = 0.0
+    else:
+        if not pitcher_id:
+            log.debug("JIG tactical signals skipped | player=%s no pitcher_id",
+                player.get("player_name", "?"))
+
+    if pitcher_id and batter_id:
+        try:
+            # Batter damage vs pitch types: weighted avg hr_rate
+            # across pitcher's pitch mix, batter-side filtered
+            pitcher_pitches = get_pitcher_pitch_stats(pitcher_id, batter_side)
+            batter_vs       = get_batter_vs_pitches(batter_id, batter_side)
+            dmg = 0.0
+            total_pct = 0.0
+            for pitch_type, pdata in pitcher_pitches.items():
+                usage = pdata.get("pitch_pct", 0)
+                bvp   = batter_vs.get(pitch_type, {})
+                hr_r  = bvp.get("hr_rate", 0)
+                dmg  += usage * hr_r
+                total_pct += usage
+            if total_pct > 0:
+                dmg /= total_pct
+            # Normalize: league avg hr_rate ~0.03, cap at 0.12
+            pitch_dmg_signal = min(dmg / 0.12, 1.0) * 0.06
+        except Exception as e:
+            log.warning("JIG pitch_dmg_signal fallback | player=%s pitcher=%s err=%s",
+                player.get("player_name", "?"), pitcher_id, e)
+            pitch_dmg_signal = 0.0
+
+        try:
+            # Pitch-mix weakness: pitcher's worst rv_per100 pitches
+            # weighted by usage vs this batter side
+            pitcher_pitches = get_pitcher_pitch_stats(pitcher_id, batter_side)
+            weakness = 0.0
+            total_pct = 0.0
+            for pdata in pitcher_pitches.values():
+                usage  = pdata.get("pitch_pct", 0)
+                rv     = pdata.get("rv_per100", 0) or 0
+                # Higher rv_per100 = worse for pitcher = exploit signal
+                weakness += usage * max(rv, 0)
+                total_pct += usage
+            if total_pct > 0:
+                weakness /= total_pct
+            # Normalize: cap at rv_per100 of 3.0
+            pitch_mix_signal = min(weakness / 3.0, 1.0) * 0.04
+        except Exception as e:
+            log.warning("JIG pitch_mix_signal fallback | player=%s pitcher=%s err=%s",
+                player.get("player_name", "?"), pitcher_id, e)
+            pitch_mix_signal = 0.0
+
+    return (base_score
+            + arsenal_signal
+            + pitch_dmg_signal
+            + pitch_mix_signal)
 
 
 # ── Full Slate ─────────────────────────────────────────────────────────────────
@@ -246,6 +316,7 @@ async def get_slate():
                 "swstr":    None,
                 "pullbrl":  None,
                 "pullair":  _pct(p.get("pull_air_pct")),
+                "h2h_factor": round(float(p.get("h2h_factor") or 1.0), 4),
                 "fast":     None,
                 "squp":     None,
                 "blast":    None,
@@ -259,22 +330,27 @@ async def get_slate():
         )
 
         # JIG list — same players, sorted by HVY base score descending
-        jig_rows = sorted(
-            [copy.copy(r) for r in leaderboard_rows],
-            key=lambda r: _jig_score(
-                next((p for p in players
-                      if (p.get("player_name") or "") == (r.get("name") or "")),
-                     {})
-            ),
-            reverse=True
-        )
-
-        # Add jig_score field to each JIG row for display
-        for r in jig_rows:
-            p = next((p for p in players
-                       if (p.get("player_name") or "") == (r.get("name") or "")),
-                      {})
-            r["jigScore"] = _jig_score(p)
+        import datetime
+        try:
+            _arsenal_data = get_pitcher_arsenal(datetime.datetime.now().year)
+            jig_rows = sorted(
+                [copy.copy(r) for r in leaderboard_rows],
+                key=lambda r: _jig_score(
+                    next((p for p in players
+                          if (p.get("player_name") or "") == (r.get("name") or "")),
+                         {}),
+                    arsenal_data=_arsenal_data,
+                ),
+                reverse=True
+            )
+            for r in jig_rows:
+                p = next((p for p in players
+                           if (p.get("player_name") or "") == (r.get("name") or "")),
+                          {})
+                r["jigScore"] = _jig_score(p, arsenal_data=_arsenal_data)
+        except Exception as e:
+            log.error("JIG row build failed: %s", e, exc_info=True)
+            jig_rows = []
 
         seen_games = {}
         for p in players:
@@ -310,7 +386,7 @@ async def get_slate():
 
     except Exception as e:
         log.error(f"[/api/slate] {e}", exc_info=True)
-        return {"error": str(e), "leaderboard_rows": [], "slate_games": []}
+        return {"error": str(e), "leaderboard_rows": [], "leaderboard_rows_jig": [], "slate_games": []}
 
 
 # ── Internals ──────────────────────────────────────────────────────────────────

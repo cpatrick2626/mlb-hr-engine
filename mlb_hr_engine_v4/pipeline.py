@@ -21,6 +21,7 @@ from config import (
 from clients import mlb_stats, odds_api
 from clients import weather as weather_client
 from clients import statcast as statcast_client
+from clients.pitch_mix import get_h2h
 from data.park_factors import get_park
 from engine import market as mkt, probability as prob, ev as ev_engine, sizing, filters
 from engine import calibration as _cal
@@ -216,6 +217,10 @@ def _build_player_profile(
 
     plat_factor = prob.platoon_factor(splits, pitcher_hand, batter_side, season_pa)
 
+    # H2H career multiplier
+    h2h_data   = get_h2h(pitcher_id or 0, player_id)
+    h2h_mult   = prob.h2h_factor(h2h_data)
+
     # Stage 6: batter × pitcher interaction term (non-additive matchup synergy).
     # Uses pit_factor (full combined signal) instead of sc_pit_fac alone — sc_pit_fac
     # is already embedded in pit_factor at 40% weight, so using it directly double-counted
@@ -226,7 +231,7 @@ def _build_player_profile(
     interaction    = batter_excess * pitcher_excess * _ic
 
     early_supp    = prob.early_season_suppressor(season_pa, sc_source)
-    adjusted_rate = min(0.15, hr_rate * streak_fac * k_fac * early_supp * (1.0 + interaction))
+    adjusted_rate = min(0.15, hr_rate * streak_fac * k_fac * early_supp * h2h_mult * (1.0 + interaction))
     model_prob = prob.game_hr_probability(
         adjusted_rate, exp_pa,
         pk_factor=pk_factor, pitcher_fac=pit_factor,
@@ -278,6 +283,7 @@ def _build_player_profile(
         "player_id": player_id, "player_name": player_name,
         "team": team, "opponent": opponent, "home_team": home_team,
         "pitcher_name": pitcher_name, "pitcher_id": pitcher_id,
+        "pitcher_confirmed": pitcher_id is not None,
         "lineup_spot": lineup_spot, "expected_pa": round(exp_pa, 1),
         "season_pa": season_pa, "season_hr": int(season_stats.get("homeRuns", 0)),
         "recent_pa": recent_pa, "hr_rate": round(hr_rate, 5),
@@ -295,6 +301,7 @@ def _build_player_profile(
         "park_factor": round(pk_factor, 3), "pitcher_factor": round(pit_factor, 3),
         "pitcher_days_rest": pitcher_days_rest, "fatigue_factor": round(fatigue_fac, 3),
         "weather_factor": round(w_factor, 3), "platoon_factor": round(plat_factor, 3),
+        "h2h_factor": round(h2h_mult, 4),
         "batter_side": batter_side,
         "pitcher_hand": pitcher_hand,
         "model_prob": round(model_prob, 4), "weather": weather,
