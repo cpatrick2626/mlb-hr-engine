@@ -85,6 +85,7 @@ window.SORT_OPTIONS = [
   { label: "xwOBA",          key: "xwoba" },
   { label: "HR / PA",        key: "hrpa" },
   { label: "AVG",            key: "avg" },
+  { label: "JIG Score",      key: "jigScore" },
 ];
 
 window.applyRoomFilters = function (rows, f) {

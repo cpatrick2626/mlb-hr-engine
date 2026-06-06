@@ -7,7 +7,10 @@ const StageCommand = ({ engine, lens, onClose, initialFilters, onApply }) => {
   const ctx = lens ? `${engine.name} · ${lens.name}` : `${engine.name}${engine.suffix ? " " + engine.suffix : ""}`;
   const accent = engine.color;
 
-  const seed = { ...FILTER_DEFAULTS, ...(initialFilters || {}) };
+  const engineDefaults = engine.id === "jig"
+    ? { ...FILTER_DEFAULTS, sortKey: "jigScore", sortDir: "Descending" }
+    : FILTER_DEFAULTS;
+  const seed = { ...engineDefaults, ...(initialFilters || {}) };
   const [draft, setDraft] = React.useState(seed);
   const [resetKey, setResetKey] = React.useState(0);
   const [justApplied, setJustApplied] = React.useState(false);
@@ -15,7 +18,8 @@ const StageCommand = ({ engine, lens, onClose, initialFilters, onApply }) => {
   const set = (patch) => { setDraft((d) => ({ ...d, ...patch })); setJustApplied(false); };
   const active = countActiveFilters(draft);
 
-  const sortLabel = (SORT_OPTIONS.find((o) => o.key === draft.sortKey) || SORT_OPTIONS[0]).label;
+  const visibleSortOptions = SORT_OPTIONS.filter((o) => o.key !== "jigScore" || engine.id === "jig");
+  const sortLabel = (visibleSortOptions.find((o) => o.key === draft.sortKey) || visibleSortOptions[0]).label;
 
   const doReset = () => { setDraft({ ...FILTER_DEFAULTS }); setResetKey((k) => k + 1); setJustApplied(false); };
   const doApply = () => { onApply(draft); setJustApplied(true); setTimeout(() => onClose(), 650); };
@@ -117,8 +121,8 @@ const StageCommand = ({ engine, lens, onClose, initialFilters, onApply }) => {
           <Stepper label="Min Projected HR %" value={0} step={0.5} decimals={1} max={100} />
           <Stepper label="Min Confidence %" value={0} step={0.5} decimals={1} max={100} />
           <Stepper label="Max Players" value={draft.maxPlayers} step={1} decimals={0} min={1} max={75} onChange={(v) => set({ maxPlayers: v })} />
-          <Dropdown label="Sort By" value={sortLabel} options={SORT_OPTIONS.map((o) => o.label)}
-            onChange={(label) => set({ sortKey: (SORT_OPTIONS.find((o) => o.label === label) || SORT_OPTIONS[0]).key })} />
+          <Dropdown label="Sort By" value={sortLabel} options={visibleSortOptions.map((o) => o.label)}
+            onChange={(label) => set({ sortKey: (visibleSortOptions.find((o) => o.label === label) || visibleSortOptions[0]).key })} />
           <Dropdown label="Sort Direction" value={draft.sortDir} options={["Descending", "Ascending"]}
             onChange={(v) => set({ sortDir: v })} />
         </FilterPanel>
