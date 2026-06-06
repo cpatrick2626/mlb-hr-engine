@@ -1,0 +1,14 @@
+mlb_hr_engine_v1/
+mlb_hr_engine_v2/
+mlb_hr_engine_v3/
+MLB HR ENGINE/
+docs/
+frontend/
+.git/
+*.md
+*.pyc
+__pycache__/
+.env
+.env.*
+*.log
+reports/

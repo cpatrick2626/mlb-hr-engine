@@ -3,10 +3,14 @@
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
 
-app = 'mlb-hr-engine'
-primary_region = 'ord'
+app = 'mlb-hr-api'
+primary_region = 'iad'
 
 [build]
+
+[mounts]
+  source = "mlb_tracking"
+  destination = "/app/tracking"
 
 [http_service]
   internal_port = 8080

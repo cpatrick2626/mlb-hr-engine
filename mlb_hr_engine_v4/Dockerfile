@@ -6,10 +6,10 @@ WORKDIR /app
 
 
 RUN python -m venv .venv
-COPY requirements.txt ./
-RUN .venv/bin/pip install -r requirements.txt
+COPY requirements-api.txt ./
+RUN .venv/bin/pip install -r requirements-api.txt
 FROM python:3.12.13-slim
 WORKDIR /app
 COPY --from=builder /app/.venv .venv/
 COPY . .
-CMD ["/app/.venv/bin/streamlit", "run", "tracking/sheets.py"]
+CMD ["/app/.venv/bin/uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8080"]
