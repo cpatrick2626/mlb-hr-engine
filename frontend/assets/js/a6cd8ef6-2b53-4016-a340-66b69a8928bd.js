@@ -31,6 +31,25 @@ function MasterDashboard() {
   // (saved filters for each room persist and re-apply when you return).
   React.useEffect(() => { setCcOpen(false); }, [active.engineId, active.lensId]);
 
+  // Fetch live slate data after React mounts so hrEngineDataLoaded fires after listeners attach.
+  React.useEffect(() => {
+    fetch("https://mlb-hr-api.fly.dev/api/slate")
+      .then(r => r.json())
+      .then(data => {
+        if (data.leaderboard_rows?.length) {
+          window.LEADERBOARD_ROWS = data.leaderboard_rows;
+        }
+        if (data.leaderboard_rows_jig?.length) {
+          window.LEADERBOARD_ROWS_JIG = data.leaderboard_rows_jig;
+        }
+        if (data.slate_games?.length) {
+          window.SLATE_GAMES = data.slate_games;
+        }
+        window.dispatchEvent(new CustomEvent("hrEngineDataLoaded", { detail: data }));
+      })
+      .catch(err => console.warn("HR Engine API fetch failed:", err));
+  }, []);
+
   const defaultLens = (eng) => eng.subs.find((s) => s.tag === "DEFAULT") || eng.subs[0];
 
   // Select a room (engine) from the nav panel.
