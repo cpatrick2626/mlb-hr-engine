@@ -1,8 +1,9 @@
 ﻿{
-  "rewrites": [
+  "version": 2,
+  "routes": [
     {
-      "source": "/api/:path*",
-      "destination": "https://mlb-hr-api.fly.dev/api/:path*"
+      "src": "/api/(.*)",
+      "dest": "https://mlb-hr-api.fly.dev/api/$1"
     }
   ]
 }
