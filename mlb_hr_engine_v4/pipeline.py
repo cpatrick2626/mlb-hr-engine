@@ -136,8 +136,21 @@ def _build_player_profile(
     sc_summary = statcast_client.statcast_summary(player_id, batter_data)
 
     # Derived contact-quality fields used by profile-based parlay scoring
-    actual_slg = float(season_stats.get("sluggingPercentage", 0) or 0)
-    actual_obp = float(season_stats.get("onBasePercentage", 0) or 0)
+    # Compute SLG and OBP from available counting stats
+    # MLB Stats API bulk group omits sluggingPercentage/onBasePercentage
+    _ab  = int(season_stats.get("atBats", 0) or 0)
+    _h   = int(season_stats.get("hits", 0) or 0)
+    _2b  = int(season_stats.get("doubles", 0) or 0)
+    _3b  = int(season_stats.get("triples", 0) or 0)
+    _hr  = int(season_stats.get("homeRuns", 0) or 0)
+    _bb  = int(season_stats.get("baseOnBalls", 0) or 0)
+    _hbp = int(season_stats.get("hitByPitch", 0) or 0)
+    _1b  = _h - _2b - _3b - _hr
+    _tb  = _1b + (2 * _2b) + (3 * _3b) + (4 * _hr)
+    actual_slg = round(_tb / _ab, 3) if _ab > 0 else 0.0
+    # OBP approximation — SF not in bulk group, excluded
+    actual_obp = round((_h + _bb + _hbp) / (_ab + _bb + _hbp), 3) \
+               if (_ab + _bb + _hbp) > 0 else 0.0
     xba_float  = _safe_float(sc_stats.get("xba"))
     xslg_float = _safe_float(sc_stats.get("xslg"))
 
