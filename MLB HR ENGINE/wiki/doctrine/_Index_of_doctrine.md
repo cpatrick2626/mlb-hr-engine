@@ -2,6 +2,7 @@
  [[wiki/doctrine/jig-tactical-doctrine|jig-tactical-doctrine]]
  [[wiki/doctrine/main-jig-separation|main-jig-separation]]
  [[wiki/doctrine/main-model-doctrine|main-model-doctrine]]
+ [[wiki/doctrine/OBSIDIAN_GOVERNANCE_DOCTRINE|OBSIDIAN_GOVERNANCE_DOCTRINE]]
  [[wiki/doctrine/room-governance|room-governance]]
  [[wiki/doctrine/visual-design-doctrine|visual-design-doctrine]]
  [[wiki/doctrine/visual-design-tokens|visual-design-tokens]]

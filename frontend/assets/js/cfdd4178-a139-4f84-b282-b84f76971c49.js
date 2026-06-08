@@ -90,9 +90,13 @@ const JigBuilder = ({ eyebrow }) =>
 
 const Stage = ({ engine, lens, ccOpen, onCloseCC, appliedFilters, onApplyFilters, onClearFilters, onOpenPlayer }) => {
   const eyebrow = `${engine.name}${engine.suffix ? " " + engine.suffix : ""}${lens ? "  /  " + lens.name.toUpperCase() : ""}`;
-  const [dataVersion, setDataVersion] = React.useState(0);
+  const [mainRows, setMainRows] = React.useState([]);
+  const [jigRows, setJigRows] = React.useState([]);
   React.useEffect(() => {
-    const handler = () => setDataVersion(v => v + 1);
+    const handler = () => {
+      setMainRows(window.LEADERBOARD_ROWS || []);
+      setJigRows(window.LEADERBOARD_ROWS_JIG || []);
+    };
     window.addEventListener("hrEngineDataLoaded", handler);
     return () => window.removeEventListener("hrEngineDataLoaded", handler);
   }, []);
@@ -122,9 +126,7 @@ const Stage = ({ engine, lens, ccOpen, onCloseCC, appliedFilters, onApplyFilters
 
 
   } else if (lens && lens.id === "fullSlate") {
-    const sourceRows = engine.id === "jig"
-      ? (window.LEADERBOARD_ROWS_JIG || [])
-      : (window.LEADERBOARD_ROWS || []);
+    const sourceRows = engine.id === "jig" ? jigRows : mainRows;
     const rows = applyRoomFilters(sourceRows, appliedFilters);
     const nf = countActiveFilters(appliedFilters);
     body =
@@ -137,7 +139,7 @@ const Stage = ({ engine, lens, ccOpen, onCloseCC, appliedFilters, onApplyFilters
       </div>;
 
   } else if (lens && lens.id === "topTargets") {
-    const base = (window.LEADERBOARD_ROWS || []).filter((r) => r.tier === "ELITE" || r.tier === "EDGE");
+    const base = mainRows.filter((r) => r.tier === "ELITE" || r.tier === "EDGE");
     const rows = applyRoomFilters(base, appliedFilters);
     body =
     <div className="md-room">
