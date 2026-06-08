@@ -33,7 +33,11 @@ function JigCommand({ engine, lens, onOpenPlayer }) {
           <button className="hr-btn hr-btn--ghost" onClick={doLoad}>LOAD BUILDER</button>
         </div>
       </div>
-      <FullSlateMatrix rows={builderRows} total={builderRows.length} onOpen={onOpenPlayer} />
+      <div className="jig-banner" role="status" aria-live="polite">
+        <div className="jig-banner__title">JIG BUILDER · PHASE A WORKSPACE</div>
+        <div className="jig-banner__sub">Current source: JIG scored slate rows. Raw unscored Builder feed is not exposed yet.</div>
+      </div>
+      <FullSlateMatrix rows={builderRows} total={builderRows.length} onOpen={onOpenPlayer} builderMode={true} />
     </div>
   );
 }

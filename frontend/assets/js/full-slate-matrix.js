@@ -37,6 +37,14 @@ const FSM_MATCHUP_DESC = {
   WEAK: "leans to the pitcher (1/4)",
   DANGER: "pitcher strongly favored (0/4)",
 };
+const FSM_BUILDER_TIER_DESC = {
+  APEX: "inherited highest-scored tier from current JIG scored slate feed",
+  ELITE: "inherited premium-scored tier from current JIG scored slate feed",
+  EDGE: "inherited advantage tier from current JIG scored slate feed",
+  SIGNAL: "inherited positive-signal tier from current JIG scored slate feed",
+  WATCH: "inherited lower-confidence tier from current JIG scored slate feed",
+  COLD: "inherited lowest-scored tier from current JIG scored slate feed",
+};
 
 const TEAM_COLOR = {
   MIA: "#00a3e0", TOR: "#1d4f91", NYY: "#8a95a0", BOS: "#bd3039", COL: "#5b48a0",
@@ -150,7 +158,7 @@ function fsmFanduelUrl(row) {
   return "https://sportsbook.fanduel.com/search?query=" + encodeURIComponent(row.name + " home run");
 }
 
-function FsmRow({ row, cols, showGame, onBatter, onPitch }) {
+function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false }) {
   const t = FSM_TIERS[row.tier] || FSM_TIERS.COLD;
   const m = FSM_MATCHUP[row.quality] || FSM_MATCHUP.AVG;
   const game = showGame ? (window.SLATE_GAMES || []).find((g) => g.id === row.gameId) : null;
@@ -161,18 +169,28 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch }) {
   return (
     <tr className="fsm-row">
       <td className="fsm-tiercell">
-        <button
-          type="button"
-          className="fsm-tier"
-          style={{ "--tc": t.color, "--tg": t.glow }}
-          onClick={addToFanduel}
-          title={`Add ${row.name} (${row.tier}) to FanDuel`}
-          aria-label={`Add ${row.name} to FanDuel`}>
-          
-          <span className="fsm-tier__icon"><FsmTierIcon tier={row.tier} /></span>
-          <span className="fsm-tier__label">{row.tier}</span>
-          <span className="fsm-tier__add" aria-hidden="true">+ FD</span>
-        </button>
+        {builderMode ? (
+          <span
+            className="fsm-tier"
+            style={{ "--tc": t.color, "--tg": t.glow }}
+            title={`${row.tier} tier from current JIG scored slate feed`}>
+            <span className="fsm-tier__icon"><FsmTierIcon tier={row.tier} /></span>
+            <span className="fsm-tier__label">{row.tier}</span>
+          </span>
+        ) : (
+          <button
+            type="button"
+            className="fsm-tier"
+            style={{ "--tc": t.color, "--tg": t.glow }}
+            onClick={addToFanduel}
+            title={`Add ${row.name} (${row.tier}) to FanDuel`}
+            aria-label={`Add ${row.name} to FanDuel`}>
+            
+            <span className="fsm-tier__icon"><FsmTierIcon tier={row.tier} /></span>
+            <span className="fsm-tier__label">{row.tier}</span>
+            <span className="fsm-tier__add" aria-hidden="true">+ FD</span>
+          </button>
+        )}
       </td>
       <td className="fsm-player">
         <button type="button" className="fsm-player__in" onClick={() => onBatter(row)} title={`Open ${row.name} batter card`}>
@@ -227,6 +245,10 @@ const FSM_GROUP_OPTS = [
 { id: "all", label: "All Players", desc: "Every batter in today's slate." },
 { id: "qualified", label: "Qualified", desc: "Batters with 100+ plate appearances (stable sample size)." },
 { id: "elite", label: "Elite Targets", desc: "APEX, ELITE & EDGE tier batters only (model HR% ≥ 9%)." }];
+const FSM_BUILDER_GROUP_OPTS = [
+{ id: "all", label: "All Players", desc: "Every batter from current JIG-side slate feed." },
+{ id: "qualified", label: "Qualified", desc: "Batters with 100+ plate appearances from current scored feed." },
+{ id: "elite", label: "Elite Targets", desc: "Inherited top scored tiers from current JIG slate feed; not Builder-native raw ranking." }];
 
 const FSM_FOCUS_OPTS = [
 { id: "all", label: "ALL", desc: "All hitter profiles." },
@@ -258,7 +280,7 @@ function FsmRadioGroup({ label, value, onChange, options }) {
 
 let fsmDragKey = null;
 
-function FsmTable({ rows, cols, showGame, onBatter, onPitch, onReorder, onSort, sortState }) {
+function FsmTable({ rows, cols, showGame, onBatter, onPitch, onReorder, onSort, sortState, builderMode = false }) {
   const thProps = (c) => ({
     draggable: true,
     onDragStart: (e) => { fsmDragKey = c.key; e.dataTransfer.effectAllowed = "move"; },
@@ -292,7 +314,7 @@ function FsmTable({ rows, cols, showGame, onBatter, onPitch, onReorder, onSort, 
         </tr>
       </thead>
       <tbody>
-        {rows.map((r) => <FsmRow key={r.id} row={r} cols={cols} showGame={showGame} onBatter={onBatter} onPitch={onPitch} />)}
+        {rows.map((r) => <FsmRow key={r.id} row={r} cols={cols} showGame={showGame} onBatter={onBatter} onPitch={onPitch} builderMode={builderMode} />)}
       </tbody>
     </table>);
 
@@ -355,7 +377,7 @@ function FsmStat({ label, value, color }) {
   return <div className="fsm-stat"><span className="fsm-stat__l">{label}</span><span className="fsm-stat__v" style={{ color }}>{value}</span></div>;
 }
 
-function FsmBatterCard({ row, onClose, onPitch }) {
+function FsmBatterCard({ row, onClose, onPitch, builderMode = false }) {
   const t = FSM_TIERS[row.tier] || FSM_TIERS.COLD;
   const m = FSM_MATCHUP[row.quality] || FSM_MATCHUP.AVG;
   const game = getFSMGames().find((g) => g.id === row.gameId);
@@ -379,7 +401,7 @@ function FsmBatterCard({ row, onClose, onPitch }) {
         </div>
         <div className="fsm-card__prob">
           <span className="fsm-card__probval" style={{ color: t.color }}>{row.hrprob.toFixed(1)}%</span>
-          <span className="fsm-card__problbl">MODEL HR PROB</span>
+          <span className="fsm-card__problbl">{builderMode ? "INHERITED SCORE FEED" : "MODEL HR PROB"}</span>
         </div>
         <button className="fsm-card__close" onClick={onClose} aria-label="Close">✕</button>
       </div>
@@ -401,7 +423,7 @@ function FsmBatterCard({ row, onClose, onPitch }) {
       )}
       <div className="fsm-card__foot">
         <span className="fsm-card__env">{game ? `${game.park} · ${game.weather} · WIND ${game.wind}` : ""}</span>
-        <a className="fsm-card__fd" href={fsmFanduelUrl(row)} target="_blank" rel="noopener">+ ADD TO FANDUEL</a>
+        {!builderMode && <a className="fsm-card__fd" href={fsmFanduelUrl(row)} target="_blank" rel="noopener">+ ADD TO FANDUEL</a>}
       </div>
     </div>);
 
@@ -507,7 +529,7 @@ function FsmPitchTable({ title, accent, rows }) {
 
 }
 
-function FsmPitchMix({ row, onClose, onBatter }) {
+function FsmPitchMix({ row, onClose, onBatter, builderMode = false }) {
   const d = fsmH2HData(row);
   const pColor = TEAM_COLOR[d.pitcher.team] || "#ff3344";
   const bColor = TEAM_COLOR[d.batter.team] || "#3b6fff";
@@ -557,8 +579,8 @@ function FsmPitchMix({ row, onClose, onBatter }) {
           </div>
           <div className="fsm-h2h__btier">
             <div><span>BATTER TIER</span><b>{d.batter.tier}</b></div>
-            <div><span>CONFIDENCE</span><b style={{ color: "#1aff66" }}>{d.batter.confidence}</b></div>
-            <div><span>HR EV</span><b style={{ color: "#ffb020" }}>{d.batter.ev_odds}</b></div>
+            <div><span>{builderMode ? "SCORED FEED CONFIDENCE" : "CONFIDENCE"}</span><b style={{ color: "#1aff66" }}>{d.batter.confidence}</b></div>
+            <div><span>{builderMode ? "SOURCE FEED ODDS" : "HR EV"}</span><b style={{ color: "#ffb020" }}>{d.batter.ev_odds}</b></div>
           </div>
         </div>
 
@@ -587,13 +609,13 @@ function FsmPitchMix({ row, onClose, onBatter }) {
 
       <div className="fsm-card__foot">
         <button className="fsm-card__pitchbtn" onClick={onBatter}>← BATTER CARD</button>
-        <a className="fsm-card__fd" href={fsmFanduelUrl(row)} target="_blank" rel="noopener">+ ADD {d.batter.last.toUpperCase()} TO FANDUEL</a>
+        {!builderMode && <a className="fsm-card__fd" href={fsmFanduelUrl(row)} target="_blank" rel="noopener">+ ADD {d.batter.last.toUpperCase()} TO FANDUEL</a>}
       </div>
     </div>);
 
 }
 
-function FsmDetailModal({ modal, onClose, setModal }) {
+function FsmDetailModal({ modal, onClose, setModal, builderMode = false }) {
   React.useEffect(() => {
     const h = (e) => {if (e.key === "Escape") onClose();};
     window.addEventListener("keydown", h);
@@ -604,8 +626,8 @@ function FsmDetailModal({ modal, onClose, setModal }) {
     <div className="fsm-modal" onClick={onClose}>
       <div className="fsm-modal__inner" onClick={(e) => e.stopPropagation()}>
         {modal.type === "batter" ?
-        <FsmBatterCard row={modal.row} onClose={onClose} onPitch={() => setModal({ type: "pitch", row: modal.row })} /> :
-        <FsmPitchMix row={modal.row} onClose={onClose} onBatter={() => setModal({ type: "batter", row: modal.row })} />}
+        <FsmBatterCard row={modal.row} onClose={onClose} onPitch={() => setModal({ type: "pitch", row: modal.row })} builderMode={builderMode} /> :
+        <FsmPitchMix row={modal.row} onClose={onClose} onBatter={() => setModal({ type: "batter", row: modal.row })} builderMode={builderMode} />}
       </div>
     </div>);
 
@@ -642,7 +664,7 @@ function fsmAdjustRow(row, on) {
   return o;
 }
 
-function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded }) {
+function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMode = false }) {
   const [view, setView] = React.useState("game");
   const [selGame, setSelGame] = React.useState("all");
   const [group, setGroup] = React.useState("all");
@@ -694,6 +716,15 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded }) {
 
   const pool = sorted.filter((r) => (selGame === "all" || r.gameId === selGame) && passGroup(r) && passFocus(r));
   const gamesToShow = selGame === "all" ? getFSMGames() : getFSMGames().filter((g) => g.id === selGame);
+  const title = builderMode ? "JIG BUILDER WORKSPACE" : "FULL SLATE INTELLIGENCE MATRIX";
+  const subtitle = builderMode ?
+  "OPERATOR WORKSPACE USING JIG-SIDE SLATE ROWS. RAW UNSCORED FEED NOT YET EXPOSED." :
+  "LIVE HR THREAT SCAN · MATCHUP / BARREL / ENVIRONMENT / DEPLOYMENT READINESS";
+  const playerViewTitle = builderMode ?
+  "Builder view preserves the current JIG-side source order. Use column controls for manual inspection." :
+  "Flat list of every batter on the slate, ranked by model HR probability.";
+  const tierDesc = builderMode ? FSM_BUILDER_TIER_DESC : FSM_TIER_DESC;
+  const groupOpts = builderMode ? FSM_BUILDER_GROUP_OPTS : FSM_GROUP_OPTS;
 
   const noteBits = [];
   if (group !== "all") noteBits.push(group === "qualified" ? "QUALIFIED" : "ELITE TARGETS");
@@ -715,8 +746,8 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded }) {
       ) : (
       <div className="fsm-topbar">
         <div className="fsm-topbar__titles">
-          <h1 className="fsm-title">FULL SLATE INTELLIGENCE MATRIX</h1>
-          <div className="fsm-sub">LIVE HR THREAT SCAN · MATCHUP / BARREL / ENVIRONMENT / DEPLOYMENT READINESS</div>
+          <h1 className="fsm-title">{title}</h1>
+          <div className="fsm-sub">{subtitle}</div>
         </div>
         <div className="fsm-topbar__status">
           <span className="fsm-live"><i className="fsm-live__dot" />LIVE</span>
@@ -726,18 +757,27 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded }) {
         </div>
       </div>
       )}
+      {!embedded && builderMode && (
+      <div className="fsm-statusbar">
+        <span className="fsm-status__sys">PHASE A SOURCE</span>
+        <i />
+        <span>JIG SCORED SLATE ROWS</span><i />
+        <span>RAW UNSCORED BUILDER FEED PENDING</span><i />
+        <span>ORDER PRESERVED FROM CURRENT JIG SOURCE</span>
+      </div>
+      )}
 
       {/* CONTROLS + LEGENDS */}
       <div className="fsm-controls">
         <div className="fsm-viewtoggle" role="tablist">
           <button className={view === "game" ? "is-on" : ""} title="Group batters by game, each under its matchup header (park, time, weather, HR factor)." onClick={() => setView("game")}>GAME VIEW</button>
-          <button className={view === "player" ? "is-on" : ""} title="Flat list of every batter on the slate, ranked by model HR probability." onClick={() => setView("player")}>PLAYER VIEW</button>
+          <button className={view === "player" ? "is-on" : ""} title={playerViewTitle} onClick={() => setView("player")}>PLAYER VIEW</button>
         </div>
         <div className="fsm-legends">
           <div className="fsm-legend">
             <span className="fsm-legend__title">TIER</span>
             {FSM_TIER_ORDER.map((t) =>
-            <span className="fsm-tierpill" key={t} style={{ "--tc": FSM_TIERS[t].color, "--tg": FSM_TIERS[t].glow }} title={`${t} tier — ${FSM_TIER_DESC[t]}`}>{t}</span>
+            <span className="fsm-tierpill" key={t} style={{ "--tc": FSM_TIERS[t].color, "--tg": FSM_TIERS[t].glow }} title={`${t} tier — ${tierDesc[t]}`}>{t}</span>
             )}
           </div>
           <div className="fsm-legend">
@@ -804,7 +844,7 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded }) {
         <span className="fsm-pitchbar__note">{pmOn ? "Stats reflect each batter vs the pitcher they're facing — pitch mix + throwing hand" : "Showing season stats vs all pitchers"}</span>
       </div>
       <div className="fsm-filters">
-        <FsmRadioGroup label="PLAYER GROUP" value={group} onChange={setGroup} options={FSM_GROUP_OPTS} />
+        <FsmRadioGroup label="PLAYER GROUP" value={group} onChange={setGroup} options={groupOpts} />
         <span className="fsm-filters__div" />
         <FsmRadioGroup label="FOCUS" value={focus} onChange={setFocus} options={FSM_FOCUS_OPTS} />
       </div>
@@ -823,7 +863,7 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded }) {
 
       {/* BODY */}
       {view === "player" ?
-      <div className="fsm-tablewrap fsm-scroll-container"><FsmTable rows={pool} cols={activeCols} showGame={true} onBatter={openBatter} onPitch={openPitch} onReorder={onReorder} onSort={onSort} sortState={sortState} /></div> :
+      <div className="fsm-tablewrap fsm-scroll-container"><FsmTable rows={pool} cols={activeCols} showGame={true} onBatter={openBatter} onPitch={openPitch} onReorder={onReorder} onSort={onSort} sortState={sortState} builderMode={builderMode} /></div> :
 
       gamesToShow.map((game) => {
         const gameRows = pool.filter((r) => r.gameId === game.id);
@@ -831,7 +871,7 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded }) {
         return (
           <div className="fsm-gameblock" key={game.id} id={`fsm-game-${game.id}`}>
               <FsmGameHeader game={game} n={gameRows.length} />
-              <div className="fsm-tablewrap fsm-scroll-container"><FsmTable rows={gameRows} cols={activeCols} onBatter={openBatter} onPitch={openPitch} onReorder={onReorder} onSort={onSort} sortState={sortState} /></div>
+              <div className="fsm-tablewrap fsm-scroll-container"><FsmTable rows={gameRows} cols={activeCols} onBatter={openBatter} onPitch={openPitch} onReorder={onReorder} onSort={onSort} sortState={sortState} builderMode={builderMode} /></div>
             </div>);
 
       })
@@ -851,7 +891,7 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded }) {
       </div>
       )}
 
-      <FsmDetailModal modal={modal} onClose={() => setModal(null)} setModal={setModal} />
+      <FsmDetailModal modal={modal} onClose={() => setModal(null)} setModal={setModal} builderMode={builderMode} />
     </div>);
 
 }
