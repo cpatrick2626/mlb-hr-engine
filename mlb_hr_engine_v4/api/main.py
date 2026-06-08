@@ -199,7 +199,7 @@ def _jig_score(player: dict, arsenal_data: dict | None = None) -> float:
             for pitch_type, pdata in pitcher_pitches.items():
                 usage = pdata.get("pitch_pct", 0)
                 bvp   = batter_vs.get(pitch_type, {})
-                hr_r  = bvp.get("hr_rate", 0)
+                hr_r  = bvp.get("hr_rate") or 0
                 dmg  += usage * hr_r
                 total_pct += usage
             if total_pct > 0:
