@@ -10,3 +10,4 @@
 ## [2026-06-08] claude-code | Obsidian doctrine sync — startup-baseline audit findings | COMPLETE — 4 new doctrine files, 1 updated, index updated, log updated. DO NOT COMMIT / DO NOT PUSH.
 ## [2026-06-08] claude-code | MAIN/JIG/JIG Builder production fix validation recorded in Obsidian Governance Update | COMPLETE — live frontend/API validated, wiki/session/doctrine updated, DO NOT COMMIT / DO NOT PUSH.
 ## [2026-06-08] claude-code | JIG Top Targets production validation recorded in Obsidian Governance Update | COMPLETE — MAIN/JIG Top Targets independently sourced and validated live, commit 9962d27 noted with hygiene caveat, outstanding Phase B/C recorded. DO NOT COMMIT / DO NOT PUSH.
+## [2026-06-08] operator | JIG Builder Phase B UI cleanup deferred — JIG Builder UI remains as-is, Phase A accepted, Phase C future-only HIGH risk | DECISION RECORDED

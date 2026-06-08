@@ -3,6 +3,7 @@
  [[wiki/sessions/2026-05-26-phase1-track-a-and-main-doctrine|2026-05-26-phase1-track-a-and-main-doctrine]]
  [[wiki/sessions/2026-05-26-ranker-audit|2026-05-26-ranker-audit]]
  [[wiki/sessions/2026-05-26-wiki-build|2026-05-26-wiki-build]]
+ [[wiki/sessions/2026-06-08-jig-builder-phase-b-deferred|2026-06-08-jig-builder-phase-b-deferred]]
  [[wiki/sessions/2026-06-08-jig-top-targets-production-validation|2026-06-08-jig-top-targets-production-validation]]
  [[wiki/sessions/2026-06-08-main-jig-jig-builder-production-validation|2026-06-08-main-jig-jig-builder-production-validation]]
  [[wiki/sessions/ranker-reform-brief|ranker-reform-brief]]

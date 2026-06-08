@@ -97,13 +97,16 @@ Production validation was also recorded on 2026-06-08 for the live MAIN/JIG/JIG 
 
 ### Outstanding Future Work
 
-1. JIG Builder Phase B
+1. JIG Builder Phase B — **DEFERRED (operator decision 2026-06-08)**
    - Raw-workspace UI cleanup
    - Reduce formula-first language where needed
    - Avoid implying JIG Builder is fully raw while it still uses JIG-side scored rows
-2. JIG Builder Phase C
+   - **Do not modify JIG Builder UI unless operator explicitly reopens Phase B.**
+   - See session [[2026-06-08-jig-builder-phase-b-deferred]]
+2. JIG Builder Phase C — **FUTURE ONLY / HIGH RISK**
    - HIGH-risk backend/API raw data surface audit if true raw unscored slate rows are required
    - Current `/api/slate` payload exposes only `leaderboard_rows`, `leaderboard_rows_jig`, `slate_games`, and `generated_at`
+   - Requires separate authorized assignment with explicit operator authorization before any work begins
 3. JIG Top Targets
    - Previously audited adjacent issue: JIG Top Targets hard-coded `mainRows`
    - **RESOLVED** — fixed and production-validated 2026-06-08
@@ -148,8 +151,8 @@ Production validation was also recorded on 2026-06-08 for the live MAIN/JIG/JIG 
 
 ### Outstanding
 
-- JIG Builder Phase B — raw-workspace UI cleanup (LOW risk when prioritized)
-- JIG Builder Phase C — backend/API raw data surface audit (HIGH risk)
+- JIG Builder Phase B — raw-workspace UI cleanup — **DEFERRED (operator decision 2026-06-08)** — do not prioritize unless operator reopens
+- JIG Builder Phase C — backend/API raw data surface audit (HIGH risk) — future only
 - Commit hygiene note: fix landed under vault backup message
 
 ---
