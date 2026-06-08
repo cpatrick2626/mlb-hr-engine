@@ -105,9 +105,52 @@ Production validation was also recorded on 2026-06-08 for the live MAIN/JIG/JIG 
    - HIGH-risk backend/API raw data surface audit if true raw unscored slate rows are required
    - Current `/api/slate` payload exposes only `leaderboard_rows`, `leaderboard_rows_jig`, `slate_games`, and `generated_at`
 3. JIG Top Targets
-   - Previously audited adjacent issue: JIG Top Targets hard-codes `mainRows`
-   - Not fixed in this pass
-   - Requires separate audit/fix if operator prioritizes it
+   - Previously audited adjacent issue: JIG Top Targets hard-coded `mainRows`
+   - **RESOLVED** — fixed and production-validated 2026-06-08
+   - See session [[2026-06-08-jig-top-targets-production-validation]]
+
+---
+
+## JIG Top Targets Production Validation Status
+
+**Last validated:** 2026-06-08
+
+### Source Fix Confirmed
+
+- File: `frontend/assets/js/cfdd4178-a139-4f84-b282-b84f76971c49.js` lines 145–146
+- `const targetSourceRows = engine.id === "jig" ? jigRows : mainRows;`
+- MAIN Top Targets → `mainRows`. JIG Top Targets → `jigRows`. ELITE/EDGE filter unchanged.
+
+### API Snapshot
+
+- MAIN raw count: `176`
+- JIG raw count: `176`
+- MAIN Top Targets after filter: `69`
+- JIG Top Targets after filter: `69`
+
+### Live UI Validation
+
+- MAIN Top Targets count: `69 / 69` — top 1: Colton Cowser
+- JIG Top Targets count: `69 / 69` — top 1: Collin Price
+- MAIN/JIG Top Targets no longer mirror: yes
+- MAIN Full Slate operational: yes
+- JIG Full Slate operational: yes
+- JIG Builder operational: yes
+
+### Verdict
+
+- JIG Top Targets production source fix validated: **yes**
+- Repo synced with `origin/main` at validation time. Working tree clean.
+
+### Commit
+
+- `9962d27` — generic vault backup message (do not rewrite history)
+
+### Outstanding
+
+- JIG Builder Phase B — raw-workspace UI cleanup (LOW risk when prioritized)
+- JIG Builder Phase C — backend/API raw data surface audit (HIGH risk)
+- Commit hygiene note: fix landed under vault backup message
 
 ---
 

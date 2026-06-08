@@ -141,9 +141,9 @@ No push was performed in this session.
 
 ### 3. JIG Top Targets
 
-- Previously audited adjacent issue: JIG Top Targets hard-codes `mainRows`
-- Not fixed in this pass
-- Needs separate audit/fix if operator prioritizes it
+- Previously audited adjacent issue: JIG Top Targets hard-coded `mainRows`
+- **RESOLVED** — fixed and validated in follow-on session [[2026-06-08-jig-top-targets-production-validation]]
+- Commit: `9962d27` (generic vault backup message; do not rewrite history)
 
 ## Files Touched By This Documentation Session
 
