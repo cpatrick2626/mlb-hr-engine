@@ -2,7 +2,18 @@
    Shows the Full Slate Intelligence Matrix with a Save / Load builder bar on top. */
 
 function JigCommand({ engine, lens, onOpenPlayer }) {
-  const rows = window.LEADERBOARD_ROWS || [];
+  // Phase A stopgap: prefer raw slate rows if exposed; otherwise use JIG-side rows.
+  // Do not default JIG Builder to MAIN leaderboard rows.
+  const rawRows =
+    Array.isArray(window.SLATE_ROWS_RAW) ? window.SLATE_ROWS_RAW :
+    Array.isArray(window.RAW_SLATE_ROWS) ? window.RAW_SLATE_ROWS :
+    Array.isArray(window.LEADERBOARD_ROWS_RAW) ? window.LEADERBOARD_ROWS_RAW :
+    null;
+  const builderRows =
+    rawRows ||
+    (Array.isArray(window.LEADERBOARD_ROWS_JIG) ? window.LEADERBOARD_ROWS_JIG :
+    // Last-resort degraded fallback only if raw/JIG rows are missing entirely.
+    (Array.isArray(window.LEADERBOARD_ROWS) ? window.LEADERBOARD_ROWS : []));
   const [preset, setPreset] = React.useState("DEFAULT TACTICAL");
   const [flash, setFlash] = React.useState("");
 
@@ -22,7 +33,7 @@ function JigCommand({ engine, lens, onOpenPlayer }) {
           <button className="hr-btn hr-btn--ghost" onClick={doLoad}>LOAD BUILDER</button>
         </div>
       </div>
-      <FullSlateMatrix rows={rows} total={rows.length} onOpen={onOpenPlayer} />
+      <FullSlateMatrix rows={builderRows} total={builderRows.length} onOpen={onOpenPlayer} />
     </div>
   );
 }
