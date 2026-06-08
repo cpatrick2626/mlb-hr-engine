@@ -93,12 +93,15 @@ const Stage = ({ engine, lens, ccOpen, onCloseCC, appliedFilters, onApplyFilters
   const [mainRows, setMainRows] = React.useState([]);
   const [jigRows, setJigRows] = React.useState([]);
   React.useEffect(() => {
-    const handler = () => {
-      setMainRows(window.LEADERBOARD_ROWS || []);
-      setJigRows(window.LEADERBOARD_ROWS_JIG || []);
+    const hydrateRows = () => {
+      const nextMainRows = Array.isArray(window.LEADERBOARD_ROWS) ? window.LEADERBOARD_ROWS : [];
+      const nextJigRows = Array.isArray(window.LEADERBOARD_ROWS_JIG) ? window.LEADERBOARD_ROWS_JIG : [];
+      setMainRows(nextMainRows);
+      setJigRows(nextJigRows);
     };
-    window.addEventListener("hrEngineDataLoaded", handler);
-    return () => window.removeEventListener("hrEngineDataLoaded", handler);
+    hydrateRows();
+    window.addEventListener("hrEngineDataLoaded", hydrateRows);
+    return () => window.removeEventListener("hrEngineDataLoaded", hydrateRows);
   }, []);
   let body;
 

@@ -675,7 +675,7 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded }) {
   const timer = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
 
   const adjusted = React.useMemo(() => rows.map((r) => fsmAdjustRow(r, pmOn)), [rows, pmOn]);
-  const sorted0 = [...adjusted].sort((a, b) => b.hrprob - a.hrprob);
+  const sorted0 = [...adjusted];
   const sorted = sortState ? [...sorted0].sort((a, b) => {
     const av = a[sortState.key], bv = b[sortState.key];
     const an = av == null ? -Infinity : av, bn = bv == null ? -Infinity : bv;
