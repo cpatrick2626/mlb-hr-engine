@@ -14,6 +14,7 @@ MAIN and JIG are separate intelligence layers and must remain permanently separa
 4. **Separate output:** MAIN and JIG produce separate pick lists. A composite/blended list requires explicit new doctrine.
 5. **No hidden blending:** Do not introduce hidden composite scoring that blends tactical/HVY signals and model scoring. Any blend must be explicit, documented, and operator-authorized.
 6. **TCC orchestrates; does not compute:** The Tactical Control Center (TCC) orchestrates what the operator sees. It does not compute MAIN or JIG scores. See `MASTER_TCC_DOCTRINE.md`.
+7. **Separate key namespaces:** MAIN uses `tac_*` session/state keys. JIG uses `jig_tac_*` session/state keys. Cross-engine key access is contamination. Do not read or write across namespaces.
 
 ### What counts as contamination
 - Feeding JIG tactical scores into MAIN's λ

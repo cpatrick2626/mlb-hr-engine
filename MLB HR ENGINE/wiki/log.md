@@ -7,3 +7,4 @@
 ## [2026-05-26] claude | Design tokens extracted + filed to wiki\doctrine\visual-design-tokens.md | COMPLETE
 ## [2026-05-29] claude-code | Full Slate polish sprint GAPs 1–5 complete | COMMITTED dfca6a7
 ## [2026-05-29] claude-code | MIGRATION_HANDOFF.md updated — session closed | COMPLETE
+## [2026-06-08] claude-code | Obsidian doctrine sync — startup-baseline audit findings | COMPLETE — 4 new doctrine files, 1 updated, index updated, log updated. DO NOT COMMIT / DO NOT PUSH.

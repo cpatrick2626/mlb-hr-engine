@@ -1,14 +1,18 @@
 # MLB HR ENGINE — Intelligence Wiki Index
-Last updated: 2026-05-26
+Last updated: 2026-06-08
 
 ## DOCTRINE
 | Page | Summary | Agent | Status |
 |------|---------|-------|--------|
 | [MAIN Model Doctrine](doctrine/main-model-doctrine.md) | Quantitative/model scoring philosophy, EV, edge, Poisson | Claude | complete |
 | [JIG Tactical Doctrine](doctrine/jig-tactical-doctrine.md) | HVY pitch-mix signal, arsenal hunting, matchup exploitation | Claude | complete |
-| [MAIN/JIG Separation Rules](doctrine/main-jig-separation.md) | Invariants governing separation of intelligence layers | Claude | complete |
+| [MAIN/JIG Separation Rules](doctrine/main-jig-separation.md) | Invariants governing separation of intelligence layers; tac_* vs jig_tac_* key namespaces | Claude | updated 2026-06-08 |
 | [Visual Design Doctrine](doctrine/visual-design-doctrine.md) | Cinematic HUD, restrained glow, escalation hierarchy | Claude | complete |
 | [Room Governance](doctrine/room-governance.md) | Rooms 05/08/09/10/11 ownership boundaries | Claude | complete |
+| [App Shell Layout](doctrine/app-shell-layout.md) | MasterDashboard shell, engine-lens nav, MAIN/JIG identity colors, layout truth scope | Claude Code | 2026-06-08 |
+| [Production Surface Truth](doctrine/production-surface-truth.md) | root frontend/ = production; v4/frontend/ = prototype; main branch canonical | Claude Code | 2026-06-08 |
+| [Tier Vocabulary](doctrine/tier-vocabulary.md) | APEX/ELITE/EDGE vs QUIET/ACTIVE/ELEVATED vs prototype CRITICAL/HIGH — must not merge | Claude Code | 2026-06-08 |
+| [Build Log and Spec Status](doctrine/build-log-and-spec-status.md) | latest.md missing; empty spec placeholders in Docs/01_SPECS/ | Claude Code | 2026-06-08 |
 
 ## ARCHITECTURE
 | Page | Summary | Agent |
