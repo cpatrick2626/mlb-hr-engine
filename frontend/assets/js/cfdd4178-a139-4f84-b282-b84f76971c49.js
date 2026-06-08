@@ -142,7 +142,8 @@ const Stage = ({ engine, lens, ccOpen, onCloseCC, appliedFilters, onApplyFilters
       </div>;
 
   } else if (lens && lens.id === "topTargets") {
-    const base = mainRows.filter((r) => r.tier === "ELITE" || r.tier === "EDGE");
+    const targetSourceRows = engine.id === "jig" ? jigRows : mainRows;
+    const base = targetSourceRows.filter((r) => r.tier === "ELITE" || r.tier === "EDGE");
     const rows = applyRoomFilters(base, appliedFilters);
     body =
     <div className="md-room">
