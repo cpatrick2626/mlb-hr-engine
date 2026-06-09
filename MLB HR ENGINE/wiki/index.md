@@ -13,6 +13,7 @@ Last updated: 2026-06-08
 | [Production Surface Truth](doctrine/production-surface-truth.md) | root frontend/ = production; v4/frontend/ = prototype; main branch canonical | Claude Code | 2026-06-08 |
 | [Tier Vocabulary](doctrine/tier-vocabulary.md) | APEX/ELITE/EDGE vs QUIET/ACTIVE/ELEVATED vs prototype CRITICAL/HIGH — must not merge | Claude Code | 2026-06-08 |
 | [Build Log and Spec Status](doctrine/build-log-and-spec-status.md) | latest.md missing; empty spec placeholders in Docs/01_SPECS/ | Claude Code | 2026-06-08 |
+| [Mobile Architecture V2](doctrine/mobile-architecture-v2.md) | Mobile/responsive layout doctrine; canonical reductions, MAIN/JIG preservation, stale patterns to avoid | Claude Code | 2026-06-09 |
 
 ## ARCHITECTURE
 | Page | Summary | Agent |

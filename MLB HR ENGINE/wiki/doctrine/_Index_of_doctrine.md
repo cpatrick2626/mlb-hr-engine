@@ -4,6 +4,7 @@
  [[wiki/doctrine/jig-tactical-doctrine|jig-tactical-doctrine]]
  [[wiki/doctrine/main-jig-separation|main-jig-separation]]
  [[wiki/doctrine/main-model-doctrine|main-model-doctrine]]
+ [[wiki/doctrine/mobile-architecture-v2|mobile-architecture-v2]]
  [[wiki/doctrine/OBSIDIAN_GOVERNANCE_DOCTRINE|OBSIDIAN_GOVERNANCE_DOCTRINE]]
  [[wiki/doctrine/production-surface-truth|production-surface-truth]]
  [[wiki/doctrine/room-governance|room-governance]]
