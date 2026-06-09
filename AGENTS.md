@@ -120,3 +120,214 @@ Prefer:
 
 over:
 - adding more features.
+
+
+---
+
+## PROJECT OPERATING RULES
+
+### 1. ROOM ROUTING
+
+When providing next actions, always specify:
+
+```
+USE EXISTING ROOM: <room name>
+```
+
+or
+
+```
+CREATE NEW ROOM: <room name>
+```
+
+Never assume the operator knows the destination.
+
+---
+
+### 2. COPY-READY EXECUTION PACKETS
+
+When assigning work, provide a complete copy-ready prompt.
+
+Do not provide partial instructions.
+
+Do not require the operator to reconstruct prompts.
+
+---
+
+### 3. AI OWNERSHIP REQUIRED
+
+Every execution packet must specify:
+
+```
+OWNER:
+Claude Code / Codex / Claude Chat
+```
+
+---
+
+### 4. MODEL REQUIRED
+
+Every execution packet must specify the recommended model.
+
+Examples:
+
+Claude Code:
+- Sonnet 4.6 Default
+- Opus 4.7
+
+Codex:
+- gpt-5.4-mini low for audits/docs
+- gpt-5.4 medium fast for frontend/UI
+- GPT-5.5 Thinking for high-risk architecture
+
+---
+
+### 5. RISK CLASS REQUIRED
+
+Every execution packet must specify:
+
+```
+LOW / MEDIUM / HIGH
+```
+
+---
+
+### 6. GIT SAFETY REQUIRED
+
+All execution packets must explicitly state:
+
+```
+DO NOT COMMIT
+```
+
+or
+
+```
+DO NOT PUSH
+```
+
+unless operator authorization exists.
+
+---
+
+### 7. !q COMMAND
+
+`!q` means: Question only.
+
+Do not generate execution routing.
+Do not generate task packets.
+Do not generate room assignments.
+Do not generate implementation plans unless explicitly requested.
+
+Respond only to the question.
+
+---
+
+### 8. PROJECT STATE AWARENESS
+
+Before providing routing, use the latest known project state.
+
+Do not route work that has already been completed.
+
+Do not recommend reconstruction of files that already exist.
+
+---
+
+### 9. PREFERRED OUTPUT FORMAT
+
+Routing responses should use:
+
+```
+ROOM
+OWNER
+MODEL
+RISK
+MISSION
+BOUNDARIES
+VALIDATION
+DELIVERABLES
+```
+
+---
+
+### 10. MOBILE GOVERNANCE
+
+Mobile Architecture V2 is canonical.
+
+Claude Design is the visual and navigation authority.
+
+Do not propose mobile redesigns that replace Claude Design unless explicitly authorized.
+
+---
+
+### 11. PROJECT STATE SYNCHRONIZATION
+
+When major phases complete, including:
+
+- architecture.md
+- product-spec.md
+- ui-system.md
+- Mobile Architecture V2
+- production validations
+- major ownership fixes
+- governance/doctrine updates
+
+the operator may issue a PROJECT STATE SYNC.
+
+Rooms should update recommendations based on the latest synchronized state before routing future work.
+
+#### PROJECT STATE SYNC OVERRIDES
+
+When a Project State Sync conflicts with an older startup audit, the newest validated Project State Sync wins, provided:
+
+- validation exists
+- doctrine has not been violated
+- the operator has accepted the sync
+
+---
+
+### 12. PRODUCTION STATUS REQUIRED
+
+Execution packets should specify the affected surface when relevant:
+
+```
+SURFACE:
+Production / Prototype / Documentation / Obsidian / Backend / Frontend
+```
+
+---
+
+### 13. HIGH-RISK TWO-STAGE RULE
+
+For HIGH-risk work:
+
+- Stage 1 = Audit
+- Stage 2 = Execution
+
+Never combine HIGH-risk audit and execution in a single packet.
+
+---
+
+### 14. PROTECTED SURFACE DECLARATION
+
+Execution packets should include:
+
+```
+PROTECTED SURFACES TO AVOID:
+```
+
+when relevant.
+
+---
+
+### 15. COMPLETION REPORT FORMAT
+
+Execution agents should return:
+
+```
+FILES CHANGED
+VALIDATION
+GIT STATUS
+COMMIT STATUS
+PUSH STATUS
+```
