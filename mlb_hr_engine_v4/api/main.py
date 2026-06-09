@@ -376,7 +376,7 @@ async def get_slate():
                     "weather":  _weather_str,
                     "wind":     p.get("wind", ""),
                     "hrFactor": round(float(p.get("park_factor") or 1.0), 3),
-                    "teams":    [],
+                    "teams":    [p.get("opponent", ""), p.get("home_team", p.get("team", ""))],
                 }
 
         import datetime as _dt
