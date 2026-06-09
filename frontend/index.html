@@ -3640,20 +3640,85 @@ html, body { height: 100%; overflow: hidden; }
 .fsm-ht.is-danger { background: #2a0a10; color: #ff3344; }
 .fsm-ht.is-na     { color: var(--fg-4); }
 
-@media (max-width: 768px) and (orientation: portrait) {
+/* ============================================================
+   MOBILE PHASE 1 — ≤ 768px
+   ============================================================ */
+@media (max-width: 768px) {
+  /* 1 — Remove desktop viewport lock, enable vertical scroll */
   html, body {
-    overflow-x: hidden;
-    width: 100%;
     height: auto;
+    overflow-x: hidden;
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
   }
-
-  #root,
+  #root {
+    height: auto;
+    min-height: 100vh;
+  }
   [class*="md-shell"],
   [class*="master"] {
     height: auto !important;
     min-height: 100vh;
     overflow: visible !important;
+  }
+  .md-app {
+    height: auto;
+    min-height: 100vh;
+    padding: 0 10px 12px;
+    gap: 8px;
+  }
+
+  /* 3 — Sticky topbar, 60px height */
+  .md-topbar {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    height: 60px;
+    background: var(--bg-void);
+    padding: 0 2px;
+    border-bottom: 1px solid rgba(180,220,200,0.08);
+  }
+
+  /* 2 — Single-column layout */
+  .md-split {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  /* 4 — Hide right sidebar */
+  .md-right {
+    display: none;
+  }
+
+  /* 5 — Banner compression */
+  .md-banner {
+    height: 56px;
+    gap: 8px;
+  }
+  .md-banner__rail {
+    width: 80px;
+  }
+
+  /* 6 — Touch targets: key interactive controls */
+  .md-lenstab,
+  .md-cc-btn,
+  .fsm-viewtoggle button {
+    min-height: 44px;
+  }
+
+  /* 7 — H2H card viewport containment */
+  .fsm-card--h2h {
+    width: 100%;
+    max-width: 100vw;
+    box-sizing: border-box;
+    overflow-x: hidden;
+  }
+
+  /* 8 — Universal touch scrolling */
+  .fsm-scroll-container,
+  .fsm-tablewrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
   }
 }
 
