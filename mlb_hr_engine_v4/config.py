@@ -261,11 +261,11 @@ PITCHER_VULNERABILITY_HR9_THRESHOLD: float = 2.2  # pitcher_hr9 ≥ this → DAN
 # 6-tier classification driven by model_prob. Display-only — does not affect
 # model probability, EV, or confidence_tier (which is EV/edge-based).
 FS_TIER_THRESHOLDS: dict = {
-    "APEX":   0.18,
-    "ELITE":  0.13,
-    "EDGE":   0.09,
-    "SIGNAL": 0.06,
-    "WATCH":  0.03,
+    "APEX":   0.20,
+    "ELITE":  0.16,
+    "EDGE":   0.11,
+    "SIGNAL": 0.07,
+    "WATCH":  0.04,
     "COLD":   0.00,
 }
 
