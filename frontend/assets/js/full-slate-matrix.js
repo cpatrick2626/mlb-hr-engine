@@ -162,10 +162,6 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false })
   const t = FSM_TIERS[row.tier] || FSM_TIERS.COLD;
   const m = FSM_MATCHUP[row.quality] || FSM_MATCHUP.AVG;
   const game = showGame ? (window.SLATE_GAMES || []).find((g) => g.id === row.gameId) : null;
-  const addToFanduel = (e) => {
-    e.stopPropagation();
-    window.open(fsmFanduelUrl(row), "_blank", "noopener");
-  };
   return (
     <tr className="fsm-row">
       <td className="fsm-tiercell">
@@ -178,18 +174,20 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false })
             <span className="fsm-tier__label">{row.tier}</span>
           </span>
         ) : (
-          <button
-            type="button"
+          <a
             className="fsm-tier"
             style={{ "--tc": t.color, "--tg": t.glow }}
-            onClick={addToFanduel}
+            href={fsmFanduelUrl(row)}
+            target="_blank"
+            rel="noopener"
+            onClick={(e) => e.stopPropagation()}
             title={`Add ${row.name} (${row.tier}) to FanDuel`}
             aria-label={`Add ${row.name} to FanDuel`}>
-            
+
             <span className="fsm-tier__icon"><FsmTierIcon tier={row.tier} /></span>
             <span className="fsm-tier__label">{row.tier}</span>
             <span className="fsm-tier__add" aria-hidden="true">+ FD</span>
-          </button>
+          </a>
         )}
       </td>
       <td className="fsm-player">
