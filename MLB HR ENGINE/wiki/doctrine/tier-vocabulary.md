@@ -58,12 +58,31 @@ These tiers exist in **prototype mock data only**. They are not production scori
 
 ---
 
+## JIG row.tier Display Clarification
+
+**Status:** Accepted doctrine (Option A) — 2026-06-10
+
+JIG `leaderboard_rows_jig` rows inherit `row.tier` from MAIN via shallow copy. This means `row.tier` as displayed in JIG context reflects **MAIN model probability tier** (Vocabulary 1 above), not a JIG-native tactical tier.
+
+| Context | Tier Source | Meaning |
+|---------|-------------|---------|
+| MAIN leaderboard | `FS_TIER_THRESHOLDS` applied to model probability | Deployment confidence |
+| JIG leaderboard (`row.tier`) | Inherited from MAIN — same `FS_TIER_THRESHOLDS` | MAIN model probability context only |
+| JIG tactical priority | `jigScore` and JIG sort order | Tactical rank within JIG — separate from `row.tier` |
+
+**Display rule:** When `row.tier` appears in JIG, label it or treat it as "Model Tier" (MAIN context), not "JIG Tier" or "JIG confidence."
+
+**No `jigTier` field exists.** If a JIG-native tier is desired, it must be introduced as a separate `jigTier` field after a `jigScore` distribution audit and explicit operator authorization. See `main-jig-separation.md`.
+
+---
+
 ## Separation Rules
 
 1. Do not use Full Slate escalation states (QUIET/ACTIVE/ELEVATED/DANGEROUS/CRITICAL) as MAIN scoring tiers.
 2. Do not use deployment tiers (APEX/ELITE/EDGE/SIGNAL/WATCH/COLD) as Full Slate card states.
 3. Do not promote prototype card tiers (CRITICAL/HIGH/MODERATE/LOW) to production without an explicit authorized mapping.
 4. Any vocabulary merge or alias must be explicitly documented and operator-authorized before implementation.
+5. Do not describe JIG `row.tier` as JIG-native tactical tier or JIG confidence. It is MAIN model probability context inherited via shallow copy.
 
 ---
 

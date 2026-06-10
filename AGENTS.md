@@ -107,6 +107,19 @@ JIG:
 separate tactical intelligence system
 NOT purely EV-driven.
 
+JIG tactical ranking is controlled by jigScore and JIG sort order.
+
+JIG leaderboard rows inherit row.tier from MAIN (shallow copy of MAIN rows).
+row.tier in JIG context = MAIN model probability tier, not JIG-native tactical tier.
+Do not describe JIG row.tier as JIG tactical confidence, JIG deployment tier, or JIG-native escalation.
+This is contextual probability information, not JIG scoring output.
+
+No jigTier field currently exists.
+If a JIG-native tier is required, introduce it as a separate jigTier field only after:
+- dedicated jigScore distribution audit
+- explicit operator authorization
+- separate doctrine update
+
 
 ---
 

@@ -31,8 +31,28 @@ MAIN and JIG are separate intelligence layers and must remain permanently separa
 | Signal source    | Statcast weighted stats       | Arsenal, pitch-mix, environment|
 | Output           | HR probability, EV, Edge      | Tactical escalation, HVY       |
 | Workflow         | SCAN → QUALIFY → DEPLOY       | MATCHUP → CONFIRM → EXPLOIT    |
-| Tier source      | Model score only              | JIG-internal scoring           |
+| Tier source      | Model score only              | row.tier inherited from MAIN (see below) |
 | Market data role | Display-only                  | Not used                       |
+
+## JIG row.tier Inheritance
+
+JIG `leaderboard_rows_jig` is built from shallow copies of MAIN rows. JIG rows therefore carry `row.tier` assigned by MAIN's model probability thresholds (`FS_TIER_THRESHOLDS`).
+
+**Accepted doctrine (Option A):**
+
+- `row.tier` in JIG context = MAIN model probability tier, displayed as contextual probability information only.
+- JIG tactical priority is determined by `jigScore` and JIG sort order — not by `row.tier`.
+- Do not interpret or label JIG `row.tier` as JIG tactical confidence, JIG deployment tier, or JIG-native escalation.
+- No `jigTier` field currently exists.
+
+**Future jigTier path (not yet authorized):**
+
+If a JIG-native tier is desired, it must be introduced as a separate `jigTier` field. Required preconditions:
+1. Dedicated `jigScore` distribution audit
+2. Explicit operator authorization
+3. Separate doctrine update to this file and `tier-vocabulary.md`
+
+This is not scoring contamination. MAIN probability is not affected by JIG. JIG logic does not affect MAIN tiers. HVY remains display-only and does not affect MAIN probability.
 
 ## Permitted Patterns
 
