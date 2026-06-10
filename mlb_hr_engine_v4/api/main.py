@@ -240,156 +240,208 @@ def _jig_score(player: dict, arsenal_data: dict | None = None) -> float:
 
 # ── Full Slate ─────────────────────────────────────────────────────────────────
 
+def _build_slate_payload(data: dict) -> dict:
+    """
+    Map pipeline data → React frontend shape.
+    Returns leaderboard_rows, leaderboard_rows_jig, slate_games, generated_at, date.
+    Does NOT include from_cache / cache_age_minutes — caller adds those.
+    """
+    import datetime as _dt
+    players = data.get("all_players", [])
+
+    leaderboard_rows = []
+    for p in players:
+        model_prob = float(p.get("model_prob") or 0)
+        season_pa = int(p.get("season_pa") or 0)
+        season_hr = int(p.get("season_hr") or 0)
+        hrpa = round(season_hr / season_pa, 3) if season_pa > 0 else None
+
+        if model_prob >= 0.18:   tier = "APEX"
+        elif model_prob >= 0.13: tier = "ELITE"
+        elif model_prob >= 0.09: tier = "EDGE"
+        elif model_prob >= 0.06: tier = "SIGNAL"
+        elif model_prob >= 0.03: tier = "WATCH"
+        else:                    tier = "COLD"
+
+        mq_map = {"ELITE": "ELITE", "STRONG": "STRONG", "AVG": "AVG",
+                  "WEAK": "WEAK", "DANGER": "DANGER"}
+        quality = mq_map.get(p.get("matchup_quality", "AVG"), "AVG")
+
+        fd_raw = p.get("fanduel_american")
+        odds = (f"+{fd_raw}" if fd_raw and fd_raw > 0
+                else str(fd_raw) if fd_raw else None)
+
+        away = (p.get("opponent") or p.get("team") or "away").upper()
+        home = (p.get("home_team") or p.get("team") or "home").upper()
+        derived_game_id = f"{away}-{home}".lower().replace(" ", "-")
+
+        leaderboard_rows.append({
+            "id":       p.get("player_id") or p.get("player_name", "").lower().replace(" ", "-"),
+            "name":     p.get("player_name"),
+            "teamAbbr": p.get("team"),
+            "bats":     p.get("batter_side"),
+            "quality":  quality,
+            "pa":       season_pa,
+            "avg":      _flt(p.get("batting_avg")),
+            "slg":      _flt(p.get("actual_slg")),
+            "babip":    _flt(p.get("babip")),
+            "gb":       _pct(p.get("gb_pct")),
+            "hh":       _pct(p.get("hard_hit")),
+            "ld":       _pct(p.get("ld_pct")),
+            "barrel":   _pct(p.get("barrel_pct")),
+            "ev":       _flt(p.get("exit_velo")),
+            "la":       _flt(p.get("avg_launch_angle")),
+            "pull":     _pct(p.get("pull_pct")),
+            "center":   _pct(p.get("center_pct")),
+            "opphr":    p.get("pitcher_hr9"),
+            "xwoba":    _flt(p.get("xwoba")),
+            "hrpa":     hrpa,
+            "hrprob":   round(model_prob * 100, 1),
+            "tier":     tier,
+            "gameId":   derived_game_id,
+            "odds":     odds,
+            "hr":       season_hr,
+            "iso":      _flt(p.get("xiso")),
+            "xslg":     _flt(p.get("xslg")),
+            "fb":       _pct(p.get("fb_pct")),
+            "sweet":    _pct(p.get("sweet_spot_pct")),
+            "obp":      _flt(p.get("actual_obp")),
+            "woba":     _flt(p.get("xwoba")),
+            "bbpct":    None,
+            "kpct":     None,
+            "whiff":    None,
+            "swstr":    None,
+            "pullbrl":  None,
+            "pullair":  _pct(p.get("pull_air_pct")),
+            "h2h_factor": round(float(p.get("h2h_factor") or 1.0), 4),
+            "fast":     None,
+            "squp":     None,
+            "blast":    None,
+            "maxev":    None,
+            "hrfb":     _flt(p.get("hr_rate")),
+            "pitcher_name":      p.get("pitcher_name", None),
+            "pitcher_confirmed": p.get("pitcher_confirmed", False),
+            "pitcher_id":        p.get("pitcher_id", None),
+        })
+
+    leaderboard_rows.sort(
+        key=lambda r: float(r.get("hrprob") or 0),
+        reverse=True
+    )
+
+    # JIG list — same players, sorted by tactical score descending
+    try:
+        _arsenal_data = get_pitcher_arsenal(_dt.datetime.now().year)
+        jig_rows = sorted(
+            [copy.copy(r) for r in leaderboard_rows],
+            key=lambda r: _jig_score(
+                next((p for p in players
+                      if (p.get("player_name") or "") == (r.get("name") or "")),
+                     {}),
+                arsenal_data=_arsenal_data,
+            ),
+            reverse=True
+        )
+        for r in jig_rows:
+            p = next((p for p in players
+                       if (p.get("player_name") or "") == (r.get("name") or "")),
+                      {})
+            r["jigScore"] = _jig_score(p, arsenal_data=_arsenal_data)
+    except Exception as e:
+        log.error("JIG row build failed: %s", e, exc_info=True)
+        jig_rows = []
+
+    seen_games = {}
+    for p in players:
+        _away = (p.get("opponent") or p.get("team") or "away").upper()
+        _home = (p.get("home_team") or p.get("team") or "home").upper()
+        gid = f"{_away}-{_home}".lower().replace(" ", "-")
+        if gid not in seen_games:
+            _w = p.get("weather")
+            _weather_str = (
+                f"{_w.get('temp_f', '')}°F · {_w.get('wind_mph', '')} mph"
+                if isinstance(_w, dict)
+                else str(_w) if _w else ""
+            )
+            seen_games[gid] = {
+                "id":       gid,
+                "away":     p.get("opponent", ""),
+                "home":     p.get("home_team", p.get("team", "")),
+                "park":     p.get("venue", ""),
+                "time":     p.get("game_time", ""),
+                "weather":  _weather_str,
+                "wind":     p.get("wind", ""),
+                "hrFactor": round(float(p.get("park_factor") or 1.0), 3),
+                "teams":    [p.get("opponent", ""), p.get("home_team", p.get("team", ""))],
+            }
+
+    return {
+        "leaderboard_rows":     leaderboard_rows,
+        "leaderboard_rows_jig": jig_rows,
+        "slate_games":          list(seen_games.values()),
+        "generated_at":         _dt.datetime.utcnow().isoformat(),
+        "date":                 date.today().strftime("%Y-%m-%d"),
+    }
+
+
 @app.get("/api/slate")
 async def get_slate():
     """
     Returns today's Full Slate data in React frontend shape.
     No auth required — public endpoint for the React dashboard.
-    Runs the pipeline and maps output to LEADERBOARD_ROWS + SLATE_GAMES format.
+    Cache-first: serves slate_cache from today's pipeline run if fresh (≤12 h).
+    Falls back to live load_game_data() if cache is missing, stale, or date-mismatched.
     """
+    import datetime as _dt
+    today = date.today().strftime("%Y-%m-%d")
+
+    # ── Cache-first path ────────────────────────────────────────────────────────
+    try:
+        cached = get_picks(today)
+        if cached and "slate_cache" in cached:
+            sc = cached["slate_cache"]
+            sc_date = sc.get("date")
+            if sc_date and sc_date != today:
+                log.info("[/api/slate] cache date mismatch: cache=%s today=%s — falling through", sc_date, today)
+            else:
+                gen_at = sc.get("generated_at")
+                if gen_at:
+                    try:
+                        gen_dt = _dt.datetime.fromisoformat(gen_at.replace("Z", ""))
+                        age_minutes = int((_dt.datetime.utcnow() - gen_dt).total_seconds() / 60)
+                        if age_minutes <= 720:
+                            log.info("[/api/slate] cache hit | age=%dm date=%s", age_minutes, today)
+                            return {
+                                **sc,
+                                "from_cache":        True,
+                                "cache_age_minutes": age_minutes,
+                            }
+                        else:
+                            log.info("[/api/slate] cache stale | age=%dm — falling through to live", age_minutes)
+                    except Exception as e:
+                        log.warning("[/api/slate] cache parse error: %s — falling through", e)
+    except Exception as e:
+        log.warning("[/api/slate] cache lookup error: %s — falling through to live", e)
+
+    # ── Live fallback ───────────────────────────────────────────────────────────
     try:
         from pipeline import load_game_data
         data = load_game_data()
-        players = data.get("all_players", [])
-
-        leaderboard_rows = []
-        for p in players:
-            model_prob = float(p.get("model_prob") or 0)
-            season_pa = int(p.get("season_pa") or 0)
-            season_hr = int(p.get("season_hr") or 0)
-            hrpa = round(season_hr / season_pa, 3) if season_pa > 0 else None
-
-            if model_prob >= 0.18:   tier = "APEX"
-            elif model_prob >= 0.13: tier = "ELITE"
-            elif model_prob >= 0.09: tier = "EDGE"
-            elif model_prob >= 0.06: tier = "SIGNAL"
-            elif model_prob >= 0.03: tier = "WATCH"
-            else:                    tier = "COLD"
-
-            mq_map = {"ELITE": "ELITE", "STRONG": "STRONG", "AVG": "AVG",
-                      "WEAK": "WEAK", "DANGER": "DANGER"}
-            quality = mq_map.get(p.get("matchup_quality", "AVG"), "AVG")
-
-            fd_raw = p.get("fanduel_american")
-            odds = (f"+{fd_raw}" if fd_raw and fd_raw > 0
-                    else str(fd_raw) if fd_raw else None)
-
-            away = (p.get("opponent") or p.get("team") or "away").upper()
-            home = (p.get("home_team") or p.get("team") or "home").upper()
-            derived_game_id = f"{away}-{home}".lower().replace(" ", "-")
-
-            leaderboard_rows.append({
-                "id":       p.get("player_id") or p.get("player_name", "").lower().replace(" ", "-"),
-                "name":     p.get("player_name"),
-                "teamAbbr": p.get("team"),
-                "bats":     p.get("batter_side"),
-                "quality":  quality,
-                "pa":       season_pa,
-                "avg":      _flt(p.get("batting_avg")),
-                "slg":      _flt(p.get("actual_slg")),
-                "babip":    _flt(p.get("babip")),
-                "gb":       _pct(p.get("gb_pct")),
-                "hh":       _pct(p.get("hard_hit")),
-                "ld":       _pct(p.get("ld_pct")),
-                "barrel":   _pct(p.get("barrel_pct")),
-                "ev":       _flt(p.get("exit_velo")),
-                "la":       _flt(p.get("avg_launch_angle")),
-                "pull":     _pct(p.get("pull_pct")),
-                "center":   _pct(p.get("center_pct")),
-                "opphr":    p.get("pitcher_hr9"),
-                "xwoba":    _flt(p.get("xwoba")),
-                "hrpa":     hrpa,
-                "hrprob":   round(model_prob * 100, 1),
-                "tier":     tier,
-                "gameId":   derived_game_id,
-                "odds":     odds,
-                "hr":       season_hr,
-                "iso":      _flt(p.get("xiso")),
-                "xslg":     _flt(p.get("xslg")),
-                "fb":       _pct(p.get("fb_pct")),
-                "sweet":    _pct(p.get("sweet_spot_pct")),
-                "obp":      _flt(p.get("actual_obp")),
-                "woba":     _flt(p.get("xwoba")),
-                "bbpct":    None,
-                "kpct":     None,
-                "whiff":    None,
-                "swstr":    None,
-                "pullbrl":  None,
-                "pullair":  _pct(p.get("pull_air_pct")),
-                "h2h_factor": round(float(p.get("h2h_factor") or 1.0), 4),
-                "fast":     None,
-                "squp":     None,
-                "blast":    None,
-                "maxev":    None,
-                "hrfb":     _flt(p.get("hr_rate")),
-                "pitcher_name":      p.get("pitcher_name", None),
-                "pitcher_confirmed": p.get("pitcher_confirmed", False),
-                "pitcher_id":        p.get("pitcher_id", None),
-            })
-
-        leaderboard_rows.sort(
-            key=lambda r: float(r.get("hrprob") or 0),
-            reverse=True
-        )
-
-        # JIG list — same players, sorted by HVY base score descending
-        import datetime
-        try:
-            _arsenal_data = get_pitcher_arsenal(datetime.datetime.now().year)
-            jig_rows = sorted(
-                [copy.copy(r) for r in leaderboard_rows],
-                key=lambda r: _jig_score(
-                    next((p for p in players
-                          if (p.get("player_name") or "") == (r.get("name") or "")),
-                         {}),
-                    arsenal_data=_arsenal_data,
-                ),
-                reverse=True
-            )
-            for r in jig_rows:
-                p = next((p for p in players
-                           if (p.get("player_name") or "") == (r.get("name") or "")),
-                          {})
-                r["jigScore"] = _jig_score(p, arsenal_data=_arsenal_data)
-        except Exception as e:
-            log.error("JIG row build failed: %s", e, exc_info=True)
-            jig_rows = []
-
-        seen_games = {}
-        for p in players:
-            _away = (p.get("opponent") or p.get("team") or "away").upper()
-            _home = (p.get("home_team") or p.get("team") or "home").upper()
-            gid = f"{_away}-{_home}".lower().replace(" ", "-")
-            if gid not in seen_games:
-                _w = p.get("weather")
-                _weather_str = (
-                    f"{_w.get('temp_f', '')}°F · {_w.get('wind_mph', '')} mph"
-                    if isinstance(_w, dict)
-                    else str(_w) if _w else ""
-                )
-                seen_games[gid] = {
-                    "id":       gid,
-                    "away":     p.get("opponent", ""),
-                    "home":     p.get("home_team", p.get("team", "")),
-                    "park":     p.get("venue", ""),
-                    "time":     p.get("game_time", ""),
-                    "weather":  _weather_str,
-                    "wind":     p.get("wind", ""),
-                    "hrFactor": round(float(p.get("park_factor") or 1.0), 3),
-                    "teams":    [p.get("opponent", ""), p.get("home_team", p.get("team", ""))],
-                }
-
-        import datetime as _dt
+        payload = _build_slate_payload(data)
         return {
-            "leaderboard_rows":     leaderboard_rows,
-            "leaderboard_rows_jig": jig_rows,
-            "slate_games":          list(seen_games.values()),
-            "generated_at":         _dt.datetime.utcnow().isoformat(),
+            **payload,
+            "from_cache":        False,
+            "cache_age_minutes": 0,
         }
-
     except Exception as e:
         log.error(f"[/api/slate] {e}", exc_info=True)
-        return {"error": str(e), "leaderboard_rows": [], "leaderboard_rows_jig": [], "slate_games": []}
+        return {
+            "error":                str(e),
+            "leaderboard_rows":     [],
+            "leaderboard_rows_jig": [],
+            "slate_games":          [],
+            "from_cache":           False,
+        }
 
 
 # ── Internals ──────────────────────────────────────────────────────────────────
@@ -431,7 +483,7 @@ async def _run_pipeline(target_date: str):
 def _build_payload(target_date: str, data: dict) -> dict:
     from datetime import datetime as _dt
     from pipeline import serializable
-    return {
+    payload = {
         "date":            target_date,
         "ran_at":          _dt.utcnow().isoformat() + "Z",
         "ranked":          serializable(data.get("ranked", [])),
@@ -440,3 +492,8 @@ def _build_payload(target_date: str, data: dict) -> dict:
         "profile_parlays": data.get("profile_parlays", {}),
         "stats":           data.get("stats", {}),
     }
+    try:
+        payload["slate_cache"] = _build_slate_payload(data)
+    except Exception as e:
+        log.error("[pipeline] slate_cache build failed: %s", e, exc_info=True)
+    return payload
