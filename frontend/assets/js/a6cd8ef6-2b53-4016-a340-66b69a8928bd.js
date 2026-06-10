@@ -76,36 +76,47 @@ function MasterDashboard() {
     boxShadow: `0 0 0 1.5px ${c}8c, 0 0 18px ${c}33`
   };
 
+  const bottomNav = [
+    { type: "engine", id: "main" },
+    { type: "engine", id: "jig" },
+    { type: "tcc" },
+    { type: "engine", id: "strategy" },
+    { type: "engine", id: "performance" },
+  ];
+
   return (
     <div className="md-app">
       {/* 1 — TOP BAR : room + sub-lens selector */}
       <div className="md-topbar" data-comment-anchor="18cc4e4515-div-53-7">
+        <span className="md-mobile-brand">HR ENGINE</span>
         <div className="md-crumb">
-          <span className="md-crumb__chip" style={chipStyle}>{engine.name}</span>
-          {engine.expandable ? (
-            <div className="md-lenstabs">
-              {engine.subs.map((s) => (
-                <button
-                  key={s.id}
-                  className={`md-lenstab ${active.lensId === s.id ? "is-on" : ""}`}
-                  style={active.lensId === s.id ? { "--eng-color": engine.color } : undefined}
-                  onClick={() => onSelectLens(engine, s)}
-                >
-                  {s.name}
-                </button>
-              ))}
-            </div>
-          ) : (
-            engine.suffix && <span className="md-crumb__lens-sub">{engine.suffix}</span>
-          )}
+          <span className="md-crumb__chip" style={chipStyle}>
+            {engine.name}
+            {engine.suffix && <span className="md-chip-sfx"> {engine.suffix}</span>}
+          </span>
+          {!engine.expandable && engine.suffix && <span className="md-crumb__lens-sub">{engine.suffix}</span>}
         </div>
+        {engine.expandable && (
+          <div className="md-lenstabs">
+            {engine.subs.map((s) => (
+              <button
+                key={s.id}
+                className={`md-lenstab ${active.lensId === s.id ? "is-on" : ""}`}
+                style={active.lensId === s.id ? { "--eng-color": engine.color } : undefined}
+                onClick={() => onSelectLens(engine, s)}
+              >
+                {s.name}
+              </button>
+            ))}
+          </div>
+        )}
         <button
           className={`md-cc-btn ${ccOpen ? "is-open" : ""}`}
           onClick={() => setCcOpen((o) => !o)}
         >
           <span className="md-cc-btn__chev"><Icon name={ccOpen ? "chevron" : "chevronR"} size={16} color="currentColor" /></span>
           <span className="md-cc-btn__gear"><Icon name="gear" size={16} color="currentColor" /></span>
-          Tactical Command Center
+          <span className="md-cc-btn__label">Tactical Command Center</span>
         </button>
       </div>
 
@@ -129,10 +140,36 @@ function MasterDashboard() {
             engines={ENGINES}
             active={active}
             onSelect={onSelectEngine} />
-          
+
           <StrategyRail onViewAll={onViewAll} />
         </div>
       </div>
+
+      {/* MOBILE BOTTOM NAV */}
+      <nav className="md-bottom-nav">
+        {bottomNav.map((item, i) => {
+          if (item.type === "tcc") {
+            return (
+              <button key="tcc" className={`md-bottom-nav__item${ccOpen ? " is-on" : ""}`}
+                style={{ "--eng-color": "var(--green-500)" }}
+                onClick={() => setCcOpen((o) => !o)}>
+                <span className="md-bottom-nav__ic"><Icon name="gear" size={20} color="currentColor" /></span>
+                <span className="md-bottom-nav__label">TCC</span>
+              </button>
+            );
+          }
+          const eng = ENGINES.find((e) => e.id === item.id);
+          if (!eng) return null;
+          return (
+            <button key={eng.id} className={`md-bottom-nav__item${active.engineId === eng.id ? " is-on" : ""}`}
+              style={{ "--eng-color": eng.color }}
+              onClick={() => onSelectEngine(eng)}>
+              <span className="md-bottom-nav__ic"><Icon name={eng.icon} size={20} color="currentColor" /></span>
+              <span className="md-bottom-nav__label">{eng.name}</span>
+            </button>
+          );
+        })}
+      </nav>
     </div>);
 
 }

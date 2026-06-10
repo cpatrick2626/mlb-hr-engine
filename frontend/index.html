@@ -2091,7 +2091,7 @@ html, body { height: 100%; overflow: hidden; }
   display: flex;
   align-items: center;
   gap: 12px;
-  flex: 1;
+  flex: 0 0 auto;
   min-width: 0;
 }
 .md-crumb__chip {
@@ -3641,6 +3641,56 @@ html, body { height: 100%; overflow: hidden; }
 .fsm-ht.is-na     { color: var(--fg-4); }
 
 /* ============================================================
+   MOBILE UTILITY CLASSES (hidden by default, shown via media query)
+   ============================================================ */
+
+/* Brand label shown only on mobile */
+.md-mobile-brand {
+  display: none;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--fg-4);
+  flex-shrink: 0;
+  align-items: center;
+}
+
+/* Engine suffix inside chip — hidden on desktop */
+.md-chip-sfx { display: none; font-size: 0.72em; letter-spacing: 0.08em; opacity: 0.75; }
+
+/* TCC button text label */
+.md-cc-btn__label { display: inline; }
+
+/* Bottom nav — hidden on desktop */
+.md-bottom-nav { display: none; }
+.md-bottom-nav__item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  border: 0;
+  background: transparent;
+  color: var(--fg-3);
+  cursor: pointer;
+  padding: 6px 4px 8px;
+  transition: color var(--dur-fast) var(--ease-out);
+}
+.md-bottom-nav__item.is-on { color: var(--eng-color, var(--green-500)); }
+.md-bottom-nav__ic { display: inline-flex; }
+.md-bottom-nav__label {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  line-height: 1;
+}
+
+/* ============================================================
    MOBILE PHASE 1 — ≤ 768px
    ============================================================ */
 @media (max-width: 768px) {
@@ -3664,19 +3714,22 @@ html, body { height: 100%; overflow: hidden; }
   .md-app {
     height: auto;
     min-height: 100vh;
-    padding: 0 10px 12px;
+    padding: 0 10px 70px;
     gap: 8px;
   }
 
-  /* 3 — Sticky topbar, 60px height */
+  /* 3 — Sticky topbar, wraps to two rows on mobile */
   .md-topbar {
     position: sticky;
     top: 0;
     z-index: 100;
-    height: 60px;
+    height: auto;
     background: var(--bg-void);
-    padding: 0 2px;
+    padding: 8px 10px 4px;
     border-bottom: 1px solid rgba(180,220,200,0.08);
+    flex-wrap: wrap;
+    gap: 6px 10px;
+    align-items: center;
   }
 
   /* 2 — Single-column layout */
@@ -3719,6 +3772,43 @@ html, body { height: 100%; overflow: hidden; }
   .fsm-tablewrap {
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
+  }
+
+  /* 9 — Mobile top status row: brand + chip + compact TCC icon */
+  .md-mobile-brand { display: flex; }
+  .md-chip-sfx { display: inline; }
+  .md-crumb__lens-sub { display: none; }
+
+  /* 10 — Lens tabs on second row below status row */
+  .md-lenstabs {
+    flex-basis: 100%;
+    order: 10;
+    margin: 2px 0 0;
+    padding-top: 6px;
+    border-top: 1px solid rgba(180,220,200,0.07);
+  }
+
+  /* 11 — Compact TCC button: gear icon only */
+  .md-cc-btn {
+    padding: 8px;
+    gap: 0;
+  }
+  .md-cc-btn__label { display: none; }
+  .md-cc-btn__chev  { display: none; }
+
+  /* 12 — Mobile bottom nav */
+  .md-bottom-nav {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    z-index: 200;
+    height: 58px;
+    background: rgba(10, 16, 20, 0.97);
+    border-top: 1px solid rgba(180,220,200,0.16);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
   }
 }
 
