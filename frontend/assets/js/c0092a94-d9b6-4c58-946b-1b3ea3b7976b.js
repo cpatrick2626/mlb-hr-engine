@@ -99,6 +99,15 @@ const LeaderRow = ({ row, onOpen }) => (
     </td>
     <td className="hr-lb__gauge"><MatchupGauge quality={row.quality} /></td>
     {COLS.map((col) => {
+      if (col.key === "fanduel") {
+        const query = encodeURIComponent(row.name + " home run");
+        const href = `https://sportsbook.fanduel.com/search?query=${query}`;
+        return (
+          <td key="fanduel" className="hr-lb__cell hr-lb__cell--fd" onClick={(e) => e.stopPropagation()}>
+            <a href={href} target="_blank" rel="noopener" className="hr-lb__fd-link">FD</a>
+          </td>
+        );
+      }
       const { cls, text } = cellStyle(col, row[col.key]);
       return <td key={col.key} className={`hr-lb__cell ${cls}`}>{text}</td>;
     })}
