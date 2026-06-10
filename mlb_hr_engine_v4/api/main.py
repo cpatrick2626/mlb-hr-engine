@@ -33,6 +33,7 @@ from api.auth import require_auth, require_beta
 from api.cache import get_picks, store_picks, list_runs, redeem_invite
 from clients.arsenal import get_pitcher_arsenal, arsenal_matchup_factor
 from clients.pitch_mix import get_batter_vs_pitches, get_pitcher_pitch_stats
+from config import FS_TIER_THRESHOLDS
 
 log = logging.getLogger("uvicorn.error")
 
@@ -256,12 +257,10 @@ def _build_slate_payload(data: dict) -> dict:
         season_hr = int(p.get("season_hr") or 0)
         hrpa = round(season_hr / season_pa, 3) if season_pa > 0 else None
 
-        if model_prob >= 0.18:   tier = "APEX"
-        elif model_prob >= 0.13: tier = "ELITE"
-        elif model_prob >= 0.09: tier = "EDGE"
-        elif model_prob >= 0.06: tier = "SIGNAL"
-        elif model_prob >= 0.03: tier = "WATCH"
-        else:                    tier = "COLD"
+        tier = next(
+            (t for t, thresh in FS_TIER_THRESHOLDS.items() if model_prob >= thresh),
+            "COLD",
+        )
 
         mq_map = {"ELITE": "ELITE", "STRONG": "STRONG", "AVG": "AVG",
                   "WEAK": "WEAK", "DANGER": "DANGER"}
