@@ -114,12 +114,12 @@ const LeaderRow = ({ row, onOpen }) => (
   </tr>
 );
 
-const Leaderboard = ({ rows, onOpen }) => (
+const Leaderboard = ({ rows, onOpen, tierHeaderLabel = "TIER" }) => (
   <div className="hr-lb">
     <table className="hr-lb__table">
       <thead>
         <tr>
-          <th className="hr-lb__th-tier">TIER</th>
+          <th className="hr-lb__th-tier">{tierHeaderLabel}</th>
           <th className="hr-lb__th-player">PLAYER</th>
           <th className="hr-lb__th-gauge">MATCHUP QUALITY</th>
           {COLS.map((c) => <th key={c.key} className={c.key === "opphr" ? "hr-lb__th-opp" : ""}>{c.head}</th>)}

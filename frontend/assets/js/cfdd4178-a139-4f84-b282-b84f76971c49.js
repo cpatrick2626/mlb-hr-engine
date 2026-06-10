@@ -138,7 +138,8 @@ const Stage = ({ engine, lens, ccOpen, onCloseCC, appliedFilters, onApplyFilters
         rows={rows}
         total={sourceRows.length}
         onOpen={onOpenPlayer}
-        filterNote={nf > 0 ? `${nf} ACTIVE FILTER${nf > 1 ? "S" : ""}` : "NO ACTIVE FILTERS"} />
+        filterNote={nf > 0 ? `${nf} ACTIVE FILTER${nf > 1 ? "S" : ""}` : "NO ACTIVE FILTERS"}
+        isJigContext={engine.id === "jig"} />
       </div>;
 
   } else if (lens && lens.id === "topTargets") {
@@ -149,7 +150,7 @@ const Stage = ({ engine, lens, ccOpen, onCloseCC, appliedFilters, onApplyFilters
     <div className="md-room">
         <RoomHead eyebrow={eyebrow} title="Top Targets"
       right={<div className="md-room__meta"><span>{rows.length} / {base.length} TARGETS</span>{filterStatus()}</div>} />
-        <Leaderboard rows={rows} onOpen={onOpenPlayer} />
+        <Leaderboard rows={rows} onOpen={onOpenPlayer} tierHeaderLabel={engine.id === "jig" ? "MODEL TIER" : "TIER"} />
       </div>;
 
   } else if (lens && lens.id === "builder") {

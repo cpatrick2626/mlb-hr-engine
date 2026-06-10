@@ -38,12 +38,12 @@ const FSM_MATCHUP_DESC = {
   DANGER: "pitcher strongly favored (0/4)",
 };
 const FSM_BUILDER_TIER_DESC = {
-  APEX: "inherited highest-scored tier from current JIG scored slate feed",
-  ELITE: "inherited premium-scored tier from current JIG scored slate feed",
-  EDGE: "inherited advantage tier from current JIG scored slate feed",
-  SIGNAL: "inherited positive-signal tier from current JIG scored slate feed",
-  WATCH: "inherited lower-confidence tier from current JIG scored slate feed",
-  COLD: "inherited lowest-scored tier from current JIG scored slate feed",
+  APEX: "MAIN model probability tier: APEX — inherited by JIG display",
+  ELITE: "MAIN model probability tier: ELITE — inherited by JIG display",
+  EDGE: "MAIN model probability tier: EDGE — inherited by JIG display",
+  SIGNAL: "MAIN model probability tier: SIGNAL — inherited by JIG display",
+  WATCH: "MAIN model probability tier: WATCH — inherited by JIG display",
+  COLD: "MAIN model probability tier: COLD — inherited by JIG display",
 };
 
 const TEAM_COLOR = {
@@ -173,7 +173,7 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false })
           <span
             className="fsm-tier"
             style={{ "--tc": t.color, "--tg": t.glow }}
-            title={`${row.tier} tier from current JIG scored slate feed`}>
+            title={`${row.tier} — MAIN model probability tier (inherited)`}>
             <span className="fsm-tier__icon"><FsmTierIcon tier={row.tier} /></span>
             <span className="fsm-tier__label">{row.tier}</span>
           </span>
@@ -280,7 +280,7 @@ function FsmRadioGroup({ label, value, onChange, options }) {
 
 let fsmDragKey = null;
 
-function FsmTable({ rows, cols, showGame, onBatter, onPitch, onReorder, onSort, sortState, builderMode = false }) {
+function FsmTable({ rows, cols, showGame, onBatter, onPitch, onReorder, onSort, sortState, builderMode = false, isJigContext = false }) {
   const thProps = (c) => ({
     draggable: true,
     onDragStart: (e) => { fsmDragKey = c.key; e.dataTransfer.effectAllowed = "move"; },
@@ -305,7 +305,7 @@ function FsmTable({ rows, cols, showGame, onBatter, onPitch, onReorder, onSort, 
           {bands.map((b, i) => <th key={i} className={"fsm-gband fsm-gband--" + b.label.toLowerCase()} colSpan={b.span}>{b.label}</th>)}
         </tr>
         <tr className="fsm-colhead">
-          <th className="fsm-th-tier">TIER</th>
+          <th className="fsm-th-tier">{isJigContext || builderMode ? "MODEL TIER" : "TIER"}</th>
           <th className="fsm-th-player">PLAYER</th>
           <th className="fsm-th-matchup">MATCHUP</th>
           {cols.map((c) =>
@@ -578,7 +578,7 @@ function FsmPitchMix({ row, onClose, onBatter, builderMode = false }) {
             </div>
           </div>
           <div className="fsm-h2h__btier">
-            <div><span>BATTER TIER</span><b>{d.batter.tier}</b></div>
+            <div><span>MODEL TIER</span><b>{d.batter.tier}</b></div>
             <div><span>{builderMode ? "SCORED FEED CONFIDENCE" : "CONFIDENCE"}</span><b style={{ color: "#1aff66" }}>{d.batter.confidence}</b></div>
             <div><span>{builderMode ? "SOURCE FEED ODDS" : "HR EV"}</span><b style={{ color: "#ffb020" }}>{d.batter.ev_odds}</b></div>
           </div>
@@ -598,7 +598,7 @@ function FsmPitchMix({ row, onClose, onBatter, builderMode = false }) {
           ["WHIFF%", d.batter.whiff.toFixed(1)], ["BARREL%", d.batter.barrel == null ? "—" : d.batter.barrel.toFixed(1)],
           ["EV", d.batter.ev.toFixed(1)]]
           } />
-          <div className="fsm-h2h__tier"><span>BATTER TIER</span><b style={{ color: (FSM_TIERS[row.tier] || FSM_TIERS.COLD).color }}>{row.tier}</b></div>
+          <div className="fsm-h2h__tier"><span>MODEL TIER</span><b style={{ color: (FSM_TIERS[row.tier] || FSM_TIERS.COLD).color }}>{row.tier}</b></div>
         </div>
       </div>
 
@@ -664,7 +664,7 @@ function fsmAdjustRow(row, on) {
   return o;
 }
 
-function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMode = false }) {
+function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMode = false, isJigContext = false }) {
   const [view, setView] = React.useState("game");
   const [selGame, setSelGame] = React.useState("all");
   const [group, setGroup] = React.useState("all");
@@ -863,7 +863,7 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
 
       {/* BODY */}
       {view === "player" ?
-      <div className="fsm-tablewrap fsm-scroll-container"><FsmTable rows={pool} cols={activeCols} showGame={true} onBatter={openBatter} onPitch={openPitch} onReorder={onReorder} onSort={onSort} sortState={sortState} builderMode={builderMode} /></div> :
+      <div className="fsm-tablewrap fsm-scroll-container"><FsmTable rows={pool} cols={activeCols} showGame={true} onBatter={openBatter} onPitch={openPitch} onReorder={onReorder} onSort={onSort} sortState={sortState} builderMode={builderMode} isJigContext={isJigContext} /></div> :
 
       gamesToShow.map((game) => {
         const gameRows = pool.filter((r) => r.gameId === game.id);
@@ -871,7 +871,7 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
         return (
           <div className="fsm-gameblock" key={game.id} id={`fsm-game-${game.id}`}>
               <FsmGameHeader game={game} n={gameRows.length} />
-              <div className="fsm-tablewrap fsm-scroll-container"><FsmTable rows={gameRows} cols={activeCols} onBatter={openBatter} onPitch={openPitch} onReorder={onReorder} onSort={onSort} sortState={sortState} builderMode={builderMode} /></div>
+              <div className="fsm-tablewrap fsm-scroll-container"><FsmTable rows={gameRows} cols={activeCols} onBatter={openBatter} onPitch={openPitch} onReorder={onReorder} onSort={onSort} sortState={sortState} builderMode={builderMode} isJigContext={isJigContext} /></div>
             </div>);
 
       })
