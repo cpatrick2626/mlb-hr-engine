@@ -6,7 +6,9 @@ MAIN is the quantitative, model-driven intelligence layer of the MLB HR Engine. 
 
 ## Key Points
 
-- **Scoring formula:** `score = EV% × 0.40 + Edge% × 0.35 + Confidence × 0.25`
+- **score (current):** `score = model_prob` — compatibility alias; unchanged. Do not redefine.
+- **model_tier_rank:** HR Threat Rank — `<TIER> #<N>` (e.g., `APEX #1`). Ranks by model_prob within each FS tier.
+- **bet_value_score (future — NOT YET IMPLEMENTED):** Deploy Score. Approved formula: `(ev_pct × 0.55 + edge_pct × 0.45) × (0.50 + 0.50 × (confidence / 100))`. Additive-only field; must not replace score, rank, model_prob, or model_tier_rank. JIG excluded.
 - **Core pipeline:** Fetch → build profiles → Poisson P(HR≥1) → price vs market → filter → rank → size → output
 - **λ derivation:** Combines batter base score (Barrel%, ISO, HR/FB, xSLG, etc.) with pitcher vulnerability (HR/9, Barrel% Allowed, xFIP) and environmental multipliers (platoon, park, wind, temp, H2H)
 - **Market pricing:** Model probability vs no-vig implied probability = edge. Positive edge + minimum confidence threshold = pick candidate.
@@ -33,6 +35,17 @@ Never fabricate Statcast, Savant, or model inputs. If data is
 unavailable, display `--` and report as a data gap. No threshold or
 calibration changes from n<200 settled picks without explicit operator
 authorization.
+
+## Primary Ranking Doctrine
+
+**Final operator decision (2026-06-11):** Primary tier ranking is pure HR Threat Rank. No market data, EV, odds, or edge may contaminate primary rank.
+
+- **`model_tier_rank` = HR Threat Rank** — pure model probability, always.
+- **APEX #1** = highest engine-estimated HR probability in APEX tier. Not "best bet." Not "highest EV."
+- **ELITE #1 / EDGE #1** = highest HR probability within each respective tier. Not market rank.
+- **Odds, EV, edge, and sportsbook lines** are display-only context. They never influence `model_prob`, `model_tier_rank`, tier classification, or the primary sort key.
+- **Bet Value Rank (Deploy Score)** is deferred. When implemented, it must be an additive-only secondary layer, selectable by the operator. It must not replace or re-sort primary rank.
+- **Market value as a sort option** may be added in the future only with explicit operator authorization and a separate doctrine update.
 
 ## MAIN Doctrine Reform
 

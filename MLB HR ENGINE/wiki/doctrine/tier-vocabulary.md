@@ -16,16 +16,28 @@ Three distinct tier vocabularies exist in MLB HR ENGINE. They apply to different
 
 | Tier   | Threshold | Meaning |
 |--------|-----------|---------|
-| APEX   | ≥ 0.20    | Highest model confidence, strongest EV |
-| ELITE  | ≥ 0.16    | Very high model confidence |
-| EDGE   | ≥ 0.11    | Above-threshold model confidence |
-| SIGNAL | ≥ 0.07    | Moderate model confidence, reportable |
+| APEX   | ≥ 0.20    | Highest HR probability — top engine-estimated threat |
+| ELITE  | ≥ 0.16    | Very high HR probability |
+| EDGE   | ≥ 0.11    | Above-threshold HR probability |
+| SIGNAL | ≥ 0.07    | Moderate HR probability, reportable |
 | WATCH  | ≥ 0.04    | Below deployment threshold, monitor only |
 | COLD   | ≥ 0.00    | No meaningful signal |
 
-These tiers reflect **model probability and EV** output from `pipeline.py` and `config.py`.
+These tiers reflect **model probability only** from `pipeline.py` and `config.py`. EV, edge, odds, and market value do not influence tier classification.
 
 **Active threshold set:** Option A — tightened 2026-06-10 (`f3969b1`). Authoritative values live in `mlb_hr_engine_v4/config.py` (`FS_TIER_THRESHOLDS`). The table above reflects the production state as of 2026-06-10; always verify against `config.py` before relying on these values.
+
+### Primary Ranking Doctrine
+
+**model_tier_rank = HR Threat Rank. Primary ranking is pure model probability.**
+
+- `APEX #1` = highest engine-estimated HR probability in APEX tier. Not "best bet."
+- `ELITE #1` = highest HR probability within ELITE. Not "highest EV."
+- `EDGE #1` = highest HR probability within EDGE. Not "most favorable odds."
+- Default engine ranking excludes market data, odds, EV, and edge from the sort key.
+- Odds, EV, edge, and sportsbook lines are **display-only** context — they never influence `model_prob`, `model_tier_rank`, or tier classification.
+- Bet Value Rank (Deploy Score) is **deferred and not yet implemented**. When eventually added, it must be an additive-only secondary layer, selectable by the operator. It must not replace or contaminate the primary HR Threat Rank.
+- Market value as a selectable sort layer may be added in future only with explicit operator authorization and a separate doctrine update.
 
 ---
 

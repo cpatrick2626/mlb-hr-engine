@@ -97,15 +97,42 @@ Avoid:
 
 ## SCORING RULES
 
-Main:
-score =
-EV% × 0.40
-+ Edge% × 0.35
-+ Confidence × 0.25
+### MAIN Fields — Current
 
-JIG:
-separate tactical intelligence system
-NOT purely EV-driven.
+score (current) = model_prob
+— `score` is a compatibility alias for `model_prob`. Unchanged. Do not redefine.
+
+model_tier_rank = HR Threat Rank
+— Stamped as `<TIER> #<N>` (e.g., `APEX #1`, `ELITE #3`).
+— Ranks within each FS tier by model_prob descending.
+— Owns: Full Slate, Picks table primary sort, leaderboard rank column.
+— PRIMARY RANKING DOCTRINE: model_tier_rank is pure HR Threat Rank. It is not a bet value rank.
+— APEX #1 = highest engine-estimated HR probability in APEX. Not best bet. Not highest EV.
+— Odds, EV, edge, market lines, and sportsbook data must NOT influence model_prob, model_tier_rank, tier classification, or primary ranking.
+— Market data is display-only context. It never gates or re-sorts primary rank.
+— Bet Value Rank is deferred. When implemented it must be additive-only and operator-selectable. It must not replace primary rank.
+
+### MAIN Fields — Future (NOT YET IMPLEMENTED)
+
+bet_value_score = Deploy Score
+— Approved formula:
+
+    confidence_scale = 0.50 + 0.50 × (confidence / 100)
+    ev_w = 0.55
+    bet_value_score = (ev_pct × ev_w + edge_pct × (1 − ev_w)) × confidence_scale
+
+— UI label: DEPLOY SCORE
+— Rank ordinal label: DEPLOY RANK
+— Additive-only field. Must NOT replace: score, rank, model_prob, model_tier_rank.
+— May eventually own: Deploy surface, Top Targets, Picks table secondary column.
+— May optionally appear in Full Slate as additive/sort option only.
+— Must NOT appear in or influence JIG.
+— Implementation is NOT authorized in this step.
+
+### JIG
+
+Separate tactical intelligence system. NOT purely EV-driven.
+Bet Value Rank does NOT apply to JIG.
 
 JIG tactical ranking is controlled by jigScore and JIG sort order.
 

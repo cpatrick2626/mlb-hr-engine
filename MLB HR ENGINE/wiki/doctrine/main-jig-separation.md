@@ -8,7 +8,7 @@ MAIN and JIG are separate intelligence layers and must remain permanently separa
 
 ### Invariants (never break without operator authorization)
 
-1. **Separate scoring:** MAIN uses `EV% × 0.40 + Edge% × 0.35 + Confidence × 0.25`. JIG uses separate tactical scoring. They must not share a composite formula.
+1. **Separate scoring:** MAIN uses `score = model_prob` (current compatibility alias). `bet_value_score` (future Deploy Score) is MAIN-exclusive and additive-only. JIG uses separate tactical scoring (`jigScore`). They must not share a composite formula. Bet Value Rank does not apply to JIG.
 2. **Separate filters:** MAIN filters are model-supportive and broader. JIG filters are aggressive and matchup-specific. Never make them identical.
 3. **HVY signal isolation:** The HVY pitch-mix modifier is display-only on the JIG side. It must not be folded into MAIN's model probability or λ calculation.
 4. **Separate output:** MAIN and JIG produce separate pick lists. A composite/blended list requires explicit new doctrine.
