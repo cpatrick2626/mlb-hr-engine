@@ -249,6 +249,58 @@ See session [[2026-06-10-option-a-tier-threshold-production-validation]] for ful
 
 ---
 
+---
+
+## Tier Ranking Room Foundation
+
+**Completed:** 2026-06-11
+
+### Scope
+
+- Room: `Tier Ranking Room`
+- Phase: Foundation completion
+- Risk: LOW
+- Documentation session only
+
+### Commits Recorded
+
+| Commit | Message | Deliverable |
+|--------|---------|-------------|
+| `1b46e48` | `fix(app): migrate main tier displays to full slate tiers` | Tier vocabulary migration — MAIN |
+| `394172c` | `fix(app): migrate jig displays to model tier labels` | JIG MODEL TIER migration |
+| `c00cf05` | `fix(frontend): clarify jig model tier labels` | Frontend JIG label cleanup |
+| `3de3d89` | `docs(doctrine): clarify jig tier display inheritance` | JIG row.tier inheritance doctrine |
+| `f13b02f` | `fix(api): read tier thresholds from config` | API config-sourced thresholds |
+| `10b1d25` | `feat(ranking): stamp model tier rank` | `model_tier_rank` field foundation |
+| `3149d18` | `feat(app): show model tier rank on main surfaces` | APEX #1 / ELITE #1 display |
+| `9231895` | `docs(doctrine): establish primary ranking doctrine` | Primary Ranking Doctrine codified |
+| `61137c9` | `feat(app): add apex reason stack` | APEX Reason Stack Phase 1 |
+| `de2fb52` | `fix(app): refine apex reason stack badges` | Reason Stack Phase 1.5 cleanup |
+
+### Final Doctrine Summary
+
+- `model_tier_rank` = HR Threat Rank — pure model probability, no market contamination
+- `APEX #1` = highest engine-estimated HR probability; not "best bet", not "highest EV"
+- Odds, EV, edge, sportsbook lines — display-only; never influence primary rank
+- Bet Value Rank (Deploy Score) — deferred, not yet implemented
+- JIG excluded from Bet Value Rank when eventually implemented
+
+### Reason Stack Status
+
+| Phase | Status |
+|-------|--------|
+| Phase 1 — APEX drivers display | Complete (`61137c9`) |
+| Phase 1.5 — Badge cleanup | Complete (`de2fb52`) |
+| Phase 2 | Deferred — not yet defined |
+
+### Next Phase
+
+Live APEX Trust Review. No ranking changes until n≥200 settled picks. Observe APEX tier outcomes. Initiate calibration review as separate authorized assignment when sample accumulates.
+
+See session [[wiki/sessions/2026-06-11-tier-ranking-foundation-completion]] for full detail.
+
+---
+
 ## Cross-References
 
 - [Room Governance](room-governance.md)
