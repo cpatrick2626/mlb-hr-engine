@@ -153,9 +153,33 @@ function FsmCell({ col, row }) {
   return <td className={`fsm-cell ${FSM_BUCKET_CLASS[b] || ""}`}>{v == null ? "—" : col.fmt(v)}</td>;
 }
 
-/* Build a FanDuel link for a batter's HR market (demo deep-link). */
+/* Build a FanDuel search URL (used for card/overlay <a> links). */
 function fsmFanduelUrl(row) {
   return "https://sportsbook.fanduel.com/search?query=" + encodeURIComponent(row.name + " home run");
+}
+
+/* FD tier-icon click: copy search term, open FD base, show toast.
+   FanDuel SPA ignores search?query= params on load — clipboard fallback reduces friction. */
+function fsmOpenFD(e, row) {
+  e.stopPropagation();
+  e.preventDefault();
+  const term = row.name + " home run";
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(term).catch(() => {});
+  }
+  window.open("https://sportsbook.fanduel.com/", "_blank", "noopener");
+  // toast
+  let el = document.getElementById("fsm-fd-toast");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "fsm-fd-toast";
+    el.style.cssText = "position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1a2030;border:1px solid #3b6fff;color:#e0e8ff;padding:10px 18px;border-radius:8px;font-size:13px;font-family:inherit;z-index:9999;pointer-events:none;transition:opacity .3s;white-space:nowrap;";
+    document.body.appendChild(el);
+  }
+  el.textContent = "Copied FanDuel search: " + term;
+  el.style.opacity = "1";
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.style.opacity = "0"; }, 2800);
 }
 
 function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false }) {
@@ -174,20 +198,18 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false })
             <span className="fsm-tier__label">{row.tier}</span>
           </span>
         ) : (
-          <a
-            className="fsm-tier"
+          <button
+            type="button"
+            className="fsm-tier fsm-tier--btn"
             style={{ "--tc": t.color, "--tg": t.glow }}
-            href={fsmFanduelUrl(row)}
-            target="_blank"
-            rel="noopener"
-            onClick={(e) => e.stopPropagation()}
-            title={`Add ${row.name} (${row.tier}) to FanDuel`}
+            onClick={(e) => fsmOpenFD(e, row)}
+            title={`Add ${row.name} (${row.tier}) to FanDuel — copies search term to clipboard`}
             aria-label={`Add ${row.name} to FanDuel`}>
 
             <span className="fsm-tier__icon"><FsmTierIcon tier={row.tier} /></span>
             <span className="fsm-tier__label">{row.tier}</span>
             <span className="fsm-tier__add" aria-hidden="true">+ FD</span>
-          </a>
+          </button>
         )}
       </td>
       <td className="fsm-player">
