@@ -20,7 +20,28 @@ const STRATEGIES = [
 
 function stratFanduelUrl(strat, players) {
   const q = players.map((p) => p.name.replace("…", "")).join(", ") + " home run";
-  return "https://sportsbook.fanduel.com/search?query=" + encodeURIComponent(q);
+  return "https://sportsbook.fanduel.com/search";
+}
+
+function stratOpenFanduel(e, strat, players) {
+  e.stopPropagation();
+  e.preventDefault();
+  const q = players.map((p) => p.name.replace("â€¦", "")).join(", ") + " home run";
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(q).catch(() => {});
+  }
+  window.open("https://sportsbook.fanduel.com/search", "_blank", "noopener");
+  let el = document.getElementById("md-qp-fd-toast");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "md-qp-fd-toast";
+    el.style.cssText = "position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1a2030;border:1px solid #3b6fff;color:#e0e8ff;padding:10px 18px;border-radius:8px;font-size:13px;font-family:inherit;z-index:9999;pointer-events:none;transition:opacity .3s;white-space:nowrap;";
+    document.body.appendChild(el);
+  }
+  el.textContent = "Copied FanDuel search: " + q;
+  el.style.opacity = "1";
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.style.opacity = "0"; }, 2800);
 }
 
 const StratHead = ({ stratId, player }) => {
@@ -39,14 +60,14 @@ const StratCard = ({ strat, rows, count }) => {
   const players = rows.slice().sort((a, b) => strat.rank(b) - strat.rank(a)).slice(0, count);
   const avg = players.reduce((a, p) => a + p.hrprob, 0) / (players.length || 1);
   const score = Math.min(9.9, 6 + avg * 0.17).toFixed(1);
-  const addFD = () => window.open(stratFanduelUrl(strat, players), "_blank", "noopener");
+  const addFD = (e) => stratOpenFanduel(e, strat, players);
   return (
     <div
       className="md-qp__card"
       role="button"
       tabIndex={0}
       onClick={addFD}
-      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); addFD(); } }}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); stratOpenFanduel(e, strat, players); } }}
       title={`Add ${strat.label} — ${players.map((p) => p.name).join(", ")} — to FanDuel`}
       style={{ "--qp-color": strat.color, "--qp-glow": `${strat.color}26` }}
     >

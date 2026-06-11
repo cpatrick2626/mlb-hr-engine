@@ -153,22 +153,15 @@ function FsmCell({ col, row }) {
   return <td className={`fsm-cell ${FSM_BUCKET_CLASS[b] || ""}`}>{v == null ? "—" : col.fmt(v)}</td>;
 }
 
-/* Build a FanDuel search URL (used for card/overlay <a> links). */
-function fsmFanduelUrl(row) {
-  return "https://sportsbook.fanduel.com/search?query=" + encodeURIComponent(row.name + " home run");
-}
+const FSM_FANDUEL_SEARCH_URL = "https://sportsbook.fanduel.com/search";
 
-/* FD tier-icon click: copy search term, open FD base, show toast.
-   FanDuel SPA ignores search?query= params on load — clipboard fallback reduces friction. */
-function fsmOpenFD(e, row) {
-  e.stopPropagation();
-  e.preventDefault();
-  const term = row.name + " home run";
+function fsmCopyFanDuelSearch(term) {
   if (navigator.clipboard) {
     navigator.clipboard.writeText(term).catch(() => {});
   }
-  window.open("https://sportsbook.fanduel.com/", "_blank", "noopener");
-  // toast
+}
+
+function fsmShowFanDuelToast(term) {
   let el = document.getElementById("fsm-fd-toast");
   if (!el) {
     el = document.createElement("div");
@@ -180,6 +173,20 @@ function fsmOpenFD(e, row) {
   el.style.opacity = "1";
   clearTimeout(el._t);
   el._t = setTimeout(() => { el.style.opacity = "0"; }, 2800);
+}
+
+function fsmFanDuelFallback(e, term) {
+  e.stopPropagation();
+  e.preventDefault();
+  fsmCopyFanDuelSearch(term);
+  window.open(FSM_FANDUEL_SEARCH_URL, "_blank", "noopener");
+  fsmShowFanDuelToast(term);
+}
+
+/* FD tier-icon click: copy search term, open FD base, show toast.
+   FanDuel SPA ignores search?query= params on load — clipboard fallback reduces friction. */
+function fsmOpenFD(e, row) {
+  fsmFanDuelFallback(e, row.name + " home run");
 }
 
 function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false }) {
@@ -443,7 +450,7 @@ function FsmBatterCard({ row, onClose, onPitch, builderMode = false }) {
       )}
       <div className="fsm-card__foot">
         <span className="fsm-card__env">{game ? `${game.park} · ${game.weather} · WIND ${game.wind}` : ""}</span>
-        {!builderMode && <a className="fsm-card__fd" href={fsmFanduelUrl(row)} target="_blank" rel="noopener">+ ADD TO FANDUEL</a>}
+        {!builderMode && <a className="fsm-card__fd" href={FSM_FANDUEL_SEARCH_URL} target="_blank" rel="noopener" onClick={(e) => fsmFanDuelFallback(e, row.name + " home run")}>+ ADD TO FANDUEL</a>}
       </div>
     </div>);
 
@@ -629,7 +636,7 @@ function FsmPitchMix({ row, onClose, onBatter, builderMode = false }) {
 
       <div className="fsm-card__foot">
         <button className="fsm-card__pitchbtn" onClick={onBatter}>← BATTER CARD</button>
-        {!builderMode && <a className="fsm-card__fd" href={fsmFanduelUrl(row)} target="_blank" rel="noopener">+ ADD {d.batter.last.toUpperCase()} TO FANDUEL</a>}
+        {!builderMode && <a className="fsm-card__fd" href={FSM_FANDUEL_SEARCH_URL} target="_blank" rel="noopener" onClick={(e) => fsmFanDuelFallback(e, row.name + " home run")}>+ ADD {d.batter.last.toUpperCase()} TO FANDUEL</a>}
       </div>
     </div>);
 

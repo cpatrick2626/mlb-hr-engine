@@ -67,6 +67,29 @@ const COLS = [
   { key: "fanduel", head: "FANDUEL",  mode: "empty" },
 ];
 
+const HR_LB_FD_URL = "https://sportsbook.fanduel.com/search";
+
+function hrLbOpenFanduel(e, playerName) {
+  e.stopPropagation();
+  e.preventDefault();
+  const term = playerName + " home run";
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(term).catch(() => {});
+  }
+  window.open(HR_LB_FD_URL, "_blank", "noopener");
+  let el = document.getElementById("hr-lb-fd-toast");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "hr-lb-fd-toast";
+    el.style.cssText = "position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1a2030;border:1px solid #3b6fff;color:#e0e8ff;padding:10px 18px;border-radius:8px;font-size:13px;font-family:inherit;z-index:9999;pointer-events:none;transition:opacity .3s;white-space:nowrap;";
+    document.body.appendChild(el);
+  }
+  el.textContent = "Copied FanDuel search: " + term;
+  el.style.opacity = "1";
+  clearTimeout(el._t);
+  el._t = setTimeout(() => { el.style.opacity = "0"; }, 2800);
+}
+
 function cellStyle(col, value) {
   if (value == null) return { cls: "", text: "—", style: {} };
   if (col.mode === "empty") return { cls: "is-empty", text: "—", style: {} };
@@ -100,11 +123,9 @@ const LeaderRow = ({ row, onOpen }) => (
     <td className="hr-lb__gauge"><MatchupGauge quality={row.quality} /></td>
     {COLS.map((col) => {
       if (col.key === "fanduel") {
-        const query = encodeURIComponent(row.name + " home run");
-        const href = `https://sportsbook.fanduel.com/search?query=${query}`;
         return (
           <td key="fanduel" className="hr-lb__cell hr-lb__cell--fd" onClick={(e) => e.stopPropagation()}>
-            <a href={href} target="_blank" rel="noopener" className="hr-lb__fd-link">FD</a>
+            <a href={HR_LB_FD_URL} target="_blank" rel="noopener" className="hr-lb__fd-link" onClick={(e) => hrLbOpenFanduel(e, row.name)}>FD</a>
           </td>
         );
       }

@@ -23,6 +23,18 @@ Room routing rule:
 - `ROOM Deployed From` does not receive results unless it is also listed in `Update Room With Results`.
 - Keep routing short, clear, and explicit.
 
+EFFICIENT ROOM UPDATE RULE
+
+- Do not overload every related room with every step-by-step prompt.
+- Full task prompts go only to the owner or execution room, and to Codex or Claude Code if repo work is required.
+- Informational rooms receive only a short kickoff notice when they need awareness and a final summary or results update when the task is complete.
+- `Update Room` means rooms that need awareness of the task, not necessarily rooms that need the full prompt.
+- `Update Room With Results` means every room that needs the final completion report or summary.
+- Do not post audit, fix, validation, commit, or push prompts into rooms that only need informational awareness.
+- If a room needs only context, give it a short update notice instead of the full prompt.
+- If a room needs to act, give it the full prompt.
+- Keep every interaction to one action.
+
 Standard room map:
 - `MLB HR Engine Setup` = main command, routing, general project direction, next-action planning
 - `Issue Intake & Triage` = operator bugs, concerns, screenshots, confusing UI, missing data, suspected issues

@@ -387,6 +387,16 @@ PUSH STATUS
 - Each active room is the main room for its assigned project area.
 - Prefer routing work to an existing room. Do not recommend creating another room unless absolutely required.
 - Recommend a new room only when no current room clearly owns the work, the work is large enough to require separate tracking, or the operator explicitly asks for a new room.
+- EFFICIENT ROOM UPDATE RULE:
+  - Do not overload every related room with every step-by-step prompt.
+  - Full task prompts go only to the owner or execution room, and to Codex or Claude Code if repo work is required.
+  - Informational rooms receive only a short kickoff notice when they need awareness and a final summary or results update when the task is complete.
+  - `Update Room` means rooms that need awareness of the task, not necessarily rooms that need the full prompt.
+  - `Update Room With Results` means every room that needs the final completion report or summary.
+  - Do not post audit, fix, validation, commit, or push prompts into rooms that only need informational awareness.
+  - If a room needs only context, give it a short update notice instead of the full prompt.
+  - If a room needs to act, give it the full prompt.
+  - Keep every interaction to one action.
 - Every copy-ready prompt must state destination explicitly:
   - `USE EXISTING ROOM: <room name>`
   - `CREATE NEW ROOM: <room name>`
