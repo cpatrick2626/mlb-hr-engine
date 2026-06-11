@@ -3336,13 +3336,13 @@ def _build_apex_badges(player: dict) -> list[tuple[str, str]]:
 
     # Platoon advantage
     platoon = float(player.get("platoon_factor") or 1.0)
-    if platoon >= 1.05:
+    if platoon >= 1.07:
         badges.append(("PLATOON EDGE", "#1aff66"))
 
     # Hitter park
     park = float(player.get("park_factor") or 1.0)
     if park >= 1.08:
-        badges.append(("HITTER PARK", "#1aff66"))
+        badges.append(("HITTER PARK", "#c084fc"))
 
     # Wind / weather boost
     weather = float(player.get("weather_factor") or 1.0)
@@ -3356,14 +3356,14 @@ def _build_apex_badges(player: dict) -> list[tuple[str, str]]:
 
     # H2H history advantage
     h2h = float(player.get("h2h_factor") or 1.0)
-    if h2h >= 1.05:
+    if h2h >= 1.09:
         badges.append(("H2H HISTORY", "#3b6fff"))
 
-    # Top of order (spots 1-3)
+    # Top of order — only meaningful for power hitters (barrel confirms intent)
     _spot = player.get("lineup_spot")
     if _spot is not None:
         try:
-            if int(_spot) <= 3:
+            if int(_spot) <= 3 and barrel >= 8.0:
                 badges.append(("TOP OF ORDER", "#4ade80"))
         except (ValueError, TypeError):
             pass
@@ -3372,10 +3372,10 @@ def _build_apex_badges(player: dict) -> list[tuple[str, str]]:
 
 
 def _reason_stack_html(player: dict, header: bool = True) -> str:
-    """HTML pill row showing why this player fires. Empty string if no badges."""
+    """HTML pill row showing why this player fires. Falls back to HR THREAT PROFILE."""
     badges = _build_apex_badges(player)
     if not badges:
-        return ""
+        badges = [("HR THREAT PROFILE", "#6b7872")]
     pills = "".join(
         f"<span style='display:inline-block;background:#080808;border:1px solid {col};"
         f"color:{col};font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;"
