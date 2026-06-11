@@ -1,6 +1,6 @@
 # Build Log and Spec Status
 
-**Last Updated:** 2026-06-08
+**Last Updated:** 2026-06-10
 
 ---
 
@@ -187,6 +187,65 @@ The following spec files exist but contain **0 bytes**. They are structural plac
 Do not cite these files as authoritative sources. They contain no content. Any agent that reads them will find nothing. Until they are populated by an authorized task, treat them as gaps.
 
 If a future task populates these files, update this note.
+
+---
+
+---
+
+## Option A Tier Threshold Production Validation
+
+**Last validated:** 2026-06-10
+
+### Scope
+
+- Room: `Obsidian Governance Update`
+- Phase: Document Option A Tier Threshold Production Validation
+- Risk: LOW
+- Surface validated: live production only
+- API: `https://mlb-hr-api.fly.dev`
+
+### Commits
+
+1. `f3969b1` — `tune(config): tighten full slate tier thresholds`
+   - File: `mlb_hr_engine_v4/config.py` only
+   - `FS_TIER_THRESHOLDS`: APEX 0.20, ELITE 0.16, EDGE 0.11, SIGNAL 0.07, WATCH 0.04, COLD 0.00
+2. `ffa156c` — `fix(frontend): align full slate fanduel search links`
+   - File: `frontend/assets/js/full-slate-matrix.js` only
+   - `fsmFanduelUrl` pattern: `https://sportsbook.fanduel.com/search?query=<encoded player name> home run`
+
+### Fly.io Deploy
+
+- Result: success — Image `deployment-01KTT1166HZRBB8WWAF2R1JBWM`, Machine `7841255a9d2e28`
+
+### API Snapshot
+
+- `generated_at`: `2026-06-11T00:32:25`
+- `from_cache`: false
+- MAIN rows: `198`, JIG rows: `198`
+
+### Tier Distribution
+
+| Tier   | Count | % of 198 |
+|--------|-------|----------|
+| APEX   | 18    | 9.1%     |
+| ELITE  | 17    | 8.6%     |
+| EDGE   | 59    | 29.8%    |
+| SIGNAL | 65    | 32.8%    |
+| WATCH  | 32    | 16.2%    |
+| COLD   | 7     | 3.5%     |
+
+- Top Targets eligible (ELITE + EDGE): 76 / 198
+
+### Verdict
+
+- Option A tiers active in production: **yes**
+- No legacy AVG / WEAK in `row.tier`: **yes**
+- FanDuel search URL fix live: **yes**
+- MAIN Full Slate label (TIER): **yes**
+- JIG Full Slate / Builder label (MODEL TIER): **yes**
+- Fly.io healthy: **yes**
+
+See session [[2026-06-10-option-a-tier-threshold-production-validation]] for full detail.
 
 ---
 

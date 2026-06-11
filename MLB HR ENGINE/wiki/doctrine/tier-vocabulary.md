@@ -1,6 +1,6 @@
 # Tier Vocabulary Doctrine
 
-**Last Updated:** 2026-06-08
+**Last Updated:** 2026-06-10
 
 ---
 
@@ -14,16 +14,18 @@ Three distinct tier vocabularies exist in MLB HR ENGINE. They apply to different
 
 **Used by:** MAIN model scoring output, pick ranking, operator dashboard leaderboard
 
-| Tier | Meaning |
-|------|---------|
-| APEX | Highest model confidence, strongest EV |
-| ELITE | Very high model confidence |
-| EDGE | Above-threshold model confidence |
-| SIGNAL | Moderate model confidence, reportable |
-| WATCH | Below deployment threshold, monitor only |
-| COLD | No meaningful signal |
+| Tier   | Threshold | Meaning |
+|--------|-----------|---------|
+| APEX   | ≥ 0.20    | Highest model confidence, strongest EV |
+| ELITE  | ≥ 0.16    | Very high model confidence |
+| EDGE   | ≥ 0.11    | Above-threshold model confidence |
+| SIGNAL | ≥ 0.07    | Moderate model confidence, reportable |
+| WATCH  | ≥ 0.04    | Below deployment threshold, monitor only |
+| COLD   | ≥ 0.00    | No meaningful signal |
 
 These tiers reflect **model probability and EV** output from `pipeline.py` and `config.py`.
+
+**Active threshold set:** Option A — tightened 2026-06-10 (`f3969b1`). Authoritative values live in `mlb_hr_engine_v4/config.py` (`FS_TIER_THRESHOLDS`). The table above reflects the production state as of 2026-06-10; always verify against `config.py` before relying on these values.
 
 ---
 
