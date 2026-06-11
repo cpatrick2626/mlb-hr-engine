@@ -18,6 +18,10 @@ Room routing rule:
 - Prefer existing room ownership.
 - Do not create a new room unless no current room clearly owns the work, the work needs separate tracking, or the operator explicitly asks.
 - Every copy-ready prompt must state destination explicitly with `USE EXISTING ROOM: <room name>` or `CREATE NEW ROOM: <room name>`.
+- For all future copy-ready prompts, `ROOM Deployed From` is the originating room, `Update Room` lists every room that needs the prompt, and `Update Room With Results` lists every room that needs the completion report or results.
+- If more than one room needs the prompt or results, list every room in the relevant field.
+- `ROOM Deployed From` does not receive results unless it is also listed in `Update Room With Results`.
+- Keep routing short, clear, and explicit.
 
 Standard room map:
 - `MLB HR Engine Setup` = main command, routing, general project direction, next-action planning

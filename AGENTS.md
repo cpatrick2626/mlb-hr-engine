@@ -182,6 +182,16 @@ CREATE NEW ROOM: <room name>
 
 Never assume the operator knows the destination.
 
+For all future MLB HR ENGINE copy-ready prompts:
+
+1. `ROOM Deployed From` means the room that created or deployed the prompt.
+2. `Update Room` must list every room that needs to receive or know the prompt, task, or action.
+3. `Update Room With Results` must list every room where the completion report or results should be pasted.
+4. If more than one room needs the prompt, list all rooms under `Update Room`.
+5. If more than one room needs the results, list all rooms under `Update Room With Results`.
+6. `ROOM Deployed From` does not automatically receive results unless it is also listed under `Update Room With Results`.
+7. Keep routing short, clear, and explicit.
+
 ---
 
 ### 2. COPY-READY EXECUTION PACKETS
