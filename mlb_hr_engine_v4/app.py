@@ -2589,8 +2589,8 @@ def _combo_html(parlay: dict, label: str) -> str:
         _l_mdl    = leg.get("model_prob", 0) * 100
         _l_ev     = leg.get("ev_pct", 0)
         _l_edge   = leg.get("edge_pct", 0)
-        _l_tier   = leg.get("confidence_tier", "C")
-        _l_tc     = {"S": "#FFD700", "A": "#4ade80", "B": "#facc15", "C": "#f87171"}.get(_l_tier, "#888")
+        _l_tier   = _fs_tier_from_prob(_safe_float(leg.get("model_prob")) or 0.0)
+        _l_tc     = config.FS_TIER_DISPLAY.get(_l_tier, config.FS_TIER_DISPLAY["COLD"])["color"]
         _l_ev_c   = "#4ade80" if _l_ev >= 0 else "#f87171"
         _l_pit    = leg.get("pitcher_name", "")
         _l_pit_f  = leg.get("pitcher_factor", 1.0)
@@ -2770,7 +2770,7 @@ def _intelligence_card_html(
     edge     = player.get("edge_pct")
     odds     = player.get("best_american")
     barrel   = _pf(player.get("barrel_pct"), 0.0)
-    tier     = player.get("confidence_tier", "C")
+    tier     = _fs_tier_from_prob(_safe_float(player.get("model_prob")) or 0.0)
     photo    = _player_photo_html(player.get("player_id"), size=34)
 
     # ── Value colors ──
@@ -2778,7 +2778,7 @@ def _intelligence_card_html(
     edge_col_    = _edge_col(edge) if edge is not None else "#64748b"
     ev_display   = f"{ev:+.1f}%" if ev is not None else "—"
     edge_display = f"{edge:+.1f}%" if edge is not None else "—"
-    tier_col  = {"S": "#FFD700", "A": "#4ade80", "B": "#facc15", "C": "#f87171"}.get(tier, "#888")
+    tier_col  = config.FS_TIER_DISPLAY.get(tier, config.FS_TIER_DISPLAY["COLD"])["color"]
     brl_col   = ("#4ade80" if barrel >= 10 else "#86efac" if barrel >= 8
                  else "#f0f0f0" if barrel >= 6 else "#555")
     brl_pct   = min(100, int(barrel / 18.0 * 100))
@@ -3946,8 +3946,8 @@ def _build_rqt_rows(
             f"⚠️ NOW: {pc['new']}" if pc
             else _pitcher_label(p.get("pitcher_name", "TBD"), pit_fac, plat_fac)
         )
-        _tier     = p.get("confidence_tier", "C")
-        _tier_lbl = {"S": "🌟 S", "A": "✅ A", "B": "🟡 B", "C": "🔴 C"}.get(_tier, _tier)
+        _tier     = _fs_tier_from_prob(_safe_float(p.get("model_prob")) or 0.0)
+        _tier_lbl = _tier
         rows.append({
             "Tier":    _tier_lbl,
             "Rating":  ("📈 " if is_steam else "") + _pick_rating(ev, edge, model_p, conf),
@@ -5789,8 +5789,8 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
         _top_ev_col = "#4ade80" if _top_ev >= 0 else "#f87171"
         _top_url    = _fanduel_url(_top_name)
 
-        _top_tier     = _top.get("confidence_tier", "C")
-        _top_tier_col = {"S": "#FFD700", "A": "#4ade80", "B": "#facc15", "C": "#f87171"}.get(_top_tier, "#888")
+        _top_tier     = _fs_tier_from_prob(_safe_float(_top.get("model_prob")) or 0.0)
+        _top_tier_col = config.FS_TIER_DISPLAY.get(_top_tier, config.FS_TIER_DISPLAY["COLD"])["color"]
         _top_pit_lbl  = _pitcher_label(_top_vs, _top.get("pitcher_factor", 1.0), _top.get("platoon_factor", 1.0))
         _top_hand     = _top.get("pitcher_hand", "")
         _top_hand_s   = f" ({'RHP' if _top_hand == 'R' else 'LHP' if _top_hand == 'L' else ''})" if _top_hand else ""
@@ -6830,8 +6830,8 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                     _mp_edge_display = f"{_mp_edge:+.1f}%" if _mp_edge is not None else "—"
                     _mp_edge_col    = _edge_col(_mp_edge) if _mp_edge is not None else "#64748b"
                     _mp_brl_col  = "#4ade80" if _mp_brl >= 8 else "#f0f0f0"
-                    _mp_tier     = _mp.get("confidence_tier", "C")
-                    _mp_tier_col = {"S": "#FFD700", "A": "#4ade80", "B": "#facc15", "C": "#f87171"}.get(_mp_tier, "#888")
+                    _mp_tier     = _fs_tier_from_prob(_safe_float(_mp.get("model_prob")) or 0.0)
+                    _mp_tier_col = config.FS_TIER_DISPLAY.get(_mp_tier, config.FS_TIER_DISPLAY["COLD"])["color"]
 
                     if st.button(
                         f"{_mp_name} — {_mp_lbl}",
@@ -7584,8 +7584,8 @@ def tab_hits(data: dict):
         hc    = "#4ade80" if hsco >= 60 else "#f59e0b" if hsco >= 40 else "#f87171"
         _h_edge   = p.get("edge_pct", 0)
         _h_ec     = _edge_col(_h_edge)
-        _h_tier   = p.get("confidence_tier", "C")
-        _h_tc     = {"S": "#FFD700", "A": "#4ade80", "B": "#facc15", "C": "#f87171"}.get(_h_tier, "#888")
+        _h_tier   = _fs_tier_from_prob(_safe_float(p.get("model_prob")) or 0.0)
+        _h_tc     = config.FS_TIER_DISPLAY.get(_h_tier, config.FS_TIER_DISPLAY["COLD"])["color"]
         _h_pit_lbl = _pitcher_label(pit_n, p.get("pitcher_factor", 1.0), p.get("platoon_factor", 1.0))
         _h_hand   = p.get("pitcher_hand", "")
         _h_hand_s = f" ({'RHP' if _h_hand == 'R' else 'LHP' if _h_hand == 'L' else ''})" if _h_hand else ""
@@ -7878,8 +7878,8 @@ def tab_hits(data: dict):
             bts_rows = []
             for i, entry in enumerate(bts_pool):
                 pp = entry["player"]
-                _bts_tier   = pp.get("confidence_tier", "")
-                _bts_tier_l = {"S": "🌟 S", "A": "✅ A", "B": "🟡 B", "C": "🔴 C"}.get(_bts_tier, _bts_tier)
+                _bts_tier   = _fs_tier_from_prob(_safe_float(pp.get("model_prob")) or 0.0)
+                _bts_tier_l = _bts_tier
                 bts_rows.append({
                     "#":        i + 1,
                     "Tier":     _bts_tier_l,
@@ -7952,8 +7952,8 @@ def tab_hits(data: dict):
         for entry in scored:
             p = entry["player"]
             xba, ld, ss, hh, kf, pa = _hit_metrics(p)
-            _ha_tier     = p.get("confidence_tier", "C")
-            _ha_tier_lbl = {"S": "🌟 S", "A": "✅ A", "B": "🟡 B", "C": "🔴 C"}.get(_ha_tier, _ha_tier)
+            _ha_tier     = _fs_tier_from_prob(_safe_float(p.get("model_prob")) or 0.0)
+            _ha_tier_lbl = _ha_tier
             rows.append({
                 "Player":   p.get("player_name", ""),
                 "Team":     p.get("team", ""),
@@ -9823,8 +9823,8 @@ def tab_parlays(data: dict):
                     model_pct = f"{sel.get('model_prob',0)*100:.1f}%"
                     ev_val    = sel.get("ev_pct", 0)
                     edge_val  = sel.get("edge_pct", 0)
-                    _mb_tier  = sel.get("confidence_tier", "C")
-                    _mb_tc    = {"S": "#FFD700", "A": "#4ade80", "B": "#facc15", "C": "#f87171"}.get(_mb_tier, "#888")
+                    _mb_tier  = _fs_tier_from_prob(_safe_float(sel.get("model_prob")) or 0.0)
+                    _mb_tc    = config.FS_TIER_DISPLAY.get(_mb_tier, config.FS_TIER_DISPLAY["COLD"])["color"]
                     _mb_ev_c  = "#4ade80" if ev_val >= 0 else "#f87171"
                     _mb_ec    = _edge_col(edge_val)
                     pitcher_lbl = _pitcher_label(sel.get("pitcher_name","TBD"), pit_fac, plat_fac)
