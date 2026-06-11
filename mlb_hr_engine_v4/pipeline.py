@@ -720,6 +720,8 @@ def load_game_data(
             p["confidence_tier"] = ranker.confidence_tier(conf, edge)
             p["score"]           = ranker.composite_score(p.get("model_prob", 0))
 
+    ranker.rank_within_tiers(all_players)
+
     # Auto parlay combos (legacy leg-count view + new profile-based view)
     auto_parlays    = parlay_engine.build_auto_parlays(ranked)
     profile_parlays = build_profile_parlays(all_players)

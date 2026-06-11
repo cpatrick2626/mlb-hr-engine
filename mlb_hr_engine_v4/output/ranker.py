@@ -82,3 +82,29 @@ def rank_picks(picks: list[dict]) -> list[dict]:
 def rank_all_by_model(picks: list[dict]) -> list[dict]:
     """Rank all players (filtered or not) purely by model HR probability."""
     return sorted(picks, key=lambda x: x.get("model_prob", 0), reverse=True)
+
+
+def rank_within_tiers(players: list[dict]) -> None:
+    """Stamp model_tier_rank on every player in-place.
+
+    Format: '<TIER> #<N>' (e.g., 'APEX #1', 'ELITE #3').
+    Sorted model_prob descending within tier; player_name breaks ties deterministically.
+    """
+    import config as _cfg
+    thresholds = _cfg.FS_TIER_THRESHOLDS
+    _tier_seq = ["APEX", "ELITE", "EDGE", "SIGNAL", "WATCH", "COLD"]
+
+    def _tier(model_prob: float) -> str:
+        for t in _tier_seq[:-1]:
+            if model_prob >= thresholds[t]:
+                return t
+        return "COLD"
+
+    by_tier: dict[str, list[dict]] = {t: [] for t in _tier_seq}
+    for p in players:
+        by_tier[_tier(float(p.get("model_prob", 0)))].append(p)
+
+    for tier, group in by_tier.items():
+        group.sort(key=lambda x: (-float(x.get("model_prob", 0)), x.get("player_name", "")))
+        for i, p in enumerate(group, 1):
+            p["model_tier_rank"] = f"{tier} #{i}"
