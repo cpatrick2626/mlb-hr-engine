@@ -8066,8 +8066,8 @@ def tab_jig(data: dict):
         mod   = ctx.get("hvy_modifier", 1.0)
         mod_c = "#4ade80" if mod > 1.0 else "#f87171" if mod < 1.0 else "#888"
         mod_s = f"{'▲' if mod > 1.0 else '▼' if mod < 1.0 else '●'} {mod*100:.0f}%"
-        _hvy_tier   = p.get("confidence_tier", "C")
-        _hvy_tc     = {"S": "#FFD700", "A": "#4ade80", "B": "#facc15", "C": "#f87171"}.get(_hvy_tier, "#888")
+        _hvy_tier   = _fs_tier_from_prob(_safe_float(p.get("model_prob")) or 0.0)
+        _hvy_tc     = {"APEX": "#ff3344", "ELITE": "#ff8a93", "EDGE": "#1aff66", "SIGNAL": "#3b6fff", "WATCH": "#ffb020", "COLD": "#6b7872"}.get(_hvy_tier, "#888")
         _hvy_edge   = _market_num("edge_pct")
         _hvy_ec     = _edge_col(_hvy_edge) if _hvy_edge is not None else "#64748b"
         _hvy_edge_display = f"{_hvy_edge:+.1f}%" if _hvy_edge is not None else "—"
@@ -8104,7 +8104,7 @@ def tab_jig(data: dict):
             ("C NEUTRAL",  "#94a3b8", "#111827") if hvy >= 25 else
             ("D AVOID",    "#f87171", "#1a0505")
         )
-        _mg_label = {"S": "S+ ELITE", "A": "A MODEL", "B": "B MODEL", "C": "C MODEL"}.get(_hvy_tier, f"{_hvy_tier} MODEL")
+        _mg_label = _hvy_tier
         if _hvy_ctx_known:
             _hvy_mod_bar_pct = min(100, max(0, int((mod - 0.75) / 0.60 * 100)))
             _hvy_mod_display = mod_s
@@ -8165,7 +8165,7 @@ def tab_jig(data: dict):
                 f"letter-spacing:0.5px;'>MATCHUP: {_mt_grade}</span>"
                 f"<span style='font-size:9px;font-weight:700;color:{_hvy_tc};"
                 f"background:#0f172a;border:1px solid {_hvy_tc}44;border-radius:4px;padding:2px 6px;"
-                f"letter-spacing:0.5px;'>MODEL: {_mg_label}</span>"
+                f"letter-spacing:0.5px;'>MODEL TIER: {_mg_label}</span>"
                 f"{_hvy_conv_html}"
                 f"</div></div>"
                 f"</div>"
@@ -8654,10 +8654,7 @@ def tab_jig(data: dict):
                     {
                         "Player":    entry["player"].get("player_name", ""),
                         "Team":      entry["player"].get("team", ""),
-                        "Tier":      {"S": "🌟 S", "A": "✅ A", "B": "🟡 B", "C": "🔴 C"}.get(
-                            entry["player"].get("confidence_tier", "C"),
-                            entry["player"].get("confidence_tier", "C"),
-                        ),
+                        "Tier":      _fs_tier_from_prob(_safe_float(entry["player"].get("model_prob")) or 0.0),
                         "HVY":       entry["jig"],
                         "HVY Base":  entry["base_jig"],
                         "Modifier":  f"{entry.get('ctx', {}).get('hvy_modifier', 1.0):.2f}×",
@@ -9427,8 +9424,8 @@ def tab_jig(data: dict):
                     )
                     for _ex_e in _ex_sorted:
                         _ex_p    = _ex_e["player"]
-                        _ex_tier = _ex_p.get("confidence_tier", "C")
-                        _ex_tc   = {"S": "#FFD700", "A": "#4ade80", "B": "#facc15", "C": "#f87171"}.get(_ex_tier, "#888")
+                        _ex_tier = _fs_tier_from_prob(_safe_float(_ex_p.get("model_prob")) or 0.0)
+                        _ex_tc   = {"APEX": "#ff3344", "ELITE": "#ff8a93", "EDGE": "#1aff66", "SIGNAL": "#3b6fff", "WATCH": "#ffb020", "COLD": "#6b7872"}.get(_ex_tier, "#888")
                         _ex_hvy  = _ex_e["jig"]
                         _ex_hcol = (
                             "#f97316" if _ex_hvy >= 75 else
@@ -9437,8 +9434,8 @@ def tab_jig(data: dict):
                         st.markdown(
                             f"<div style='display:flex;align-items:center;gap:8px;"
                             f"padding:3px 10px 3px 14px;border-bottom:1px solid #0c0803;'>"
-                            f"<span style='font-size:10px;font-weight:700;color:{_ex_tc};"
-                            f"min-width:16px;'>{_ex_tier}</span>"
+                            f"<span style='font-size:9px;font-weight:700;color:{_ex_tc};"
+                            f"min-width:48px;letter-spacing:0.5px;'>MODEL TIER: {_ex_tier}</span>"
                             f"<span style='font-size:11px;color:#e0d8c8;font-weight:600;"
                             f"min-width:120px;'>"
                             f"{html.escape(_ex_p.get('player_name', '?'))}</span>"
