@@ -371,3 +371,31 @@ GIT STATUS
 COMMIT STATUS
 PUSH STATUS
 ```
+
+### 16. ROOM GOVERNANCE RULES
+
+- Each active room is the main room for its assigned project area.
+- Prefer routing work to an existing room. Do not recommend creating another room unless absolutely required.
+- Recommend a new room only when no current room clearly owns the work, the work is large enough to require separate tracking, or the operator explicitly asks for a new room.
+- Every copy-ready prompt must state destination explicitly:
+  - `USE EXISTING ROOM: <room name>`
+  - `CREATE NEW ROOM: <room name>`
+- Every coding, repo, audit, validation, or docs-edit task must include:
+  - recommended tool: `CC / Claude Code` or `CX / Codex`
+  - recommended model
+  - effort level
+  - risk class
+- Keep responses short and direct unless the operator asks for more detail.
+- Claude Design is the canonical UI/dashboard layout source. Preserve its visual intent unless the operator explicitly authorizes a design change.
+- Room map:
+  - `MLB HR Engine Setup` = main command, routing, general project direction, next-action planning
+  - `Issue Intake & Triage` = operator bugs, concerns, screenshots, confusing UI, missing data, suspected issues
+  - `Tier Ranking & Classification Doctrine` = tier ranking, opportunity class, rank order, tier display, canonical/lens ranking doctrine, escalation quality
+  - `FanDuel Shortcut Audit` = FanDuel links, search behavior, copy fallback, row-click isolation, FD shortcut validation
+  - `Mobile UI Overhaul` = mobile/tablet implementation and responsive polish based on Mobile Architecture V2 and Claude Design
+  - `Obsidian Governance Update` = wiki, doctrine, logs, session notes, durable documentation
+  - `AGENTS.md Grounding Update` = project-wide rules, AI ownership, room behavior, protected surfaces, operating instructions
+  - `Production Roadmap Planning` = roadmap, phase planning, 30-day sequencing, completed/remaining work
+  - `Spec Reconstruction` = specs only, including architecture.md, product-spec.md, ui-system.md, component rules if needed
+  - `Project Handoff MLB HR` = migration history, handoff state, archive context only
+  - `Canonical Ranking Doctrine` and `Ranking Doctrine Review` = historical/reference rooms only; future ranking work routes to `Tier Ranking & Classification Doctrine` unless operator says otherwise

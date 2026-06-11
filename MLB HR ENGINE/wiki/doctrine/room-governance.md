@@ -14,6 +14,24 @@
 | 09 | JIG TACTICAL ENGINE | JIG Builder, aggressive filters, tactical stacks, arsenal hunting, high-volatility HR opportunities |
 | 05 | LIVE DEPLOYMENT SYSTEMS | EV, odds, exposure, slips, bankroll, portfolio, deployment workflow, risk systems |
 
+Room routing rule:
+- Prefer existing room ownership.
+- Do not create a new room unless no current room clearly owns the work, the work needs separate tracking, or the operator explicitly asks.
+- Every copy-ready prompt must state destination explicitly with `USE EXISTING ROOM: <room name>` or `CREATE NEW ROOM: <room name>`.
+
+Standard room map:
+- `MLB HR Engine Setup` = main command, routing, general project direction, next-action planning
+- `Issue Intake & Triage` = operator bugs, concerns, screenshots, confusing UI, missing data, suspected issues
+- `Tier Ranking & Classification Doctrine` = tier ranking, opportunity class, rank order, tier display, canonical/lens ranking doctrine, escalation quality
+- `FanDuel Shortcut Audit` = FanDuel links, search behavior, copy fallback, row-click isolation, FD shortcut validation
+- `Mobile UI Overhaul` = mobile/tablet implementation and responsive polish based on Mobile Architecture V2 and Claude Design
+- `Obsidian Governance Update` = wiki, doctrine, logs, session notes, durable documentation
+- `AGENTS.md Grounding Update` = project-wide rules, AI ownership, room behavior, protected surfaces, operating instructions
+- `Production Roadmap Planning` = roadmap, phase planning, 30-day sequencing, completed/remaining work
+- `Spec Reconstruction` = specs only, including architecture.md, product-spec.md, ui-system.md, component rules if needed
+- `Project Handoff MLB HR` = migration history, handoff state, archive context only
+- `Canonical Ranking Doctrine` and `Ranking Doctrine Review` = historical/reference rooms only; future ranking work routes to `Tier Ranking & Classification Doctrine` unless operator says otherwise
+
 ---
 
 ## Room Ownership Law
@@ -60,6 +78,15 @@ authorization.
 | HIGH | Touches engine/*, pipeline.py, calibration, MAIN model probability, scoring composites, MAIN/JIG separation, config.py, any closed surface | Audit-first -> operator review -> execution as a separate authorized assignment |
 
 HIGH risk work cannot be single-step. Ever.
+
+## Operating Rules
+
+- One action per response.
+- Keep outputs short and direct unless the operator asks for more detail.
+- Every coding, repo, audit, validation, or docs-edit task should include recommended tool, model, effort, and risk class.
+- Claude Design is the canonical UI/dashboard layout source. Preserve its visual intent unless the operator explicitly authorizes a design change.
+- MAIN and JIG stay separate.
+- JIG `row.tier` is inherited MAIN model probability tier and should be presented as MODEL TIER in JIG contexts. Tactical ranking still comes from `jigScore` and JIG sort order.
 
 ---
 
