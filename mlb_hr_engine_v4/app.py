@@ -3310,6 +3310,91 @@ def _show_pitch_mix_modal() -> None:
         st.rerun()
 
 
+# ── APEX Explanation Layer ────────────────────────────────────────────────────
+# Derives why a player ranks APEX #1 from existing pipeline output fields only.
+# No model changes, no scoring changes, no new data fetches.
+
+def _build_apex_badges(player: dict) -> list[tuple[str, str]]:
+    """Return (label, color_hex) pairs for each signal threshold that fires."""
+    badges: list[tuple[str, str]] = []
+
+    # Barrel — mutually exclusive ELITE > STRONG
+    try:
+        _b_raw = player.get("barrel_pct")
+        barrel = float(str(_b_raw).replace("%", "")) if _b_raw not in (None, "--", "") else 0.0
+    except (ValueError, TypeError):
+        barrel = 0.0
+    if barrel >= 14.0:
+        badges.append(("ELITE BARREL", "#ff3344"))
+    elif barrel >= 10.0:
+        badges.append(("STRONG BARREL", "#ff8a93"))
+
+    # Pitcher vulnerability (FS_HEATMAP_THRESHOLDS elite tier for pitcher_hr9)
+    pitcher_hr9 = float(player.get("pitcher_hr9") or 0.0)
+    if pitcher_hr9 >= 1.50:
+        badges.append(("VULNERABLE PITCHER", "#FFD700"))
+
+    # Platoon advantage
+    platoon = float(player.get("platoon_factor") or 1.0)
+    if platoon >= 1.05:
+        badges.append(("PLATOON EDGE", "#1aff66"))
+
+    # Hitter park
+    park = float(player.get("park_factor") or 1.0)
+    if park >= 1.08:
+        badges.append(("HITTER PARK", "#1aff66"))
+
+    # Wind / weather boost
+    weather = float(player.get("weather_factor") or 1.0)
+    if weather >= 1.08:
+        badges.append(("WIND BOOST", "#00d9ff"))
+
+    # Hot streak
+    streak = float(player.get("streak_factor") or 1.0)
+    if streak >= 1.10:
+        badges.append(("HOT STREAK", "#ffb020"))
+
+    # H2H history advantage
+    h2h = float(player.get("h2h_factor") or 1.0)
+    if h2h >= 1.05:
+        badges.append(("H2H HISTORY", "#3b6fff"))
+
+    # Top of order (spots 1-3)
+    _spot = player.get("lineup_spot")
+    if _spot is not None:
+        try:
+            if int(_spot) <= 3:
+                badges.append(("TOP OF ORDER", "#4ade80"))
+        except (ValueError, TypeError):
+            pass
+
+    return badges
+
+
+def _reason_stack_html(player: dict, header: bool = True) -> str:
+    """HTML pill row showing why this player fires. Empty string if no badges."""
+    badges = _build_apex_badges(player)
+    if not badges:
+        return ""
+    pills = "".join(
+        f"<span style='display:inline-block;background:#080808;border:1px solid {col};"
+        f"color:{col};font-size:10px;font-weight:700;padding:2px 8px;border-radius:4px;"
+        f"letter-spacing:0.5px;margin:2px 3px 2px 0;white-space:nowrap;'>{lbl}</span>"
+        for lbl, col in badges
+    )
+    header_html = (
+        "<div style='font-size:9px;color:#555;letter-spacing:1.2px;"
+        "text-transform:uppercase;margin-bottom:5px;'>Reason Stack</div>"
+        if header else ""
+    )
+    return (
+        f"<div style='margin:8px 0 2px;'>"
+        f"{header_html}"
+        f"<div style='display:flex;flex-wrap:wrap;gap:0;'>{pills}</div>"
+        f"</div>"
+    )
+
+
 @st.dialog("⚾ Player Details", width="large")
 def _show_player_modal(player: dict):
     _record_widget_zone("modal.player_details", widget_count_estimate=3)
@@ -3356,6 +3441,11 @@ def _show_player_modal(player: dict):
     c2.metric("Best Odds", _fmt_american(player.get("best_american")))
     c3.metric("EV%",   f"{player.get('ev_pct'):+.1f}%" if player.get('ev_pct') is not None else "—")
     c4.metric("Edge%", f"{player.get('edge_pct'):+.1f}%" if player.get('edge_pct') is not None else "—")
+
+    # ── Reason Stack ──────────────────────────────────────────────────────
+    _modal_rs = _reason_stack_html(player)
+    if _modal_rs:
+        st.markdown(_modal_rs, unsafe_allow_html=True)
 
     # ── Factor breakdown ──────────────────────────────────────────────────
     st.caption("Game-day factors")
@@ -5847,6 +5937,10 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
                       delta_color="off")
 
         _hb1, _hb2 = st.columns([8, 2])
+        with _hb1:
+            _hero_rs = _reason_stack_html(_top)
+            if _hero_rs:
+                st.markdown(_hero_rs, unsafe_allow_html=True)
         with _hb2:
             st.link_button("Open on FanDuel ↗", _top_url, width="stretch")
 
