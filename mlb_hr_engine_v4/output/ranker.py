@@ -108,3 +108,33 @@ def rank_within_tiers(players: list[dict]) -> None:
         group.sort(key=lambda x: (-float(x.get("model_prob", 0)), x.get("player_name", "")))
         for i, p in enumerate(group, 1):
             p["model_tier_rank"] = f"{tier} #{i}"
+
+
+def rank_jig_within_tiers(entries: list[dict]) -> None:
+    """Stamp jig_tier_rank on every JIG entry in-place.
+
+    Format: '<TIER> #<N>' (e.g., 'APEX #1', 'ELITE #3').
+    Each entry is a dict with 'jig' (float score) and 'player' (dict with player_name).
+    Sorted jig score descending within tier; player_name breaks ties deterministically.
+    """
+    import config as _cfg
+    thresholds = _cfg.JIG_TIER_THRESHOLDS
+    _tier_seq = ["APEX", "ELITE", "EDGE", "SIGNAL", "WATCH", "COLD"]
+
+    def _tier(jig_score: float) -> str:
+        for t in _tier_seq[:-1]:
+            if jig_score >= thresholds[t]:
+                return t
+        return "COLD"
+
+    by_tier: dict[str, list[dict]] = {t: [] for t in _tier_seq}
+    for entry in entries:
+        by_tier[_tier(float(entry.get("jig", 0)))].append(entry)
+
+    for tier, group in by_tier.items():
+        group.sort(key=lambda x: (
+            -float(x.get("jig", 0)),
+            x.get("player", {}).get("player_name", ""),
+        ))
+        for i, entry in enumerate(group, 1):
+            entry["jig_tier_rank"] = f"{tier} #{i}"

@@ -278,6 +278,18 @@ FS_TIER_DISPLAY: dict = {
     "COLD":   {"color": "#6b7872", "glow": "rgba(107,120,114,0.3)",  "label": "COLD"},
 }
 
+# ── JIG Tier Thresholds ───────────────────────────────────────────────────────
+# 6-tier classification driven by jigScore (HVY score). Display-only — does not
+# affect model_prob, EV, edge, or MAIN tier ranking. MAIN/JIG tiers are separate.
+JIG_TIER_THRESHOLDS: dict = {
+    "APEX":   13.5,
+    "ELITE":  12.5,
+    "EDGE":   11.5,
+    "SIGNAL": 10.0,
+    "WATCH":   8.5,
+    "COLD":    0.0,
+}
+
 # ── Full Slate Heatmap ────────────────────────────────────────────────────────
 # 5-bucket color ramp applied to numeric columns in the Full Slate table.
 # Thresholds are fixed cutoffs, not dynamic percentiles.

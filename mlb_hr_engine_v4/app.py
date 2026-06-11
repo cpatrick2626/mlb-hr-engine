@@ -8227,6 +8227,7 @@ def tab_jig(data: dict):
         _hvy_html_fp = (
             _hvy_ck, _hvy_pid, round(hvy, 1), round(mod, 2), is_live, _hvy_ctx_known,
             hash(status_row) if status_row else 0,
+            entry.get("jig_tier_rank", ""),
         )
         _hvy_border_w = 4 if hvy >= 70 else 3
         _hvy_card_bg = (
@@ -8259,9 +8260,12 @@ def tab_jig(data: dict):
                 f"<span style='font-size:9px;font-weight:700;color:{_mt_c};"
                 f"background:{_mt_bg};border:1px solid {_mt_c}44;border-radius:4px;padding:2px 6px;"
                 f"letter-spacing:0.5px;'>MATCHUP: {_mt_grade}</span>"
-                f"<span style='font-size:9px;font-weight:700;color:{_hvy_tc};"
-                f"background:#0f172a;border:1px solid {_hvy_tc}44;border-radius:4px;padding:2px 6px;"
-                f"letter-spacing:0.5px;'>MODEL TIER: {_mg_label}</span>"
+                + f"<span style='font-size:11px;font-weight:900;color:{_hvy_tc};"
+                  f"background:#0f172a;border:2px solid {_hvy_tc}88;border-radius:4px;padding:3px 8px;"
+                  f"letter-spacing:1px;'>{entry.get('jig_tier_rank', 'JIG —')}</span>"
+                + f"<span style='font-size:8px;font-weight:600;color:#64748b;"
+                f"background:#0a0a12;border:1px solid #1e2540;border-radius:4px;padding:2px 5px;"
+                f"letter-spacing:0.4px;'>MDL: {_mg_label}</span>"
                 f"{_hvy_conv_html}"
                 f"</div></div>"
                 f"</div>"
@@ -8380,6 +8384,12 @@ def tab_jig(data: dict):
                 })
             return entries
 
+        def _rank_jig_and_sort(players):
+            from output.ranker import rank_jig_within_tiers as _rank_jig
+            _es = _score_jig_players(players)
+            _rank_jig(_es)
+            return sorted(_es, key=lambda x: x["jig"], reverse=True)
+
         def _passes_pitcher_vulnerability(entry):
             _splits = entry["ctx"].get("hand_splits", {})
             if not _splits:
@@ -8441,6 +8451,8 @@ def tab_jig(data: dict):
             _entries = st.session_state["_jig_scored"]
         else:
             _entries = _score_jig_players(_players)
+            from output.ranker import rank_jig_within_tiers as _rank_jig
+            _rank_jig(_entries)
             st.session_state["_jig_scored"] = _entries
             st.session_state["_jig_scored_fp"] = _jig_scored_fp
 
@@ -8750,7 +8762,8 @@ def tab_jig(data: dict):
                     {
                         "Player":    entry["player"].get("player_name", ""),
                         "Team":      entry["player"].get("team", ""),
-                        "Tier":      _fs_tier_from_prob(_safe_float(entry["player"].get("model_prob")) or 0.0),
+                        "JIG Tier":  entry.get("jig_tier_rank", "—"),
+                        "MDL Tier":  _fs_tier_from_prob(_safe_float(entry["player"].get("model_prob")) or 0.0),
                         "HVY":       entry["jig"],
                         "HVY Base":  entry["base_jig"],
                         "Modifier":  f"{entry.get('ctx', {}).get('hvy_modifier', 1.0):.2f}×",
@@ -8951,7 +8964,7 @@ def tab_jig(data: dict):
                 "_jig_scored_all_fp",
                 "_jig_scored_all",
                 _jig_scored_all_fp,
-                lambda: sorted(_score_jig_players(all_players), key=lambda x: x["jig"], reverse=True),
+                lambda: _rank_jig_and_sort(all_players),
             )
             fs_filtered = _apply_jig_visibility_gates([
                 x for x in scored_all
