@@ -2934,7 +2934,7 @@ def _intelligence_card_html(
         f"<div style='text-align:right;flex-shrink:0;margin-left:6px;'>"
         f"<div style='font-size:{odds_font_size};font-weight:700;color:{odds_color};line-height:1;'>{odds_fmt}</div>"
         f"<div style='font-size:8px;color:{tier_col};font-weight:700;margin-top:1px;letter-spacing:0.3px;'>"
-        f"{tier}-TIER{badges_html}</div>"
+        f"{player.get('model_tier_rank', tier)}{badges_html}</div>"
         f"</div></div>"
 
         # ── Row 2: Status / game time · Pitcher ──
@@ -5336,6 +5336,8 @@ def _render_full_slate_native_cols(
                     _tc  = _tier_cfg["color"]
                     _tg  = _tier_cfg["glow"]
                     _tlbl = _tier_cfg["label"]
+                    _mtr = p.get("model_tier_rank")
+                    _chip_lbl = _mtr.replace(" #", " · #") if _mtr else _tlbl
                     col.markdown(
                         f"<a href='{_fanduel_url(pname)}' target='_blank'"
                         f" style='text-decoration:none;'>"
@@ -5355,9 +5357,9 @@ def _render_full_slate_native_cols(
                         f"border-radius:4px;"
                         f"padding:5px 10px;"
                         f"display:inline-block;"
-                        f"min-width:48px;"
+                        f"min-width:72px;"
                         f"cursor:pointer;"
-                        f"'>{_tlbl}</div></a>",
+                        f"'>{_chip_lbl}</div></a>",
                         unsafe_allow_html=True,
                     )
 
@@ -5834,7 +5836,7 @@ def tab_picks(data: dict, min_ev: float, min_edge: float, cutoff_utc_hour: int |
         with _hc5:
             st.markdown(
                 f"<div style='text-align:center;padding-top:8px;'>"
-                f"<div style='font-size:22px;font-weight:900;color:{_top_tier_col};'>{_top_tier}</div>"
+                f"<div style='font-size:22px;font-weight:900;color:{_top_tier_col};'>{_top.get('model_tier_rank', _top_tier)}</div>"
                 f"<div style='font-size:11px;color:#666;'>Tier</div></div>",
                 unsafe_allow_html=True,
             )
