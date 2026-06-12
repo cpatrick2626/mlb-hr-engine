@@ -73,6 +73,37 @@ JIG TCC:
 
 Never make Main and JIG filters identical.
 
+TCC Tactical Command Center is the main and only room for:
+- Tactical Command Center layout
+- TCC dashboard shell
+- TCC command panels
+- TCC workflow behavior
+- TCC visual hierarchy
+- TCC tactical UX
+- TCC navigation behavior
+- TCC status panels
+- TCC issue review
+- TCC-specific implementation prompts
+- TCC validation results
+- TCC doctrine and governance
+
+TCC routing rules:
+- If work is TCC-related, keep it in `TCC Tactical Command Center`.
+- Do not suggest another room for TCC work unless absolutely required or the operator explicitly asks.
+- TCC orchestrates; TCC does not compute.
+- TCC may display model outputs, tactical signals, state, and workflow status.
+- TCC must not create hidden scoring.
+- TCC must not merge MAIN and JIG.
+- MAIN remains `SCAN -> QUALIFY -> DEPLOY`.
+- JIG remains `MATCHUP -> CONFIRM -> EXPLOIT`.
+- HVY is display-only on JIG side.
+- HVY must never feed MAIN probability.
+- `config.py` remains source of truth for thresholds/model constants.
+- `pipeline.py` remains canonical data assembly entrypoint.
+- JIG `row.tier` is inherited MAIN model probability tier and must display as `MODEL TIER` in JIG contexts.
+- JIG tactical priority is `jigScore` / tactical order, not `row.tier`.
+- Claude Design is the canonical UI/dashboard layout source for TCC unless the operator explicitly authorizes a design change.
+
 
 ---
 
@@ -411,8 +442,9 @@ PUSH STATUS
   - `MLB HR Engine Setup` = main command, routing, general project direction, next-action planning
   - `Issue Intake & Triage` = operator bugs, concerns, screenshots, confusing UI, missing data, suspected issues
   - `Tier Ranking & Classification Doctrine` = tier ranking, opportunity class, rank order, tier display, canonical/lens ranking doctrine, escalation quality
-  - `FanDuel Shortcut Audit` = FanDuel links, search behavior, copy fallback, row-click isolation, FD shortcut validation
-  - `Mobile UI Overhaul` = mobile/tablet implementation and responsive polish based on Mobile Architecture V2 and Claude Design
+- `FanDuel Shortcut Audit` = FanDuel links, search behavior, copy fallback, row-click isolation, FD shortcut validation
+- `TCC Tactical Command Center` = main and only room for Tactical Command Center layout, dashboard shell, command panels, workflow behavior, visual hierarchy, tactical UX, navigation behavior, status panels, TCC issue review, TCC implementation prompts, TCC validation results, and TCC doctrine/governance
+- `Mobile UI Overhaul` = mobile/tablet implementation and responsive polish based on Mobile Architecture V2 and Claude Design
   - `Obsidian Governance Update` = wiki, doctrine, logs, session notes, durable documentation
   - `AGENTS.md Grounding Update` = project-wide rules, AI ownership, room behavior, protected surfaces, operating instructions
   - `Production Roadmap Planning` = roadmap, phase planning, 30-day sequencing, completed/remaining work
