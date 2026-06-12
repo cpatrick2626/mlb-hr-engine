@@ -51,6 +51,27 @@ Exception: a future audit may confirm that a specific `master` commit contains u
 
 ---
 
+## Stale / Orphan Deployment Files (2026-06-12)
+
+The following files exist in the repo but are **stale/orphaned** and **must not be used for deployment**:
+
+| File | Reason |
+|------|--------|
+| `mlb_hr_engine_v4/Dockerfile` | Multi-stage build, pinned 3.12.13, no `--workers` flag, `COPY` path expects `cwd = v4/`. Not referenced by any workflow, script, or doc. |
+| `mlb_hr_engine_v4/fly.toml` | Same app name (`mlb-hr-api`), empty `[build]` block, conflicting `memory_mb` vs `memory`, `auto_stop_machines` as string vs root's bool. Not referenced by any workflow, script, or doc. |
+
+**Canonical deployment files** are at the repo root only:
+- `Dockerfile` (root)
+- `fly.toml` (root)
+
+These are the only files used by the `mlb-hr-api` Fly.io app.
+
+**Operator note:** Archive or deletion of `mlb_hr_engine_v4/Dockerfile` and `mlb_hr_engine_v4/fly.toml` is pending separate authorization. No cleanup was performed in this update.
+
+*Surfaced by 2026-06-12 production sanity check. Dated entry: 2026-06-12.*
+
+---
+
 ## Cross-References
 
 - [App Shell Layout](app-shell-layout.md)
