@@ -144,10 +144,12 @@ def render_filter_control(
             current = float(current)
         except (TypeError, ValueError):
             current = float(default)
+    # min_value/max_value intentionally omitted: passing them to st.number_input
+    # sets min/max on the underlying <input type="number">, causing the browser to
+    # clamp on every keystroke and prevent partial/intermediate values while typing.
+    # Range is enforced at filter-application time in app.py instead.
     return st.number_input(
         label,
-        min_value=min_val,
-        max_value=max_val,
         value=current,
         step=step,
         format=fmt,
