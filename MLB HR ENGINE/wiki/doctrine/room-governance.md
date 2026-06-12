@@ -13,6 +13,7 @@
 | 08 | RUNTIME & STABILITY COMMAND | session_state, rerenders, routing, cache ownership, performance, validation, stabilization |
 | 09 | JIG TACTICAL ENGINE | JIG Builder, aggressive filters, tactical stacks, arsenal hunting, high-volatility HR opportunities |
 | 05 | LIVE DEPLOYMENT SYSTEMS | EV, odds, exposure, slips, bankroll, portfolio, deployment workflow, risk systems |
+| — | MAIN SKILLS | Utility skill creation, skill updates, skill placement prompts, skill validation prompts, skill registry maintenance, skill doctrine references, skill command behavior, skill-related Obsidian notes, skill-library commit/push routing |
 
 Room routing rule:
 - Prefer existing room ownership.
@@ -40,7 +41,7 @@ Standard room map:
 - `Issue Intake & Triage` = operator bugs, concerns, screenshots, confusing UI, missing data, suspected issues
 - `Tier Ranking & Classification Doctrine` = tier ranking, opportunity class, rank order, tier display, canonical/lens ranking doctrine, escalation quality
 - `FanDuel Shortcut Audit` = FanDuel links, search behavior, copy fallback, row-click isolation, FD shortcut validation
-- `TCC Tactical Command Center` = main and only room for Tactical Command Center layout, dashboard shell, command panels, workflow behavior, visual hierarchy, tactical UX, navigation behavior, status panels, TCC issue review, TCC implementation prompts, TCC validation results, and TCC doctrine/governance
+- `TCC Tactical Command Center` = main and only room for Tactical Command Center layout, dashboard shell, command panels, workflow behavior, visual hierarchy, tactical UX, navigation behavior, status panels, TCC issue review, TCC implementation prompts, TCC validation results, and TCC doctrine/governance. Does NOT own the global utility skill library.
 - `Mobile UI Overhaul` = mobile/tablet implementation and responsive polish based on Mobile Architecture V2 and Claude Design
 - `Obsidian Governance Update` = wiki, doctrine, logs, session notes, durable documentation
 - `AGENTS.md Grounding Update` = project-wide rules, AI ownership, room behavior, protected surfaces, operating instructions
@@ -48,6 +49,7 @@ Standard room map:
 - `Spec Reconstruction` = specs only, including architecture.md, product-spec.md, ui-system.md, component rules if needed
 - `Project Handoff MLB HR` = migration history, handoff state, archive context only
 - `Canonical Ranking Doctrine` and `Ranking Doctrine Review` = historical/reference rooms only; future ranking work routes to `Tier Ranking & Classification Doctrine` unless operator says otherwise
+- `MAIN SKILLS` = main and only room for utility skill creation, skill updates, skill placement prompts, skill validation prompts, skill registry maintenance, skill doctrine references, skill command behavior, skill-related Obsidian notes, and skill-library commit/push routing. Skill work must use `ROOM Deployed From: MAIN SKILLS`.
 
 ---
 
@@ -124,6 +126,40 @@ HIGH risk work cannot be single-step. Ever.
 - JIG `row.tier` is inherited MAIN model probability tier and must display as `MODEL TIER` in JIG contexts.
 - JIG tactical priority is `jigScore` / tactical order, not `row.tier`.
 - Claude Design is the canonical UI/dashboard layout source for TCC unless the operator explicitly authorizes a design change.
+
+---
+
+## MAIN SKILLS Room Governance
+
+`MAIN SKILLS` is the main and only room for all MLB HR ENGINE utility skill-library work.
+
+### MAIN SKILLS Owns
+
+- utility skill creation
+- utility skill updates
+- skill placement prompts
+- skill validation prompts
+- skill registry maintenance
+- skill doctrine references
+- skill command behavior
+- skill-related Obsidian notes
+- skill-library commit/push routing
+
+### MAIN SKILLS Does NOT Own
+
+- TCC app shell / layout / runtime behavior
+- MAIN/JIG scoring
+- `config.py` thresholds
+- `pipeline.py` data assembly
+- production deployment
+- frontend runtime fixes unless the work is only skill documentation
+
+### Routing Clarifications
+
+- Skill work must use `ROOM Deployed From: MAIN SKILLS`.
+- `TCC Tactical Command Center` owns Tactical Command Center app/shell/UX work, not general utility skill-library ownership.
+- The global skill library remains available to all rooms; MAIN SKILLS owns changes to the skill library itself.
+- Prior ambiguity where skill-library work was routed from `TCC Tactical Command Center` is corrected as of 2026-06-12.
 
 ---
 

@@ -442,15 +442,16 @@ PUSH STATUS
   - `MLB HR Engine Setup` = main command, routing, general project direction, next-action planning
   - `Issue Intake & Triage` = operator bugs, concerns, screenshots, confusing UI, missing data, suspected issues
   - `Tier Ranking & Classification Doctrine` = tier ranking, opportunity class, rank order, tier display, canonical/lens ranking doctrine, escalation quality
-- `FanDuel Shortcut Audit` = FanDuel links, search behavior, copy fallback, row-click isolation, FD shortcut validation
-- `TCC Tactical Command Center` = main and only room for Tactical Command Center layout, dashboard shell, command panels, workflow behavior, visual hierarchy, tactical UX, navigation behavior, status panels, TCC issue review, TCC implementation prompts, TCC validation results, and TCC doctrine/governance
-- `Mobile UI Overhaul` = mobile/tablet implementation and responsive polish based on Mobile Architecture V2 and Claude Design
+  - `FanDuel Shortcut Audit` = FanDuel links, search behavior, copy fallback, row-click isolation, FD shortcut validation
+  - `TCC Tactical Command Center` = main and only room for Tactical Command Center layout, dashboard shell, command panels, workflow behavior, visual hierarchy, tactical UX, navigation behavior, status panels, TCC issue review, TCC implementation prompts, TCC validation results, and TCC doctrine/governance. Does NOT own the global utility skill library.
+  - `Mobile UI Overhaul` = mobile/tablet implementation and responsive polish based on Mobile Architecture V2 and Claude Design
   - `Obsidian Governance Update` = wiki, doctrine, logs, session notes, durable documentation
   - `AGENTS.md Grounding Update` = project-wide rules, AI ownership, room behavior, protected surfaces, operating instructions
   - `Production Roadmap Planning` = roadmap, phase planning, 30-day sequencing, completed/remaining work
   - `Spec Reconstruction` = specs only, including architecture.md, product-spec.md, ui-system.md, component rules if needed
   - `Project Handoff MLB HR` = migration history, handoff state, archive context only
   - `Canonical Ranking Doctrine` and `Ranking Doctrine Review` = historical/reference rooms only; future ranking work routes to `Tier Ranking & Classification Doctrine` unless operator says otherwise
+  - `MAIN SKILLS` = main and only room for utility skill creation, skill updates, skill placement prompts, skill validation prompts, skill registry maintenance, skill doctrine references, skill command behavior, skill-related Obsidian notes, and skill-library commit/push routing. Does NOT own TCC app shell/layout/runtime behavior, MAIN/JIG scoring, config.py thresholds, pipeline.py data assembly, production deployment, or frontend runtime fixes unless the work is only skill documentation. Skill work must use `ROOM Deployed From: MAIN SKILLS`.
 
 ---
 
