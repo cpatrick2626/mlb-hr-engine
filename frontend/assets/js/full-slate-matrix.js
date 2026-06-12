@@ -48,12 +48,12 @@ const FSM_BUILDER_TIER_DESC = {
 
 /* JIG-owned tier thresholds (approved operator values) */
 const JIG_TIER_THRESHOLDS = [
-  { tier: "APEX",   min: 13.5 },
-  { tier: "ELITE",  min: 12.5 },
-  { tier: "EDGE",   min: 11.5 },
-  { tier: "SIGNAL", min: 10.0 },
-  { tier: "WATCH",  min:  8.5 },
-  { tier: "COLD",   min:  0   },
+  { tier: "APEX",   min: 0.34 },
+  { tier: "ELITE",  min: 0.30 },
+  { tier: "EDGE",   min: 0.26 },
+  { tier: "SIGNAL", min: 0.21 },
+  { tier: "WATCH",  min: 0.15 },
+  { tier: "COLD",   min: 0    },
 ];
 function fsmJigTierLabel(score) {
   for (const { tier, min } of JIG_TIER_THRESHOLDS) {
@@ -355,7 +355,7 @@ function FsmTable({ rows, cols, showGame, onBatter, onPitch, onReorder, onSort, 
           {bands.map((b, i) => <th key={i} className={"fsm-gband fsm-gband--" + b.label.toLowerCase()} colSpan={b.span}>{b.label}</th>)}
         </tr>
         <tr className="fsm-colhead">
-          <th className="fsm-th-tier">{isJigContext || builderMode ? "MODEL TIER" : "TIER"}</th>
+          <th className="fsm-th-tier">{isJigContext ? "JIG TIER" : builderMode ? "MODEL TIER" : "TIER"}</th>
           <th className="fsm-th-player">PLAYER</th>
           <th className="fsm-th-matchup">MATCHUP</th>
           {cols.map((c) =>

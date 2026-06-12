@@ -158,13 +158,21 @@ def _jig_score(player: dict, arsenal_data: dict | None = None) -> float:
             return 0.0
 
     # --- Contact/power base (0.78 weight) ---
+    # Percent-scale stats normalized to 0-1 so they share the decimal
+    # scale of xSLG/xISO (Candidate D correction).
     xslg        = _f("xslg")        * 0.20
-    barrel      = _f("barrel_pct")  * 0.17
+    barrel      = (_f("barrel_pct") / 100.0) * 0.17
     xiso        = _f("xiso")        * 0.12
-    pull_air    = _f("pull_air_pct")* 0.11
-    hard_hit    = _f("hard_hit")    * 0.11
-    sweet_spot  = _f("sweet_spot_pct") * 0.07
+    pull_air    = (_f("pull_air_pct") / 100.0) * 0.11
+    hard_hit    = (_f("hard_hit") / 100.0)    * 0.11
+    sweet_spot  = (_f("sweet_spot_pct") / 100.0) * 0.07
     base_score  = xslg + barrel + xiso + pull_air + hard_hit + sweet_spot
+
+    # --- PA stabilization + HR/PA term (Candidate D) ---
+    pa = _f("season_pa")
+    stab = pa / (pa + 100.0) if pa > 0 else 0.0
+    hrpa = (_f("season_hr") / pa) if pa > 0 else 0.0
+    hr_term = min(hrpa / 0.08, 1.0) * 0.10
 
     # --- Tactical signals (0.22 weight) ---
     arsenal_signal  = 0.0
@@ -233,10 +241,8 @@ def _jig_score(player: dict, arsenal_data: dict | None = None) -> float:
                 player.get("player_name", "?"), pitcher_id, e)
             pitch_mix_signal = 0.0
 
-    return (base_score
-            + arsenal_signal
-            + pitch_dmg_signal
-            + pitch_mix_signal)
+    tactical = arsenal_signal + pitch_dmg_signal + pitch_mix_signal
+    return ((base_score + hr_term) * stab) + tactical
 
 
 # ── Full Slate ─────────────────────────────────────────────────────────────────
@@ -331,21 +337,18 @@ def _build_slate_payload(data: dict) -> dict:
     # JIG list — same players, sorted by tactical score descending
     try:
         _arsenal_data = get_pitcher_arsenal(_dt.datetime.now().year)
-        jig_rows = sorted(
-            [copy.copy(r) for r in leaderboard_rows],
-            key=lambda r: _jig_score(
-                next((p for p in players
-                      if (p.get("player_name") or "") == (r.get("name") or "")),
-                     {}),
-                arsenal_data=_arsenal_data,
-            ),
-            reverse=True
-        )
+        # Key lookup by stable player_id (same scheme as row "id") to avoid
+        # same-name collisions; fall back to name slug when player_id absent.
+        players_by_id = {
+            (p.get("player_id")
+             or (p.get("player_name") or "").lower().replace(" ", "-")): p
+            for p in players
+        }
+        jig_rows = [copy.copy(r) for r in leaderboard_rows]
         for r in jig_rows:
-            p = next((p for p in players
-                       if (p.get("player_name") or "") == (r.get("name") or "")),
-                      {})
+            p = players_by_id.get(r.get("id"), {})
             r["jigScore"] = _jig_score(p, arsenal_data=_arsenal_data)
+        jig_rows.sort(key=lambda r: r["jigScore"], reverse=True)
     except Exception as e:
         log.error("JIG row build failed: %s", e, exc_info=True)
         jig_rows = []
