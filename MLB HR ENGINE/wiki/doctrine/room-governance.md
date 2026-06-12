@@ -170,6 +170,46 @@ Governance command:
 
 ---
 
+## Vault Auto-Commit Interaction Rule (2026-06-12)
+
+### Context
+
+The Obsidian vault at `MLB HR ENGINE/` is tracked inside the main repo. Vault backup automation periodically auto-commits any changes inside the vault subtree (commits typically titled `vault backup: <timestamp>`).
+
+### Observed Failure Mode (2026-06-12)
+
+A planned batched commit was intended to land Step A (doctrine update to `wiki/doctrine/production-surface-truth.md`, a vault-tracked file) together with Step C (non-vault archival of v4 deploy files).
+
+Between Step A landing on disk and Step C completing, the vault backup process auto-committed the doctrine change in `97eff6e`. The batched-commit plan was no longer achievable. Step C had to ship as a separate commit (`a32293d`).
+
+History is still clean and reversible, but the intended single-logical-commit narrative was lost.
+
+### Doctrine Rule
+
+Any time a planned commit batches a vault-tracked file with one or more non-vault files, ONE of the following must be done before the vault edit hits disk:
+
+- **(a)** Stage and commit the non-vault files FIRST, then apply and commit the vault edit (two commits, but intentional ordering). **This is the default.**
+- **(b)** Pause vault backup automation for the duration of the operation, then resume after the batched commit lands. Requires explicit operator authorization.
+- **(c)** Apply both edits, stage both immediately, and commit within the auto-commit interval (only safe if the operator can guarantee timing). Requires explicit operator authorization.
+
+Option (a) is the default. Options (b) and (c) require explicit operator authorization.
+
+### Authorship Rule
+
+Claude Code packets that plan a batched vault + non-vault commit must explicitly state which of (a), (b), (c) is in effect. Packets that do not specify default to (a).
+
+### Detection
+
+Recent vault-backup commits can be inspected with:
+
+```
+git log --oneline --grep "vault backup"
+```
+
+If a planned-batch vault file appears in such a commit before the intended commit lands, the batch plan is considered broken and must be re-scoped (as was done for Step C on 2026-06-12).
+
+---
+
 ## Cross-References
 
 - [Session State Map](../architecture/session-state-map.md)

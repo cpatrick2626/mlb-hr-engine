@@ -20,3 +20,27 @@
 ## [2026-06-11] codex | Efficient room update workflow governance recorded | COMPLETE - AGENTS.md, wiki/doctrine/room-governance.md, and wiki/log.md updated so informational rooms get short kickoff notices and final summaries instead of every step-by-step task prompt. No runtime files changed. DO NOT COMMIT / DO NOT PUSH.
 ## [2026-06-11] codex | TCC Tactical Command Center room governance registration | COMPLETE - AGENTS.md, wiki/doctrine/room-governance.md, and wiki/log.md updated so TCC Tactical Command Center is the main and only room for TCC layout, shell, workflow, UX, validation, and governance work. TCC orchestration, MAIN/JIG separation, HVY display-only, config/pipeline authority, MODEL TIER display, and Claude Design authority recorded. No runtime files changed. DO NOT COMMIT / DO NOT PUSH.
 ## [2026-06-12] claude-code | Production sanity check + doctrine gap closure (Step A) | COMPLETE — API mlb-hr-api.fly.dev healthy (200/200, 7 canonical keys, MAIN 389/JIG 389/games 30, MAIN/JIG separation intact, tier vocab canonical). Repo: branch main canonical, working tree clean, HEAD 377db55. Doctrine gap closed: appended "Stale / Orphan Deployment Files (2026-06-12)" to wiki/doctrine/production-surface-truth.md declaring mlb_hr_engine_v4/Dockerfile and mlb_hr_engine_v4/fly.toml as stale/orphaned. Open: stale symref (operator local action), origin/master dead branch (operator decision), Vercel surface clarity (deferred), Tier Ranking distribution audit (deferred), Step C archival (held pending operator authorization). DO NOT COMMIT / DO NOT PUSH.
+## 2026-06-12 — Deployment hygiene committed + pushed
+
+- Step A: doctrine update landed in `97eff6e` (vault backup auto-commit). Added the **"Stale / Orphan Deployment Files (2026-06-12)"** section to `wiki/doctrine/production-surface-truth.md`.
+- Step C: archival landed in `a32293d`. `mlb_hr_engine_v4/Dockerfile` and `mlb_hr_engine_v4/fly.toml` were moved to `archive/deployment/2026-06-12/` using history-preserving `git mv`. Archive README added.
+- Changes pushed to `origin/main`.
+- No deployment performed.
+- Production API unchanged.
+- Root `Dockerfile` and root `fly.toml` remain the canonical deployment artifacts.
+
+### Process note
+
+Vault auto-commit behavior caused Step A to be committed separately before the planned batched commit.
+
+Future batched commits involving vault files should either:
+
+1. Stage and commit non-vault changes first, or
+2. Temporarily pause vault backup automation before batching related changes.
+
+### Result
+
+- Doctrine gap closed.
+- Stale deployment artifacts removed from active deployment paths.
+- Deployment source-of-truth clarified.
+- Production deployment behavior unchanged.
