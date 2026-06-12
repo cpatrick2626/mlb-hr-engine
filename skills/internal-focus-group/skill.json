@@ -1,0 +1,13 @@
+{
+  "name": "/internal-focus-group",
+  "type": "utility",
+  "version": "1.0.0",
+  "description": "Internal focus-group skill for testing ideas, app changes, copy, workflows, and launches before shipping.",
+  "risk": "LOW",
+  "default_mode": "advisory read-only",
+  "tools": [],
+  "related_skills": ["/ingest-source", "/ingest-resource", "/web-scraping", "/ask-the-board", "/improve-system"],
+  "canonical_focus_group_folder": "MLB HR ENGINE/knowledge/focus-group/",
+  "owner": "MLB HR ENGINE — OPERATIONS",
+  "source_of_truth": "skills/internal-focus-group/SKILL.md"
+}

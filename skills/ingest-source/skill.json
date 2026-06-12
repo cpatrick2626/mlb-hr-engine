@@ -1,0 +1,15 @@
+{
+  "name": "/ingest-source",
+  "aliases": ["/ingest-resource"],
+  "type": "utility",
+  "version": "1.0.0",
+  "description": "Capture articles, YouTube links, transcripts, PDFs, and notes into the knowledge base with routing, summaries, metadata, and wikilinks.",
+  "risk": "LOW",
+  "default_mode": "knowledge-base write",
+  "owner": "MLB HR ENGINE — OPERATIONS",
+  "source_of_truth": "skills/ingest-source/SKILL.md",
+  "routes": {
+    "knowledge": "MLB HR ENGINE/knowledge/",
+    "projects": "MLB HR ENGINE/projects/"
+  }
+}

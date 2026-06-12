@@ -1,0 +1,40 @@
+{
+  "name": "/ask-the-board",
+  "type": "utility",
+  "version": "1.0.0",
+  "description": "Expert-inspired Board of Advisors for betting, model, product, engineering, UX, and project decisions.",
+  "risk": "LOW",
+  "default_mode": "advisory read-only",
+  "tools": [],
+  "related_skills": ["/web-scraping", "/ingest-source", "/improve-system"],
+  "workflow_steps": [
+    "Identify the experts",
+    "Ingest their training data with /ingest-source",
+    "Create the /ask-the-board skill",
+    "Ask the board a question"
+  ],
+  "default_board": [
+    {
+      "seat": "Sharp Betting Discipline",
+      "lens": "Billy Walters-inspired market discipline lens"
+    },
+    {
+      "seat": "Quant Edge Engine",
+      "lens": "Bill Benter-inspired quant edge lens"
+    },
+    {
+      "seat": "Product Strategy",
+      "lens": "Marty Cagan-inspired product strategy lens"
+    },
+    {
+      "seat": "Engineering Systems",
+      "lens": "John Carmack-inspired engineering clarity lens"
+    },
+    {
+      "seat": "UX / Usability",
+      "lens": "Jakob Nielsen / NNGroup-inspired UX lens"
+    }
+  ],
+  "owner": "MLB HR ENGINE — OPERATIONS",
+  "source_of_truth": "skills/ask-the-board/SKILL.md"
+}

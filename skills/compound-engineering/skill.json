@@ -1,0 +1,25 @@
+{
+  "name": "Compound Engineering",
+  "type": "utility-suite",
+  "version": "1.0.0",
+  "description": "Engineering workflow suite for brainstorming, planning, phased work, code review, debugging, and done-state validation.",
+  "risk": "LOW",
+  "default_mode": "read-only unless implementation is explicitly authorized",
+  "tools": [],
+  "commands": [
+    "/ce-brainstorm",
+    "/ce-plan",
+    "/ce-work",
+    "/ce-code-review",
+    "/ce-debug"
+  ],
+  "related_skills": [
+    "/ask-the-board",
+    "/internal-focus-group",
+    "/web-scraping",
+    "/ingest-source",
+    "/improve-system"
+  ],
+  "owner": "MLB HR ENGINE — OPERATIONS",
+  "source_of_truth": "skills/compound-engineering/SKILL.md"
+}

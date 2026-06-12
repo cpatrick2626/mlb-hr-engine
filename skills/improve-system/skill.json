@@ -1,0 +1,18 @@
+{
+  "name": "/improve-system",
+  "type": "utility",
+  "version": "1.0.0",
+  "description": "Compound the operating system over time through audit, skill review, experience capture, historical review, and foundation-gap filling.",
+  "risk": "LOW",
+  "default_mode": "read-only unless explicitly authorized",
+  "tools": [],
+  "modes": [
+    "Audit",
+    "Skill Review",
+    "Experience",
+    "Historical Review",
+    "Foundation"
+  ],
+  "owner": "MLB HR ENGINE — OPERATIONS",
+  "source_of_truth": "skills/improve-system/SKILL.md"
+}
