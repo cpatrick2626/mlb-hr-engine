@@ -46,6 +46,22 @@ const FSM_BUILDER_TIER_DESC = {
   COLD: "MAIN model probability tier: COLD — inherited by JIG display",
 };
 
+/* JIG-owned tier thresholds (approved operator values) */
+const JIG_TIER_THRESHOLDS = [
+  { tier: "APEX",   min: 13.5 },
+  { tier: "ELITE",  min: 12.5 },
+  { tier: "EDGE",   min: 11.5 },
+  { tier: "SIGNAL", min: 10.0 },
+  { tier: "WATCH",  min:  8.5 },
+  { tier: "COLD",   min:  0   },
+];
+function fsmJigTierLabel(score) {
+  for (const { tier, min } of JIG_TIER_THRESHOLDS) {
+    if ((score || 0) >= min) return tier;
+  }
+  return "COLD";
+}
+
 const TEAM_COLOR = {
   MIA: "#00a3e0", TOR: "#1d4f91", NYY: "#8a95a0", BOS: "#bd3039", COL: "#5b48a0",
   CHC: "#0e3386", ATL: "#ce1141", PHI: "#e81828", HOU: "#eb6e1f", TEX: "#003278",
@@ -155,6 +171,13 @@ function FsmCell({ col, row }) {
 
 const FSM_FANDUEL_SEARCH_URL = "https://sportsbook.fanduel.com/search";
 
+function fsmFanDuelUrl(term) {
+  const q = (term || "").trim();
+  return q
+    ? `${FSM_FANDUEL_SEARCH_URL}?q=${encodeURIComponent(q)}`
+    : "https://sportsbook.fanduel.com/baseball/mlb?tab=player-home-runs";
+}
+
 function fsmCopyFanDuelSearch(term) {
   if (navigator.clipboard) {
     navigator.clipboard.writeText(term).catch(() => {});
@@ -175,22 +198,22 @@ function fsmShowFanDuelToast(term) {
   el._t = setTimeout(() => { el.style.opacity = "0"; }, 2800);
 }
 
-function fsmFanDuelFallback(e, term) {
+function fsmOpenFanDuelSearch(e, term) {
   e.stopPropagation();
   e.preventDefault();
   fsmCopyFanDuelSearch(term);
-  window.open(FSM_FANDUEL_SEARCH_URL, "_blank", "noopener");
+  window.open(fsmFanDuelUrl(term), "_blank", "noopener");
   fsmShowFanDuelToast(term);
 }
 
-/* FD tier-icon click: copy search term, open FD base, show toast.
-   FanDuel SPA ignores search?query= params on load — clipboard fallback reduces friction. */
+/* FD tier-icon click: use Streamlit parity search URL, keep clipboard fallback. */
 function fsmOpenFD(e, row) {
-  fsmFanDuelFallback(e, row.name + " home run");
+  fsmOpenFanDuelSearch(e, row.name);
 }
 
-function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false }) {
-  const t = FSM_TIERS[row.tier] || FSM_TIERS.COLD;
+function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, isJigContext = false, jigLabel = null, jigRank = null }) {
+  const displayTier = isJigContext && jigLabel ? jigLabel : row.tier;
+  const t = FSM_TIERS[displayTier] || FSM_TIERS.COLD;
   const m = FSM_MATCHUP[row.quality] || FSM_MATCHUP.AVG;
   const game = showGame ? (window.SLATE_GAMES || []).find((g) => g.id === row.gameId) : null;
   return (
@@ -200,9 +223,9 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false })
           <span
             className="fsm-tier"
             style={{ "--tc": t.color, "--tg": t.glow }}
-            title={`${row.tier} — MAIN model probability tier (inherited)`}>
-            <span className="fsm-tier__icon"><FsmTierIcon tier={row.tier} /></span>
-            <span className="fsm-tier__label">{row.tier}</span>
+            title={isJigContext && jigLabel ? `${jigLabel} #${jigRank} — JIG tier rank` : `${row.tier} — MAIN model probability tier (inherited)`}>
+            <span className="fsm-tier__icon"><FsmTierIcon tier={displayTier} /></span>
+            <span className="fsm-tier__label">{isJigContext && jigLabel ? `${jigLabel} #${jigRank}` : row.tier}</span>
           </span>
         ) : (
           <button
@@ -210,11 +233,11 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false })
             className="fsm-tier fsm-tier--btn"
             style={{ "--tc": t.color, "--tg": t.glow }}
             onClick={(e) => fsmOpenFD(e, row)}
-            title={`Add ${row.name} (${row.tier}) to FanDuel — copies search term to clipboard`}
+            title={isJigContext && jigLabel ? `Add ${row.name} (${jigLabel} #${jigRank}) to FanDuel` : `Add ${row.name} (${row.tier}) to FanDuel`}
             aria-label={`Add ${row.name} to FanDuel`}>
 
-            <span className="fsm-tier__icon"><FsmTierIcon tier={row.tier} /></span>
-            <span className="fsm-tier__label">{row.tier}</span>
+            <span className="fsm-tier__icon"><FsmTierIcon tier={displayTier} /></span>
+            <span className="fsm-tier__label">{isJigContext && jigLabel ? `${jigLabel} #${jigRank}` : row.tier}</span>
             <span className="fsm-tier__add" aria-hidden="true">+ FD</span>
           </button>
         )}
@@ -341,7 +364,18 @@ function FsmTable({ rows, cols, showGame, onBatter, onPitch, onReorder, onSort, 
         </tr>
       </thead>
       <tbody>
-        {rows.map((r) => <FsmRow key={r.id} row={r} cols={cols} showGame={showGame} onBatter={onBatter} onPitch={onPitch} builderMode={builderMode} />)}
+        {(() => {
+          const tierCounts = {};
+          return rows.map((r) => {
+            let jigLabel = null, jigRank = null;
+            if (isJigContext) {
+              jigLabel = fsmJigTierLabel(r.jigScore);
+              tierCounts[jigLabel] = (tierCounts[jigLabel] || 0) + 1;
+              jigRank = tierCounts[jigLabel];
+            }
+            return <FsmRow key={r.id} row={r} cols={cols} showGame={showGame} onBatter={onBatter} onPitch={onPitch} builderMode={builderMode} isJigContext={isJigContext} jigLabel={jigLabel} jigRank={jigRank} />;
+          });
+        })()}
       </tbody>
     </table>);
 
@@ -450,7 +484,7 @@ function FsmBatterCard({ row, onClose, onPitch, builderMode = false }) {
       )}
       <div className="fsm-card__foot">
         <span className="fsm-card__env">{game ? `${game.park} · ${game.weather} · WIND ${game.wind}` : ""}</span>
-        {!builderMode && <a className="fsm-card__fd" href={FSM_FANDUEL_SEARCH_URL} target="_blank" rel="noopener" onClick={(e) => fsmFanDuelFallback(e, row.name + " home run")}>+ ADD TO FANDUEL</a>}
+        {!builderMode && <a className="fsm-card__fd" href={fsmFanDuelUrl(row.name)} target="_blank" rel="noopener" onClick={(e) => fsmOpenFanDuelSearch(e, row.name)}>+ ADD TO FANDUEL</a>}
       </div>
     </div>);
 
@@ -636,7 +670,7 @@ function FsmPitchMix({ row, onClose, onBatter, builderMode = false }) {
 
       <div className="fsm-card__foot">
         <button className="fsm-card__pitchbtn" onClick={onBatter}>← BATTER CARD</button>
-        {!builderMode && <a className="fsm-card__fd" href={FSM_FANDUEL_SEARCH_URL} target="_blank" rel="noopener" onClick={(e) => fsmFanDuelFallback(e, row.name + " home run")}>+ ADD {d.batter.last.toUpperCase()} TO FANDUEL</a>}
+        {!builderMode && <a className="fsm-card__fd" href={fsmFanDuelUrl(row.name)} target="_blank" rel="noopener" onClick={(e) => fsmOpenFanDuelSearch(e, row.name)}>+ ADD {d.batter.last.toUpperCase()} TO FANDUEL</a>}
       </div>
     </div>);
 
