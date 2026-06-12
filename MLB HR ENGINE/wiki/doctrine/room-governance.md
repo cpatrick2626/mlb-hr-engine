@@ -210,6 +210,58 @@ If a planned-batch vault file appears in such a commit before the intended commi
 
 ---
 
+## Global Utility Skill Library
+
+Skill source files live under `skills/` in the repo root.
+
+### Registry
+
+| Skill | Trigger |
+|-------|---------|
+| `/web-scraping` | Semantic web discovery, current source research, Exa/Firecrawl workflows, public source checks, rendered/dynamic page extraction |
+| `/ingest-source` / `/ingest-resource` | Capture articles, YouTube links, transcripts, PDFs, notes into `knowledge/` or `projects/` with summaries and wikilinks |
+| `/improve-system` | Audit stale/conflicting notes, review skills, capture lessons, mine Claude Code sessions, fill foundation gaps |
+| `/ask-the-board` | Expert-inspired decision review across betting, quant/model, product, engineering, and UX lenses |
+| `/internal-focus-group` | Test app changes, copy, workflows, launches, and product ideas against source-backed personas before shipping |
+| `/ce-brainstorm` | Explore what to build |
+| `/ce-plan` | Define scope, phases, risk, and done |
+| `/ce-work` | Execute authorized work through delivery phases |
+| `/ce-code-review` | Review completed work against scope and validation |
+| `/ce-debug` | Troubleshoot failed or unexpected behavior |
+
+### Usage Rules
+
+All MLB HR ENGINE rooms may invoke these skills when the task matches the trigger.
+
+- Select the smallest useful skill.
+- Prefer skill source files (`skills/*/SKILL.md`) as source of truth. Do not copy/paste full skill doctrine into room notes.
+- Use `/ask-the-board` before major product, architecture, or betting decisions.
+- Use `/internal-focus-group` before user-facing launches or UX/copy changes.
+- Use `/ce-plan` before implementation prompts when scope or risk needs structure.
+- Use `/ce-code-review` after claimed implementation completion.
+- Use `/ce-debug` when behavior breaks or validation fails.
+- Use `/improve-system` when repeated lessons should become doctrine.
+- Use `/ingest-source` for durable captured material.
+- Use `/web-scraping` when current external verification or source discovery is needed.
+
+### Invariants — Skills Do Not Override
+
+Skills do not override protected-surface governance. Skills do not authorize runtime or code edits by themselves. Any implementation work produced by a skill must still follow:
+
+- Room routing and risk classification
+- Protected-surface audit-first workflow
+- Operator authorization for commits and pushes
+- MAIN / JIG separation
+- HVY display-only doctrine
+- TCC orchestrates; does not compute
+- No hidden scoring
+- No fabricated model inputs
+- `config.py` as source of truth for thresholds and model constants
+- `pipeline.py` as canonical data assembly entrypoint
+- DO NOT COMMIT / DO NOT PUSH unless operator explicitly authorizes
+
+---
+
 ## Cross-References
 
 - [Session State Map](../architecture/session-state-map.md)
