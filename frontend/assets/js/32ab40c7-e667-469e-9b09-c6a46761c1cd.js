@@ -18,19 +18,24 @@ const STRATEGIES = [
     rank: (r) => (r.bats === "L" ? 60 : r.bats === "S" ? 30 : 0) + r.hrprob } ,
 ];
 
-function stratFanduelUrl(strat, players) {
-  const q = players.map((p) => p.name.replace("…", "")).join(", ") + " home run";
-  return "https://sportsbook.fanduel.com/search";
+const STRAT_FD_SEARCH_URL = "https://sportsbook.fanduel.com/search";
+
+function stratFanDuelUrl(term) {
+  const q = (term || "").trim();
+  return q
+    ? `${STRAT_FD_SEARCH_URL}?q=${encodeURIComponent(q)}`
+    : "https://sportsbook.fanduel.com/baseball/mlb?tab=player-home-runs";
 }
 
 function stratOpenFanduel(e, strat, players) {
   e.stopPropagation();
   e.preventDefault();
-  const q = players.map((p) => p.name.replace("â€¦", "")).join(", ") + " home run";
+  const primary = players[0]?.name.replace("…", "") || "";
+  const q = players.map((p) => p.name.replace("…", "")).join(", ");
   if (navigator.clipboard) {
     navigator.clipboard.writeText(q).catch(() => {});
   }
-  window.open("https://sportsbook.fanduel.com/search", "_blank", "noopener");
+  window.open(stratFanDuelUrl(primary), "_blank", "noopener");
   let el = document.getElementById("md-qp-fd-toast");
   if (!el) {
     el = document.createElement("div");

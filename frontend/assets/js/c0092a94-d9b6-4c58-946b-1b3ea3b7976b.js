@@ -69,14 +69,21 @@ const COLS = [
 
 const HR_LB_FD_URL = "https://sportsbook.fanduel.com/search";
 
+function hrLbFanDuelUrl(term) {
+  const q = (term || "").trim();
+  return q
+    ? `${HR_LB_FD_URL}?q=${encodeURIComponent(q)}`
+    : "https://sportsbook.fanduel.com/baseball/mlb?tab=player-home-runs";
+}
+
 function hrLbOpenFanduel(e, playerName) {
   e.stopPropagation();
   e.preventDefault();
-  const term = playerName + " home run";
+  const term = playerName;
   if (navigator.clipboard) {
     navigator.clipboard.writeText(term).catch(() => {});
   }
-  window.open(HR_LB_FD_URL, "_blank", "noopener");
+  window.open(hrLbFanDuelUrl(term), "_blank", "noopener");
   let el = document.getElementById("hr-lb-fd-toast");
   if (!el) {
     el = document.createElement("div");
@@ -125,7 +132,7 @@ const LeaderRow = ({ row, onOpen }) => (
       if (col.key === "fanduel") {
         return (
           <td key="fanduel" className="hr-lb__cell hr-lb__cell--fd" onClick={(e) => e.stopPropagation()}>
-            <a href={HR_LB_FD_URL} target="_blank" rel="noopener" className="hr-lb__fd-link" onClick={(e) => hrLbOpenFanduel(e, row.name)}>FD</a>
+            <a href={hrLbFanDuelUrl(row.name)} target="_blank" rel="noopener" className="hr-lb__fd-link" onClick={(e) => hrLbOpenFanduel(e, row.name)}>FD</a>
           </td>
         );
       }
