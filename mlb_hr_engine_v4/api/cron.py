@@ -40,6 +40,17 @@ def run(target_date: str = None) -> dict:
         "stats":           data.get("stats", {}),
     }
 
+    try:
+        # api.main imports api.auth, which requires SUPABASE_JWT_SECRET at
+        # module level. The GH Actions cron env doesn't set it (cron never
+        # verifies JWTs), so provide a placeholder before importing.
+        os.environ.setdefault("SUPABASE_JWT_SECRET", "")
+        from api.main import _build_slate_payload
+        payload["slate_cache"] = _build_slate_payload(data)
+        print(f"[cron] slate_cache built — {len(payload['slate_cache'].get('leaderboard_rows', []))} rows")
+    except Exception as e:
+        print(f"[cron] slate_cache build failed (payload stored without it): {e}")
+
     store_picks(target_date, payload)
 
     stats = data.get("stats", {})
