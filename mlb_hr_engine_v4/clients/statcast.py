@@ -365,6 +365,8 @@ def statcast_summary(
             stats.get("pull_pct"), stats.get("fb_pct"), stats.get("ld_pct"),
         ),
         "oppo_pct":        _pct("oppo_pct"),
+        "max_ev":          round(float(stats["max_ev"]), 1)
+                            if stats.get("max_ev") is not None else None,
         "season":          stats.get("season", config.CURRENT_SEASON),
         "statcast_source": stats.get("statcast_source", "current"),
     }
@@ -555,6 +557,7 @@ def _parse_statcast_csv(raw: str, year: int = None, player_ids: frozenset[int] =
 
             barrel_rate = _f(row, "brl_pa",           div=100.0)
             ev          = _f(row, "avg_hit_speed",     "exit_velocity_avg")
+            max_ev      = _f(row, "max_hit_speed")
             hard_hit    = _f(row, "ev95percent",       "hard_hit_percent", div=100.0)
             avg_la      = _f(row, "avg_hit_angle", "avg_launch_angle", "launch_angle_avg", allow_negative=True)
             sweet_spot  = _f(row, "sweet_spot_percent","anglesweetspotpercent",
@@ -567,6 +570,8 @@ def _parse_statcast_csv(raw: str, year: int = None, player_ids: frozenset[int] =
                 barrel_rate = None
             if ev is not None and not (60.0 <= ev <= 125.0):
                 ev = None
+            if max_ev is not None and not (60.0 <= max_ev <= 130.0):
+                max_ev = None
             if hard_hit is not None and not (0.0 <= hard_hit <= 1.0):
                 hard_hit = None
             if avg_la is not None and not (-90.0 <= avg_la <= 90.0):
@@ -579,6 +584,7 @@ def _parse_statcast_csv(raw: str, year: int = None, player_ids: frozenset[int] =
             row_out: dict = {"season": _year}
             if barrel_rate is not None: row_out["barrel_rate"]       = barrel_rate
             if ev          is not None: row_out["exit_velocity_avg"] = ev
+            if max_ev      is not None: row_out["max_ev"]            = max_ev
             if hard_hit    is not None: row_out["hard_hit_pct"]      = hard_hit
             if avg_la      is not None: row_out["avg_launch_angle"]  = avg_la
             if sweet_spot  is not None: row_out["sweet_spot_pct"]    = sweet_spot

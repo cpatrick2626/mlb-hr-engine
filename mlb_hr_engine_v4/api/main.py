@@ -316,7 +316,7 @@ def _build_slate_payload(data: dict) -> dict:
             "fast":     None,
             "squp":     None,
             "blast":    None,
-            "maxev":    None,
+            "maxev":    _flt(p.get("max_ev")),
             "hrfb":     _flt(p.get("hr_rate")),
             "pitcher_name":      p.get("pitcher_name", None),
             "pitcher_confirmed": p.get("pitcher_confirmed", False),
