@@ -1,0 +1,11 @@
+{
+  "name": "/web-scraping",
+  "type": "utility",
+  "version": "1.0.0",
+  "description": "Semantic web discovery with Exa and JavaScript-heavy page extraction with Firecrawl.",
+  "primary_tools": ["exa", "firecrawl"],
+  "risk": "LOW",
+  "default_mode": "read-only",
+  "owner": "MLB HR ENGINE — OPERATIONS",
+  "source_of_truth": "skills/web-scraping/SKILL.md"
+}

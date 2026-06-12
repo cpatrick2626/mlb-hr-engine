@@ -44,3 +44,5 @@ Future batched commits involving vault files should either:
 - Stale deployment artifacts removed from active deployment paths.
 - Deployment source-of-truth clarified.
 - Production deployment behavior unchanged.
+
+## [2026-06-12] claude-code | /web-scraping utility skill placed | COMPLETE — Added `skills/web-scraping/SKILL.md`, optional skill metadata/examples, and Obsidian governance note `wiki/doctrine/web-scraping-skill.md`. Exa is designated for semantic discovery; Firecrawl is designated for JavaScript-heavy/rendered extraction. No runtime, frontend, backend, API, config, pipeline, scoring, routing, deployment, or secret files changed. DO NOT COMMIT / DO NOT PUSH.
