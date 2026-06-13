@@ -1,5 +1,7 @@
 # Wiki Log
 
+## [2026-06-13] codex | d63f046 fast/squp/blast production validation PASS - Fly deploy and cache refresh successful. /api/slate returned 377 MAIN and 377 JIG rows. fast/squp/blast keys present on all rows, 186/377 non-null, percent-scale confirmed, null behavior valid, MAIN/JIG sorting preserved, model/scoring unchanged. Git clean and synced with origin/main.
+
 ## [2026-05-26] codex | Ranker doctrine audit — HIGH risk read-only | COMPLETE — execution blocked pending operator decision
 ## [2026-05-26] operator | Ranker doctrine decision — Option C: redesign auto_learn around model_prob reliability modifier | AUTHORIZED
 ## [2026-05-26] claude | Ranker reform prioritized as next session focus — executes before Phase 2-3 | FILED

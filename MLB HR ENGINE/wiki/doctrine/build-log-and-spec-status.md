@@ -1,6 +1,6 @@
 # Build Log and Spec Status
 
-**Last Updated:** 2026-06-10
+**Last Updated:** 2026-06-13
 
 ---
 
@@ -9,6 +9,82 @@
 Baseline audit (2026-06-08) identified missing and empty files that future agents must not assume exist or contain valid content.
 
 Production validation was also recorded on 2026-06-08 for the live MAIN/JIG/JIG Builder frontend behavior after the Full Slate ordering fix and the JIG Builder source-routing fix.
+
+Production validation was recorded on 2026-06-13 for commit `d63f046`, confirming production `fast` / `squp` / `blast` field population without scoring, ordering, or payload-shape regressions.
+
+---
+
+## Fast / SQUP / Blast Production Validation
+
+**Last validated:** 2026-06-13
+
+### Scope
+
+- Room: `Obsidian Governance Update`
+- Phase: Document fast/squp/blast production validation
+- Risk: LOW
+- Surface validated: live production only
+- API: `https://mlb-hr-api.fly.dev`
+
+### Commit
+
+- `d63f046`
+
+### Deployment
+
+- Push succeeded: `d63f046` on `origin/main`
+- Fly build/deploy: success
+- Image: `deployment-01KV0TP83V1GGSSG60E0YQR4FN`
+- Machine: `7841255a9d2e28`
+- Region: `iad`
+
+### API / Cache Validation
+
+- `POST /api/pipeline/run` -> HTTP 200
+- `/health` -> HTTP 200 `{"status":"ok"}`
+- `/api/slate` -> HTTP 200
+
+### Row Counts
+
+- MAIN `leaderboard_rows`: `377`
+- JIG `leaderboard_rows_jig`: `377`
+
+### Field Validation
+
+- `fast`, `squp`, and `blast` keys present on all rows
+- `186 / 377` rows have non-null `fast`, `squp`, and `blast`
+- `191 / 377` rows are null for absent players
+- Percent scale confirmed: `0` to `89.2`
+
+### Sorting Validation
+
+- MAIN sorted by `hrprob` descending
+- JIG sorted by `jigScore` descending
+
+### Invariants Preserved
+
+- Model/scoring unchanged
+- MAIN/JIG ordering preserved
+- Frontend payload keys match
+- No protected surfaces changed beyond authorized display-field population
+
+### Sample Rows
+
+- Shea Langeliers -> `hrprob=23.7` | `fast=53.0` | `squp=24.7` | `blast=13.8`
+- Yordan Alvarez -> `hrprob=23.4` | `fast=59.4` | `squp=24.6` | `blast=17.7`
+- Byron Buxton -> `hrprob=22.1` | `fast=40.0` | `squp=21.5` | `blast=11.9`
+- Nick Kurtz -> `hrprob=20.1` | `fast=80.3` | `squp=18.6` | `blast=15.3`
+- Hunter Goodman -> `hrprob=19.5` | `fast=52.8` | `squp=17.5` | `blast=10.3`
+
+### Verdict
+
+- Production fast/squp/blast population validated: **yes**
+- MAIN and JIG row counts matched: **yes**
+- Sorting preserved: **yes**
+- Model/scoring unchanged: **yes**
+- Git clean and synced with `origin/main` at validation time: **yes**
+
+See session [[2026-06-13-fast-squp-blast-production-validation]] for full detail.
 
 ---
 
