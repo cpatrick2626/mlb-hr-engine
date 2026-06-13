@@ -338,6 +338,8 @@ def _build_player_profile(
         "xwoba": xwoba_raw,
         "center_pct": center_pct,
         "matchup_quality": matchup_quality,
+        "batter_bb_pct": round(_bb / season_pa, 3) if season_pa > 0 else None,
+        "batter_k_pct":  round(season_k / season_pa, 3) if season_pa > 0 else None,
     }
 
 
