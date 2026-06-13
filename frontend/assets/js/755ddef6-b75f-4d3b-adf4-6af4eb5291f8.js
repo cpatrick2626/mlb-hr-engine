@@ -33,14 +33,16 @@ const Stepper = ({ label, unit, value: initial = 0, step = 0.1, decimals = 1, mi
       <FieldLabel unit={unit}>{label}</FieldLabel>
       <div className="hr-stepper">
         <input
+          type="text"
           className="hr-stepper__input"
           value={raw !== null ? raw : fmt(value)}
           onChange={(e) => setRaw(e.target.value)}
+          onFocus={(e) => e.target.select()}
           onBlur={(e) => commit(e.target.value)}
-          onKeyDown={(e) => { if (e.key === "Enter") commit(e.target.value); }}
+          onKeyDown={(e) => { if (e.key === "Enter") { commit(e.target.value); e.target.blur(); } }}
         />
-        <button className="hr-stepper__btn" onClick={() => update(+(value - step).toFixed(4))}>−</button>
-        <button className="hr-stepper__btn" onClick={() => update(+(value + step).toFixed(4))}>+</button>
+        <button type="button" className="hr-stepper__btn" onClick={() => update(+(value - step).toFixed(4))}>−</button>
+        <button type="button" className="hr-stepper__btn" onClick={() => update(+(value + step).toFixed(4))}>+</button>
       </div>
     </div>
   );
