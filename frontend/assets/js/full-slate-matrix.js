@@ -91,19 +91,19 @@ const FSM_COLS = [
 { key: "slg", head: "SLG", title: "Slugging percentage", group: "STATS", bucketsHi: [0.520, 0.460, 0.410, 0.370], fmt: f3d },
 { key: "iso", head: "ISO", title: "Isolated power (SLG − AVG) — a core HR driver", group: "STATS", bucketsHi: [0.250, 0.180, 0.120, 0.070], fmt: f3d },
 { key: "xslg", head: "xSLG", title: "Expected slugging from quality of contact", group: "STATS", bucketsHi: [0.520, 0.450, 0.400, 0.350], fmt: f3d },
-{ key: "woba", head: "wOBA", title: "Weighted on-base average", group: "STATS", bucketsHi: [0.370, 0.345, 0.320, 0.300], fmt: f3d },
+{ key: "woba", head: "wOBA", title: "Weighted on-base average — DATA GAP: no real source currently available; hidden by default", group: "STATS", bucketsHi: [0.370, 0.345, 0.320, 0.300], fmt: f3d },
 { key: "xwoba", head: "xwOBA", title: "Expected weighted on-base average", group: "STATS", bucketsHi: [0.350, 0.330, 0.310, 0.290], fmt: f3d },
 { key: "babip", head: "BABIP", title: "Batting average on balls in play", group: "STATS", bucketsHi: [0.330, 0.300, 0.270, 0.240], fmt: f3d },
 { key: "bbpct", head: "BB%", title: "Walk rate", group: "STATS", bucketsHi: [12, 9, 7, 5], fmt: fp },
 { key: "pa", head: "PA", title: "Plate appearances — sample size", group: "STATS", mode: "neutral", fmt: (v) => String(v) },
 { key: "hrpa", head: "HR/PA", title: "Home runs per plate appearance (model output)", group: "STATS", mode: "headline", fmt: (v) => v.toFixed(3) },
-{ key: "whiff", head: "WHIFF%", title: "Whiff rate — LOWER is better", group: "STRIKES", bucketsLo: [18, 24, 30, 36], fmt: fp },
+{ key: "whiff", head: "WHIFF%", title: "Whiff rate — DATA GAP: no reliable batter-level source found; hidden by default", group: "STRIKES", bucketsLo: [18, 24, 30, 36], fmt: fp },
 { key: "kpct", head: "K%", title: "Strikeout rate — LOWER is better", group: "STRIKES", bucketsLo: [15, 20, 25, 30], fmt: fp },
-{ key: "swstr", head: "SWSTR%", title: "Swinging-strike rate — LOWER is better", group: "STRIKES", bucketsLo: [8, 11, 14, 17], fmt: fp },
+{ key: "swstr", head: "SWSTR%", title: "Swinging-strike rate — DATA GAP: no reliable batter-level source found; hidden by default", group: "STRIKES", bucketsLo: [8, 11, 14, 17], fmt: fp },
 { key: "ev", head: "EV", title: "Average exit velocity (mph)", group: "STATCAST", bucketsHi: [92, 90, 88, 86], fmt: f1 },
 { key: "maxev", head: "MAX EV", title: "Max exit velocity (mph) — peak raw power", group: "STATCAST", bucketsHi: [112, 109, 106, 103], fmt: f1 },
 { key: "barrel", head: "BARREL%", title: "Barrel rate — optimal EV + launch-angle contact, the best HR predictor", group: "STATCAST", bucketsHi: [8, 6, 4.5, 3], fmt: fp },
-{ key: "pullbrl", head: "PULLBRL%", title: "Pulled-barrel rate — barrels hit to the pull side", group: "STATCAST", bucketsHi: [6, 4, 2.5, 1.5], fmt: fp },
+{ key: "pullbrl", head: "PULLBRL%", title: "Pulled-barrel rate — DATA GAP: no reliable source found; hidden by default", group: "STATCAST", bucketsHi: [6, 4, 2.5, 1.5], fmt: fp },
 { key: "pullair", head: "PULLAIR%", title: "Pulled-air rate — fly balls/liners to the pull side, prime HR contact", group: "STATCAST", bucketsHi: [26, 21, 16, 12], fmt: fp },
 { key: "hh", head: "HH%", title: "Hard-hit rate (95+ mph exit velo)", group: "STATCAST", bucketsHi: [45, 40, 34, 28], fmt: fp },
 { key: "gb", head: "GB%", title: "Ground-ball rate — LOWER is better for HR", group: "STATCAST", bucketsLo: [35, 40, 45, 50], fmt: fp },
@@ -734,7 +734,7 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
   const [pmOn, setPmOn] = React.useState(true);
   const [colPref, setColPref] = React.useState(() => {
     try { const s = JSON.parse(localStorage.getItem("fsmColPref")); if (s && Array.isArray(s.order)) return s; } catch (e) {}
-    return { order: FSM_COLS.map((c) => c.key), hidden: [] };
+    return { order: FSM_COLS.map((c) => c.key), hidden: ["woba", "whiff", "swstr", "pullbrl"] };
   });
   const [colOpen, setColOpen] = React.useState(false);
   const [colInfo, setColInfo] = React.useState(null);
@@ -752,7 +752,7 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
   const activeCols = colPref.order.map((k) => FSM_COLS.find((c) => c.key === k)).filter((c) => c && !colPref.hidden.includes(c.key));
   const toggleCol = (k) => setColPref((p) => ({ ...p, hidden: p.hidden.includes(k) ? p.hidden.filter((x) => x !== k) : [...p.hidden, k] }));
   const moveCol = (idx, dir) => setColPref((p) => { const o = [...p.order]; const j = idx + dir; if (j < 0 || j >= o.length) return p; [o[idx], o[j]] = [o[j], o[idx]]; return { ...p, order: o }; });
-  const resetCols = () => setColPref({ order: FSM_COLS.map((c) => c.key), hidden: [] });
+  const resetCols = () => setColPref({ order: FSM_COLS.map((c) => c.key), hidden: ["woba", "whiff", "swstr", "pullbrl"] });
   const [secs, setSecs] = React.useState(3);
   React.useEffect(() => {const id = setInterval(() => setSecs((s) => (s + 1) % 600), 1000);return () => clearInterval(id);}, []);
   const timer = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
