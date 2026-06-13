@@ -4818,7 +4818,7 @@ def _fs_tier_html(tier: str) -> str:
 
 def _fs_heatmap_color(value, column_key: str) -> dict:
     """Return bg and text color for Full Slate heatmap cell."""
-    _INVERTED = {"gb_pct"}
+    _INVERTED = {"gb_pct", "batter_k_pct"}
     _TEXT_COLORS = config.FS_HEATMAP_TEXT_COLORS
     thresholds = config.FS_HEATMAP_THRESHOLDS.get(column_key)
     if thresholds is None or value is None:
@@ -4844,9 +4844,10 @@ def _fs_heatmap_color(value, column_key: str) -> dict:
 
 
 _FS_COLUMN_PRESETS: dict[str, list[str]] = {
-    "ALL":     ["tier","player","mq","pa","avg","slg",
-                "babip","gb","hh","ld","barrel","ev",
-                "la","pull","center","hr9","xwoba","hrpa","fanduel"],
+    "ALL":     ["tier","player","mq",
+                "hr","barrel","xslg","xiso","hh","pullair","blast","maxev","squp",
+                "ev","hrpa","sweet","la","slg","fast","xwoba","obp","avg","babip","bb","k",
+                "fanduel"],
     "POWER":   ["tier","player","mq","barrel","ev",
                 "la","hrpa","hr9","fanduel"],
     "CONTACT": ["tier","player","mq","pa","avg","slg",
@@ -5272,11 +5273,17 @@ _FS_NC_COL_RATIOS = {
     "la":      0.6,  "pull":    0.65, "center":  0.8,
     "hr9":     0.8,  "xwoba":   0.7,  "hrpa":    0.7,
     "fanduel": 0.8,
+    # new columns
+    "hr":      0.5,  "xslg":    0.6,  "xiso":    0.6,
+    "pullair": 0.65, "blast":   0.6,  "maxev":   0.6,
+    "squp":    0.6,  "sweet":   0.6,  "fast":    0.6,
+    "obp":     0.6,  "bb":      0.55, "k":       0.55,
 }
 _FS_NATIVE_DEFAULT_COLS = (
-    "tier", "player", "mq", "pa", "avg", "slg", "babip",
-    "gb", "hh", "ld", "barrel", "ev", "la", "pull",
-    "center", "hr9", "xwoba", "hrpa", "fanduel",
+    "tier", "player", "mq",
+    "hr", "barrel", "xslg", "xiso", "hh", "pullair", "blast", "maxev", "squp",
+    "ev", "hrpa", "sweet", "la", "slg", "fast", "xwoba", "obp", "avg", "babip", "bb", "k",
+    "fanduel",
 )
 
 
@@ -5303,6 +5310,11 @@ def _render_full_slate_native_cols(
         "la": "LA°", "pull": "PULL%", "center": "CENTER%",
         "hr9": "OPP HR/9", "xwoba": "xwOBA",
         "hrpa": "HR/PA", "fanduel": "FANDUEL",
+        # new columns
+        "hr":      "HR",       "xslg":   "xSLG",    "xiso":   "xISO",
+        "pullair": "PULL AIR", "blast":  "BLAST%",  "maxev":  "MAX EV",
+        "squp":    "SQUP%",    "sweet":  "SWEET%",  "fast":   "FAST%",
+        "obp":     "OBP",      "bb":     "BB%",     "k":      "K%",
     }
 
     ratios = [_FS_NC_COL_RATIOS.get(c, 0.6) for c in active_cols]
@@ -5405,6 +5417,17 @@ def _render_full_slate_native_cols(
             fb_pct    = _safe_float(p.get("fb_pct")) or 0.0
             fb_pa     = (season_pa or 0) * fb_pct / 100.0
             hrpa      = round(season_hr / fb_pa, 3) if fb_pa > 0 else None
+            xslg      = _safe_float(p.get("xslg"))
+            xiso      = _safe_float(p.get("xiso"))
+            pull_air  = _safe_float(resolve_pull_air_pct(p))
+            blast     = _safe_float(p.get("blast"))
+            max_ev    = _safe_float(p.get("max_ev"))
+            squp      = _safe_float(p.get("squp"))
+            sweet     = _safe_float(p.get("sweet_spot_pct"))
+            fast      = _safe_float(p.get("fast"))
+            obp       = _safe_float(p.get("actual_obp"))
+            bb_pct    = _safe_float(p.get("batter_bb_pct"))
+            k_pct     = _safe_float(p.get("batter_k_pct"))
             fd_raw    = p.get("fanduel_american")
             fd_s      = (
                 f"+{fd_raw}" if fd_raw and fd_raw > 0
@@ -5693,6 +5716,134 @@ def _render_full_slate_native_cols(
                     col.markdown(
                         f"<div style='text-align:center;color:#ccc;font-size:11px;'>"
                         f"{f'{hrpa:.3f}'[1:] if hrpa else '—'}</div>",
+                        unsafe_allow_html=True,
+                    )
+
+                elif ckey == "hr":
+                    col.markdown(
+                        f"<div style='text-align:center;color:#ccc;font-size:11px;font-weight:600;'>"
+                        f"{season_hr if season_hr is not None else '—'}</div>",
+                        unsafe_allow_html=True,
+                    )
+
+                elif ckey == "xslg":
+                    c = _hc(xslg, "xslg")
+                    col.markdown(
+                        f"<div style='background:{c['bg']};color:{c['text']};"
+                        f"box-shadow:{c['shadow']};"
+                        f"text-align:center;font-size:11px;padding:3px 2px;"
+                        f"border-radius:3px;'>"
+                        f"{f'{xslg:.3f}'[1:] if xslg is not None else '—'}</div>",
+                        unsafe_allow_html=True,
+                    )
+
+                elif ckey == "xiso":
+                    c = _hc(xiso, "xiso")
+                    col.markdown(
+                        f"<div style='background:{c['bg']};color:{c['text']};"
+                        f"box-shadow:{c['shadow']};"
+                        f"text-align:center;font-size:11px;padding:3px 2px;"
+                        f"border-radius:3px;'>"
+                        f"{f'{xiso:.3f}'[1:] if xiso is not None else '—'}</div>",
+                        unsafe_allow_html=True,
+                    )
+
+                elif ckey == "pullair":
+                    c = _hc(pull_air, "pull_air_pct")
+                    col.markdown(
+                        f"<div style='background:{c['bg']};color:{c['text']};"
+                        f"box-shadow:{c['shadow']};"
+                        f"text-align:center;font-size:11px;padding:3px 2px;"
+                        f"border-radius:3px;'>"
+                        f"{f'{pull_air:.1f}%' if pull_air is not None else '—'}</div>",
+                        unsafe_allow_html=True,
+                    )
+
+                elif ckey == "blast":
+                    c = _hc(blast, "blast")
+                    col.markdown(
+                        f"<div style='background:{c['bg']};color:{c['text']};"
+                        f"box-shadow:{c['shadow']};"
+                        f"text-align:center;font-size:11px;padding:3px 2px;"
+                        f"border-radius:3px;'>"
+                        f"{f'{blast:.1f}%' if blast is not None else '—'}</div>",
+                        unsafe_allow_html=True,
+                    )
+
+                elif ckey == "maxev":
+                    c = _hc(max_ev, "max_ev")
+                    col.markdown(
+                        f"<div style='background:{c['bg']};color:{c['text']};"
+                        f"box-shadow:{c['shadow']};"
+                        f"text-align:center;font-size:11px;padding:3px 2px;"
+                        f"border-radius:3px;'>"
+                        f"{f'{max_ev:.1f}' if max_ev is not None else '—'}</div>",
+                        unsafe_allow_html=True,
+                    )
+
+                elif ckey == "squp":
+                    c = _hc(squp, "squp")
+                    col.markdown(
+                        f"<div style='background:{c['bg']};color:{c['text']};"
+                        f"box-shadow:{c['shadow']};"
+                        f"text-align:center;font-size:11px;padding:3px 2px;"
+                        f"border-radius:3px;'>"
+                        f"{f'{squp:.1f}%' if squp is not None else '—'}</div>",
+                        unsafe_allow_html=True,
+                    )
+
+                elif ckey == "sweet":
+                    c = _hc(sweet, "sweet_spot_pct")
+                    col.markdown(
+                        f"<div style='background:{c['bg']};color:{c['text']};"
+                        f"box-shadow:{c['shadow']};"
+                        f"text-align:center;font-size:11px;padding:3px 2px;"
+                        f"border-radius:3px;'>"
+                        f"{f'{sweet:.1f}%' if sweet is not None else '—'}</div>",
+                        unsafe_allow_html=True,
+                    )
+
+                elif ckey == "fast":
+                    c = _hc(fast, "fast")
+                    col.markdown(
+                        f"<div style='background:{c['bg']};color:{c['text']};"
+                        f"box-shadow:{c['shadow']};"
+                        f"text-align:center;font-size:11px;padding:3px 2px;"
+                        f"border-radius:3px;'>"
+                        f"{f'{fast:.1f}%' if fast is not None else '—'}</div>",
+                        unsafe_allow_html=True,
+                    )
+
+                elif ckey == "obp":
+                    c = _hc(obp, "actual_obp")
+                    col.markdown(
+                        f"<div style='background:{c['bg']};color:{c['text']};"
+                        f"box-shadow:{c['shadow']};"
+                        f"text-align:center;font-size:11px;padding:3px 2px;"
+                        f"border-radius:3px;'>"
+                        f"{f'{obp:.3f}'[1:] if obp is not None else '—'}</div>",
+                        unsafe_allow_html=True,
+                    )
+
+                elif ckey == "bb":
+                    c = _hc(bb_pct, "batter_bb_pct")
+                    col.markdown(
+                        f"<div style='background:{c['bg']};color:{c['text']};"
+                        f"box-shadow:{c['shadow']};"
+                        f"text-align:center;font-size:11px;padding:3px 2px;"
+                        f"border-radius:3px;'>"
+                        f"{f'{bb_pct*100:.1f}%' if bb_pct is not None else '—'}</div>",
+                        unsafe_allow_html=True,
+                    )
+
+                elif ckey == "k":
+                    c = _hc(k_pct, "batter_k_pct")
+                    col.markdown(
+                        f"<div style='background:{c['bg']};color:{c['text']};"
+                        f"box-shadow:{c['shadow']};"
+                        f"text-align:center;font-size:11px;padding:3px 2px;"
+                        f"border-radius:3px;'>"
+                        f"{f'{k_pct*100:.1f}%' if k_pct is not None else '—'}</div>",
                         unsafe_allow_html=True,
                     )
 

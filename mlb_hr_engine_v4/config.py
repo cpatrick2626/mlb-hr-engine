@@ -326,7 +326,7 @@ HRE_HEAT_COLD     = "#2a0a10"   # heatmap cold
 
 # Thresholds: [elite_floor, strong_floor, average_floor, weak_floor]
 # Values >= elite_floor → ELITE; < weak_floor → DANGER.
-# gb_pct is INVERTED: lower gb_pct = better for HR.
+# gb_pct and batter_k_pct are INVERTED: lower = better for HR.
 FS_HEATMAP_THRESHOLDS: dict = {
     "barrel_pct":       [14.0, 10.0,  7.0,  4.0],
     "hard_hit":         [50.0, 42.0, 35.0, 28.0],
@@ -342,6 +342,18 @@ FS_HEATMAP_THRESHOLDS: dict = {
     "babip":            [0.340, 0.310, 0.290, 0.270],
     "center_pct":       [30.0, 25.0, 20.0, 15.0],
     "season_pa":        [400,   300,   200,  100],
+    # new Full Slate columns
+    "xslg":             [0.500, 0.450, 0.400, 0.350],
+    "xiso":             [0.200, 0.165, 0.135, 0.100],
+    "pull_air_pct":     [20.0,  15.0,  10.0,   6.0],
+    "blast":            [8.0,   6.0,   4.0,   2.0],
+    "max_ev":           [115.0, 110.0, 105.0, 100.0],
+    "squp":             [20.0,  16.0,  12.0,   8.0],
+    "sweet_spot_pct":   [38.0,  33.0,  28.0,  22.0],
+    "actual_obp":       [0.380, 0.350, 0.320, 0.290],
+    "batter_bb_pct":    [0.120, 0.095, 0.075, 0.055],
+    "batter_k_pct":     [0.280, 0.240, 0.200, 0.160],  # inverted: lower = better
+    "fast":             [65.0,  58.0,  50.0,  42.0],
 }
 
 # ── Full Slate Heatmap Text Colors ────────────────────────────────────────────
