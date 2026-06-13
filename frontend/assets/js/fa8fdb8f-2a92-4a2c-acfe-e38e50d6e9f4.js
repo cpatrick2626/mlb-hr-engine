@@ -52,20 +52,20 @@ const StageCommand = ({ engine, lens, onClose, initialFilters, onApply }) => {
 
       <div className="md-cc__grid" key={resetKey}>
         <FilterPanel num="1" title="BATTER POWER & CONTACT" cols={2}>
-          <Stepper label="ISO" value={0} step={0.005} decimals={3} max={1} />
-          <Stepper label="xSLG" value={0} step={0.005} decimals={3} max={1} />
+          <Stepper label="ISO" value={draft.minISO} step={0.005} decimals={3} max={1} onChange={(v) => set({ minISO: v })} />
+          <Stepper label="xSLG" value={draft.minXSLG} step={0.005} decimals={3} max={1} onChange={(v) => set({ minXSLG: v })} />
           <Stepper label="Barrel %" value={draft.minBarrel} step={0.5} decimals={1} max={100} onChange={(v) => set({ minBarrel: v })} />
           <Stepper label="Hard Hit %" value={draft.minHH} step={0.5} decimals={1} max={100} onChange={(v) => set({ minHH: v })} />
           <Stepper label="Avg Exit Velocity" unit="(MPH)" value={draft.minEV} step={0.5} decimals={1} max={120} onChange={(v) => set({ minEV: v })} />
-          <Stepper label="HR/FB %" value={0} step={0.5} decimals={1} max={100} />
+          <Stepper label="HR/FB %" value={draft.minHRFB} step={0.5} decimals={1} max={100} onChange={(v) => set({ minHRFB: v })} />
         </FilterPanel>
 
         <FilterPanel num="2" title="LAUNCH & CONTACT SHAPE" cols={2}>
-          <Stepper label="Pull Air %" value={0} step={0.5} decimals={1} max={100} />
+          <Stepper label="Pull Air %" value={draft.minPullAir} step={0.5} decimals={1} max={100} onChange={(v) => set({ minPullAir: v })} />
           <Stepper label="Launch Angle" unit="(°)" value={0} step={0.5} decimals={1} min={-20} max={60} />
           <Stepper label="HR Window %" value={0} step={0.5} decimals={1} max={100} />
-          <Stepper label="Sweet Spot %" value={0} step={0.5} decimals={1} max={100} />
-          <Stepper label="Fly Ball %" value={0} step={0.5} decimals={1} max={100} />
+          <Stepper label="Sweet Spot %" value={draft.minSweet} step={0.5} decimals={1} max={100} onChange={(v) => set({ minSweet: v })} />
+          <Stepper label="Fly Ball %" value={draft.minFB} step={0.5} decimals={1} max={100} onChange={(v) => set({ minFB: v })} />
         </FilterPanel>
 
         <FilterPanel num="3" title="MATCHUP & SPLITS" cols={2}>
@@ -118,7 +118,7 @@ const StageCommand = ({ engine, lens, onClose, initialFilters, onApply }) => {
         </FilterPanel>
 
         <FilterPanel num="9" title="OUTPUT CONTROL" cols={2}>
-          <Stepper label="Min Projected HR %" value={0} step={0.5} decimals={1} max={100} />
+          <Stepper label="Min Projected HR %" value={draft.minHRProb} step={0.5} decimals={1} max={100} onChange={(v) => set({ minHRProb: v })} />
           <Stepper label="Min Confidence %" value={0} step={0.5} decimals={1} max={100} />
           <Stepper label="Max Players" value={draft.maxPlayers} step={1} decimals={0} min={1} max={75} onChange={(v) => set({ maxPlayers: v })} />
           <Dropdown label="Sort By" value={sortLabel} options={visibleSortOptions.map((o) => o.label)}

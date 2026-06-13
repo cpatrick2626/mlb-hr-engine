@@ -20,20 +20,24 @@ const FieldLabel = ({ children, unit }) => (
 /* Numeric stepper: label + value field + −/+ buttons. Fully functional. */
 const Stepper = ({ label, unit, value: initial = 0, step = 0.1, decimals = 1, min = 0, max = 9999, onChange }) => {
   const [value, setValue] = React.useState(initial);
+  const [raw, setRaw] = React.useState(null);
   const clamp = (v) => Math.min(max, Math.max(min, v));
   const fmt = (v) => v.toFixed(decimals);
-  const update = (v) => { const c = clamp(v); setValue(c); onChange && onChange(c); };
+  const update = (v) => { const c = clamp(v); setValue(c); setRaw(null); onChange && onChange(c); };
+  const commit = (str) => {
+    const n = parseFloat(str);
+    if (!isNaN(n)) update(n); else { setValue(value); setRaw(null); }
+  };
   return (
     <div className="hr-field">
       <FieldLabel unit={unit}>{label}</FieldLabel>
       <div className="hr-stepper">
         <input
           className="hr-stepper__input"
-          value={fmt(value)}
-          onChange={(e) => {
-            const n = parseFloat(e.target.value);
-            if (!isNaN(n)) update(n);
-          }}
+          value={raw !== null ? raw : fmt(value)}
+          onChange={(e) => setRaw(e.target.value)}
+          onBlur={(e) => commit(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") commit(e.target.value); }}
         />
         <button className="hr-stepper__btn" onClick={() => update(+(value - step).toFixed(4))}>−</button>
         <button className="hr-stepper__btn" onClick={() => update(+(value + step).toFixed(4))}>+</button>

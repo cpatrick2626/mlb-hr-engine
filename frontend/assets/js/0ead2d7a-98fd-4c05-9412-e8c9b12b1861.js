@@ -75,7 +75,12 @@ window.ENGINES = [
 ];
 
 /* ---- Room filters: how Tactical Command Center values affect a room ---- */
-window.FILTER_DEFAULTS = { minBarrel: 0, minHH: 0, minEV: 0, sortKey: "none", sortDir: "Descending", maxPlayers: 75 };
+window.FILTER_DEFAULTS = {
+  minBarrel: 0, minHH: 0, minEV: 0,
+  minISO: 0, minXSLG: 0, minHRFB: 0, minPullAir: 0, minSweet: 0, minFB: 0,
+  minHRProb: 0,
+  sortKey: "none", sortDir: "Descending", maxPlayers: 75
+};
 
 window.SORT_OPTIONS = [
   { label: "Default (Tier)", key: "none" },
@@ -91,9 +96,16 @@ window.SORT_OPTIONS = [
 window.applyRoomFilters = function (rows, f) {
   if (!f) return rows;
   let out = rows.filter((r) => {
-    if (f.minBarrel && !(r.barrel >= f.minBarrel)) return false;
-    if (f.minHH && !(r.hh >= f.minHH)) return false;
-    if (f.minEV && !(r.ev >= f.minEV)) return false;
+    if (f.minBarrel  && !(r.barrel  >= f.minBarrel))  return false;
+    if (f.minHH      && !(r.hh      >= f.minHH))      return false;
+    if (f.minEV      && !(r.ev      >= f.minEV))       return false;
+    if (f.minISO     && !(r.iso     >= f.minISO))      return false;
+    if (f.minXSLG    && !(r.xslg    >= f.minXSLG))     return false;
+    if (f.minHRFB    && !(r.hrfb    >= f.minHRFB))     return false;
+    if (f.minPullAir && !(r.pullair >= f.minPullAir))  return false;
+    if (f.minSweet   && !(r.sweet   >= f.minSweet))    return false;
+    if (f.minFB      && !(r.fb      >= f.minFB))       return false;
+    if (f.minHRProb  && !(r.hrprob  >= f.minHRProb))   return false;
     return true;
   });
   if (f.sortKey && f.sortKey !== "none") {
@@ -112,9 +124,16 @@ window.countActiveFilters = function (f) {
   if (!f) return 0;
   const d = window.FILTER_DEFAULTS;
   let n = 0;
-  if (f.minBarrel > d.minBarrel) n++;
-  if (f.minHH > d.minHH) n++;
-  if (f.minEV > d.minEV) n++;
+  if (f.minBarrel  > d.minBarrel)  n++;
+  if (f.minHH      > d.minHH)      n++;
+  if (f.minEV      > d.minEV)      n++;
+  if (f.minISO     > d.minISO)     n++;
+  if (f.minXSLG    > d.minXSLG)    n++;
+  if (f.minHRFB    > d.minHRFB)    n++;
+  if (f.minPullAir > d.minPullAir) n++;
+  if (f.minSweet   > d.minSweet)   n++;
+  if (f.minFB      > d.minFB)      n++;
+  if (f.minHRProb  > d.minHRProb)  n++;
   if (f.sortKey && f.sortKey !== "none") n++;
   if (f.maxPlayers != null && f.maxPlayers !== d.maxPlayers) n++;
   return n;
