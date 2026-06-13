@@ -86,37 +86,37 @@ const fdeg = (v) => v.toFixed(1) + "°";
 const FSM_COLS = [
 { key: "odds", head: "ODDS", title: "HR prop odds (American)", group: "STATS", mode: "odds", fmt: (v) => String(v) },
 { key: "hr", head: "HR", title: "Home runs — season total", group: "STATS", bucketsHi: [28, 18, 10, 5], fmt: (v) => String(v) },
-{ key: "avg", head: "BA", title: "Batting average", group: "STATS", bucketsHi: [0.290, 0.265, 0.240, 0.215], fmt: f3d },
-{ key: "obp", head: "OBP", title: "On-base percentage", group: "STATS", bucketsHi: [0.360, 0.335, 0.310, 0.290], fmt: f3d },
-{ key: "slg", head: "SLG", title: "Slugging percentage", group: "STATS", bucketsHi: [0.520, 0.460, 0.410, 0.370], fmt: f3d },
-{ key: "iso", head: "ISO", title: "Isolated power (SLG − AVG) — a core HR driver", group: "STATS", bucketsHi: [0.250, 0.180, 0.120, 0.070], fmt: f3d },
+{ key: "barrel", head: "BARREL%", title: "Barrel rate — optimal EV + launch-angle contact, the best HR predictor", group: "STATCAST", bucketsHi: [8, 6, 4.5, 3], fmt: fp },
 { key: "xslg", head: "xSLG", title: "Expected slugging from quality of contact", group: "STATS", bucketsHi: [0.520, 0.450, 0.400, 0.350], fmt: f3d },
-{ key: "woba", head: "wOBA", title: "Weighted on-base average — DATA GAP: no real source currently available; hidden by default", group: "STATS", bucketsHi: [0.370, 0.345, 0.320, 0.300], fmt: f3d },
+{ key: "iso", head: "ISO", title: "Isolated power (SLG − AVG) — a core HR driver", group: "STATS", bucketsHi: [0.250, 0.180, 0.120, 0.070], fmt: f3d },
+{ key: "hh", head: "HH%", title: "Hard-hit rate (95+ mph exit velo)", group: "STATCAST", bucketsHi: [45, 40, 34, 28], fmt: fp },
+{ key: "pullair", head: "PULLAIR%", title: "Pulled-air rate — fly balls/liners to the pull side, prime HR contact", group: "STATCAST", bucketsHi: [26, 21, 16, 12], fmt: fp },
+{ key: "blast", head: "BLAST%", title: "Blast rate — fast swing + squared-up contact", group: "STATCAST", bucketsHi: [16, 11, 7, 4], fmt: fp },
+{ key: "maxev", head: "MAX EV", title: "Max exit velocity (mph) — peak raw power", group: "STATCAST", bucketsHi: [112, 109, 106, 103], fmt: f1 },
+{ key: "squp", head: "SQUP%", title: "Squared-up rate — efficiency of contact vs max EV", group: "STATCAST", bucketsHi: [36, 32, 28, 24], fmt: fp },
+{ key: "ev", head: "EV", title: "Average exit velocity (mph)", group: "STATCAST", bucketsHi: [92, 90, 88, 86], fmt: f1 },
+{ key: "hrpa", head: "HR/PA", title: "Home runs per plate appearance (model output)", group: "STATS", mode: "headline", fmt: (v) => v.toFixed(3) },
+{ key: "sweet", head: "Sweet Spot%", title: "Launch-angle sweet-spot rate — batted balls at 8–32°", group: "STATCAST", bucketsHi: [38, 34, 30, 26], fmt: fp },
+{ key: "la", head: "LA°", title: "Launch angle — HR sweet spot ≈ 15°", group: "STATCAST", special: "la", fmt: fdeg },
+{ key: "slg", head: "SLG", title: "Slugging percentage", group: "STATS", bucketsHi: [0.520, 0.460, 0.410, 0.370], fmt: f3d },
+{ key: "fast", head: "FAST%", title: "Fast-swing rate — swings at 75+ mph bat speed", group: "STATCAST", bucketsHi: [40, 28, 18, 10], fmt: fp },
 { key: "xwoba", head: "xwOBA", title: "Expected weighted on-base average", group: "STATS", bucketsHi: [0.350, 0.330, 0.310, 0.290], fmt: f3d },
+{ key: "obp", head: "OBP", title: "On-base percentage", group: "STATS", bucketsHi: [0.360, 0.335, 0.310, 0.290], fmt: f3d },
+{ key: "avg", head: "AVG", title: "Batting average", group: "STATS", bucketsHi: [0.290, 0.265, 0.240, 0.215], fmt: f3d },
 { key: "babip", head: "BABIP", title: "Batting average on balls in play", group: "STATS", bucketsHi: [0.330, 0.300, 0.270, 0.240], fmt: f3d },
 { key: "bbpct", head: "BB%", title: "Walk rate", group: "STATS", bucketsHi: [12, 9, 7, 5], fmt: fp },
-{ key: "pa", head: "PA", title: "Plate appearances — sample size", group: "STATS", mode: "neutral", fmt: (v) => String(v) },
-{ key: "hrpa", head: "HR/PA", title: "Home runs per plate appearance (model output)", group: "STATS", mode: "headline", fmt: (v) => v.toFixed(3) },
-{ key: "whiff", head: "WHIFF%", title: "Whiff rate — DATA GAP: no reliable batter-level source found; hidden by default", group: "STRIKES", bucketsLo: [18, 24, 30, 36], fmt: fp },
 { key: "kpct", head: "K%", title: "Strikeout rate — LOWER is better", group: "STRIKES", bucketsLo: [15, 20, 25, 30], fmt: fp },
+{ key: "woba", head: "wOBA", title: "Weighted on-base average — DATA GAP: no real source currently available; hidden by default", group: "STATS", bucketsHi: [0.370, 0.345, 0.320, 0.300], fmt: f3d },
+{ key: "pa", head: "PA", title: "Plate appearances — sample size", group: "STATS", mode: "neutral", fmt: (v) => String(v) },
+{ key: "whiff", head: "WHIFF%", title: "Whiff rate — DATA GAP: no reliable batter-level source found; hidden by default", group: "STRIKES", bucketsLo: [18, 24, 30, 36], fmt: fp },
 { key: "swstr", head: "SWSTR%", title: "Swinging-strike rate — DATA GAP: no reliable batter-level source found; hidden by default", group: "STRIKES", bucketsLo: [8, 11, 14, 17], fmt: fp },
-{ key: "ev", head: "EV", title: "Average exit velocity (mph)", group: "STATCAST", bucketsHi: [92, 90, 88, 86], fmt: f1 },
-{ key: "maxev", head: "MAX EV", title: "Max exit velocity (mph) — peak raw power", group: "STATCAST", bucketsHi: [112, 109, 106, 103], fmt: f1 },
-{ key: "barrel", head: "BARREL%", title: "Barrel rate — optimal EV + launch-angle contact, the best HR predictor", group: "STATCAST", bucketsHi: [8, 6, 4.5, 3], fmt: fp },
 { key: "pullbrl", head: "PULLBRL%", title: "Pulled-barrel rate — DATA GAP: no reliable source found; hidden by default", group: "STATCAST", bucketsHi: [6, 4, 2.5, 1.5], fmt: fp },
-{ key: "pullair", head: "PULLAIR%", title: "Pulled-air rate — fly balls/liners to the pull side, prime HR contact", group: "STATCAST", bucketsHi: [26, 21, 16, 12], fmt: fp },
-{ key: "hh", head: "HH%", title: "Hard-hit rate (95+ mph exit velo)", group: "STATCAST", bucketsHi: [45, 40, 34, 28], fmt: fp },
 { key: "gb", head: "GB%", title: "Ground-ball rate — LOWER is better for HR", group: "STATCAST", bucketsLo: [35, 40, 45, 50], fmt: fp },
 { key: "fb", head: "FB%", title: "Fly-ball rate — more fly balls = more HR chances", group: "STATCAST", bucketsHi: [42, 36, 30, 24], fmt: fp },
 { key: "ld", head: "LD%", title: "Line-drive rate", group: "STATCAST", bucketsHi: [28, 24, 20, 17], fmt: fp },
-{ key: "la", head: "LA°", title: "Launch angle — HR sweet spot ≈ 15°", group: "STATCAST", special: "la", fmt: fdeg },
-{ key: "sweet", head: "LA SS%", title: "Launch-angle sweet-spot rate — batted balls at 8–32°", group: "STATCAST", bucketsHi: [38, 34, 30, 26], fmt: fp },
 { key: "pull", head: "PULL%", title: "Pull rate — pull-side power", group: "STATCAST", bucketsHi: [45, 40, 35, 30], fmt: fp },
 { key: "center", head: "CENTER%", title: "Center rate — lower favors pull-side power", group: "STATCAST", bucketsLo: [22, 26, 32, 40], fmt: fp },
 { key: "hrfb", head: "HR/FB%", title: "Home-run-per-fly-ball rate", group: "STATCAST", bucketsHi: [20, 14, 9, 5], fmt: fp },
-{ key: "fast", head: "FAST%", title: "Fast-swing rate — swings at 75+ mph bat speed", group: "STATCAST", bucketsHi: [40, 28, 18, 10], fmt: fp },
-{ key: "squp", head: "SQUP%", title: "Squared-up rate — efficiency of contact vs max EV", group: "STATCAST", bucketsHi: [36, 32, 28, 24], fmt: fp },
-{ key: "blast", head: "BLAST%", title: "Blast rate — fast swing + squared-up contact", group: "STATCAST", bucketsHi: [16, 11, 7, 4], fmt: fp },
 { key: "opphr", head: "OPP HR/9", title: "Opposing pitcher HR allowed per 9 — HIGHER favors the batter", group: "MATCHUP", danger: true, bucketsHi: [1.5, 1.3, 1.0, 0.7], fmt: f2 }];
 
 const FSM_COLSPAN = 3 + FSM_COLS.length; // tier + player + matchup + stats
@@ -732,10 +732,10 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
   const [focus, setFocus] = React.useState("all");
   const [modal, setModal] = React.useState(null);
   const [pmOn, setPmOn] = React.useState(true);
-  const FSM_PREF_V = 2;
+  const FSM_PREF_V = 3;
   const FSM_DATA_GAP = ["woba", "whiff", "swstr", "pullbrl"];
   const [colPref, setColPref] = React.useState(() => {
-    try { const s = JSON.parse(localStorage.getItem("fsmColPref")); if (s && Array.isArray(s.order)) { if ((s.v || 1) < FSM_PREF_V) { return { ...s, hidden: [...new Set([...(s.hidden || []), ...FSM_DATA_GAP])], v: FSM_PREF_V }; } return s; } } catch (e) {}
+    try { const s = JSON.parse(localStorage.getItem("fsmColPref")); if (s && Array.isArray(s.order)) { if ((s.v || 1) < FSM_PREF_V) { return { order: FSM_COLS.map((c) => c.key), hidden: [...new Set([...(s.hidden || []), ...FSM_DATA_GAP])], v: FSM_PREF_V }; } return s; } } catch (e) {}
     return { order: FSM_COLS.map((c) => c.key), hidden: FSM_DATA_GAP, v: FSM_PREF_V };
   });
   const [colOpen, setColOpen] = React.useState(false);
