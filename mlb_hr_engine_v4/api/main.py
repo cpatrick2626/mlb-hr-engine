@@ -132,11 +132,21 @@ def _pct(val):
 
 
 def _flt(val):
-    """Cast to float, or None if missing."""
+    """Cast to float rounded to 1 decimal, or None if missing. Use for mph/degree-style physical stats."""
     if val is None:
         return None
     try:
         return round(float(str(val).replace("%", "").strip()), 1)
+    except (ValueError, TypeError):
+        return None
+
+
+def _rate(val):
+    """Cast to float rounded to 3 decimals, or None if missing. Use for decimal-rate stats (avg, slg, obp, etc.)."""
+    if val is None:
+        return None
+    try:
+        return round(float(str(val).replace("%", "").strip()), 3)
     except (ValueError, TypeError):
         return None
 
@@ -287,9 +297,9 @@ def _build_slate_payload(data: dict) -> dict:
             "bats":     p.get("batter_side"),
             "quality":  quality,
             "pa":       season_pa,
-            "avg":      _flt(p.get("batting_avg")),
-            "slg":      _flt(p.get("actual_slg")),
-            "babip":    _flt(p.get("babip")),
+            "avg":      _rate(p.get("batting_avg")),
+            "slg":      _rate(p.get("actual_slg")),
+            "babip":    _rate(p.get("babip")),
             "gb":       _pct(p.get("gb_pct")),
             "hh":       _pct(p.get("hard_hit")),
             "ld":       _pct(p.get("ld_pct")),
@@ -299,19 +309,19 @@ def _build_slate_payload(data: dict) -> dict:
             "pull":     _pct(p.get("pull_pct")),
             "center":   _pct(p.get("center_pct")),
             "opphr":    p.get("pitcher_hr9"),
-            "xwoba":    _flt(p.get("xwoba")),
+            "xwoba":    _rate(p.get("xwoba")),
             "hrpa":     hrpa,
             "hrprob":   round(model_prob * 100, 1),
             "tier":     tier,
             "gameId":   derived_game_id,
             "odds":     odds,
             "hr":       season_hr,
-            "iso":      _flt(p.get("xiso")),
-            "xslg":     _flt(p.get("xslg")),
+            "iso":      _rate(p.get("xiso")),
+            "xslg":     _rate(p.get("xslg")),
             "fb":       _pct(p.get("fb_pct")),
             "sweet":    _pct(p.get("sweet_spot_pct")),
-            "obp":      _flt(p.get("actual_obp")),
-            "woba":     _flt(p.get("xwoba")),
+            "obp":      _rate(p.get("actual_obp")),
+            "woba":     None,
             "bbpct":    round(p["batter_bb_pct"] * 100, 1) if p.get("batter_bb_pct") is not None else None,
             "kpct":     round(p["batter_k_pct"]  * 100, 1) if p.get("batter_k_pct")  is not None else None,
             "whiff":    None,
