@@ -723,6 +723,98 @@ def _stabilize_metric(value: float, league_avg: float, pa: int, half_life: int) 
     return trust * value + (1.0 - trust) * league_avg
 
 
+def get_bat_tracking(year: int = None) -> dict[int, dict]:
+    """Fetch Savant bat-tracking leaderboard for batters.
+
+    Returns dict keyed by MLBAM player_id with decimal-ratio values:
+      hard_swing_rate, squared_up_per_swing, blast_per_swing
+    """
+    year = year or config.CURRENT_SEASON
+    key = ("bt", year)
+    if key in _FETCH_CACHE:
+        return _FETCH_CACHE[key]
+    url = (
+        "https://baseballsavant.mlb.com/leaderboard/bat-tracking"
+        f"?type=batter&year={year}&min=1&csv=true"
+    )
+    try:
+        resp = _SESSION.get(url, timeout=25)
+        if resp.status_code != 200:
+            return {}
+        result = _parse_bat_tracking_csv(resp.text)
+        _FETCH_CACHE[key] = result
+        return result
+    except Exception as e:
+        print(f"[statcast] bat-tracking fetch failed ({year}): {e}")
+        return {}
+
+
+def bat_tracking_summary(
+    player_id: int,
+    bat_tracking_data: dict[int, dict],
+) -> dict:
+    """Return display-ready bat-tracking fields in percent scale.
+
+    Values are None when data is missing so frontend can render '--'.
+    These are display-only — do NOT feed into model probability, JIG, or HVY.
+    """
+    stats = bat_tracking_data.get(player_id) or {}
+
+    def _to_pct(key: str) -> Optional[float]:
+        v = stats.get(key)
+        if v is None:
+            return None
+        try:
+            f = float(v)
+            return round(f * 100.0, 1) if 0.0 <= f <= 1.0 else None
+        except (TypeError, ValueError):
+            return None
+
+    return {
+        "fast": _to_pct("hard_swing_rate"),
+        "squp": _to_pct("squared_up_per_swing"),
+        "blast": _to_pct("blast_per_swing"),
+    }
+
+
+def _parse_bat_tracking_csv(raw: str) -> dict[int, dict]:
+    """Parse bat-tracking CSV. Stores raw decimal-ratio values keyed by player_id."""
+    result: dict[int, dict] = {}
+    reader = csv.DictReader(io.StringIO(raw.lstrip("﻿")))
+
+    def _f(row, key) -> Optional[float]:
+        v = row.get(key)
+        if v not in (None, "", "null", "NA", "N/A"):
+            try:
+                f = float(v)
+                return f if 0.0 <= f <= 1.0 else None
+            except ValueError:
+                pass
+        return None
+
+    for row in reader:
+        try:
+            pid = int(row.get("id") or 0)
+            if not pid:
+                continue
+            row_out: dict = {}
+            v = _f(row, "hard_swing_rate")
+            if v is not None:
+                row_out["hard_swing_rate"] = v
+            v = _f(row, "squared_up_per_swing")
+            if v is not None:
+                row_out["squared_up_per_swing"] = v
+            v = _f(row, "blast_per_swing")
+            if v is not None:
+                row_out["blast_per_swing"] = v
+            if row_out:
+                result[pid] = row_out
+        except (ValueError, KeyError):
+            continue
+
+    return result
+
+
 def clear_all_caches() -> None:
     """Clear Statcast fetch cache. Call before Force Refresh so next load
     fetches fresh leaderboard, batted-ball, and expected-stats data."""

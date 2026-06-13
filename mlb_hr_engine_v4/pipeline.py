@@ -110,6 +110,7 @@ def _build_player_profile(
     player_id, player_name, lineup_spot, team, opponent,
     home_team, pitcher, batter_data, pitcher_data,
     game_time_utc: str = "",
+    bat_tracking_data: dict = None,
 ):
     season_stats    = mlb_stats.get_player_season_stats(player_id)
     recent_stats    = mlb_stats.get_player_recent_stats(player_id)
@@ -340,6 +341,7 @@ def _build_player_profile(
         "matchup_quality": matchup_quality,
         "batter_bb_pct": round(_bb / season_pa, 3) if season_pa > 0 else None,
         "batter_k_pct":  round(season_k / season_pa, 3) if season_pa > 0 else None,
+        **statcast_client.bat_tracking_summary(player_id, bat_tracking_data or {}),
     }
 
 
@@ -575,12 +577,13 @@ def load_game_data(
 
     # Fetch Statcast and MLB stats in parallel
     _cb(f"Loading data for {len(batter_ids)} batters, {len(pitcher_ids)} pitchers...")
-    with ThreadPoolExecutor(max_workers=4) as executor:
+    with ThreadPoolExecutor(max_workers=5) as executor:
         futures = {
             executor.submit(statcast_client.get_batter_statcast, player_ids=batter_ids): "batter_statcast",
             executor.submit(statcast_client.get_pitcher_statcast, player_ids=pitcher_ids): "pitcher_statcast",
             executor.submit(mlb_stats.bulk_fetch_player_stats, batter_ids): "mlb_player_stats",
             executor.submit(mlb_stats.bulk_fetch_pitcher_stats, pitcher_ids): "mlb_pitcher_stats",
+            executor.submit(statcast_client.get_bat_tracking): "bat_tracking",
         }
 
         results = {}
@@ -593,8 +596,9 @@ def load_game_data(
                 results[key] = {} if key in ("batter_statcast", "pitcher_statcast") else None
 
     # Batted-ball data is already merged into batter_data/pitcher_data by get_*_statcast()
-    batter_data  = results.get("batter_statcast", {})
-    pitcher_data = results.get("pitcher_statcast", {})
+    batter_data      = results.get("batter_statcast", {})
+    pitcher_data     = results.get("pitcher_statcast", {})
+    bat_tracking_data = results.get("bat_tracking", {})
 
     if not batter_data:
         print("[pipeline] WARNING: Statcast batter data is empty — all power multipliers default to 1.0")
@@ -646,6 +650,7 @@ def load_game_data(
                 pid, name, spot, team, opp, home_team, opp_pitcher,
                 batter_data, pitcher_data,
                 game_time_utc=game_time_utc,
+                bat_tracking_data=bat_tracking_data,
             )
             if profile:
                 profile["game_time_utc"] = game_time_utc
