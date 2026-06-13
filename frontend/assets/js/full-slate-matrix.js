@@ -732,9 +732,11 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
   const [focus, setFocus] = React.useState("all");
   const [modal, setModal] = React.useState(null);
   const [pmOn, setPmOn] = React.useState(true);
+  const FSM_PREF_V = 2;
+  const FSM_DATA_GAP = ["woba", "whiff", "swstr", "pullbrl"];
   const [colPref, setColPref] = React.useState(() => {
-    try { const s = JSON.parse(localStorage.getItem("fsmColPref")); if (s && Array.isArray(s.order)) return s; } catch (e) {}
-    return { order: FSM_COLS.map((c) => c.key), hidden: ["woba", "whiff", "swstr", "pullbrl"] };
+    try { const s = JSON.parse(localStorage.getItem("fsmColPref")); if (s && Array.isArray(s.order)) { if ((s.v || 1) < FSM_PREF_V) { return { ...s, hidden: [...new Set([...(s.hidden || []), ...FSM_DATA_GAP])], v: FSM_PREF_V }; } return s; } } catch (e) {}
+    return { order: FSM_COLS.map((c) => c.key), hidden: FSM_DATA_GAP, v: FSM_PREF_V };
   });
   const [colOpen, setColOpen] = React.useState(false);
   const [colInfo, setColInfo] = React.useState(null);
@@ -752,7 +754,7 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
   const activeCols = colPref.order.map((k) => FSM_COLS.find((c) => c.key === k)).filter((c) => c && !colPref.hidden.includes(c.key));
   const toggleCol = (k) => setColPref((p) => ({ ...p, hidden: p.hidden.includes(k) ? p.hidden.filter((x) => x !== k) : [...p.hidden, k] }));
   const moveCol = (idx, dir) => setColPref((p) => { const o = [...p.order]; const j = idx + dir; if (j < 0 || j >= o.length) return p; [o[idx], o[j]] = [o[j], o[idx]]; return { ...p, order: o }; });
-  const resetCols = () => setColPref({ order: FSM_COLS.map((c) => c.key), hidden: ["woba", "whiff", "swstr", "pullbrl"] });
+  const resetCols = () => setColPref({ order: FSM_COLS.map((c) => c.key), hidden: FSM_DATA_GAP, v: FSM_PREF_V });
   const [secs, setSecs] = React.useState(3);
   React.useEffect(() => {const id = setInterval(() => setSecs((s) => (s + 1) % 600), 1000);return () => clearInterval(id);}, []);
   const timer = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
