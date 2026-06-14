@@ -111,6 +111,22 @@ window.applyRoomFilters = function (rows, f) {
     if (f.minSweet   && !(r.sweet   >= f.minSweet))    return false;
     if (f.minFB      && !(r.fb      >= f.minFB))       return false;
     if (f.minHRProb  && !(r.hrprob  >= f.minHRProb))   return false;
+    // Game Context filters
+    if (f.confirmedLineupsOnly && !r.pitcher_confirmed) return false;
+    if (f.excludeStarted || !f.includeLive) {
+      const gs = r.gameStartUtc;
+      if (gs) {
+        const startMs = Date.parse(gs);
+        if (!isNaN(startMs)) {
+          const started = startMs <= Date.now();
+          if (started) {
+            if (!f.includeLive) return false;
+            if (f.excludeStarted) return false;
+          }
+        }
+      }
+    }
+    if (f.preLineupPool === false && !r.pitcher_confirmed) return false;
     return true;
   });
   if (f.sortKey && f.sortKey !== "none") {

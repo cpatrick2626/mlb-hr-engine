@@ -339,6 +339,8 @@ def _build_slate_payload(data: dict) -> dict:
             "pitcher_name":      p.get("pitcher_name", None),
             "pitcher_confirmed": p.get("pitcher_confirmed", False),
             "pitcher_id":        p.get("pitcher_id", None),
+            "gameStartUtc":      p.get("game_time_utc", ""),
+            "gameStatus":        p.get("game_status", "Scheduled"),
             "foundation":        role["foundation"],
             "ceiling":           role["ceiling"],
         })
