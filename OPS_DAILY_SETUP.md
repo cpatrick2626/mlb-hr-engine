@@ -183,3 +183,30 @@ The following must NOT be changed via ops scripts or Task Scheduler automation:
 - Any file in `mlb_hr_engine_v4/engine/` or `mlb_hr_engine_v4/clients/`
 
 `ops_daily.py`, `capture_closing_lines.py`, and `optimize_daily.py` are read-only with respect to the model — they only write to CSV tracking files and text reports.
+
+---
+
+## Empty Slate Before Lineups Post — Expected Behavior
+
+Added: 2026-06-14
+
+A 0-row slate early in the day is EXPECTED, not a bug.
+
+- The pipeline gates qualifying batters on posted starting lineups.
+- Games can be scheduled while confirmed lineups have not yet posted
+  (typical on morning checks, especially Sunday early games).
+- During this window /api/slate returns slate_games populated but
+  leaderboard_rows = 0 (or empty entirely if checked before schedule fetch).
+- As lineups post through midday, the scheduled pipeline run populates rows.
+
+### Operator check before treating empty slate as an incident
+1. Confirm games are actually scheduled today (MLB schedule).
+2. Confirm whether confirmed lineups have posted yet for early games.
+3. Read /api/slate: check generated_at (today?), from_cache, slate_games count.
+   - slate_games > 0, rows = 0  -> lineup-timing window, wait for scheduled run
+   - slate_games = 0            -> schedule fetch issue, escalate to backend
+4. Do NOT escalate as a production failure if it is the lineup-timing window.
+
+Validated 2026-06-14: morning empty slate self-resolved once lineups posted;
+13:47 ET run returned from_cache=false, 386 rows MAIN/JIG, 30 slate_games.
+No backend or frontend defect.
