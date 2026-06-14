@@ -34,6 +34,7 @@ from api.cache import get_picks, store_picks, list_runs, redeem_invite
 from clients.arsenal import get_pitcher_arsenal, arsenal_matchup_factor
 from clients.pitch_mix import get_batter_vs_pitches, get_pitcher_pitch_stats
 from config import FS_TIER_THRESHOLDS
+from roles import classify_role
 
 log = logging.getLogger("uvicorn.error")
 
@@ -290,6 +291,7 @@ def _build_slate_payload(data: dict) -> dict:
         home = (p.get("home_team") or p.get("team") or "home").upper()
         derived_game_id = f"{away}-{home}".lower().replace(" ", "-")
 
+        role = classify_role(p, tier)
         leaderboard_rows.append({
             "id":       p.get("player_id") or p.get("player_name", "").lower().replace(" ", "-"),
             "name":     p.get("player_name"),
@@ -337,6 +339,8 @@ def _build_slate_payload(data: dict) -> dict:
             "pitcher_name":      p.get("pitcher_name", None),
             "pitcher_confirmed": p.get("pitcher_confirmed", False),
             "pitcher_id":        p.get("pitcher_id", None),
+            "foundation":        role["foundation"],
+            "ceiling":           role["ceiling"],
         })
 
     leaderboard_rows.sort(
@@ -358,6 +362,8 @@ def _build_slate_payload(data: dict) -> dict:
         for r in jig_rows:
             p = players_by_id.get(r.get("id"), {})
             r["jigScore"] = _jig_score(p, arsenal_data=_arsenal_data)
+            r.pop("foundation", None)
+            r.pop("ceiling", None)
         jig_rows.sort(key=lambda r: r["jigScore"], reverse=True)
     except Exception as e:
         log.error("JIG row build failed: %s", e, exc_info=True)
