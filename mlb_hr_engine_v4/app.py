@@ -1244,6 +1244,7 @@ try:
     from tracking import line_movement as lm_tracker
     from strategies_ui import tab_advanced_strategies
     from clients.pull_air import resolve_pull_air_pct
+    from roles import classify_role
 except ImportError as e:
     raise RuntimeError(_format_startup_import_error(e)) from e
 
@@ -4844,7 +4845,7 @@ def _fs_heatmap_color(value, column_key: str) -> dict:
 
 
 _FS_COLUMN_PRESETS: dict[str, list[str]] = {
-    "ALL":     ["tier","player","mq",
+    "ALL":     ["tier","player","role","mq",
                 "hr","barrel","xslg","xiso","hh","pullair","blast","maxev","squp",
                 "ev","hrpa","sweet","la","slg","fast","xwoba","obp","avg","babip","bb","k",
                 "fanduel"],
@@ -5278,9 +5279,10 @@ _FS_NC_COL_RATIOS = {
     "pullair": 0.65, "blast":   0.6,  "maxev":   0.6,
     "squp":    0.6,  "sweet":   0.6,  "fast":    0.6,
     "obp":     0.6,  "bb":      0.55, "k":       0.55,
+    "role":    0.6,
 }
 _FS_NATIVE_DEFAULT_COLS = (
-    "tier", "player", "mq",
+    "tier", "player", "role", "mq",
     "hr", "barrel", "xslg", "xiso", "hh", "pullair", "blast", "maxev", "squp",
     "ev", "hrpa", "sweet", "la", "slg", "fast", "xwoba", "obp", "avg", "babip", "bb", "k",
     "fanduel",
@@ -5315,6 +5317,7 @@ def _render_full_slate_native_cols(
         "pullair": "PULL AIR", "blast":  "BLAST%",  "maxev":  "MAX EV",
         "squp":    "SQUP%",    "sweet":  "SWEET%",  "fast":   "FAST%",
         "obp":     "OBP",      "bb":     "BB%",     "k":      "K%",
+        "role":    "ROLE",
     }
 
     ratios = [_FS_NC_COL_RATIOS.get(c, 0.6) for c in active_cols]
@@ -5438,6 +5441,7 @@ def _render_full_slate_native_cols(
                 d.get("player_id") == pid
                 for d in st.session_state.get("fs_picked", [])
             )
+            _role_flags = classify_role(p, tier=tier)
 
             row_cols = st.columns(ratios)
             for col, ckey in zip(row_cols, active_cols):
@@ -5846,6 +5850,56 @@ def _render_full_slate_native_cols(
                         f"{f'{k_pct*100:.1f}%' if k_pct is not None else '—'}</div>",
                         unsafe_allow_html=True,
                     )
+
+                elif ckey == "role":
+                    _is_found = _role_flags["foundation"]
+                    _is_ceil  = False  # CEILING dormant — computed but not displayed (Phase 1)
+                    if _is_found and _is_ceil:
+                        _role_html = (
+                            "<div style='display:flex;flex-direction:column;"
+                            "align-items:center;gap:2px;'>"
+                            "<span style='font-size:8px;font-weight:800;"
+                            "letter-spacing:0.06em;color:#1aff66;"
+                            "text-shadow:0 0 6px rgba(26,255,102,0.7);"
+                            "border:1px solid rgba(26,255,102,0.5);"
+                            "border-radius:3px;padding:1px 4px;"
+                            "white-space:nowrap;'>FOUND</span>"
+                            "<span style='font-size:8px;font-weight:800;"
+                            "letter-spacing:0.06em;color:#00d9ff;"
+                            "text-shadow:0 0 6px rgba(0,217,255,0.6);"
+                            "border:1px solid rgba(0,217,255,0.4);"
+                            "border-radius:3px;padding:1px 4px;"
+                            "white-space:nowrap;'>CEIL</span>"
+                            "</div>"
+                        )
+                    elif _is_found:
+                        _role_html = (
+                            "<div style='text-align:center;'>"
+                            "<span style='font-size:8px;font-weight:800;"
+                            "letter-spacing:0.06em;color:#1aff66;"
+                            "text-shadow:0 0 6px rgba(26,255,102,0.7);"
+                            "border:1px solid rgba(26,255,102,0.5);"
+                            "border-radius:3px;padding:1px 4px;"
+                            "white-space:nowrap;'>FOUND</span>"
+                            "</div>"
+                        )
+                    elif _is_ceil:
+                        _role_html = (
+                            "<div style='text-align:center;'>"
+                            "<span style='font-size:8px;font-weight:800;"
+                            "letter-spacing:0.06em;color:#00d9ff;"
+                            "text-shadow:0 0 6px rgba(0,217,255,0.6);"
+                            "border:1px solid rgba(0,217,255,0.4);"
+                            "border-radius:3px;padding:1px 4px;"
+                            "white-space:nowrap;'>CEIL</span>"
+                            "</div>"
+                        )
+                    else:
+                        _role_html = (
+                            "<div style='text-align:center;"
+                            "color:#333;font-size:10px;'>—</div>"
+                        )
+                    col.markdown(_role_html, unsafe_allow_html=True)
 
                 elif ckey == "fanduel":
                     col.markdown(

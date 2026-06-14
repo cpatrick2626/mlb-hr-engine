@@ -453,6 +453,25 @@ PUSH STATUS
   - `Canonical Ranking Doctrine` and `Ranking Doctrine Review` = historical/reference rooms only; future ranking work routes to `Tier Ranking & Classification Doctrine` unless operator says otherwise
   - `MAIN SKILLS` = main and only room for utility skill creation, skill updates, skill placement prompts, skill validation prompts, skill registry maintenance, skill doctrine references, skill command behavior, skill-related Obsidian notes, and skill-library commit/push routing. Does NOT own TCC app shell/layout/runtime behavior, MAIN/JIG scoring, config.py thresholds, pipeline.py data assembly, production deployment, or frontend runtime fixes unless the work is only skill documentation. Skill work must use `ROOM Deployed From: MAIN SKILLS`.
 
+### 17. TOOL ACTION PERMISSION POLICY
+
+READ = Always allowed.
+- Inspecting files, repo state, API/cache snapshots, vault notes, and project
+  state requires no approval.
+
+CREATE / WRITE / UPLOAD / SEND = Needs operator approval.
+- File creation, file edits, uploads, outbound sends (email/Slack/API writes),
+  and any durable state change require explicit operator authorization before
+  execution. This includes vault writes and repo writes.
+
+DELETE = Disabled by default; operator approval required to enable per-task.
+- No deletion of files, notes, rows, branches, or remote state without explicit,
+  task-scoped operator authorization.
+
+This policy is additive to and does not weaken existing Git Safety (Rule 6),
+HIGH-Risk Two-Stage (Rule 13), and Protected Surface (Rule 14) doctrine.
+Where rules overlap, the stricter gate wins.
+
 ---
 
 ## GLOBAL UTILITY SKILL LIBRARY

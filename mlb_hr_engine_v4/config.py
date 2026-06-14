@@ -385,6 +385,25 @@ FS_MQ_PIE_COLORS: dict = {
     "EMPTY":  "#2a2a3a",
 }
 
+# ── Role Layer Thresholds (Phase 1: FOUNDATION + CEILING) ────────────────────
+# Display-only classification derived from existing MAIN row fields.
+# Read-only: these flags are NEVER written back to model_prob, score, or sort keys.
+# Source of truth for roles.py — do not scatter literals elsewhere.
+#
+# FOUNDATION: reliable anchor role; requires top-tier model confidence + elite Statcast core.
+# CEILING: explosive-outcome candidate; requires raw power ceiling (max EV) + at least one
+#          swing trait (blast% OR pull-air%) — null blast is not disqualifying (see §5).
+ROLE_FOUNDATION_BARREL_PCT:  float = 9.0   # barrel% ≥ this (string field, strip "%")
+ROLE_FOUNDATION_XSLG:        float = 0.500 # xSLG ≥ this
+ROLE_FOUNDATION_HH_PCT:      float = 45.0  # HH% ≥ this (string field, strip "%")
+ROLE_FOUNDATION_EV:          float = 90.0  # exit_velo ≥ this (mph)
+ROLE_FOUNDATION_TIERS: set   = frozenset({"APEX", "ELITE"})  # tier must be in this set
+
+ROLE_CEILING_MAX_EV:         float = 115.0 # max_ev ≥ this (mph)
+ROLE_CEILING_BARREL_PCT:     float = 9.0   # barrel% ≥ this (same parse as FOUNDATION)
+ROLE_CEILING_BLAST_PCT:      float = 15.0  # blast% ≥ this (when present; null = skip sub-criterion)
+ROLE_CEILING_PULL_AIR_PCT:   float = 25.0  # pull_air_pct ≥ this (when present; null = skip sub-criterion)
+
 # ── Team Colors ───────────────────────────────────────────────────────────────
 TEAM_COLORS = {
     "ARI": "#A71930", "ATL": "#CE1141", "BAL": "#DF4601",

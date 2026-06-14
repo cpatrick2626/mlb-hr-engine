@@ -79,7 +79,12 @@ window.FILTER_DEFAULTS = {
   minBarrel: 0, minHH: 0, minEV: 0,
   minISO: 0, minXSLG: 0, minHRFB: 0, minPullAir: 0, minSweet: 0, minFB: 0,
   minHRProb: 0,
-  sortKey: "none", sortDir: "Descending", maxPlayers: 75
+  sortKey: "none", sortDir: "Descending", maxPlayers: 75,
+  excludeStarted: false,
+  includeLive: true,
+  noTimeGate: false,
+  confirmedLineupsOnly: false,
+  preLineupPool: true,
 };
 
 window.SORT_OPTIONS = [
@@ -136,5 +141,10 @@ window.countActiveFilters = function (f) {
   if (f.minHRProb  > d.minHRProb)  n++;
   if (f.sortKey && f.sortKey !== "none") n++;
   if (f.maxPlayers != null && f.maxPlayers !== d.maxPlayers) n++;
+  if (f.excludeStarted !== d.excludeStarted) n++;
+  if (f.includeLive !== d.includeLive) n++;
+  if (f.noTimeGate !== d.noTimeGate) n++;
+  if (f.confirmedLineupsOnly !== d.confirmedLineupsOnly) n++;
+  if (f.preLineupPool !== d.preLineupPool) n++;
   return n;
 };

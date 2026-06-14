@@ -110,11 +110,11 @@ const StageCommand = ({ engine, lens, onClose, initialFilters, onApply }) => {
         </FilterPanel>
 
         <FilterPanel num="8" title="GAME CONTEXT" cols={1} className="hr-panel-cc--toggles">
-          <Toggle label="Exclude Started Games" on={false} />
-          <Toggle label="Include Live Games" on={true} />
-          <Toggle label="No Time Gate" on={false} />
-          <Toggle label="Confirmed Lineups Only" on={false} />
-          <Toggle label="Pre-Lineup Pool" on={true} />
+          <Toggle label="Exclude Started Games" on={draft.excludeStarted} onChange={(v) => set({ excludeStarted: v })} />
+          <Toggle label="Include Live Games" on={draft.includeLive} onChange={(v) => set({ includeLive: v })} />
+          <Toggle label="No Time Gate" on={draft.noTimeGate} onChange={(v) => set({ noTimeGate: v })} />
+          <Toggle label="Confirmed Lineups Only" on={draft.confirmedLineupsOnly} onChange={(v) => set({ confirmedLineupsOnly: v })} />
+          <Toggle label="Pre-Lineup Pool" on={draft.preLineupPool} onChange={(v) => set({ preLineupPool: v })} />
         </FilterPanel>
 
         <FilterPanel num="9" title="OUTPUT CONTROL" cols={2}>

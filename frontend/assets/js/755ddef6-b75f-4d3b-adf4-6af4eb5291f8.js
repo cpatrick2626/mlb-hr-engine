@@ -49,10 +49,11 @@ const Stepper = ({ label, unit, value: initial = 0, step = 0.1, decimals = 1, mi
 };
 
 /* iOS-style toggle. */
-const Toggle = ({ label, on: initial = false }) => {
+const Toggle = ({ label, on: initial = false, onChange }) => {
   const [on, setOn] = React.useState(initial);
+  const handleToggle = () => { const next = !on; setOn(next); onChange && onChange(next); };
   return (
-    <button className={`hr-toggle ${on ? "is-on" : ""}`} onClick={() => setOn(!on)}>
+    <button className={`hr-toggle ${on ? "is-on" : ""}`} onClick={handleToggle}>
       <span className="hr-toggle__label">{label}</span>
       <span className="hr-toggle__track"><span className="hr-toggle__knob" /></span>
     </button>
