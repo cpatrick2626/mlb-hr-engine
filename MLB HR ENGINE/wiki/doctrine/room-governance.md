@@ -107,6 +107,30 @@ HIGH risk work cannot be single-step. Ever.
 - MAIN and JIG stay separate.
 - JIG `row.tier` is inherited MAIN model probability tier and should be presented as MODEL TIER in JIG contexts. Tactical ranking still comes from `jigScore` and JIG sort order.
 
+## Tool Action Permission Policy
+
+This section records AGENTS.md Rule 17.
+
+READ = Always allowed.
+- Inspecting files, repo state, API/cache snapshots, vault notes, and project
+  state requires no approval.
+
+CREATE / WRITE / UPLOAD / SEND = Needs operator approval.
+- File creation, file edits, uploads, outbound sends (email/Slack/API writes),
+  and any durable state change require explicit operator authorization before
+  execution. This includes vault writes and repo writes.
+
+DELETE = Disabled by default; operator approval required to enable per-task.
+- No deletion of files, notes, rows, branches, or remote state without explicit,
+  task-scoped operator authorization.
+
+This policy is additive to and does not weaken existing Git Safety (Rule 6),
+HIGH-Risk Two-Stage (Rule 13), and Protected Surface (Rule 14) doctrine.
+Where rules overlap, the stricter gate wins.
+
+Related doctrine:
+- [Obsidian Governance Doctrine](OBSIDIAN_GOVERNANCE_DOCTRINE.md)
+
 ## TCC Tactical Command Center Governance
 
 - `TCC Tactical Command Center` is the main and only room for all MLB HR ENGINE Tactical Command Center work.
