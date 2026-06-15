@@ -339,6 +339,15 @@ def _build_slate_payload(data: dict) -> dict:
             "pitcher_name":      p.get("pitcher_name", None),
             "pitcher_confirmed": p.get("pitcher_confirmed", False),
             "pitcher_id":        p.get("pitcher_id", None),
+            "pitcher_hand":      p.get("pitcher_hand", None),
+            "pitcher_era":       p.get("pitcher_era"),
+            "pitcher_whip":      p.get("pitcher_whip"),
+            "pitcher_k_pct":     p.get("pitcher_k_pct"),
+            "pitcher_bb_pct":    p.get("pitcher_bb_pct"),
+            "pitcher_barrel_allowed": p.get("pitcher_barrel_allowed"),
+            "pitcher_hh_allowed":     p.get("pitcher_hh_allowed"),
+            "pitcher_fb_allowed":     p.get("pitcher_fb_allowed"),
+            "pitcher_gb_allowed":     p.get("pitcher_gb_allowed"),
             "gameStartUtc":      p.get("game_time_utc", ""),
             "gameStatus":        p.get("game_status", "Scheduled"),
             "prime":             role["prime"],
@@ -465,6 +474,74 @@ async def get_slate():
             "slate_games":          [],
             "from_cache":           False,
         }
+
+
+@app.get("/api/pitcher-detail")
+async def get_pitcher_detail(pitcher_id: int, batter_id: int = 0,
+                             batter_side: str = "", pitcher_hand: str = ""):
+    """
+    On-demand pitcher detail for the Pitch Mix Analysis modal.
+    Returns: arsenal (pitch types + usage/velo/whiff), pitch_stats, batter_vs_pitches, h2h.
+    No auth required — display-only data, not model inputs.
+    pitcher_hand: used to derive effective batter side for switch hitters.
+    """
+    import datetime as _dt
+
+    # Switch hitters bat opposite hand of pitcher
+    effective_batter_side = batter_side
+    if batter_side == "S" and pitcher_hand:
+        effective_batter_side = "R" if pitcher_hand == "L" else "L"
+
+    result: dict = {"pitcher_id": pitcher_id, "batter_id": batter_id,
+                    "effective_batter_side": effective_batter_side}
+
+    # Arsenal: get_pitcher_arsenal returns {pid: [{"pitch_type", "pitch_pct", "avg_speed", "whiff_pct", ...}]}
+    try:
+        year = _dt.datetime.now().year
+        all_arsenal = get_pitcher_arsenal(year)
+        raw_list = all_arsenal.get(pitcher_id, [])
+        result["arsenal"] = [
+            {
+                "code":  p.get("pitch_type", ""),
+                "name":  p.get("pitch_name", p.get("pitch_type", "")),
+                "usage": round(float(p.get("pitch_pct") or p.get("pitch_usage_pct") or 0) * 100, 1),
+                "velo":  round(float(p.get("avg_speed") or 0), 1) or None,
+                "whiff": round(float(p.get("whiff_pct") or 0) * 100, 1) if p.get("whiff_pct") is not None else None,
+            }
+            for p in raw_list
+            if (p.get("pitch_pct") or p.get("pitch_usage_pct") or 0) > 0.01
+        ]
+        result["arsenal"].sort(key=lambda x: x["usage"], reverse=True)
+    except Exception as e:
+        log.warning("pitcher-detail arsenal failed pid=%s: %s", pitcher_id, e)
+        result["arsenal"] = []
+
+    # Pitcher pitch stats vs effective batter side
+    try:
+        pitch_stats = get_pitcher_pitch_stats(pitcher_id, effective_batter_side)
+        result["pitch_stats"] = pitch_stats
+    except Exception as e:
+        log.warning("pitcher-detail pitch_stats failed pid=%s: %s", pitcher_id, e)
+        result["pitch_stats"] = {}
+
+    # Batter vs pitches (vs pitcher_hand, not batter_side)
+    try:
+        bvp = get_batter_vs_pitches(batter_id, pitcher_hand) if batter_id else {}
+        result["batter_vs_pitches"] = bvp
+    except Exception as e:
+        log.warning("pitcher-detail batter_vs_pitches failed bid=%s: %s", batter_id, e)
+        result["batter_vs_pitches"] = {}
+
+    # H2H career
+    try:
+        from clients.pitch_mix import get_h2h as _get_h2h
+        h2h_raw = _get_h2h(pitcher_id, batter_id) if batter_id else {}
+        result["h2h"] = h2h_raw
+    except Exception as e:
+        log.warning("pitcher-detail h2h failed pid=%s bid=%s: %s", pitcher_id, batter_id, e)
+        result["h2h"] = {}
+
+    return result
 
 
 # ── Internals ──────────────────────────────────────────────────────────────────

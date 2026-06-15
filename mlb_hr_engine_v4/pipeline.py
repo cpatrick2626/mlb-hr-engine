@@ -342,6 +342,20 @@ def _build_player_profile(
         "batter_bb_pct": round(_bb / season_pa, 3) if season_pa > 0 else None,
         "batter_k_pct":  round(season_k / season_pa, 3) if season_pa > 0 else None,
         **statcast_client.bat_tracking_summary(player_id, bat_tracking_data or {}),
+        # Pitcher season stats (display only — not used in model)
+        "pitcher_era":    _safe_float(pitcher_stats.get("era")),
+        "pitcher_whip":   _safe_float(pitcher_stats.get("whip")),
+        "pitcher_k_pct":  (round(int(pitcher_stats.get("strikeOuts", 0)) /
+                                  int(pitcher_stats.get("battersFaced", 0)) * 100, 1)
+                           if int(pitcher_stats.get("battersFaced") or 0) > 0 else None),
+        "pitcher_bb_pct": (round(int(pitcher_stats.get("baseOnBalls", 0)) /
+                                  int(pitcher_stats.get("battersFaced", 0)) * 100, 1)
+                           if int(pitcher_stats.get("battersFaced") or 0) > 0 else None),
+        # Pitcher statcast allowed (display only)
+        "pitcher_barrel_allowed": _safe_float((pitcher_data.get(pitcher_id) or {}).get("barrel_rate")),
+        "pitcher_hh_allowed":     _safe_float((pitcher_data.get(pitcher_id) or {}).get("hard_hit_pct")),
+        "pitcher_fb_allowed":     _safe_float((pitcher_data.get(pitcher_id) or {}).get("fb_pct")),
+        "pitcher_gb_allowed":     _safe_float((pitcher_data.get(pitcher_id) or {}).get("gb_pct")),
     }
 
 

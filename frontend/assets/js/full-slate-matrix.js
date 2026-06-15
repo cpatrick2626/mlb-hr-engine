@@ -241,6 +241,14 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, i
             <span className="fsm-tier__add" aria-hidden="true">+ FD</span>
           </button>
         )}
+        {(row.prime || row.explosive || row.advantage || row.wildcard) && (
+          <span className="fsm-tiercell__roles">
+            {row.prime && <span className="fsm-role-badge--prime">PRIME</span>}
+            {row.explosive && <span className="fsm-role-badge--explosive">EXPLOSIVE</span>}
+            {row.advantage && <span className="fsm-role-badge--advantage">ADVANTAGE</span>}
+            {row.wildcard && <span className="fsm-role-badge--wildcard">WILDCARD</span>}
+          </span>
+        )}
       </td>
       <td className="fsm-player">
         <button type="button" className="fsm-player__in" onClick={() => onBatter(row)} title={`Open ${row.name} batter card`}>
@@ -249,10 +257,6 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, i
             <span className="fsm-player__name">{row.name}</span>
             <span className="fsm-player__meta">{row.teamAbbr}<i className="fsm-player__bar">|</i>{row.bats}</span>
             {game && <span className="fsm-player__game">{game.away}@{game.home}<i className="fsm-player__bar">·</i>{game.time}</span>}
-            {row.prime && <span className="fsm-role-badge--prime">PRIME</span>}
-            {row.explosive && <span className="fsm-role-badge--explosive">EXPLOSIVE</span>}
-            {row.advantage && <span className="fsm-role-badge--advantage">ADVANTAGE</span>}
-            {row.wildcard && <span className="fsm-role-badge--wildcard">WILDCARD</span>}
           </span>
         </button>
       </td>
@@ -399,43 +403,17 @@ function fsmStatVal(key, row) {
   return v == null ? "—" : c.fmt(v);
 }
 
-function fsmHash(str) {let h = 2166136261;for (let i = 0; i < str.length; i++) {h ^= str.charCodeAt(i);h = Math.imul(h, 16777619);}return h >>> 0;}
-function fsmSeeded(seed) {let a = seed >>> 0;return () => {a |= 0;a = a + 0x6D2B79F5 | 0;let t = Math.imul(a ^ a >>> 15, 1 | a);t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;return ((t ^ t >>> 14) >>> 0) / 4294967296;};}
+// Module-level cache for on-demand pitcher detail fetches.
+const FSM_PITCHER_DETAIL_CACHE = new Map();
 
-const FSM_PITCH_TYPES = [
-{ code: "FF", name: "4-Seam", vlo: 92, vhi: 99 },
-{ code: "SI", name: "Sinker", vlo: 90, vhi: 96 },
-{ code: "FC", name: "Cutter", vlo: 87, vhi: 93 },
-{ code: "SL", name: "Slider", vlo: 82, vhi: 89 },
-{ code: "CH", name: "Change", vlo: 82, vhi: 89 },
-{ code: "CB", name: "Curve", vlo: 76, vhi: 83 }];
+const FSM_PITCH_NAMES = {
+  FF: "4-Seam", SI: "Sinker", FC: "Cutter", SL: "Slider", ST: "Sweeper",
+  CH: "Changeup", FS: "Splitter", CU: "Curveball", KC: "Knuckle-Curve",
+  KN: "Knuckleball", EP: "Eephus", SC: "Screwball", FO: "Forkball",
+};
 
-function fsmPitchData(row) {
-  const game = getFSMGames().find((g) => g.id === row.gameId);
-  const opp = game ? game.teams.find((t) => t !== row.teamAbbr) : "OPP";
-  const rng = fsmSeeded(fsmHash(row.gameId + ":" + opp));
-  const pitcher = { name: row.pitcher_name || "TBD", team: opp, throws: rng() < 0.5 ? "L" : "R" };
-  const rest = [...FSM_PITCH_TYPES.slice(1)].sort(() => rng() - 0.5);
-  const chosen = [FSM_PITCH_TYPES[0], ...rest.slice(0, 3 + (rng() < 0.5 ? 1 : 0))];
-  const weights = chosen.map((p, i) => i === 0 ? 0.34 + rng() * 0.18 : 0.06 + rng() * 0.22);
-  const sum = weights.reduce((a, b) => a + b, 0);
-  const power = Math.min(1, Math.max(0, (row.hrprob - 3) / 18));
-  const pitches = chosen.map((p, i) => {
-    const woba = +Math.max(0.18, Math.min(0.46, 0.255 + power * 0.11 + (rng() - 0.4) * 0.15)).toFixed(3);
-    return {
-      code: p.code, name: p.name,
-      usagePct: Math.round(weights[i] / sum * 100),
-      velo: +(p.vlo + rng() * (p.vhi - p.vlo)).toFixed(1),
-      whiff: Math.round(8 + rng() * 30),
-      woba,
-      hrpct: +Math.max(0, power * 4.5 + (rng() - 0.5) * 3.5).toFixed(1),
-      verdict: woba >= 0.360 ? "ATTACK" : woba >= 0.300 ? "NEUTRAL" : "AVOID"
-    };
-  });
-  let tot = pitches.reduce((a, p) => a + p.usagePct, 0);
-  pitches[0].usagePct += 100 - tot;
-  pitches.sort((a, b) => b.usagePct - a.usagePct);
-  return { pitcher, pitches };
+function fsmPitchName(code) {
+  return FSM_PITCH_NAMES[code] || code;
 }
 
 function FsmStat({ label, value, color }) {
@@ -446,8 +424,9 @@ function FsmBatterCard({ row, onClose, onPitch, builderMode = false }) {
   const t = FSM_TIERS[row.tier] || FSM_TIERS.COLD;
   const m = FSM_MATCHUP[row.quality] || FSM_MATCHUP.AVG;
   const game = getFSMGames().find((g) => g.id === row.gameId);
-  const pd = fsmPitchData(row);
+  const oppTeam = game ? (game.teams.find((t) => t !== row.teamAbbr) || "OPP") : "OPP";
   const pitcherDisplay = row.pitcher_name ? row.pitcher_name : "TBD";
+  const pitcherHand = row.pitcher_hand || "?";
   const pitcherConfirmed = row.pitcher_confirmed === true;
   const groups = [
   { title: "POWER & CONTACT", keys: ["avg", "slg", "babip", "xwoba", "barrel", "hrpa"] },
@@ -474,7 +453,7 @@ function FsmBatterCard({ row, onClose, onPitch, builderMode = false }) {
         <span className="fsm-pie fsm-pie--lg" style={{ background: fsmPie(m.q, m.color) }} />
         <div className="fsm-card__mtext">
           <span className="fsm-card__mq" style={{ color: m.color }}>{row.quality} MATCHUP</span>
-          <span className="fsm-card__msub">vs <span className="fsm-pitcher-name">{pitcherDisplay}</span>{!pitcherConfirmed && (<span className="fsm-tbd-badge">TBD</span>)} ({pd.pitcher.team} · {pd.pitcher.throws}HP) · OPP HR/9 {fsmStatVal("opphr", row)}{game ? ` · PARK HR ${game.hrFactor.toFixed(2)}×` : ""}</span>
+          <span className="fsm-card__msub">vs <span className="fsm-pitcher-name">{pitcherDisplay}</span>{!pitcherConfirmed && (<span className="fsm-tbd-badge">TBD</span>)} ({oppTeam} · {pitcherHand}HP) · OPP HR/9 {fsmStatVal("opphr", row)}{game ? ` · PARK HR ${game.hrFactor.toFixed(2)}×` : ""}</span>
         </div>
         <button className="fsm-card__pitchbtn" onClick={onPitch}>PITCH MIX ANALYSIS →</button>
       </div>
@@ -494,67 +473,10 @@ function FsmBatterCard({ row, onClose, onPitch, builderMode = false }) {
 
 }
 
-/* deterministic head-to-head dataset for a batter vs the opposing starter */
-function fsmH2HData(row) {
-  const pd = fsmPitchData(row);
-  const rng = fsmSeeded(fsmHash(row.id + "|h2h"));
-  const power = Math.min(1, Math.max(0, (row.hrprob - 3) / 18));
-  const batHand = row.bats === "S" ? pd.pitcher.throws === "L" ? "R" : "L" : row.bats;
-  const r = (lo, hi, d = 1) => +(lo + rng() * (hi - lo)).toFixed(d);
-
-  const hr9 = +(0.75 + power * 0.85 + rng() * 0.55).toFixed(2);
-  const pitcher = {
-    ...pd.pitcher,
-    last: pd.pitcher.name.split(" ").slice(-1)[0],
-    era: r(2.9, 5.4, 2), whip: r(0.98, 1.46, 2), kpct: r(15, 31, 1), bbpct: r(5, 11.5, 1),
-    hr9, xhr9: +(hr9 + (rng() - 0.5) * 0.4).toFixed(2), avg: r(0.212, 0.288, 3),
-    tier: hr9 >= 1.45 ? "HR TARGET" : hr9 >= 1.05 ? "VULNERABLE" : "TOUGH"
-  };
-
-  const BTIER = { APEX: "S+", ELITE: "S", EDGE: "A", SIGNAL: "B", WATCH: "C", COLD: "D" };
-  const batter = {
-    name: row.name, last: row.name.replace("…", "").split(" ").slice(-1)[0], team: row.teamAbbr, bats: row.bats,
-    avg: row.avg, hr: Math.round(8 + power * 34), iso: +(row.slg - row.avg).toFixed(3),
-    kpct: r(13, 30, 1), whiff: r(18, 40, 1), barrel: row.barrel == null ? null : row.barrel, ev: row.ev,
-    tier: BTIER[row.tier] || "C", confidence: Math.round(58 + power * 37),
-    ev_odds: "+" + Math.round(Math.min(950, Math.max(230, 980 - row.hrprob * 31)))
-  };
-
-  // 3x3 strike-zone xSLG (rows top→bottom). Heart of zone runs hotter.
-  const zoneBase = 0.44 + power * 0.26;
-  const zoneBoost = [0.00, 0.05, -0.01, 0.04, 0.10, 0.02, -0.03, 0.03, -0.05];
-  const zone = zoneBoost.map((b) => +Math.min(0.86, Math.max(0.36, zoneBase + b + (rng() - 0.5) * 0.16)).toFixed(3));
-
-  const zoneAvg = zone.reduce((a, b) => a + b, 0) / 9;
-  const edge = Math.round((zoneAvg - 0.50) * 100 + (hr9 - 1.0) * 14);
-
-  const h2h = { pa: Math.round(8 + rng() * 32), avg: r(0.205, 0.372, 3), xslg: 0, hr: Math.round(rng() * 3 + power * 2), kpct: r(11, 28, 1), bbpct: r(4, 13, 1) };
-  h2h.xslg = +Math.min(0.74, h2h.avg + 0.17 + power * 0.13).toFixed(3);
-
-  // pitcher pitch mix vs this batter's hand
-  const mix = pd.pitches.map((p) => {
-    const vslg = +Math.min(0.85, Math.max(0.12, 0.20 + power * 0.4 + (rng() - 0.45) * 0.34)).toFixed(3);
-    return { name: p.name, usage: p.usagePct, vslg, iso: +Math.max(0, vslg - r(0.16, 0.24, 3)).toFixed(3),
-      hr: Math.round(rng() * 3 * power), hh: r(18, 46, 1), whiff: p.whiff, k: r(12, 36, 1) };
-  });
-
-  // batter hit profile vs this pitcher's hand (same pitch families, batter perspective)
-  const profile = pd.pitches.map((p) => {
-    const vslg = +Math.min(0.90, Math.max(0.18, 0.30 + power * 0.42 + (rng() - 0.4) * 0.3)).toFixed(3);
-    return { name: p.name, usage: Math.round(45 + rng() * 45), vslg, iso: +Math.max(0, vslg - r(0.14, 0.26, 3)).toFixed(3),
-      hr: Math.round(rng() * 6 + power * 12), hh: r(20, 64, 1), whiff: r(11, 64, 1), k: r(9, 28, 1) };
-  });
-
-  return { pitcher, batter, zone, edge, h2h, mix, profile, batHand };
-}
 
 const fsmS3 = (v) => v == null ? "—" : v.toFixed(3).replace(/^0/, "");
 const fsmP1 = (v) => v == null ? "—" : v.toFixed(1) + "%";
 
-/* zone-cell heat (xSLG: high = batter advantage = green) */
-function fsmZoneClass(v) {
-  if (v >= 0.70) return "is-elite";if (v >= 0.62) return "is-strong";if (v >= 0.54) return "is-avg";if (v >= 0.47) return "is-weak";return "is-danger";
-}
 function fsmHeatClass(v, hi) {
   if (v == null) return "is-na";
   return v >= hi[0] ? "is-elite" : v >= hi[1] ? "is-strong" : v >= hi[2] ? "is-avg" : v >= hi[3] ? "is-weak" : "is-danger";
@@ -571,35 +493,135 @@ function FsmStatRail({ title, stats }) {
 
 }
 
-function FsmPitchTable({ title, accent, rows }) {
+/* Arsenal table — pitcher's pitch mix with real Savant stats */
+function FsmArsenalTable({ title, arsenal, pitchStats }) {
+  if (!arsenal || arsenal.length === 0) return (
+    <div className="fsm-pt fsm-pt--red">
+      <div className="fsm-pt__title">{title}</div>
+      <div className="fsm-pt__empty">No arsenal data available</div>
+    </div>
+  );
   return (
-    <div className={"fsm-pt fsm-pt--" + accent}>
+    <div className="fsm-pt fsm-pt--red">
       <div className="fsm-pt__title">{title}</div>
       <div className="fsm-pt__grid">
-        <div className="fsm-pt__hd"><span>PITCH TYPE</span><span>USAGE</span><span>vSLG</span><span>ISO</span><span>HR</span><span>HH%</span><span>WHIFF%</span><span>K%</span></div>
-        {rows.map((p, i) =>
-        <div className="fsm-pt__row" key={i}>
-            <span className="fsm-pt__type">{p.name}</span>
-            <span className="fsm-pt__usage"><span className="fsm-pt__bar" style={{ width: Math.min(100, p.usage) + "%" }} /><i>{p.usage}%</i></span>
-            <span className={"fsm-ht " + fsmHeatClass(p.vslg, [0.520, 0.430, 0.350, 0.270])}>{fsmS3(p.vslg)}</span>
-            <span className={"fsm-ht " + fsmHeatClass(p.iso, [0.260, 0.180, 0.120, 0.070])}>{fsmS3(p.iso)}</span>
-            <span className="fsm-pt__num">{p.hr}</span>
-            <span className="fsm-pt__num">{fsmP1(p.hh)}</span>
-            <span className="fsm-pt__num">{fsmP1(p.whiff)}</span>
-            <span className="fsm-pt__num">{fsmP1(p.k)}</span>
-          </div>
-        )}
+        <div className="fsm-pt__hd"><span>PITCH TYPE</span><span>USAGE</span><span>VELO</span><span>WHIFF%</span><span>HR</span><span>K%</span><span>HH%</span></div>
+        {arsenal.map((p, i) => {
+          const ps = pitchStats[p.code] || {};
+          const hrVal = ps.hr != null ? ps.hr : null;
+          const kPct = ps.k_pct != null ? ps.k_pct * 100 : null;
+          const hh = ps.display_hh != null ? ps.display_hh * 100 : null;
+          return (
+            <div className="fsm-pt__row" key={i}>
+              <span className="fsm-pt__type">{p.name || fsmPitchName(p.code)}</span>
+              <span className="fsm-pt__usage"><span className="fsm-pt__bar" style={{ width: Math.min(100, p.usage) + "%" }} /><i>{p.usage != null ? p.usage.toFixed(1) : "—"}%</i></span>
+              <span className="fsm-pt__num">{p.velo != null ? p.velo.toFixed(1) : "—"}</span>
+              <span className="fsm-pt__num">{p.whiff != null ? p.whiff.toFixed(1) + "%" : "—"}</span>
+              <span className="fsm-pt__num">{hrVal != null ? hrVal : "—"}</span>
+              <span className="fsm-pt__num">{kPct != null ? kPct.toFixed(1) + "%" : "—"}</span>
+              <span className="fsm-pt__num">{hh != null ? hh.toFixed(1) + "%" : "—"}</span>
+            </div>
+          );
+        })}
       </div>
-    </div>);
+    </div>
+  );
+}
 
+/* Batter vs pitch type table — real Savant batter splits */
+function FsmBatterVsPitchTable({ title, bvp, arsenal }) {
+  const pitchCodes = arsenal && arsenal.length > 0
+    ? arsenal.map((p) => p.code)
+    : Object.keys(bvp || {});
+  const rows = pitchCodes.filter((c) => bvp[c]).map((c) => ({ code: c, ...bvp[c] }));
+  if (rows.length === 0) return (
+    <div className="fsm-pt fsm-pt--blue">
+      <div className="fsm-pt__title">{title}</div>
+      <div className="fsm-pt__empty">No batter-vs-pitch data available</div>
+    </div>
+  );
+  return (
+    <div className="fsm-pt fsm-pt--blue">
+      <div className="fsm-pt__title">{title}</div>
+      <div className="fsm-pt__grid">
+        <div className="fsm-pt__hd"><span>PITCH TYPE</span><span>PA</span><span>BA</span><span>SLG</span><span>HR</span><span>K%</span></div>
+        {rows.map((p, i) => {
+          const ba = parseFloat(p.ba) || null;
+          const slg = parseFloat(p.slg) || null;
+          const kPct = p.k_pct != null ? p.k_pct * 100 : null;
+          const smallSample = (p.pa || 0) < 10;
+          return (
+            <div className={"fsm-pt__row" + (smallSample ? " fsm-pt__row--dim" : "")} key={i}>
+              <span className="fsm-pt__type">{fsmPitchName(p.code)}{smallSample ? <span className="fsm-ss-flag" title="Small sample">·</span> : null}</span>
+              <span className="fsm-pt__num">{p.pa != null ? p.pa : "—"}</span>
+              <span className={"fsm-ht " + fsmHeatClass(ba, [0.320, 0.275, 0.230, 0.180])}>{ba != null ? ba.toFixed(3).replace(/^0/, "") : "—"}</span>
+              <span className={"fsm-ht " + fsmHeatClass(slg, [0.520, 0.430, 0.350, 0.270])}>{slg != null ? slg.toFixed(3).replace(/^0/, "") : "—"}</span>
+              <span className="fsm-pt__num">{p.hr != null ? p.hr : "—"}</span>
+              <span className="fsm-pt__num">{kPct != null ? kPct.toFixed(1) + "%" : "—"}</span>
+            </div>
+          );
+        })}
+      </div>
+      {rows.some((r) => (r.pa || 0) < 10) && <div className="fsm-pt__note">· = small sample (&lt;10 PA)</div>}
+    </div>
+  );
 }
 
 function FsmPitchMix({ row, onClose, onBatter, builderMode = false }) {
-  const d = fsmH2HData(row);
-  const pColor = TEAM_COLOR[d.pitcher.team] || "#ff3344";
-  const bColor = TEAM_COLOR[d.batter.team] || "#3b6fff";
-  const pTierColor = d.pitcher.tier === "HR TARGET" ? "#1aff66" : d.pitcher.tier === "VULNERABLE" ? "#ffb020" : "#ff3344";
-  const initials = (n) => n.replace("…", "").split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+  const [detail, setDetail] = React.useState(null);
+  const [fetchState, setFetchState] = React.useState("loading");
+
+  const pitcherId = row.pitcher_id;
+  const batterId = row.id;
+  const batterSide = row.bats || "";
+  const pitcherHand = row.pitcher_hand || "";
+
+  React.useEffect(() => {
+    const cacheKey = `${pitcherId}:${batterId}:${batterSide}`;
+    if (FSM_PITCHER_DETAIL_CACHE.has(cacheKey)) {
+      setDetail(FSM_PITCHER_DETAIL_CACHE.get(cacheKey));
+      setFetchState("done");
+      return;
+    }
+    if (!pitcherId) {
+      setFetchState("error");
+      return;
+    }
+    const url = `https://mlb-hr-api.fly.dev/api/pitcher-detail?pitcher_id=${encodeURIComponent(pitcherId)}&batter_id=${encodeURIComponent(batterId || 0)}&batter_side=${encodeURIComponent(batterSide)}&pitcher_hand=${encodeURIComponent(pitcherHand)}`;
+    fetch(url)
+      .then((r) => r.json())
+      .then((data) => {
+        FSM_PITCHER_DETAIL_CACHE.set(cacheKey, data);
+        setDetail(data);
+        setFetchState("done");
+      })
+      .catch(() => setFetchState("error"));
+  }, [pitcherId, batterId]);
+
+  const game = getFSMGames().find((g) => g.id === row.gameId);
+  const oppTeam = game ? (game.teams.find((t) => t !== row.teamAbbr) || "OPP") : "OPP";
+  const initials = (n) => (n || "?").replace("…", "").split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
+
+  const pitcherName = row.pitcher_name || "TBD";
+  const pLast = pitcherName.replace("…", "").split(" ").slice(-1)[0];
+  const bLast = (row.name || "").replace("…", "").split(" ").slice(-1)[0];
+
+  // Effective batter side display (switch hitters face opposite hand)
+  const batHand = batterSide === "S" ? (pitcherHand === "L" ? "R" : "L") : batterSide;
+
+  const pColor = TEAM_COLOR[oppTeam] || "#ff3344";
+  const bColor = TEAM_COLOR[row.teamAbbr] || "#3b6fff";
+
+  const hr9 = row.pitcher_hr9 != null ? row.pitcher_hr9 : null;
+  const pTierLabel = hr9 != null ? (hr9 >= 1.45 ? "HR TARGET" : hr9 >= 1.05 ? "VULNERABLE" : "TOUGH") : "—";
+  const pTierColor = pTierLabel === "HR TARGET" ? "#1aff66" : pTierLabel === "VULNERABLE" ? "#ffb020" : "#ff3344";
+
+  const iso = (row.slg != null && row.avg != null) ? +(row.slg - row.avg).toFixed(3) : null;
+
+  const h2h = detail && detail.h2h && detail.h2h.pa ? detail.h2h : null;
+  const arsenal = detail ? (detail.arsenal || []) : [];
+  const pitchStats = detail ? (detail.pitch_stats || {}) : {};
+  const bvp = detail ? (detail.batter_vs_pitches || {}) : {};
 
   return (
     <div className="fsm-card fsm-card--h2h">
@@ -609,75 +631,105 @@ function FsmPitchMix({ row, onClose, onBatter, builderMode = false }) {
         {/* PITCHER */}
         <div className="fsm-h2h__side" style={{ "--tc": pColor }}>
           <div className="fsm-h2h__nameblock">
-            <div className="fsm-h2h__team">{d.pitcher.team}</div>
-            <div className="fsm-h2h__name">{d.pitcher.name}</div>
-            <span className="fsm-h2h__badge">{d.pitcher.throws}HP</span>
+            <div className="fsm-h2h__team">{oppTeam}</div>
+            <div className="fsm-h2h__name">{pitcherName}</div>
+            <span className="fsm-h2h__badge">{pitcherHand || "?"}HP</span>
           </div>
-          <div className="fsm-h2h__portrait"><span>{initials(d.pitcher.name)}</span></div>
-          <FsmStatRail title={`2024 vs ${d.batHand}HB`} stats={[
-          ["ERA", d.pitcher.era.toFixed(2)], ["WHIP", d.pitcher.whip.toFixed(2)],
-          ["K%", d.pitcher.kpct.toFixed(1)], ["BB%", d.pitcher.bbpct.toFixed(1)],
-          ["HR/9", d.pitcher.hr9.toFixed(2), d.pitcher.hr9 >= 1.45 ? "#1aff66" : null],
-          ["xHR/9", d.pitcher.xhr9.toFixed(2)], ["AVG", fsmS3(d.pitcher.avg)]]
-          } />
-          <div className="fsm-h2h__tier"><span>PITCHER TIER</span><b style={{ color: pTierColor }}>{d.pitcher.tier}</b></div>
+          <div className="fsm-h2h__portrait"><span>{initials(pitcherName)}</span></div>
+          <FsmStatRail title={`vs ${batHand}HB`} stats={[
+            ["ERA",    row.pitcher_era   != null ? row.pitcher_era.toFixed(2)   : "—"],
+            ["WHIP",   row.pitcher_whip  != null ? row.pitcher_whip.toFixed(2)  : "—"],
+            ["K%",     row.pitcher_k_pct != null ? row.pitcher_k_pct.toFixed(1) : "—"],
+            ["BB%",    row.pitcher_bb_pct != null ? row.pitcher_bb_pct.toFixed(1) : "—"],
+            ["HR/9",   hr9 != null ? hr9.toFixed(2) : "—", hr9 != null && hr9 >= 1.45 ? "#1aff66" : null],
+            ["BARREL%", row.pitcher_barrel_allowed != null ? (row.pitcher_barrel_allowed * 100).toFixed(1) : "—"],
+            ["HH%",    row.pitcher_hh_allowed != null ? (row.pitcher_hh_allowed * 100).toFixed(1) : "—"],
+          ]} />
+          <div className="fsm-h2h__tier"><span>PITCHER TIER</span><b style={{ color: pTierColor }}>{pTierLabel}</b></div>
         </div>
 
-        {/* CENTER */}
+        {/* CENTER — H2H + loading state */}
         <div className="fsm-h2h__center">
-          <div className="fsm-h2h__ctitle">STRIKE ZONE MATCHUP<span>xSLG BY LOCATION</span></div>
-          <div className="fsm-h2h__zone">
-            {d.zone.map((v, i) => <div key={i} className={"fsm-zcell " + fsmZoneClass(v)}>{fsmS3(v)}</div>)}
-          </div>
-          <div className="fsm-h2h__edge">
-            <span className="fsm-h2h__edgelbl">MATCHUP EDGE</span>
-            <b style={{ color: d.edge >= 0 ? "#1aff66" : "#ff3344" }}>{d.edge >= 0 ? "+" : ""}{d.edge}%</b>
-            <span className="fsm-h2h__edgeside">{d.edge >= 0 ? "BATTER ADVANTAGE" : "PITCHER ADVANTAGE"}</span>
-          </div>
+          {fetchState === "loading" && (
+            <div className="fsm-h2h__loading">Loading pitch data…</div>
+          )}
+          {fetchState === "error" && !pitcherId && (
+            <div className="fsm-h2h__loading">Pitcher TBD — no detail available</div>
+          )}
+          {fetchState === "error" && pitcherId && (
+            <div className="fsm-h2h__loading">Fetch error — showing available stats</div>
+          )}
           <div className="fsm-h2h__h2h">
-            <div className="fsm-h2h__h2htitle">HEAD TO HEAD <span>CAREER · {d.batter.last} vs {d.pitcher.last}</span></div>
-            <div className="fsm-h2h__h2hstrip">
-              {[["PA", d.h2h.pa], ["AVG", fsmS3(d.h2h.avg)], ["xSLG", fsmS3(d.h2h.xslg)], ["HR", d.h2h.hr], ["K%", d.h2h.kpct.toFixed(1)], ["BB%", d.h2h.bbpct.toFixed(1)]].map(([l, v]) =>
-              <div key={l}><span>{l}</span><b>{v}</b></div>
-              )}
-            </div>
+            <div className="fsm-h2h__h2htitle">HEAD TO HEAD <span>CAREER · {bLast} vs {pLast}</span></div>
+            {h2h ? (
+              <div className="fsm-h2h__h2hstrip">
+                {[
+                  ["PA",  h2h.pa],
+                  ["AVG", h2h.avg || "—"],
+                  ["SLG", h2h.slg || "—"],
+                  ["HR",  h2h.hr],
+                  ["K",   h2h.k],
+                  ["OPS", h2h.ops || "—"],
+                ].map(([l, v]) =>
+                  <div key={l}><span>{l}</span><b>{v}</b></div>
+                )}
+              </div>
+            ) : (
+              <div className="fsm-h2h__h2hstrip fsm-h2h__h2hstrip--empty">
+                {fetchState === "done" ? "No career H2H on record" : "—"}
+              </div>
+            )}
+            {h2h && h2h.pa < 10 && (
+              <div className="fsm-pt__note">Small sample ({h2h.pa} PA) — treat with caution</div>
+            )}
           </div>
           <div className="fsm-h2h__btier">
-            <div><span>MODEL TIER</span><b>{d.batter.tier}</b></div>
-            <div><span>{builderMode ? "SCORED FEED CONFIDENCE" : "CONFIDENCE"}</span><b style={{ color: "#1aff66" }}>{d.batter.confidence}</b></div>
-            <div><span>{builderMode ? "SOURCE FEED ODDS" : "HR EV"}</span><b style={{ color: "#ffb020" }}>{d.batter.ev_odds}</b></div>
+            <div><span>MODEL TIER</span><b>{row.tier}</b></div>
+            <div><span>MODEL HR PROB</span><b style={{ color: "#1aff66" }}>{row.hrprob != null ? row.hrprob.toFixed(1) + "%" : "—"}</b></div>
+            <div><span>{builderMode ? "SOURCE FEED ODDS" : "HR ODDS"}</span><b style={{ color: "#ffb020" }}>{row.odds || "—"}</b></div>
           </div>
         </div>
 
         {/* BATTER */}
         <div className="fsm-h2h__side fsm-h2h__side--right" style={{ "--tc": bColor }}>
           <div className="fsm-h2h__nameblock">
-            <div className="fsm-h2h__team">{d.batter.team}</div>
-            <div className="fsm-h2h__name">{d.batter.name}</div>
-            <span className="fsm-h2h__badge">BATS {d.batter.bats}</span>
+            <div className="fsm-h2h__team">{row.teamAbbr}</div>
+            <div className="fsm-h2h__name">{row.name}</div>
+            <span className="fsm-h2h__badge">BATS {batterSide}</span>
           </div>
-          <div className="fsm-h2h__portrait"><span>{initials(d.batter.name)}</span></div>
-          <FsmStatRail title={`2024 vs ${d.pitcher.throws}HP`} stats={[
-          ["AVG", fsmS3(d.batter.avg)], ["ISO", fsmS3(d.batter.iso)],
-          ["HR", d.batter.hr, "#1aff66"], ["K%", d.batter.kpct.toFixed(1)],
-          ["WHIFF%", d.batter.whiff.toFixed(1)], ["BARREL%", d.batter.barrel == null ? "—" : d.batter.barrel.toFixed(1)],
-          ["EV", d.batter.ev.toFixed(1)]]
-          } />
+          <div className="fsm-h2h__portrait"><span>{initials(row.name)}</span></div>
+          <FsmStatRail title={`vs ${pitcherHand || "?"}HP`} stats={[
+            ["AVG",     fsmS3(row.avg)],
+            ["ISO",     fsmS3(iso)],
+            ["HR",      row.hr != null ? row.hr : "—", "#1aff66"],
+            ["K%",      row.kpct != null ? row.kpct.toFixed(1) : "—"],
+            ["BARREL%", row.barrel != null ? row.barrel.toFixed(1) : "—"],
+            ["EV",      row.ev != null ? row.ev.toFixed(1) : "—"],
+            ["xwOBA",   fsmS3(row.xwoba)],
+          ]} />
           <div className="fsm-h2h__tier"><span>MODEL TIER</span><b style={{ color: (FSM_TIERS[row.tier] || FSM_TIERS.COLD).color }}>{row.tier}</b></div>
         </div>
       </div>
 
       <div className="fsm-h2h__tables">
-        <FsmPitchTable title={`${d.pitcher.last} PITCH MIX vs ${d.batHand}HB`} accent="red" rows={d.mix} />
-        <FsmPitchTable title={`${d.batter.last} HIT PROFILE vs ${d.pitcher.throws}HP`} accent="blue" rows={d.profile} />
+        <FsmArsenalTable
+          title={`${pLast} ARSENAL vs ${batHand}HB`}
+          arsenal={arsenal}
+          pitchStats={pitchStats}
+        />
+        <FsmBatterVsPitchTable
+          title={`${bLast} vs ${pitcherHand || "?"}HP — BY PITCH TYPE`}
+          bvp={bvp}
+          arsenal={arsenal}
+        />
       </div>
 
       <div className="fsm-card__foot">
         <button className="fsm-card__pitchbtn" onClick={onBatter}>← BATTER CARD</button>
-        {!builderMode && <a className="fsm-card__fd" href={fsmFanDuelUrl(row.name)} target="_blank" rel="noopener" onClick={(e) => fsmOpenFanDuelSearch(e, row.name)}>+ ADD {d.batter.last.toUpperCase()} TO FANDUEL</a>}
+        {!builderMode && <a className="fsm-card__fd" href={fsmFanDuelUrl(row.name)} target="_blank" rel="noopener" onClick={(e) => fsmOpenFanDuelSearch(e, row.name)}>+ ADD {bLast.toUpperCase()} TO FANDUEL</a>}
       </div>
-    </div>);
-
+    </div>
+  );
 }
 
 function FsmDetailModal({ modal, onClose, setModal, builderMode = false }) {
@@ -698,24 +750,14 @@ function FsmDetailModal({ modal, onClose, setModal, builderMode = false }) {
 
 }
 
-const FSM_ARSENAL = [
-  { code: "FF", name: "4-Seam" }, { code: "SI", name: "Sinker" }, { code: "FC", name: "Cutter" },
-  { code: "SL", name: "Slider" }, { code: "CH", name: "Change" }, { code: "CB", name: "Curve" },
-];
-
-/* Recompute a batter's stats vs their opposing starter's hand + the selected pitch types.
-   Deterministic per batter/pitch; "all pitches selected" = baseline-vs-hand. */
+/* Recompute a batter's stats vs their opposing starter's hand using platoon factor.
+   Uses real pitcher_hand from row (already fetched by pipeline). */
 function fsmAdjustRow(row, on) {
   if (!on) return row;
-  const pd = fsmPitchData(row);
-  const opp = pd.pitcher.throws, bats = row.bats;
+  const opp = row.pitcher_hand || "", bats = row.bats;
   const platoon = bats === "S" ? 1.0 : (bats === "L" && opp === "R") || (bats === "R" && opp === "L") ? 1.06 : 0.93;
-  const m = (code) => 0.8 + fsmSeeded(fsmHash(row.id + code))() * 0.45;
-  let w = 0, mm = 0;
-  pd.pitches.forEach((p) => { w += p.usagePct; mm += m(p.code) * p.usagePct; });
-  const arsenal = (w > 0 ? mm / w : 1) / 1.025;
-  const factor = platoon * arsenal;
-  const o = { ...row, vsPitcher: pd.pitcher, adjFactor: factor };
+  const factor = platoon;
+  const o = { ...row, adjFactor: factor };
   const up = (k, min, max, d) => { if (o[k] != null) o[k] = +Math.max(min, Math.min(max, o[k] * factor)).toFixed(d); };
   ["avg", "obp", "slg", "iso", "xslg", "woba", "xwoba", "babip"].forEach((k) => up(k, 0.08, 0.86, 3));
   ["barrel", "hh", "hrfb", "pullbrl", "pullair", "sweet", "blast", "squp", "fast", "ld"].forEach((k) => up(k, 0, 100, 1));
