@@ -94,7 +94,7 @@ def classify_role(row: dict, tier: str = "") -> dict[str, bool]:
         or (barrel is not None and barrel >= config.ROLE_ADVANTAGE_BARREL_PCT)
     )
 
-    # WILDCARD: count non-null traits that clear their threshold; award if 1 or 2.
+    # WILDCARD: count non-null traits that clear their threshold; award if ≥1.
     wildcard = False
     if not_top:
         wc_traits = [
@@ -104,6 +104,6 @@ def classify_role(row: dict, tier: str = "") -> dict[str, bool]:
             pull_air is not None and pull_air >= config.ROLE_WILDCARD_PULL_AIR_PCT,
         ]
         trait_count = sum(wc_traits)
-        wildcard = 1 <= trait_count <= 2
+        wildcard = trait_count >= 1
 
     return {"prime": prime, "explosive": explosive, "advantage": advantage, "wildcard": wildcard}
