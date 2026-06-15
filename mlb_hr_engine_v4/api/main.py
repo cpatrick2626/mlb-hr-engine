@@ -343,6 +343,8 @@ def _build_slate_payload(data: dict) -> dict:
             "gameStatus":        p.get("game_status", "Scheduled"),
             "prime":             role["prime"],
             "explosive":         role["explosive"],
+            "advantage":         role["advantage"],
+            "wildcard":          role["wildcard"],
         })
 
     leaderboard_rows.sort(

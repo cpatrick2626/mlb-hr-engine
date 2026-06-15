@@ -251,8 +251,8 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, i
             {game && <span className="fsm-player__game">{game.away}@{game.home}<i className="fsm-player__bar">·</i>{game.time}</span>}
             {row.prime && <span className="fsm-role-badge--prime">PRIME</span>}
             {row.explosive && <span className="fsm-role-badge--explosive">EXPLOSIVE</span>}
-            {isJigContext && row.advantage && <span className="fsm-role-badge--advantage">ADVANTAGE</span>}
-            {isJigContext && row.wildcard && <span className="fsm-role-badge--wildcard">WILDCARD</span>}
+            {row.advantage && <span className="fsm-role-badge--advantage">ADVANTAGE</span>}
+            {row.wildcard && <span className="fsm-role-badge--wildcard">WILDCARD</span>}
           </span>
         </button>
       </td>
