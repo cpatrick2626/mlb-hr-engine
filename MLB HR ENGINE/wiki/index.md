@@ -1,5 +1,5 @@
 # MLB HR ENGINE — Intelligence Wiki Index
-Last updated: 2026-06-08
+Last updated: 2026-06-15
 
 ## DOCTRINE
 | Page | Summary | Agent | Status |
@@ -14,6 +14,10 @@ Last updated: 2026-06-08
 | [Tier Vocabulary](doctrine/tier-vocabulary.md) | APEX/ELITE/EDGE vs QUIET/ACTIVE/ELEVATED vs prototype CRITICAL/HIGH — must not merge; Primary Ranking Doctrine added 2026-06-11 | Claude Code | updated 2026-06-11 |
 | [Build Log and Spec Status](doctrine/build-log-and-spec-status.md) | latest.md missing; empty spec placeholders; Tier Ranking Room foundation recorded 2026-06-11 | Claude Code | updated 2026-06-11 |
 | [Mobile Architecture V2](doctrine/mobile-architecture-v2.md) | Mobile/responsive layout doctrine; canonical reductions, MAIN/JIG preservation, stale patterns to avoid | Claude Code | 2026-06-09 |
+| [Deploy Runbook](doctrine/deploy-runbook.md) | Manual flyctl deploy steps, cache refresh procedure, production surface map | Claude Code | 2026-06-15 |
+| [Ticket Roles](doctrine/ticket-roles.md) | PRIME/EXPLOSIVE/ADVANTAGE/WILDCARD — usage archetypes, gates, display-only invariants, recalibration history | Claude Code | 2026-06-15 |
+| [Design: Pitch Mix Analysis](doctrine/design-pitch-mix-analysis.md) | Modal de-fabrication 2026-06-15; real data sources; removed 3×3 zone grid | Claude Code | 2026-06-15 |
+| [Known Gaps / Parked](doctrine/known-gaps.md) | xFIP mismatch, silent neutral pitcher default, dead app.py, pitch mix blanks, JIG tier epoch, rooms governance | Claude Code | 2026-06-15 |
 
 ## ARCHITECTURE
 | Page | Summary | Agent |
@@ -51,3 +55,4 @@ Last updated: 2026-06-08
 | [2026-06-08 JIG Builder Phase B Deferred](sessions/2026-06-08-jig-builder-phase-b-deferred.md) | Phase B raw-workspace UI deferred by operator decision | Claude Code | 2026-06-08 |
 | [2026-06-10 Option A Tier Threshold Production Validation](sessions/2026-06-10-option-a-tier-threshold-production-validation.md) | Option A FS_TIER_THRESHOLDS tightened + FanDuel URL fix validated | Claude Code | 2026-06-10 |
 | [2026-06-11 Tier Ranking Foundation Completion](sessions/2026-06-11-tier-ranking-foundation-completion.md) | 10 commits recorded: tier vocab, model_tier_rank, APEX #1 display, Primary Ranking Doctrine, APEX Reason Stack Phase 1+1.5 | Claude Code | 2026-06-11 |
+| [2026-06-15 Roles / Pitch Mix / Gauge Session](sessions/2026-06-15-roles-pitchmix-gauge-session.md) | All 4 ticket roles deployed (both boards); pitch mix de-fabricated; threat pie→radial gauge (0.29 ceiling); ADVANTAGE/WILDCARD recalibrated | Claude Code | 2026-06-15 |
