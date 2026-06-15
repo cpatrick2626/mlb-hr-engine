@@ -148,16 +148,37 @@ function FsmTierIcon({ tier }) {
   }
 }
 
-/* conic-gradient quadrant pie */
-function fsmPie(filled, color) {
-  const empty = "#2a2a3a",gap = "#04070a";
-  const stops = [];
-  for (let i = 0; i < 4; i++) {
-    const c = i < filled ? color : empty;
-    const s = i * 90,e = s + 90;
-    stops.push(`${gap} ${s}deg ${s + 3}deg`, `${c} ${s + 3}deg ${e}deg`);
+/* HR THREAT METER — continuous conic fill driven by model_prob.
+   Tier bands mirror FS_TIER_THRESHOLDS from config.py (served via window.FS_TIER_THRESHOLDS). */
+const FSM_PROB_TIER_BOUNDS = (() => {
+  const src = (typeof window !== "undefined" && window.FS_TIER_THRESHOLDS) || {
+    APEX: 0.20, ELITE: 0.16, EDGE: 0.11, SIGNAL: 0.07, WATCH: 0.04, COLD: 0.00
+  };
+  return [
+    { lo: src.APEX,   hi: 1.00,       loFill: 0.95, hiFill: 1.00 },
+    { lo: src.ELITE,  hi: src.APEX,   loFill: 0.75, hiFill: 0.95 },
+    { lo: src.EDGE,   hi: src.ELITE,  loFill: 0.55, hiFill: 0.75 },
+    { lo: src.SIGNAL, hi: src.EDGE,   loFill: 0.35, hiFill: 0.55 },
+    { lo: src.WATCH,  hi: src.SIGNAL, loFill: 0.15, hiFill: 0.35 },
+    { lo: src.COLD,   hi: src.WATCH,  loFill: 0.00, hiFill: 0.15 },
+  ];
+})();
+
+function fsmThreatFill(model_prob) {
+  const p = model_prob || 0;
+  for (const band of FSM_PROB_TIER_BOUNDS) {
+    if (p >= band.lo) {
+      const span = band.hi - band.lo;
+      const t = span > 0 ? (p - band.lo) / span : 1;
+      return band.loFill + t * (band.hiFill - band.loFill);
+    }
   }
-  return `conic-gradient(from -2deg, ${stops.join(", ")})`;
+  return 0;
+}
+
+function fsmPieFill(fraction, color) {
+  const pct = (Math.max(0, Math.min(1, fraction)) * 100).toFixed(2);
+  return `conic-gradient(from -90deg, ${color} 0% ${pct}%, #2a2a3a ${pct}% 100%)`;
 }
 
 function FsmCell({ col, row }) {
@@ -262,7 +283,7 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, i
       </td>
       <td className="fsm-matchup">
         <button type="button" className="fsm-matchup__in" onClick={() => onPitch(row)} title="Open Pitch Mix Analysis">
-          <span className="fsm-pie" style={{ background: fsmPie(m.q, m.color) }} />
+          <span className="fsm-pie" style={{ background: fsmPieFill(fsmThreatFill(row.model_prob), t.color) }} />
           <span className="fsm-matchup__label" style={{ color: m.color }}>
             <span>{row.quality}</span><span className="fsm-matchup__sub">MATCHUP</span>
           </span>
@@ -450,7 +471,7 @@ function FsmBatterCard({ row, onClose, onPitch, builderMode = false }) {
         <button className="fsm-card__close" onClick={onClose} aria-label="Close">✕</button>
       </div>
       <div className="fsm-card__matchup">
-        <span className="fsm-pie fsm-pie--lg" style={{ background: fsmPie(m.q, m.color) }} />
+        <span className="fsm-pie fsm-pie--lg" style={{ background: fsmPieFill(fsmThreatFill(row.model_prob), t.color) }} />
         <div className="fsm-card__mtext">
           <span className="fsm-card__mq" style={{ color: m.color }}>{row.quality} MATCHUP</span>
           <span className="fsm-card__msub">vs <span className="fsm-pitcher-name">{pitcherDisplay}</span>{!pitcherConfirmed && (<span className="fsm-tbd-badge">TBD</span>)} ({oppTeam} · {pitcherHand}HP) · OPP HR/9 {fsmStatVal("opphr", row)}{game ? ` · PARK HR ${game.hrFactor.toFixed(2)}×` : ""}</span>

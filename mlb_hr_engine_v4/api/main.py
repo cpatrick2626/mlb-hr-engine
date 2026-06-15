@@ -314,6 +314,7 @@ def _build_slate_payload(data: dict) -> dict:
             "xwoba":    _rate(p.get("xwoba")),
             "hrpa":     hrpa,
             "hrprob":   round(model_prob * 100, 1),
+            "model_prob": round(model_prob, 4),
             "tier":     tier,
             "gameId":   derived_game_id,
             "odds":     odds,
@@ -413,6 +414,7 @@ def _build_slate_payload(data: dict) -> dict:
         "slate_games":          list(seen_games.values()),
         "generated_at":         _dt.datetime.utcnow().isoformat(),
         "date":                 date.today().strftime("%Y-%m-%d"),
+        "fs_tier_thresholds":   dict(FS_TIER_THRESHOLDS),
     }
 
 
