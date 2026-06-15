@@ -176,9 +176,26 @@ function fsmThreatFill(model_prob) {
   return 0;
 }
 
-function fsmPieFill(fraction, color) {
-  const pct = (Math.max(0, Math.min(1, fraction)) * 100).toFixed(2);
-  return `conic-gradient(from -90deg, ${color} 0% ${pct}%, #2a2a3a ${pct}% 100%)`;
+function FsmGauge({ fraction, color, size }) {
+  const f = Math.max(0, Math.min(1, fraction || 0));
+  const lg = size === "lg";
+  const r = lg ? 20 : 15;
+  const sw = lg ? 5 : 4;
+  const w = lg ? 54 : 40;
+  const h = lg ? 30 : 22;
+  const cx = w / 2, cy = h;
+  const arc = Math.PI * r;
+  const filled = (f * arc).toFixed(2);
+  const pct = Math.round(f * 100);
+  const x1 = cx - r, x2 = cx + r;
+  const d = `M ${x1} ${cy} A ${r} ${r} 0 0 1 ${x2} ${cy}`;
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} fill="none" className="fsm-gauge" style={{ flexShrink: 0, overflow: "visible" }}>
+      <path d={d} stroke="#2a2a3a" strokeWidth={sw} strokeLinecap="round" />
+      <path d={d} stroke={color} strokeWidth={sw} strokeLinecap="round" strokeDasharray={`${filled} ${arc.toFixed(2)}`} />
+      <text x={cx} y={cy - sw - 2} textAnchor="middle" fill={color} fontSize={lg ? 11 : 9} fontWeight="500" fontFamily="inherit">{pct}</text>
+    </svg>
+  );
 }
 
 function FsmCell({ col, row }) {
@@ -283,7 +300,7 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, i
       </td>
       <td className="fsm-matchup">
         <button type="button" className="fsm-matchup__in" onClick={() => onPitch(row)} title="Open Pitch Mix Analysis">
-          <span className="fsm-pie" style={{ background: fsmPieFill(fsmThreatFill(row.model_prob), t.color) }} />
+          <FsmGauge fraction={fsmThreatFill(row.model_prob)} color={t.color} />
           <span className="fsm-matchup__label" style={{ color: m.color }}>
             <span>{row.quality}</span><span className="fsm-matchup__sub">MATCHUP</span>
           </span>
@@ -471,7 +488,7 @@ function FsmBatterCard({ row, onClose, onPitch, builderMode = false }) {
         <button className="fsm-card__close" onClick={onClose} aria-label="Close">✕</button>
       </div>
       <div className="fsm-card__matchup">
-        <span className="fsm-pie fsm-pie--lg" style={{ background: fsmPieFill(fsmThreatFill(row.model_prob), t.color) }} />
+        <FsmGauge fraction={fsmThreatFill(row.model_prob)} color={t.color} size="lg" />
         <div className="fsm-card__mtext">
           <span className="fsm-card__mq" style={{ color: m.color }}>{row.quality} MATCHUP</span>
           <span className="fsm-card__msub">vs <span className="fsm-pitcher-name">{pitcherDisplay}</span>{!pitcherConfirmed && (<span className="fsm-tbd-badge">TBD</span>)} ({oppTeam} · {pitcherHand}HP) · OPP HR/9 {fsmStatVal("opphr", row)}{game ? ` · PARK HR ${game.hrFactor.toFixed(2)}×` : ""}</span>
@@ -911,7 +928,7 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
             )}
           </div>
           <div className="fsm-legend">
-            <span className="fsm-legend__title" title="Matchup quality: the batter's projected edge vs today's starting pitcher & park, shown as a 4-quadrant pie (4 filled = best).">MATCHUP</span>
+            <span className="fsm-legend__title" title="Matchup quality: the batter's projected edge vs today's starting pitcher & park, shown as a radial gauge (100 = best).">MATCHUP</span>
             {FSM_MATCHUP_ORDER.map((k) =>
             <span className="fsm-mkey" key={k} title={`${k} matchup — ${FSM_MATCHUP_DESC[k]}`}><i style={{ background: FSM_MATCHUP[k].color }} />{k}</span>
             )}
