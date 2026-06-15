@@ -356,6 +356,37 @@ const FSM_FOCUS_OPTS = [
 { id: "matchup", label: "MATCHUP", desc: "Batters in an ELITE or STRONG matchup vs today's pitcher." }];
 
 
+const FSM_ROLE_OPTS = [
+  { id: "prime",     label: "PRIME",     color: "#1aff66", borderColor: "rgba(26,255,102,0.5)" },
+  { id: "explosive", label: "EXPLOSIVE", color: "#ff9f1a", borderColor: "rgba(255,159,26,0.5)" },
+  { id: "advantage", label: "ADVANTAGE", color: "#3b9eff", borderColor: "rgba(59,158,255,0.5)" },
+  { id: "wildcard",  label: "WILDCARD",  color: "#c77dff", borderColor: "rgba(199,125,255,0.5)" },
+];
+
+function FsmRoleFilter({ selRoles, onToggle }) {
+  return (
+    <div className="fsm-rg">
+      <span className="fsm-rg__label">ROLE</span>
+      <div className="fsm-rg__opts fsm-rg__opts--role">
+        {FSM_ROLE_OPTS.map((r) => {
+          const on = selRoles.includes(r.id);
+          return (
+            <button
+              key={r.id}
+              className={"fsm-rg__opt fsm-role-opt" + (on ? " is-on" : "")}
+              style={on ? { "--role-c": r.color, "--role-b": r.borderColor } : {}}
+              title={`Filter: ${r.label} role — AND logic`}
+              onClick={() => onToggle(r.id)}>
+              <span className="fsm-role-opt__dot" style={{ "--role-c": r.color }} />
+              {r.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 function FsmRadioGroup({ label, value, onChange, options }) {
   return (
     <div className="fsm-rg">
@@ -817,6 +848,8 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
   const [selGame, setSelGame] = React.useState("all");
   const [group, setGroup] = React.useState("all");
   const [focus, setFocus] = React.useState("all");
+  const [selRoles, setSelRoles] = React.useState([]);
+  const toggleRole = (id) => setSelRoles((prev) => prev.includes(id) ? prev.filter((r) => r !== id) : [...prev, id]);
   const [modal, setModal] = React.useState(null);
   const [pmOn, setPmOn] = React.useState(true);
   const FSM_PREF_V = 3;
@@ -864,7 +897,9 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
     return true;
   };
 
-  const pool = sorted.filter((r) => (selGame === "all" || r.gameId === selGame) && passGroup(r) && passFocus(r));
+  const passRole = (r) => selRoles.length === 0 || selRoles.every((id) => r[id] === true);
+
+  const pool = sorted.filter((r) => (selGame === "all" || r.gameId === selGame) && passGroup(r) && passFocus(r) && passRole(r));
   const gamesToShow = selGame === "all" ? getFSMGames() : getFSMGames().filter((g) => g.id === selGame);
   const title = builderMode ? "JIG BUILDER WORKSPACE" : "FULL SLATE INTELLIGENCE MATRIX";
   const subtitle = builderMode ?
@@ -997,6 +1032,8 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
         <FsmRadioGroup label="PLAYER GROUP" value={group} onChange={setGroup} options={groupOpts} />
         <span className="fsm-filters__div" />
         <FsmRadioGroup label="FOCUS" value={focus} onChange={setFocus} options={FSM_FOCUS_OPTS} />
+        <span className="fsm-filters__div" />
+        <FsmRoleFilter selRoles={selRoles} onToggle={toggleRole} />
       </div>
 
       {/* GAME-NAV CHIPS — one-click jump to each game */}

@@ -3264,6 +3264,11 @@ html, body { height: 100%; overflow: hidden; }
 .fsm-rg__radio { width: 15px; height: 15px; border-radius: 50%; border: 2px solid rgba(180,220,200,0.32); position: relative; flex-shrink: 0; transition: border-color .14s ease; }
 .fsm-rg__opt.is-on .fsm-rg__radio { border-color: var(--red-500); }
 .fsm-rg__opt.is-on .fsm-rg__radio::after { content: ""; position: absolute; inset: 2px; border-radius: 50%; background: var(--red-500); box-shadow: 0 0 6px rgba(255,51,68,0.7); }
+.fsm-rg__opts--role { gap: 3px; }
+.fsm-role-opt { gap: 6px; }
+.fsm-role-opt__dot { width: 7px; height: 7px; border-radius: 50%; background: var(--role-c, #6b7872); opacity: 0.45; flex-shrink: 0; transition: opacity .14s ease; }
+.fsm-role-opt.is-on { color: var(--role-c); box-shadow: inset 0 0 0 1px var(--role-b), 0 1px 5px rgba(0,0,0,0.45); }
+.fsm-role-opt.is-on .fsm-role-opt__dot { opacity: 1; box-shadow: 0 0 5px var(--role-c); }
 
 /* COLUMNS add/remove/reorder menu */
 .fsm-th-stat { cursor: grab; -webkit-user-select: none; user-select: none; }
