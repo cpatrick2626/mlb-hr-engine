@@ -1,9 +1,10 @@
 """
-Role Layer — PRIME and EXPLOSIVE ticket role flags.
+Role Layer — PRIME, EXPLOSIVE, ADVANTAGE, WILDCARD ticket role flags.
 
 Read-only classification derived from existing leaderboard_rows fields.
 No market data. No writes to model_prob, score, tier, or sort keys.
-Non-exclusive: a player may hold both flags simultaneously.
+Non-exclusive: a player may hold multiple flags simultaneously.
+ADVANTAGE + WILDCARD are JIG-only; PRIME + EXPLOSIVE appear on both boards.
 """
 from __future__ import annotations
 from typing import Any
@@ -39,7 +40,7 @@ def _parse_float(val: Any) -> float | None:
 
 def classify_role(row: dict, tier: str = "") -> dict[str, bool]:
     """
-    Derive PRIME and EXPLOSIVE role flags from a single leaderboard row.
+    Derive PRIME, EXPLOSIVE, ADVANTAGE, WILDCARD role flags from a single leaderboard row.
 
     Args:
         row:  leaderboard player dict (pipeline output).
@@ -47,8 +48,9 @@ def classify_role(row: dict, tier: str = "") -> dict[str, bool]:
               because pipeline rows do not carry a "tier" key — it is derived from
               model_prob at display time. Falls back to row.get("tier") if omitted.
 
-    Returns {"prime": bool, "explosive": bool}.
+    Returns {"prime": bool, "explosive": bool, "advantage": bool, "wildcard": bool}.
     Never fabricates missing fields — a null required field = flag not awarded.
+    ADVANTAGE + WILDCARD gated on tier NOT in ROLE_TOP_TIERS.
     """
     barrel  = _parse_pct(row.get("barrel_pct"))
     xslg    = _parse_float(row.get("xslg"))
@@ -83,4 +85,25 @@ def classify_role(row: dict, tier: str = "") -> dict[str, bool]:
         pull_air_pass = pull_air is not None and pull_air >= config.ROLE_EXPLOSIVE_PULL_AIR_PCT
         explosive = blast_pass or pull_air_pass
 
-    return {"prime": prime, "explosive": explosive}
+    # ADVANTAGE + WILDCARD: only for players NOT in top FS tiers.
+    not_top = tier not in config.ROLE_TOP_TIERS
+
+    # ADVANTAGE: xslg OR barrel% clears threshold.
+    advantage = not_top and (
+        (xslg   is not None and xslg   >= config.ROLE_ADVANTAGE_XSLG)
+        or (barrel is not None and barrel >= config.ROLE_ADVANTAGE_BARREL_PCT)
+    )
+
+    # WILDCARD: count non-null traits that clear their threshold; award if 1 or 2.
+    wildcard = False
+    if not_top:
+        wc_traits = [
+            max_ev   is not None and max_ev   >= config.ROLE_WILDCARD_MAX_EV,
+            barrel   is not None and barrel   >= config.ROLE_WILDCARD_BARREL_PCT,
+            xslg     is not None and xslg     >= config.ROLE_WILDCARD_XSLG,
+            pull_air is not None and pull_air >= config.ROLE_WILDCARD_PULL_AIR_PCT,
+        ]
+        trait_count = sum(wc_traits)
+        wildcard = 1 <= trait_count <= 2
+
+    return {"prime": prime, "explosive": explosive, "advantage": advantage, "wildcard": wildcard}

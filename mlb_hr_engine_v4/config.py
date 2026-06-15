@@ -404,6 +404,21 @@ ROLE_EXPLOSIVE_BARREL_PCT:     float = 8.5   # barrel% ≥ this (same parse as P
 ROLE_EXPLOSIVE_BLAST_PCT:      float = 12.0  # blast% ≥ this (when present; null = skip sub-criterion)
 ROLE_EXPLOSIVE_PULL_AIR_PCT:   float = 20.0  # pull_air_pct ≥ this (when present; null = skip sub-criterion)
 
+# ADVANTAGE: value-angle role; NOT APEX/ELITE but has solid underlying Statcast floor.
+# Awarded when FS tier is outside top tiers AND (xslg OR barrel% clears threshold).
+ROLE_ADVANTAGE_XSLG:        float = 0.500 # xslg ≥ this
+ROLE_ADVANTAGE_BARREL_PCT:  float = 9.0   # barrel% ≥ this
+
+# WILDCARD: volatile-upside role; NOT APEX/ELITE but clusters 1–2 power-ceiling traits.
+# Trait count = number of non-null traits exceeding their threshold (1 or 2 = awarded).
+ROLE_WILDCARD_MAX_EV:        float = 117.0 # max_ev ≥ this
+ROLE_WILDCARD_BARREL_PCT:    float = 12.0  # barrel% ≥ this
+ROLE_WILDCARD_XSLG:          float = 0.520 # xslg ≥ this
+ROLE_WILDCARD_PULL_AIR_PCT:  float = 30.0  # pull_air_pct ≥ this
+
+# Shared top-tier gate for ADVANTAGE + WILDCARD exclusion.
+ROLE_TOP_TIERS: set = frozenset({"APEX", "ELITE"})
+
 # ── Team Colors ───────────────────────────────────────────────────────────────
 TEAM_COLORS = {
     "ARI": "#A71930", "ATL": "#CE1141", "BAL": "#DF4601",

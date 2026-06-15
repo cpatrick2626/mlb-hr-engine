@@ -364,6 +364,9 @@ def _build_slate_payload(data: dict) -> dict:
         for r in jig_rows:
             p = players_by_id.get(r.get("id"), {})
             r["jigScore"] = _jig_score(p, arsenal_data=_arsenal_data)
+            jig_role = classify_role(p, r.get("tier", ""))
+            r["advantage"] = jig_role["advantage"]
+            r["wildcard"]  = jig_role["wildcard"]
         jig_rows.sort(key=lambda r: r["jigScore"], reverse=True)
     except Exception as e:
         log.error("JIG row build failed: %s", e, exc_info=True)
