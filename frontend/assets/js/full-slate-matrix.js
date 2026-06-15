@@ -249,8 +249,8 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, i
             <span className="fsm-player__name">{row.name}</span>
             <span className="fsm-player__meta">{row.teamAbbr}<i className="fsm-player__bar">|</i>{row.bats}</span>
             {game && <span className="fsm-player__game">{game.away}@{game.home}<i className="fsm-player__bar">·</i>{game.time}</span>}
-            {!isJigContext && row.foundation && <span className="fsm-role-badge--foundation">FOUNDATION</span>}
-            {!isJigContext && row.ceiling && <span className="fsm-role-badge--ceiling">CEILING</span>}
+            {row.prime && <span className="fsm-role-badge--prime">PRIME</span>}
+            {row.explosive && <span className="fsm-role-badge--explosive">EXPLOSIVE</span>}
           </span>
         </button>
       </td>

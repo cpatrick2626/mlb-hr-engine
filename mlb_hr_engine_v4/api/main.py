@@ -341,8 +341,8 @@ def _build_slate_payload(data: dict) -> dict:
             "pitcher_id":        p.get("pitcher_id", None),
             "gameStartUtc":      p.get("game_time_utc", ""),
             "gameStatus":        p.get("game_status", "Scheduled"),
-            "foundation":        role["foundation"],
-            "ceiling":           role["ceiling"],
+            "prime":             role["prime"],
+            "explosive":         role["explosive"],
         })
 
     leaderboard_rows.sort(
@@ -364,8 +364,6 @@ def _build_slate_payload(data: dict) -> dict:
         for r in jig_rows:
             p = players_by_id.get(r.get("id"), {})
             r["jigScore"] = _jig_score(p, arsenal_data=_arsenal_data)
-            r.pop("foundation", None)
-            r.pop("ceiling", None)
         jig_rows.sort(key=lambda r: r["jigScore"], reverse=True)
     except Exception as e:
         log.error("JIG row build failed: %s", e, exc_info=True)

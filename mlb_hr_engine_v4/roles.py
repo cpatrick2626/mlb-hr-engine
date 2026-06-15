@@ -1,5 +1,5 @@
 """
-Role Layer — Phase 1: FOUNDATION and CEILING flags.
+Role Layer — PRIME and EXPLOSIVE ticket role flags.
 
 Read-only classification derived from existing leaderboard_rows fields.
 No market data. No writes to model_prob, score, tier, or sort keys.
@@ -39,7 +39,7 @@ def _parse_float(val: Any) -> float | None:
 
 def classify_role(row: dict, tier: str = "") -> dict[str, bool]:
     """
-    Derive FOUNDATION and CEILING role flags from a single leaderboard row.
+    Derive PRIME and EXPLOSIVE role flags from a single leaderboard row.
 
     Args:
         row:  leaderboard player dict (pipeline output).
@@ -47,7 +47,7 @@ def classify_role(row: dict, tier: str = "") -> dict[str, bool]:
               because pipeline rows do not carry a "tier" key — it is derived from
               model_prob at display time. Falls back to row.get("tier") if omitted.
 
-    Returns {"foundation": bool, "ceiling": bool}.
+    Returns {"prime": bool, "explosive": bool}.
     Never fabricates missing fields — a null required field = flag not awarded.
     """
     barrel  = _parse_pct(row.get("barrel_pct"))
@@ -60,27 +60,27 @@ def classify_role(row: dict, tier: str = "") -> dict[str, bool]:
     blast   = _parse_float(row.get("blast"))
     pull_air = _parse_float(row.get("pull_air_pct"))
 
-    # FOUNDATION — all four Statcast fields must be present and above threshold,
+    # PRIME — all four Statcast fields must be present and above threshold,
     # and tier must be APEX or ELITE.
-    foundation = (
-        barrel  is not None and barrel  >= config.ROLE_FOUNDATION_BARREL_PCT
-        and xslg    is not None and xslg    >= config.ROLE_FOUNDATION_XSLG
-        and hh      is not None and hh      >= config.ROLE_FOUNDATION_HH_PCT
-        and ev      is not None and ev      >= config.ROLE_FOUNDATION_EV
-        and tier in config.ROLE_FOUNDATION_TIERS
+    prime = (
+        barrel  is not None and barrel  >= config.ROLE_PRIME_BARREL_PCT
+        and xslg    is not None and xslg    >= config.ROLE_PRIME_XSLG
+        and hh      is not None and hh      >= config.ROLE_PRIME_HH_PCT
+        and ev      is not None and ev      >= config.ROLE_PRIME_EV
+        and tier in config.ROLE_PRIME_TIERS
     )
 
-    # CEILING — reliable core gate: max_ev + barrel% both required.
-    # Explosive gate: at least one of (blast% OR pull-air%) must pass its threshold.
+    # EXPLOSIVE — reliable core gate: max_ev + barrel% both required.
+    # Swing trait gate: at least one of (blast% OR pull-air%) must pass its threshold.
     # Null blast = skip blast sub-criterion only; null pull_air = skip pull-air only.
-    # Both null = no explosive trait present = CEILING not awarded.
-    ceiling = False
+    # Both null = no explosive trait present = EXPLOSIVE not awarded.
+    explosive = False
     if (
-        max_ev  is not None and max_ev  >= config.ROLE_CEILING_MAX_EV
-        and barrel is not None and barrel >= config.ROLE_CEILING_BARREL_PCT
+        max_ev  is not None and max_ev  >= config.ROLE_EXPLOSIVE_MAX_EV
+        and barrel is not None and barrel >= config.ROLE_EXPLOSIVE_BARREL_PCT
     ):
-        blast_pass    = blast    is not None and blast    >= config.ROLE_CEILING_BLAST_PCT
-        pull_air_pass = pull_air is not None and pull_air >= config.ROLE_CEILING_PULL_AIR_PCT
-        ceiling = blast_pass or pull_air_pass
+        blast_pass    = blast    is not None and blast    >= config.ROLE_EXPLOSIVE_BLAST_PCT
+        pull_air_pass = pull_air is not None and pull_air >= config.ROLE_EXPLOSIVE_PULL_AIR_PCT
+        explosive = blast_pass or pull_air_pass
 
-    return {"foundation": foundation, "ceiling": ceiling}
+    return {"prime": prime, "explosive": explosive}
