@@ -155,7 +155,7 @@ const FSM_PROB_TIER_BOUNDS = (() => {
     APEX: 0.20, ELITE: 0.16, EDGE: 0.11, SIGNAL: 0.07, WATCH: 0.04, COLD: 0.00
   };
   return [
-    { lo: src.APEX,   hi: 1.00,       loFill: 0.95, hiFill: 1.00 },
+    { lo: src.APEX,   hi: 0.29,       loFill: 0.85, hiFill: 1.00 }, // 0.29 = MAX_GAME_HR_PROB (config.py); not exposed to frontend
     { lo: src.ELITE,  hi: src.APEX,   loFill: 0.75, hiFill: 0.95 },
     { lo: src.EDGE,   hi: src.ELITE,  loFill: 0.55, hiFill: 0.75 },
     { lo: src.SIGNAL, hi: src.EDGE,   loFill: 0.35, hiFill: 0.55 },
