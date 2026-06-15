@@ -3410,6 +3410,13 @@ button.fsm-tier { appearance: none; text-decoration: none; }
   color: #c77dff; border: 1px solid rgba(199,125,255,0.4); border-radius: 3px;
   padding: 1px 5px; text-transform: uppercase; align-self: flex-start; margin-top: 2px;
 }
+.fsm-tiercell__roles {
+  display: flex; flex-direction: column; align-items: center; gap: 2px; margin-top: 4px;
+}
+.fsm-tiercell__roles .fsm-role-badge--prime,
+.fsm-tiercell__roles .fsm-role-badge--explosive,
+.fsm-tiercell__roles .fsm-role-badge--advantage,
+.fsm-tiercell__roles .fsm-role-badge--wildcard { align-self: center; margin-top: 0; }
 
 /* matchup (clickable → pitch mix analysis) */
 .fsm-matchup { vertical-align: middle; padding: 5px 10px 5px 6px; }
