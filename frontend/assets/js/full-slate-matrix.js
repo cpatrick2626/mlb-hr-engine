@@ -179,21 +179,24 @@ function fsmThreatFill(model_prob) {
 function FsmGauge({ fraction, color, size }) {
   const f = Math.max(0, Math.min(1, fraction || 0));
   const lg = size === "lg";
-  const r = lg ? 20 : 15;
-  const sw = lg ? 5 : 4;
-  const w = lg ? 54 : 40;
-  const h = lg ? 30 : 22;
-  const cx = w / 2, cy = h;
+  const r  = lg ? 17 : 13;
+  const sw = lg ? 5  : 4;
+  const w  = lg ? 68 : 56;
+  const h  = lg ? 48 : 38;
+  const cx = w / 2;
+  const cy = lg ? 20 : 16;
   const arc = Math.PI * r;
   const filled = (f * arc).toFixed(2);
   const pct = Math.round(f * 100);
   const x1 = cx - r, x2 = cx + r;
   const d = `M ${x1} ${cy} A ${r} ${r} 0 0 1 ${x2} ${cy}`;
+  const ty = lg ? 39 : 31;
+  const fs = lg ? 19 : 15;
   return (
     <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} fill="none" className="fsm-gauge" style={{ flexShrink: 0, overflow: "visible" }}>
       <path d={d} stroke="#2a2a3a" strokeWidth={sw} strokeLinecap="round" />
       <path d={d} stroke={color} strokeWidth={sw} strokeLinecap="round" strokeDasharray={`${filled} ${arc.toFixed(2)}`} />
-      <text x={cx} y={cy - sw - 2} textAnchor="middle" fill={color} fontSize={lg ? 11 : 9} fontWeight="500" fontFamily="inherit">{pct}</text>
+      <text x={cx} y={ty} textAnchor="middle" fill={color} fontSize={fs} fontWeight="500" fontFamily="inherit">{pct}</text>
     </svg>
   );
 }
