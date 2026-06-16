@@ -21,7 +21,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from pipeline import load_game_data, serializable
-from api.cache import store_picks
+from api.cache import store_picks, insert_picks
 
 MODEL_VERSION = "v4"
 
@@ -54,6 +54,12 @@ def run(target_date: str = None) -> dict:
         print(f"[cron] slate_cache build failed (payload stored without it): {e}")
 
     store_picks(target_date, payload)
+
+    try:
+        n = insert_picks(target_date, data.get("ranked", []), source_tab="cron", engine_version=MODEL_VERSION)
+        print(f"[cron] picks table — {n} rows upserted for {target_date}")
+    except Exception as e:
+        print(f"[cron] picks table write failed (non-fatal): {e}")
 
     # Log full slate to full_slate_log.csv on the Fly volume (Part 3)
     try:
