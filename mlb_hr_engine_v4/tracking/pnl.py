@@ -473,10 +473,13 @@ def _load_pending(date_str: str) -> list[dict]:
 def _load_results() -> list[dict]:
     if _sheets.available():
         return _sheets.read_rows("results")
-    if not RESULTS_PATH.exists():
+    pt_path = Path(__file__).parent / "pick_tracker.csv"
+    if not pt_path.exists():
         return []
-    with open(RESULTS_PATH, newline="", encoding="utf-8") as f:
-        return list(csv.DictReader(f))
+    with open(pt_path, newline="", encoding="utf-8") as f:
+        rows = list(csv.DictReader(f))
+    # Only return settled rows — pick_tracker contains all pick states
+    return [r for r in rows if r.get("hr_result", "") not in ("", None)]
 
 
 def _upsert_results(new_rows: list[dict]) -> None:
