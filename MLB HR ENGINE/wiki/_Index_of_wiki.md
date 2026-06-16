@@ -4,6 +4,7 @@
  [[wiki/concepts/_Index_of_concepts|_Index_of_concepts]]
  [[wiki/doctrine/_Index_of_doctrine|_Index_of_doctrine]]
  [[wiki/formulas/_Index_of_formulas|_Index_of_formulas]]
+ [[wiki/ideas/_Index_of_ideas|_Index_of_ideas]]
  [[wiki/index|index]]
  [[wiki/log|log]]
  [[wiki/sessions/_Index_of_sessions|_Index_of_sessions]]

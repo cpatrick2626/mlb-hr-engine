@@ -1,5 +1,5 @@
 # MLB HR ENGINE — Intelligence Wiki Index
-Last updated: 2026-06-15
+Last updated: 2026-06-16
 
 ## DOCTRINE
 | Page | Summary | Agent | Status |
@@ -40,6 +40,11 @@ Last updated: 2026-06-15
 | [12-Step Sequence](stabilization/12-step-sequence.md) | Master stabilization roadmap | Claude |
 | [Step 1 Record](stabilization/step-01-record.md) | route-state fix — PASSED 2026-05-22 | Claude Code |
 
+## IDEAS
+| Page | Summary | Agent | Status |
+|------|---------|-------|--------|
+| [Feature Backlog](ideas/feature-backlog.md) | Validation-first priority, done/in-progress, build-later, parked, key data facts | Claude Code | 2026-06-16 |
+
 ## CONCEPTS
 (pages added here as concepts are built out)
 
@@ -56,3 +61,4 @@ Last updated: 2026-06-15
 | [2026-06-10 Option A Tier Threshold Production Validation](sessions/2026-06-10-option-a-tier-threshold-production-validation.md) | Option A FS_TIER_THRESHOLDS tightened + FanDuel URL fix validated | Claude Code | 2026-06-10 |
 | [2026-06-11 Tier Ranking Foundation Completion](sessions/2026-06-11-tier-ranking-foundation-completion.md) | 10 commits recorded: tier vocab, model_tier_rank, APEX #1 display, Primary Ranking Doctrine, APEX Reason Stack Phase 1+1.5 | Claude Code | 2026-06-11 |
 | [2026-06-15 Roles / Pitch Mix / Gauge Session](sessions/2026-06-15-roles-pitchmix-gauge-session.md) | All 4 ticket roles deployed (both boards); pitch mix de-fabricated; threat pie→radial gauge (0.29 ceiling); ADVANTAGE/WILDCARD recalibrated | Claude Code | 2026-06-15 |
+| [2026-06-15 Validation Audit + Cloud Capture Loop](sessions/2026-06-15-validation-and-capture-loop.md) | First calibration audit (737 picks, marginal BSS, YELLOW FLAG on qualified over-prediction); settlement root-cause fixed; all capture jobs migrated to cloud (GitHub Actions + Fly volume) | Claude Code | 2026-06-15 |
