@@ -3836,7 +3836,8 @@ def _cached_steam_moves() -> dict:
 def _cached_pnl_results() -> list:
     """P&L results cached 5 min — prevents CSV read on every sidebar slider interaction."""
     try:
-        return pnl_tracker._load_results()
+        rows = pnl_tracker._load_results()
+        return [r for r in rows if r.get("source_section", "") == "Qualified Picks"]
     except Exception:
         return []
 
@@ -10225,6 +10226,7 @@ def tab_performance():
         _pending_count = sum(
             1 for r in pnl_tracker._load_results()
             if r.get("profit_loss", "") in ("", None)
+            and r.get("source_section", "") == "Qualified Picks"
         )
         if _pending_count > 0:
             st.info(
@@ -10276,6 +10278,9 @@ def tab_performance():
     except Exception as e:
         st.error(f"Error loading performance data: {e}")
         return
+
+    # Exclude universe log rows — only Qualified Picks are real bets
+    _all_results_raw = [r for r in _all_results_raw if r.get("source_section", "") == "Qualified Picks"]
 
     if _cutoff_date:
         _all_results_raw = [r for r in _all_results_raw if r.get("date", "") >= _cutoff_date]
