@@ -1,0 +1,33 @@
+name: CLV Capture
+
+# Two runs per day to cover both day-game and night-game closing lines.
+#
+# Schedule rationale:
+#   Day games typically start ~1:05 PM ET (17:05 UTC).
+#   Night games typically start ~7:05 PM ET (23:05 UTC).
+#   CLV capture targets ~30 min before first pitch of each window so closing
+#   lines are settled but the market has had full time to move.
+#
+#   Run 1 — 12:30 PM ET = 16:30 UTC: captures closing lines for day games
+#   Run 2 — 06:30 PM ET = 22:30 UTC: captures closing lines for night games
+#
+#   fetch_and_compute_clv() is idempotent for already-computed rows so the
+#   second run safely overwrites/extends without duplicating data.
+
+on:
+  schedule:
+    - cron: '30 16 * * *'   # 12:30 PM ET — day-game closing lines
+    - cron: '30 22 * * *'   # 06:30 PM ET — night-game closing lines
+  workflow_dispatch: {}
+
+jobs:
+  clv-capture:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Trigger CLV capture endpoint
+        run: |
+          curl -sf -X POST \
+            -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}" \
+            https://mlb-hr-api.fly.dev/api/ops/clv-capture

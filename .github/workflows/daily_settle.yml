@@ -1,0 +1,20 @@
+name: Daily Settlement
+
+on:
+  schedule:
+    # 6:00 AM ET = 10:00 UTC (after overnight scores are final)
+    # Runs every day; settle_all() skips future/today dates automatically.
+    - cron: '0 10 * * *'
+  workflow_dispatch: {}
+
+jobs:
+  settle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Trigger settlement endpoint
+        run: |
+          curl -sf -X POST \
+            -H "X-Cron-Secret: ${{ secrets.CRON_SECRET }}" \
+            https://mlb-hr-api.fly.dev/api/ops/settle

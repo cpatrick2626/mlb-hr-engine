@@ -9,6 +9,8 @@ GET  /api/picks/{date}            — picks for YYYY-MM-DD (beta required)
 GET  /api/strategies?date=…       — parlays + strategy data (beta required)
 GET  /api/runs                    — recent pipeline run history (beta required)
 POST /api/pipeline/run            — trigger pipeline (X-Cron-Secret header)
+POST /api/ops/settle              — settle pick_tracker.csv outcomes (X-Cron-Secret header)
+POST /api/ops/clv-capture         — fetch closing odds + compute CLV (X-Cron-Secret header)
 POST /api/invite/redeem           — redeem invite code (auth required)
 
 The pipeline is normally triggered by GitHub Actions cron (see api/cron.py).
@@ -107,6 +109,67 @@ async def trigger_pipeline(request: Request, background_tasks: BackgroundTasks):
     target = date.today().strftime("%Y-%m-%d")
     background_tasks.add_task(_run_pipeline, target)
     return {"status": "queued", "date": target}
+
+
+# ── Ops: settlement ───────────────────────────────────────────────────────────
+
+@app.post("/api/ops/settle")
+async def ops_settle(request: Request, background_tasks: BackgroundTasks):
+    """
+    Settle pick_tracker.csv outcomes for all past dates.
+    Requires X-Cron-Secret header. Returns immediately; work runs in background.
+    Called by GitHub Actions daily_settle.yml (overnight, after final scores available).
+    """
+    secret = request.headers.get("X-Cron-Secret", "")
+    if not CRON_SECRET or secret != CRON_SECRET:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    background_tasks.add_task(_run_settle)
+    return {"status": "queued"}
+
+
+async def _run_settle():
+    import importlib.util, os as _os
+    try:
+        _script = _os.path.join(
+            _os.path.dirname(_os.path.dirname(__file__)),
+            "scripts", "ops", "settle_pick_tracker.py",
+        )
+        spec = importlib.util.spec_from_file_location("settle_pick_tracker", _script)
+        mod  = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        mod.settle_all(verbose=False)
+        log.info("[ops/settle] settlement complete")
+    except Exception as exc:
+        log.error("[ops/settle] failed: %s", exc, exc_info=True)
+
+
+# ── Ops: CLV capture ──────────────────────────────────────────────────────────
+
+@app.post("/api/ops/clv-capture")
+async def ops_clv_capture(request: Request, background_tasks: BackgroundTasks):
+    """
+    Fetch current HR odds and compute CLV for today's picks.
+    Requires X-Cron-Secret header. Returns immediately; work runs in background.
+    Called twice daily by GitHub Actions clv_capture.yml:
+      - 12:30 ET (16:30 UTC) — captures closing lines before day games (~1pm ET FP)
+      - 6:30 PM ET (22:30 UTC) — captures closing lines before night games (~7pm ET FP)
+    """
+    secret = request.headers.get("X-Cron-Secret", "")
+    if not CRON_SECRET or secret != CRON_SECRET:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    background_tasks.add_task(_run_clv_capture)
+    return {"status": "queued"}
+
+
+async def _run_clv_capture():
+    import sys, os as _os
+    sys.path.insert(0, _os.path.dirname(_os.path.dirname(__file__)))
+    try:
+        from tracking.clv import fetch_and_compute_clv
+        rows = fetch_and_compute_clv()
+        log.info("[ops/clv-capture] captured %d CLV rows", len(rows))
+    except Exception as exc:
+        log.error("[ops/clv-capture] failed: %s", exc, exc_info=True)
 
 
 # ── Beta invite ────────────────────────────────────────────────────────────────

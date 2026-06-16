@@ -23,6 +23,8 @@ load_dotenv()
 from pipeline import load_game_data, serializable
 from api.cache import store_picks
 
+MODEL_VERSION = "v4"
+
 
 def run(target_date: str = None) -> dict:
     target_date = target_date or date.today().strftime("%Y-%m-%d")
@@ -52,6 +54,19 @@ def run(target_date: str = None) -> dict:
         print(f"[cron] slate_cache build failed (payload stored without it): {e}")
 
     store_picks(target_date, payload)
+
+    # Log full slate to full_slate_log.csv on the Fly volume (Part 3)
+    try:
+        from tracking import pnl as pnl_tracker
+        all_players = data.get("all_players", [])
+        ranked = data.get("ranked", [])
+        q_names = {p.get("player_name", "") for p in ranked}
+        full_logged = pnl_tracker.log_all_players(
+            all_players, model_version=MODEL_VERSION, qualified_names=q_names
+        )
+        print(f"[cron] full_slate_log — {full_logged} rows written")
+    except Exception as e:
+        print(f"[cron] full_slate_log failed (non-fatal): {e}")
 
     stats = data.get("stats", {})
     print(
