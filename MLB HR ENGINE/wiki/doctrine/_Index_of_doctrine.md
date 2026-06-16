@@ -4,6 +4,7 @@
  [[wiki/doctrine/build-log-and-spec-status|build-log-and-spec-status]]
  [[wiki/doctrine/compound-engineering-skill|compound-engineering-skill]]
  [[wiki/doctrine/deploy-runbook|deploy-runbook]]
+ [[wiki/doctrine/design-expert-agent-layer|design-expert-agent-layer]]
  [[wiki/doctrine/design-pitch-mix-analysis|design-pitch-mix-analysis]]
  [[wiki/doctrine/improve-system-skill|improve-system-skill]]
  [[wiki/doctrine/ingest-source-skill|ingest-source-skill]]
