@@ -252,6 +252,41 @@ function fsmOpenFD(e, row) {
   fsmOpenFanDuelSearch(e, row.name);
 }
 
+/* Tier badge tooltip — tier name + doctrine description + this row's real model_prob. */
+function fsmTierTip(row, isJig, jigLabel, jigRank) {
+  const tier = isJig && jigLabel ? jigLabel : row.tier;
+  const desc = FSM_TIER_DESC[tier] || tier;
+  const probPct = row.model_prob != null ? (row.model_prob * 100).toFixed(1) + "%" : "--";
+  const context = isJig && jigLabel
+    ? `Model Tier: ${tier} (MAIN probability) · JIG rank ${jigLabel} #${jigRank}`
+    : tier;
+  return `${context} — ${desc}. Model prob: ${probPct}.`;
+}
+
+/* Role badge tooltip — role meaning + this row's real qualifying field values. */
+function fsmRoleTip(role, row) {
+  const fmtPct = (v) => v != null ? Number(v).toFixed(1) + "%" : "--";
+  const fmtX   = (v) => v != null ? Number(v).toFixed(3).replace(/^0/, "") : "--";
+  const fmtMph = (v) => v != null ? Number(v).toFixed(1) : "--";
+  switch (role) {
+    case "prime":
+      return `PRIME — Anchor: survives every quality test. barrel ${fmtPct(row.barrel)} · xSLG ${fmtX(row.xslg)} · HH ${fmtPct(row.hh)} · EV ${fmtMph(row.ev)}`;
+    case "explosive":
+      return `EXPLOSIVE — Slate-breaking upside. maxEV ${fmtMph(row.maxev)} · barrel ${fmtPct(row.barrel)}`;
+    case "advantage":
+      return `ADVANTAGE — Underpriced quality below top tier. xSLG ${fmtX(row.xslg)} · barrel ${fmtPct(row.barrel)}`;
+    case "wildcard": {
+      const traits = [];
+      if (row.maxev  != null && row.maxev  >= 116)   traits.push(`maxEV ${fmtMph(row.maxev)}`);
+      if (row.barrel != null && row.barrel >= 12)    traits.push(`barrel ${fmtPct(row.barrel)}`);
+      if (row.xslg   != null && row.xslg   >= 0.520) traits.push(`xSLG ${fmtX(row.xslg)}`);
+      if (row.pullair != null && row.pullair >= 30)  traits.push(`pullair ${fmtPct(row.pullair)}`);
+      return `WILDCARD — Chaos upside. Elite trait(s): ${traits.length ? traits.join(" · ") : "--"}. Higher variance.`;
+    }
+  }
+  return role.toUpperCase();
+}
+
 function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, isJigContext = false, jigLabel = null, jigRank = null }) {
   const displayTier = isJigContext && jigLabel ? jigLabel : row.tier;
   const t = FSM_TIERS[displayTier] || FSM_TIERS.COLD;
@@ -264,7 +299,7 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, i
           <span
             className="fsm-tier"
             style={{ "--tc": t.color, "--tg": t.glow }}
-            title={isJigContext && jigLabel ? `${jigLabel} #${jigRank} — JIG tier rank` : `${row.tier} — MAIN model probability tier (inherited)`}>
+            title={fsmTierTip(row, isJigContext, jigLabel, jigRank)}>
             <span className="fsm-tier__icon"><FsmTierIcon tier={displayTier} /></span>
             <span className="fsm-tier__label">{isJigContext && jigLabel ? `${jigLabel} #${jigRank}` : row.tier}</span>
           </span>
@@ -274,7 +309,7 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, i
             className="fsm-tier fsm-tier--btn"
             style={{ "--tc": t.color, "--tg": t.glow }}
             onClick={(e) => fsmOpenFD(e, row)}
-            title={isJigContext && jigLabel ? `Add ${row.name} (${jigLabel} #${jigRank}) to FanDuel` : `Add ${row.name} (${row.tier}) to FanDuel`}
+            title={fsmTierTip(row, isJigContext, jigLabel, jigRank) + " · Click: FanDuel search"}
             aria-label={`Add ${row.name} to FanDuel`}>
 
             <span className="fsm-tier__icon"><FsmTierIcon tier={displayTier} /></span>
@@ -284,10 +319,10 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, i
         )}
         {(row.prime || row.explosive || row.advantage || row.wildcard) && (
           <span className="fsm-tiercell__roles">
-            {row.prime && <span className="fsm-role-badge--prime">PRIME</span>}
-            {row.explosive && <span className="fsm-role-badge--explosive">EXPLOSIVE</span>}
-            {row.advantage && <span className="fsm-role-badge--advantage">ADVANTAGE</span>}
-            {row.wildcard && <span className="fsm-role-badge--wildcard">WILDCARD</span>}
+            {row.prime && <span className="fsm-role-badge--prime" title={fsmRoleTip("prime", row)}>PRIME</span>}
+            {row.explosive && <span className="fsm-role-badge--explosive" title={fsmRoleTip("explosive", row)}>EXPLOSIVE</span>}
+            {row.advantage && <span className="fsm-role-badge--advantage" title={fsmRoleTip("advantage", row)}>ADVANTAGE</span>}
+            {row.wildcard && <span className="fsm-role-badge--wildcard" title={fsmRoleTip("wildcard", row)}>WILDCARD</span>}
           </span>
         )}
       </td>
