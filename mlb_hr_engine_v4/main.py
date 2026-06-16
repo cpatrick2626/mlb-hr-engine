@@ -81,6 +81,10 @@ def run(dump_json_path: str = None):
         except Exception as e:
             if not quiet:
                 console.print(f"[dim]CLV update skipped: {e}[/dim]")
+    q_names = {p.get("player_name") for p in qualified}
+    full_logged = pnl_tracker.log_all_players(all_players, model_version=MODEL_VERSION, qualified_names=q_names)
+    if full_logged and not quiet:
+        console.print(f"[dim]Full slate logged: {full_logged} players -> tracking/full_slate_log.csv[/dim]\n")
     try:
         settled = pnl_tracker.settle_all_unsettled()
         if settled:

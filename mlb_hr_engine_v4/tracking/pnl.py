@@ -27,8 +27,9 @@ from tracking import sheets as _sheets
 _SESSION = requests.Session()
 _SESSION.headers.update({"User-Agent": "Codex-HR-Engine/pnl"})
 
-LOG_PATH     = Path(__file__).parent / "picks_log.csv"
-RESULTS_PATH = Path(__file__).parent / "results.csv"
+LOG_PATH       = Path(__file__).parent / "picks_log.csv"
+RESULTS_PATH   = Path(__file__).parent / "results.csv"
+FULL_LOG_PATH  = Path(__file__).parent / "full_slate_log.csv"
 
 LOG_FIELDS = [
     "date", "model_version", "player_id", "player_name", "team", "opponent",
@@ -40,7 +41,8 @@ LOG_FIELDS = [
     "streak_factor", "barrel_pct", "xslg", "platoon_factor", "statcast_source",
 ]
 
-RESULTS_FIELDS = LOG_FIELDS + ["hr_result", "profit_loss", "notes"]
+RESULTS_FIELDS   = LOG_FIELDS + ["hr_result", "profit_loss", "notes"]
+FULL_LOG_FIELDS  = LOG_FIELDS + ["confidence_tier", "qualified", "filter_reasons"]
 
 
 # â”€â”€ Public API â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -95,6 +97,37 @@ def log_slip_picks(picks: list[dict], model_version: str = "v4") -> int:
         if new_rows:
             _append_csv(LOG_PATH, LOG_FIELDS, new_rows)
     return len(new_rows)
+
+
+def log_all_players(
+    all_players: list[dict],
+    model_version: str = "v4",
+    qualified_names: Optional[set] = None,
+) -> int:
+    """
+    Write one row per player in the full slate to full_slate_log.csv.
+    Skips if today already logged. Never touches picks_log.csv or results.csv.
+    Returns count of rows written (0 if already logged today).
+    """
+    today = date.today().isoformat()
+    _migrate_schema(FULL_LOG_PATH, FULL_LOG_FIELDS)
+
+    if today in _read_existing_dates(FULL_LOG_PATH):
+        return 0
+
+    q_names = qualified_names or set()
+    rows = []
+    for p in all_players:
+        base = _pick_row(p, today, model_version)
+        base["confidence_tier"] = p.get("confidence_tier", "")
+        base["qualified"]       = "1" if p.get("player_name", "") in q_names else "0"
+        reasons = p.get("filter_reasons", [])
+        base["filter_reasons"]  = "|".join(reasons) if isinstance(reasons, list) else str(reasons or "")
+        rows.append(base)
+
+    if rows:
+        _append_csv(FULL_LOG_PATH, FULL_LOG_FIELDS, rows)
+    return len(rows)
 
 
 def update_yesterday() -> dict:

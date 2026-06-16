@@ -6,4 +6,4 @@
 
 cd /D "C:\Users\ChrisPatrick\OneDrive - Resilience\Desktop\MLB HR Engine\mlb-hr-engine-master"
 
-py -3.12 -X utf8 ops_daily.py >> logs\ops_daily_log.txt 2>&1
+py -3.12 -X utf8 mlb_hr_engine_v4\scripts\ops\ops_daily.py >> logs\ops_daily_log.txt 2>&1

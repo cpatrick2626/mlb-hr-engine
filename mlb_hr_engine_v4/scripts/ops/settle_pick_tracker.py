@@ -26,8 +26,9 @@ from pathlib import Path
 
 import requests
 
-ROOT     = Path(__file__).parent
-CSV_PATH = ROOT / "mlb_hr_engine_v4" / "tracking" / "pick_tracker.csv"
+ROOT     = Path(__file__).resolve().parent.parent.parent   # → mlb_hr_engine_v4/
+CSV_PATH = ROOT / "tracking" / "pick_tracker.csv"
+print(f"[settle] CSV_PATH = {CSV_PATH}")
 
 _SESSION = requests.Session()
 _SESSION.headers.update({"User-Agent": "Codex-HR-Engine/settle"})
