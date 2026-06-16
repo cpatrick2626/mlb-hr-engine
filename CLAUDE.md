@@ -343,3 +343,13 @@ No modification without operator authorization:
 **After:** Update wiki pages → Append `wiki\log.md` → Update `wiki\index.md` → file raw outputs
 
 **Git:** DO NOT COMMIT. DO NOT PUSH unless operator authorizes.
+
+## graphify
+
+This project has a knowledge graph at mlb_hr_engine_v4/graphify-out/ with god nodes, community structure, and cross-file relationships.
+
+Rules:
+- For codebase questions, first run `graphify query "<question>"` when mlb_hr_engine_v4/graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- If mlb_hr_engine_v4/graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
+- Read mlb_hr_engine_v4/graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
+- After modifying code, run `graphify update mlb_hr_engine_v4` to keep the graph current (AST-only, no API cost). The `.graphifyignore` in `mlb_hr_engine_v4/` excludes `frontend/`, `Docs/`, `_archive/`, and `node_modules/`.
