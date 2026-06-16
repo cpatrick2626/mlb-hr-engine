@@ -348,6 +348,8 @@ def _settle_date(date_str: str) -> dict:
 def pnl_summary() -> dict:
     """Return running P&L stats from settled results."""
     rows = _load_results()
+    # Universe log rows (source_section == "All Players") are not real bets
+    rows = [r for r in rows if r.get("source_section", "") == "Qualified Picks"]
     if not rows:
         return {}
 
