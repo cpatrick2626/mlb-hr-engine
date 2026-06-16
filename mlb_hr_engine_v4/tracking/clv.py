@@ -159,6 +159,11 @@ def fetch_and_compute_clv(
     # Fetch current odds from The Odds API
     live_odds = _fetch_current_hr_odds()
     if not live_odds:
+        import logging as _logging
+        _logging.getLogger(__name__).warning(
+            "[clv] no live odds available for %s — CLV computation skipped, returning %d existing rows unchanged",
+            date_str, len(picks),
+        )
         return picks   # return existing (possibly incomplete) rows unchanged
 
     # Save as snapshots
@@ -547,6 +552,10 @@ def _atomic_write(rows: list[dict]) -> None:
 def _fetch_current_hr_odds() -> dict[str, int]:
     """Best available HR Over odds keyed by normalized player name."""
     if not config.ODDS_API_KEY:
+        import logging as _logging
+        _logging.getLogger(__name__).warning(
+            "[clv] ODDS_API_KEY not set — no odds fetched, no CLV computed"
+        )
         return {}
     try:
         now_utc  = datetime.now(timezone.utc)

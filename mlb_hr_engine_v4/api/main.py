@@ -167,7 +167,15 @@ async def _run_clv_capture():
     try:
         from tracking.clv import fetch_and_compute_clv
         rows = fetch_and_compute_clv()
-        log.info("[ops/clv-capture] captured %d CLV rows", len(rows))
+        computed = [r for r in rows if r.get("clv_pp") is not None]
+        if computed:
+            log.info("[ops/clv-capture] CLV computed for %d rows", len(computed))
+        else:
+            log.warning(
+                "[ops/clv-capture] 0 CLV rows computed (no live odds or key missing); "
+                "%d existing rows returned unchanged",
+                len(rows),
+            )
     except Exception as exc:
         log.error("[ops/clv-capture] failed: %s", exc, exc_info=True)
 
