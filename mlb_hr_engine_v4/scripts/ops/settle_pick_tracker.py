@@ -172,8 +172,7 @@ def settle_date(date_str: str, rows: list[dict], fields: list[str],
 
 def settle_all(target_date: str | None = None, verbose: bool = True) -> None:
     if not CSV_PATH.exists():
-        print(f"ERROR: {CSV_PATH} not found")
-        sys.exit(1)
+        raise RuntimeError(f"settlement aborted: {CSV_PATH} not found")
 
     fields, rows = _load()
 

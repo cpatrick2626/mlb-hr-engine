@@ -128,18 +128,15 @@ async def ops_settle(request: Request, background_tasks: BackgroundTasks):
 
 
 async def _run_settle():
-    import importlib.util, os as _os
+    import sys, os as _os
+    sys.path.insert(0, _os.path.dirname(_os.path.dirname(__file__)))
     try:
-        _script = _os.path.join(
-            _os.path.dirname(_os.path.dirname(__file__)),
-            "scripts", "ops", "settle_pick_tracker.py",
-        )
-        spec = importlib.util.spec_from_file_location("settle_pick_tracker", _script)
-        mod  = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
-        mod.settle_all(verbose=False)
-        log.info("[ops/settle] settlement complete")
-    except Exception as exc:
+        from tracking import pnl
+        summary = pnl.settle_all_unsettled()
+        total = sum(v for k, v in summary.items() if not k.startswith("_"))
+        expired = summary.get("_expired", 0)
+        log.info("[ops/settle] settled %d picks into results.csv; expired=%d; detail=%s", total, expired, summary)
+    except BaseException as exc:
         log.error("[ops/settle] failed: %s", exc, exc_info=True)
 
 
