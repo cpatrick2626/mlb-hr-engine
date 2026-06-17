@@ -1,0 +1,1322 @@
+date,player_name,team,snapshot_type,snapshot_ts,sportsbook,american_odds,implied_pct,no_vig_pct,game_id
+2026-05-17,Drake Baldwin,ATL,opening,2026-05-17T14:20:49Z,,500,16.667,15.375,
+2026-05-17,Michael Harris II,ATL,opening,2026-05-17T14:20:49Z,,600,14.286,13.179,
+2026-05-17,Matt Olson,ATL,opening,2026-05-17T14:20:49Z,,360,21.739,20.222,
+2026-05-17,Liam Hicks,MIA,opening,2026-05-17T14:20:49Z,,600,14.286,13.179,
+2026-05-17,Jonathan Aranda,TB,opening,2026-05-17T14:20:49Z,,750,11.765,10.756,
+2026-05-17,Mike Trout,LAA,opening,2026-05-17T14:20:50Z,,600,14.286,13.179,
+2026-05-17,Angel Martínez,CLE,opening,2026-05-17T14:20:50Z,,600,14.286,13.179,
+2026-05-18,Ozzie Albies,Miami Marlins,closing,2026-05-18T05:02:41Z,betonlineag,600,14.286,13.457,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Austin Riley,Miami Marlins,closing,2026-05-18T05:02:41Z,betonlineag,500,16.667,15.700,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Matt Olson,Miami Marlins,closing,2026-05-18T05:02:41Z,betonlineag,350,22.222,21.064,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Connor Norby,Miami Marlins,closing,2026-05-18T05:02:41Z,betonlineag,700,12.500,11.775,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Xavier Edwards,Miami Marlins,closing,2026-05-18T05:02:41Z,betonlineag,900,10.000,9.357,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Otto Lopez,Miami Marlins,closing,2026-05-18T05:02:41Z,betonlineag,700,12.500,11.775,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Kyle Stowers,Miami Marlins,closing,2026-05-18T05:02:41Z,betonlineag,400,20.000,18.957,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Michael Harris II,Miami Marlins,closing,2026-05-18T05:02:41Z,betonlineag,400,20.000,18.957,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Owen Caissie,Miami Marlins,closing,2026-05-18T05:02:41Z,betonlineag,600,14.286,13.457,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Mauricio Dubon,Miami Marlins,closing,2026-05-18T05:02:41Z,betonlineag,900,10.000,9.357,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Jakob Marsee,Miami Marlins,closing,2026-05-18T05:02:41Z,betonlineag,700,12.500,11.775,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Mike Yastrzemski,Miami Marlins,closing,2026-05-18T05:02:41Z,betonlineag,600,14.286,13.457,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Ha-Seong Kim,Miami Marlins,closing,2026-05-18T05:02:41Z,betonlineag,900,10.000,9.357,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Drake Baldwin,Miami Marlins,closing,2026-05-18T05:02:41Z,betonlineag,450,18.182,17.127,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Joe Mack,Miami Marlins,closing,2026-05-18T05:02:41Z,betonlineag,700,12.500,11.775,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Liam Hicks,Miami Marlins,closing,2026-05-18T05:02:41Z,betonlineag,600,14.286,13.457,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Leo Jimenez,Miami Marlins,closing,2026-05-18T05:02:41Z,betonlineag,900,10.000,9.357,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Dominic Smith,Miami Marlins,closing,2026-05-18T05:02:41Z,betonlineag,700,12.500,11.775,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Tyler Stephenson,Philadelphia Phillies,closing,2026-05-18T05:02:41Z,betonlineag,500,16.667,15.700,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,J.T. Realmuto,Philadelphia Phillies,closing,2026-05-18T05:02:41Z,betonlineag,600,14.286,13.457,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,TJ Friedl,Philadelphia Phillies,closing,2026-05-18T05:02:41Z,betonlineag,700,12.500,11.775,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Bryce Harper,Philadelphia Phillies,closing,2026-05-18T05:02:41Z,betonlineag,400,20.000,18.957,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Alec Bohm,Philadelphia Phillies,closing,2026-05-18T05:02:41Z,betonlineag,700,12.500,11.775,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Kyle Schwarber,Philadelphia Phillies,closing,2026-05-18T05:02:41Z,betonlineag,200,33.333,31.794,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Matt McLain,Philadelphia Phillies,closing,2026-05-18T05:02:41Z,betonlineag,700,12.500,11.775,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Ke'Bryan Hayes,Philadelphia Phillies,closing,2026-05-18T05:02:41Z,betonlineag,900,10.000,9.357,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Edmundo Sosa,Philadelphia Phillies,closing,2026-05-18T05:02:41Z,betonlineag,600,14.286,13.457,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Brandon Marsh,Philadelphia Phillies,closing,2026-05-18T05:02:41Z,betonlineag,600,14.286,13.457,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Spencer Steer,Philadelphia Phillies,closing,2026-05-18T05:02:41Z,betonlineag,450,18.182,17.127,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Trea Turner,Philadelphia Phillies,closing,2026-05-18T05:02:41Z,betonlineag,500,16.667,15.700,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Will Benson,Philadelphia Phillies,closing,2026-05-18T05:02:41Z,betonlineag,350,22.222,21.064,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Elly De La Cruz,Philadelphia Phillies,closing,2026-05-18T05:02:41Z,betonlineag,350,22.222,21.064,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Adolis Garcia,Philadelphia Phillies,closing,2026-05-18T05:02:41Z,betonlineag,400,20.000,18.957,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,JJ Bleday,Philadelphia Phillies,closing,2026-05-18T05:02:41Z,betonlineag,400,20.000,18.957,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Sal Stewart,Philadelphia Phillies,closing,2026-05-18T05:02:41Z,betonlineag,350,22.222,21.064,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Felix Reyes,Philadelphia Phillies,closing,2026-05-18T05:02:41Z,betonlineag,600,14.286,13.457,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Nathaniel Lowe,Philadelphia Phillies,closing,2026-05-18T05:02:41Z,betonlineag,500,16.667,15.700,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Steven Kwan,Detroit Tigers,closing,2026-05-18T05:02:41Z,betonlineag,900,10.000,9.357,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Spencer Torkelson,Detroit Tigers,closing,2026-05-18T05:02:41Z,betonlineag,450,18.182,17.127,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Austin Hedges,Detroit Tigers,closing,2026-05-18T05:02:41Z,betonlineag,900,10.000,9.357,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Jose Ramirez,Detroit Tigers,closing,2026-05-18T05:02:41Z,betonlineag,500,16.667,15.700,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Brayan Rocchio,Detroit Tigers,closing,2026-05-18T05:02:41Z,betonlineag,900,10.000,9.357,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Riley Greene,Detroit Tigers,closing,2026-05-18T05:02:41Z,betonlineag,450,18.182,17.127,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Angel Martinez,Detroit Tigers,closing,2026-05-18T05:02:41Z,betonlineag,700,12.500,11.775,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Zach McKinstry,Detroit Tigers,closing,2026-05-18T05:02:41Z,betonlineag,700,12.500,11.775,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Wenceel Perez,Detroit Tigers,closing,2026-05-18T05:02:41Z,betonlineag,900,10.000,9.357,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,David Fry,Detroit Tigers,closing,2026-05-18T05:02:41Z,betonlineag,900,10.000,9.357,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Matt Vierling,Detroit Tigers,closing,2026-05-18T05:02:41Z,betonlineag,700,12.500,11.775,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Dillon Dingler,Detroit Tigers,closing,2026-05-18T05:02:41Z,betonlineag,500,16.667,15.700,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Colt Keith,Detroit Tigers,closing,2026-05-18T05:02:41Z,betonlineag,700,12.500,11.775,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Travis Bazzana,Detroit Tigers,closing,2026-05-18T05:02:41Z,betonlineag,900,10.000,9.357,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Rhys Hoskins,Detroit Tigers,closing,2026-05-18T05:02:41Z,betonlineag,500,16.667,15.700,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Chase DeLauter,Detroit Tigers,closing,2026-05-18T05:02:41Z,betonlineag,900,10.000,9.357,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Kevin McGonigle,Detroit Tigers,closing,2026-05-18T05:02:41Z,betonlineag,600,14.286,13.457,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Patrick Bailey,Detroit Tigers,closing,2026-05-18T05:02:41Z,betonlineag,900,10.000,9.357,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Gage Workman,Detroit Tigers,closing,2026-05-18T05:02:41Z,betonlineag,700,12.500,11.775,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Keibert Ruiz,Washington Nationals,closing,2026-05-18T05:02:41Z,betonlineag,700,12.500,11.775,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Luis Garcia Jr.,Washington Nationals,closing,2026-05-18T05:02:41Z,betonlineag,600,14.286,13.457,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Mark Vientos,Washington Nationals,closing,2026-05-18T05:02:41Z,betonlineag,350,22.222,21.064,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Jacob Young,Washington Nationals,closing,2026-05-18T05:02:41Z,betonlineag,900,10.000,9.357,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Nasim Nunez,Washington Nationals,closing,2026-05-18T05:02:41Z,betonlineag,900,10.000,9.357,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Brett Baty,Washington Nationals,closing,2026-05-18T05:02:41Z,betonlineag,500,16.667,15.700,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,CJ Abrams,Washington Nationals,closing,2026-05-18T05:02:41Z,betonlineag,450,18.182,17.127,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Drew Millas,Washington Nationals,closing,2026-05-18T05:02:41Z,betonlineag,700,12.500,11.775,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Luis Torrens,Washington Nationals,closing,2026-05-18T05:02:41Z,betonlineag,700,12.500,11.775,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Brady House,Washington Nationals,closing,2026-05-18T05:02:41Z,betonlineag,500,16.667,15.700,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Marcus Semien,Washington Nationals,closing,2026-05-18T05:02:41Z,betonlineag,500,16.667,15.700,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Juan Soto,Washington Nationals,closing,2026-05-18T05:02:41Z,betonlineag,250,28.571,27.082,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Daylen Lile,Washington Nationals,closing,2026-05-18T05:02:41Z,betonlineag,500,16.667,15.700,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Bo Bichette,Washington Nationals,closing,2026-05-18T05:02:41Z,betonlineag,600,14.286,13.457,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Jose Tena,Washington Nationals,closing,2026-05-18T05:02:41Z,betonlineag,500,16.667,15.700,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,James Wood,Washington Nationals,closing,2026-05-18T05:02:41Z,betonlineag,225,30.769,29.165,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,MJ Melendez,Washington Nationals,closing,2026-05-18T05:02:41Z,betonlineag,300,25.000,23.697,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Carson Benge,Washington Nationals,closing,2026-05-18T05:02:41Z,betonlineag,450,18.182,17.127,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,A.J. Ewing,Washington Nationals,closing,2026-05-18T05:02:41Z,betonlineag,600,14.286,13.457,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Vladimir Guerrero Jr.,New York Yankees,closing,2026-05-18T05:02:41Z,betonlineag,500,16.667,15.700,13038bc4537d05af00935232c7a96b21
+2026-05-18,Aaron Judge,New York Yankees,closing,2026-05-18T05:02:41Z,betonlineag,150,40.000,38.153,13038bc4537d05af00935232c7a96b21
+2026-05-18,George Springer,New York Yankees,closing,2026-05-18T05:02:41Z,betonlineag,450,18.182,17.127,13038bc4537d05af00935232c7a96b21
+2026-05-18,Tyler Heineman,New York Yankees,closing,2026-05-18T05:02:41Z,betonlineag,900,10.000,9.357,13038bc4537d05af00935232c7a96b21
+2026-05-18,Anthony Volpe,New York Yankees,closing,2026-05-18T05:02:41Z,betonlineag,500,16.667,15.700,13038bc4537d05af00935232c7a96b21
+2026-05-18,Trent Grisham,New York Yankees,closing,2026-05-18T05:02:41Z,betonlineag,450,18.182,17.127,13038bc4537d05af00935232c7a96b21
+2026-05-18,Ernie Clement,New York Yankees,closing,2026-05-18T05:02:41Z,betonlineag,900,10.000,9.357,13038bc4537d05af00935232c7a96b21
+2026-05-18,Austin Wells,New York Yankees,closing,2026-05-18T05:02:41Z,betonlineag,500,16.667,15.700,13038bc4537d05af00935232c7a96b21
+2026-05-18,Daulton Varsho,New York Yankees,closing,2026-05-18T05:02:41Z,betonlineag,700,12.500,11.775,13038bc4537d05af00935232c7a96b21
+2026-05-18,Ben Rice,New York Yankees,closing,2026-05-18T05:02:41Z,betonlineag,300,25.000,23.697,13038bc4537d05af00935232c7a96b21
+2026-05-18,Davis Schneider,New York Yankees,closing,2026-05-18T05:02:41Z,betonlineag,600,14.286,13.457,13038bc4537d05af00935232c7a96b21
+2026-05-18,Jazz Chisholm Jr.,New York Yankees,closing,2026-05-18T05:02:41Z,betonlineag,400,20.000,18.957,13038bc4537d05af00935232c7a96b21
+2026-05-18,Cody Bellinger,New York Yankees,closing,2026-05-18T05:02:41Z,betonlineag,450,18.182,17.127,13038bc4537d05af00935232c7a96b21
+2026-05-18,Paul Goldschmidt,New York Yankees,closing,2026-05-18T05:02:41Z,betonlineag,400,20.000,18.957,13038bc4537d05af00935232c7a96b21
+2026-05-18,Myles Straw,New York Yankees,closing,2026-05-18T05:02:41Z,betonlineag,700,12.500,11.775,13038bc4537d05af00935232c7a96b21
+2026-05-18,Amed Rosario,New York Yankees,closing,2026-05-18T05:02:41Z,betonlineag,900,10.000,9.357,13038bc4537d05af00935232c7a96b21
+2026-05-18,Brandon Valenzuela,New York Yankees,closing,2026-05-18T05:02:41Z,betonlineag,700,12.500,11.775,13038bc4537d05af00935232c7a96b21
+2026-05-18,Kazuma Okamoto,New York Yankees,closing,2026-05-18T05:02:41Z,betonlineag,400,20.000,18.957,13038bc4537d05af00935232c7a96b21
+2026-05-18,Lenyn Sosa,New York Yankees,closing,2026-05-18T05:02:41Z,betonlineag,700,12.500,11.775,13038bc4537d05af00935232c7a96b21
+2026-05-18,Maikel Garcia,Kansas City Royals,closing,2026-05-18T05:02:41Z,betonlineag,700,12.500,11.775,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Salvador Perez,Kansas City Royals,closing,2026-05-18T05:02:41Z,betonlineag,500,16.667,15.700,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Jarren Duran,Kansas City Royals,closing,2026-05-18T05:02:41Z,betonlineag,500,16.667,15.700,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Kyle Isbel,Kansas City Royals,closing,2026-05-18T05:02:41Z,betonlineag,900,10.000,9.357,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Bobby Witt Jr.,Kansas City Royals,closing,2026-05-18T05:02:41Z,betonlineag,400,20.000,18.957,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Ceddanne Rafaela,Kansas City Royals,closing,2026-05-18T05:02:41Z,betonlineag,600,14.286,13.457,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Michael Massey,Kansas City Royals,closing,2026-05-18T05:02:41Z,betonlineag,600,14.286,13.457,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Vinnie Pasquantino,Kansas City Royals,closing,2026-05-18T05:02:41Z,betonlineag,500,16.667,15.700,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Wilyer Abreu,Kansas City Royals,closing,2026-05-18T05:02:41Z,betonlineag,350,22.222,21.064,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Marcelo Mayer,Kansas City Royals,closing,2026-05-18T05:02:41Z,betonlineag,600,14.286,13.457,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Mickey Gasper,Kansas City Royals,closing,2026-05-18T05:02:41Z,betonlineag,600,14.286,13.457,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Jac Caglianone,Kansas City Royals,closing,2026-05-18T05:02:41Z,betonlineag,450,18.182,17.127,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Carlos Narvaez,Kansas City Royals,closing,2026-05-18T05:02:41Z,betonlineag,600,14.286,13.457,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Carter Jensen,Kansas City Royals,closing,2026-05-18T05:02:41Z,betonlineag,400,20.000,18.957,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Isaac Collins,Kansas City Royals,closing,2026-05-18T05:02:41Z,betonlineag,700,12.500,11.775,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Andruw Monasterio,Kansas City Royals,closing,2026-05-18T05:02:41Z,betonlineag,700,12.500,11.775,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Caleb Durbin,Kansas City Royals,closing,2026-05-18T05:02:41Z,betonlineag,900,10.000,9.357,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Willson Contreras,Kansas City Royals,closing,2026-05-18T05:02:41Z,betonlineag,350,22.222,21.064,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Ian Happ,Chicago Cubs,closing,2026-05-18T05:02:41Z,betonlineag,350,22.222,21.064,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Blake Perkins,Chicago Cubs,closing,2026-05-18T05:02:41Z,betonlineag,700,12.500,11.775,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Christian Yelich,Chicago Cubs,closing,2026-05-18T05:02:41Z,betonlineag,600,14.286,13.457,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Nico Hoerner,Chicago Cubs,closing,2026-05-18T05:02:41Z,betonlineag,900,10.000,9.357,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Seiya Suzuki,Chicago Cubs,closing,2026-05-18T05:02:41Z,betonlineag,350,22.222,21.064,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Brice Turang,Chicago Cubs,closing,2026-05-18T05:02:41Z,betonlineag,600,14.286,13.457,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Michael Busch,Chicago Cubs,closing,2026-05-18T05:02:41Z,betonlineag,300,25.000,23.697,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Pete Crow-Armstrong,Chicago Cubs,closing,2026-05-18T05:02:41Z,betonlineag,450,18.182,17.127,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Dansby Swanson,Chicago Cubs,closing,2026-05-18T05:02:41Z,betonlineag,500,16.667,15.700,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Joey Ortiz,Chicago Cubs,closing,2026-05-18T05:02:41Z,betonlineag,700,12.500,11.775,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,William Contreras,Chicago Cubs,closing,2026-05-18T05:02:41Z,betonlineag,400,20.000,18.957,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Sal Frelick,Chicago Cubs,closing,2026-05-18T05:02:41Z,betonlineag,900,10.000,9.357,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Jackson Chourio,Chicago Cubs,closing,2026-05-18T05:02:41Z,betonlineag,350,22.222,21.064,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Andrew Vaughn,Chicago Cubs,closing,2026-05-18T05:02:41Z,betonlineag,350,22.222,21.064,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Carson Kelly,Chicago Cubs,closing,2026-05-18T05:02:41Z,betonlineag,450,18.182,17.127,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Gary Sanchez,Chicago Cubs,closing,2026-05-18T05:02:41Z,betonlineag,350,22.222,21.064,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Luis Rengifo,Chicago Cubs,closing,2026-05-18T05:02:41Z,betonlineag,600,14.286,13.457,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Alex Bregman,Chicago Cubs,closing,2026-05-18T05:02:41Z,betonlineag,350,22.222,21.064,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Moisés Ballesteros,Chicago Cubs,closing,2026-05-18T05:02:41Z,betonlineag,500,16.667,15.700,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Michael Conforto,Chicago Cubs,closing,2026-05-18T05:02:41Z,betonlineag,400,20.000,18.957,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Ozzie Albies,Miami Marlins,closing,2026-05-18T05:05:27Z,betonlineag,600,14.286,13.457,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Austin Riley,Miami Marlins,closing,2026-05-18T05:05:27Z,betonlineag,500,16.667,15.700,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Matt Olson,Miami Marlins,closing,2026-05-18T05:05:27Z,betonlineag,350,22.222,21.064,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Connor Norby,Miami Marlins,closing,2026-05-18T05:05:27Z,betonlineag,700,12.500,11.775,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Xavier Edwards,Miami Marlins,closing,2026-05-18T05:05:27Z,betonlineag,900,10.000,9.357,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Otto Lopez,Miami Marlins,closing,2026-05-18T05:05:27Z,betonlineag,700,12.500,11.775,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Kyle Stowers,Miami Marlins,closing,2026-05-18T05:05:27Z,betonlineag,400,20.000,18.957,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Michael Harris II,Miami Marlins,closing,2026-05-18T05:05:27Z,betonlineag,400,20.000,18.957,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Owen Caissie,Miami Marlins,closing,2026-05-18T05:05:27Z,betonlineag,600,14.286,13.457,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Mauricio Dubon,Miami Marlins,closing,2026-05-18T05:05:27Z,betonlineag,900,10.000,9.357,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Jakob Marsee,Miami Marlins,closing,2026-05-18T05:05:27Z,betonlineag,700,12.500,11.775,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Mike Yastrzemski,Miami Marlins,closing,2026-05-18T05:05:27Z,betonlineag,600,14.286,13.457,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Ha-Seong Kim,Miami Marlins,closing,2026-05-18T05:05:27Z,betonlineag,900,10.000,9.357,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Drake Baldwin,Miami Marlins,closing,2026-05-18T05:05:27Z,betonlineag,450,18.182,17.127,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Joe Mack,Miami Marlins,closing,2026-05-18T05:05:27Z,betonlineag,700,12.500,11.775,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Liam Hicks,Miami Marlins,closing,2026-05-18T05:05:27Z,betonlineag,600,14.286,13.457,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Leo Jimenez,Miami Marlins,closing,2026-05-18T05:05:27Z,betonlineag,900,10.000,9.357,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Dominic Smith,Miami Marlins,closing,2026-05-18T05:05:27Z,betonlineag,700,12.500,11.775,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Tyler Stephenson,Philadelphia Phillies,closing,2026-05-18T05:05:27Z,betonlineag,500,16.667,15.700,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,J.T. Realmuto,Philadelphia Phillies,closing,2026-05-18T05:05:27Z,betonlineag,600,14.286,13.457,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,TJ Friedl,Philadelphia Phillies,closing,2026-05-18T05:05:27Z,betonlineag,700,12.500,11.775,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Bryce Harper,Philadelphia Phillies,closing,2026-05-18T05:05:27Z,betonlineag,400,20.000,18.957,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Alec Bohm,Philadelphia Phillies,closing,2026-05-18T05:05:27Z,betonlineag,700,12.500,11.775,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Kyle Schwarber,Philadelphia Phillies,closing,2026-05-18T05:05:27Z,betonlineag,200,33.333,31.794,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Matt McLain,Philadelphia Phillies,closing,2026-05-18T05:05:27Z,betonlineag,700,12.500,11.775,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Ke'Bryan Hayes,Philadelphia Phillies,closing,2026-05-18T05:05:27Z,betonlineag,900,10.000,9.357,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Edmundo Sosa,Philadelphia Phillies,closing,2026-05-18T05:05:27Z,betonlineag,600,14.286,13.457,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Brandon Marsh,Philadelphia Phillies,closing,2026-05-18T05:05:27Z,betonlineag,600,14.286,13.457,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Spencer Steer,Philadelphia Phillies,closing,2026-05-18T05:05:27Z,betonlineag,450,18.182,17.127,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Trea Turner,Philadelphia Phillies,closing,2026-05-18T05:05:27Z,betonlineag,500,16.667,15.700,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Will Benson,Philadelphia Phillies,closing,2026-05-18T05:05:27Z,betonlineag,350,22.222,21.064,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Elly De La Cruz,Philadelphia Phillies,closing,2026-05-18T05:05:27Z,betonlineag,350,22.222,21.064,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Adolis Garcia,Philadelphia Phillies,closing,2026-05-18T05:05:27Z,betonlineag,400,20.000,18.957,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,JJ Bleday,Philadelphia Phillies,closing,2026-05-18T05:05:27Z,betonlineag,400,20.000,18.957,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Sal Stewart,Philadelphia Phillies,closing,2026-05-18T05:05:27Z,betonlineag,350,22.222,21.064,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Felix Reyes,Philadelphia Phillies,closing,2026-05-18T05:05:27Z,betonlineag,600,14.286,13.457,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Nathaniel Lowe,Philadelphia Phillies,closing,2026-05-18T05:05:27Z,betonlineag,500,16.667,15.700,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Steven Kwan,Detroit Tigers,closing,2026-05-18T05:05:27Z,betonlineag,900,10.000,9.357,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Spencer Torkelson,Detroit Tigers,closing,2026-05-18T05:05:27Z,betonlineag,450,18.182,17.127,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Austin Hedges,Detroit Tigers,closing,2026-05-18T05:05:27Z,betonlineag,900,10.000,9.357,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Jose Ramirez,Detroit Tigers,closing,2026-05-18T05:05:27Z,betonlineag,500,16.667,15.700,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Brayan Rocchio,Detroit Tigers,closing,2026-05-18T05:05:27Z,betonlineag,900,10.000,9.357,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Riley Greene,Detroit Tigers,closing,2026-05-18T05:05:27Z,betonlineag,450,18.182,17.127,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Angel Martinez,Detroit Tigers,closing,2026-05-18T05:05:27Z,betonlineag,700,12.500,11.775,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Zach McKinstry,Detroit Tigers,closing,2026-05-18T05:05:27Z,betonlineag,700,12.500,11.775,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Wenceel Perez,Detroit Tigers,closing,2026-05-18T05:05:27Z,betonlineag,900,10.000,9.357,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,David Fry,Detroit Tigers,closing,2026-05-18T05:05:27Z,betonlineag,900,10.000,9.357,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Matt Vierling,Detroit Tigers,closing,2026-05-18T05:05:27Z,betonlineag,700,12.500,11.775,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Dillon Dingler,Detroit Tigers,closing,2026-05-18T05:05:27Z,betonlineag,500,16.667,15.700,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Colt Keith,Detroit Tigers,closing,2026-05-18T05:05:27Z,betonlineag,700,12.500,11.775,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Travis Bazzana,Detroit Tigers,closing,2026-05-18T05:05:27Z,betonlineag,900,10.000,9.357,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Rhys Hoskins,Detroit Tigers,closing,2026-05-18T05:05:27Z,betonlineag,500,16.667,15.700,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Chase DeLauter,Detroit Tigers,closing,2026-05-18T05:05:27Z,betonlineag,900,10.000,9.357,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Kevin McGonigle,Detroit Tigers,closing,2026-05-18T05:05:27Z,betonlineag,600,14.286,13.457,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Patrick Bailey,Detroit Tigers,closing,2026-05-18T05:05:27Z,betonlineag,900,10.000,9.357,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Gage Workman,Detroit Tigers,closing,2026-05-18T05:05:27Z,betonlineag,700,12.500,11.775,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Keibert Ruiz,Washington Nationals,closing,2026-05-18T05:05:27Z,betonlineag,700,12.500,11.775,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Luis Garcia Jr.,Washington Nationals,closing,2026-05-18T05:05:27Z,betonlineag,600,14.286,13.457,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Mark Vientos,Washington Nationals,closing,2026-05-18T05:05:27Z,betonlineag,350,22.222,21.064,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Jacob Young,Washington Nationals,closing,2026-05-18T05:05:27Z,betonlineag,900,10.000,9.357,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Nasim Nunez,Washington Nationals,closing,2026-05-18T05:05:27Z,betonlineag,900,10.000,9.357,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Brett Baty,Washington Nationals,closing,2026-05-18T05:05:27Z,betonlineag,500,16.667,15.700,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,CJ Abrams,Washington Nationals,closing,2026-05-18T05:05:27Z,betonlineag,450,18.182,17.127,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Drew Millas,Washington Nationals,closing,2026-05-18T05:05:27Z,betonlineag,700,12.500,11.775,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Luis Torrens,Washington Nationals,closing,2026-05-18T05:05:27Z,betonlineag,700,12.500,11.775,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Brady House,Washington Nationals,closing,2026-05-18T05:05:27Z,betonlineag,500,16.667,15.700,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Marcus Semien,Washington Nationals,closing,2026-05-18T05:05:27Z,betonlineag,500,16.667,15.700,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Juan Soto,Washington Nationals,closing,2026-05-18T05:05:27Z,betonlineag,250,28.571,27.082,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Daylen Lile,Washington Nationals,closing,2026-05-18T05:05:27Z,betonlineag,500,16.667,15.700,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Bo Bichette,Washington Nationals,closing,2026-05-18T05:05:27Z,betonlineag,600,14.286,13.457,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Jose Tena,Washington Nationals,closing,2026-05-18T05:05:27Z,betonlineag,500,16.667,15.700,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,James Wood,Washington Nationals,closing,2026-05-18T05:05:27Z,betonlineag,225,30.769,29.165,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,MJ Melendez,Washington Nationals,closing,2026-05-18T05:05:27Z,betonlineag,300,25.000,23.697,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Carson Benge,Washington Nationals,closing,2026-05-18T05:05:27Z,betonlineag,450,18.182,17.127,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,A.J. Ewing,Washington Nationals,closing,2026-05-18T05:05:27Z,betonlineag,600,14.286,13.457,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Vladimir Guerrero Jr.,New York Yankees,closing,2026-05-18T05:05:27Z,betonlineag,500,16.667,15.700,13038bc4537d05af00935232c7a96b21
+2026-05-18,Aaron Judge,New York Yankees,closing,2026-05-18T05:05:27Z,betonlineag,150,40.000,38.153,13038bc4537d05af00935232c7a96b21
+2026-05-18,George Springer,New York Yankees,closing,2026-05-18T05:05:27Z,betonlineag,450,18.182,17.127,13038bc4537d05af00935232c7a96b21
+2026-05-18,Tyler Heineman,New York Yankees,closing,2026-05-18T05:05:27Z,betonlineag,900,10.000,9.357,13038bc4537d05af00935232c7a96b21
+2026-05-18,Anthony Volpe,New York Yankees,closing,2026-05-18T05:05:27Z,betonlineag,500,16.667,15.700,13038bc4537d05af00935232c7a96b21
+2026-05-18,Trent Grisham,New York Yankees,closing,2026-05-18T05:05:27Z,betonlineag,450,18.182,17.127,13038bc4537d05af00935232c7a96b21
+2026-05-18,Ernie Clement,New York Yankees,closing,2026-05-18T05:05:27Z,betonlineag,900,10.000,9.357,13038bc4537d05af00935232c7a96b21
+2026-05-18,Austin Wells,New York Yankees,closing,2026-05-18T05:05:27Z,betonlineag,500,16.667,15.700,13038bc4537d05af00935232c7a96b21
+2026-05-18,Daulton Varsho,New York Yankees,closing,2026-05-18T05:05:27Z,betonlineag,700,12.500,11.775,13038bc4537d05af00935232c7a96b21
+2026-05-18,Ben Rice,New York Yankees,closing,2026-05-18T05:05:27Z,betonlineag,300,25.000,23.697,13038bc4537d05af00935232c7a96b21
+2026-05-18,Davis Schneider,New York Yankees,closing,2026-05-18T05:05:27Z,betonlineag,600,14.286,13.457,13038bc4537d05af00935232c7a96b21
+2026-05-18,Jazz Chisholm Jr.,New York Yankees,closing,2026-05-18T05:05:27Z,betonlineag,400,20.000,18.957,13038bc4537d05af00935232c7a96b21
+2026-05-18,Cody Bellinger,New York Yankees,closing,2026-05-18T05:05:27Z,betonlineag,450,18.182,17.127,13038bc4537d05af00935232c7a96b21
+2026-05-18,Paul Goldschmidt,New York Yankees,closing,2026-05-18T05:05:27Z,betonlineag,400,20.000,18.957,13038bc4537d05af00935232c7a96b21
+2026-05-18,Myles Straw,New York Yankees,closing,2026-05-18T05:05:27Z,betonlineag,700,12.500,11.775,13038bc4537d05af00935232c7a96b21
+2026-05-18,Amed Rosario,New York Yankees,closing,2026-05-18T05:05:27Z,betonlineag,900,10.000,9.357,13038bc4537d05af00935232c7a96b21
+2026-05-18,Brandon Valenzuela,New York Yankees,closing,2026-05-18T05:05:27Z,betonlineag,700,12.500,11.775,13038bc4537d05af00935232c7a96b21
+2026-05-18,Kazuma Okamoto,New York Yankees,closing,2026-05-18T05:05:27Z,betonlineag,400,20.000,18.957,13038bc4537d05af00935232c7a96b21
+2026-05-18,Lenyn Sosa,New York Yankees,closing,2026-05-18T05:05:27Z,betonlineag,700,12.500,11.775,13038bc4537d05af00935232c7a96b21
+2026-05-18,Maikel Garcia,Kansas City Royals,closing,2026-05-18T05:05:27Z,betonlineag,700,12.500,11.775,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Salvador Perez,Kansas City Royals,closing,2026-05-18T05:05:27Z,betonlineag,500,16.667,15.700,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Jarren Duran,Kansas City Royals,closing,2026-05-18T05:05:27Z,betonlineag,500,16.667,15.700,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Kyle Isbel,Kansas City Royals,closing,2026-05-18T05:05:27Z,betonlineag,900,10.000,9.357,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Bobby Witt Jr.,Kansas City Royals,closing,2026-05-18T05:05:27Z,betonlineag,400,20.000,18.957,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Ceddanne Rafaela,Kansas City Royals,closing,2026-05-18T05:05:27Z,betonlineag,600,14.286,13.457,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Michael Massey,Kansas City Royals,closing,2026-05-18T05:05:27Z,betonlineag,600,14.286,13.457,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Vinnie Pasquantino,Kansas City Royals,closing,2026-05-18T05:05:27Z,betonlineag,500,16.667,15.700,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Wilyer Abreu,Kansas City Royals,closing,2026-05-18T05:05:27Z,betonlineag,350,22.222,21.064,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Marcelo Mayer,Kansas City Royals,closing,2026-05-18T05:05:27Z,betonlineag,600,14.286,13.457,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Mickey Gasper,Kansas City Royals,closing,2026-05-18T05:05:27Z,betonlineag,600,14.286,13.457,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Jac Caglianone,Kansas City Royals,closing,2026-05-18T05:05:27Z,betonlineag,450,18.182,17.127,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Carlos Narvaez,Kansas City Royals,closing,2026-05-18T05:05:27Z,betonlineag,600,14.286,13.457,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Carter Jensen,Kansas City Royals,closing,2026-05-18T05:05:27Z,betonlineag,400,20.000,18.957,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Isaac Collins,Kansas City Royals,closing,2026-05-18T05:05:27Z,betonlineag,700,12.500,11.775,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Andruw Monasterio,Kansas City Royals,closing,2026-05-18T05:05:27Z,betonlineag,700,12.500,11.775,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Caleb Durbin,Kansas City Royals,closing,2026-05-18T05:05:27Z,betonlineag,900,10.000,9.357,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Willson Contreras,Kansas City Royals,closing,2026-05-18T05:05:27Z,betonlineag,350,22.222,21.064,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Ian Happ,Chicago Cubs,closing,2026-05-18T05:05:27Z,betonlineag,350,22.222,21.064,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Blake Perkins,Chicago Cubs,closing,2026-05-18T05:05:27Z,betonlineag,700,12.500,11.775,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Christian Yelich,Chicago Cubs,closing,2026-05-18T05:05:27Z,betonlineag,600,14.286,13.457,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Nico Hoerner,Chicago Cubs,closing,2026-05-18T05:05:27Z,betonlineag,900,10.000,9.357,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Seiya Suzuki,Chicago Cubs,closing,2026-05-18T05:05:27Z,betonlineag,350,22.222,21.064,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Brice Turang,Chicago Cubs,closing,2026-05-18T05:05:27Z,betonlineag,600,14.286,13.457,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Michael Busch,Chicago Cubs,closing,2026-05-18T05:05:27Z,betonlineag,300,25.000,23.697,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Pete Crow-Armstrong,Chicago Cubs,closing,2026-05-18T05:05:27Z,betonlineag,450,18.182,17.127,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Dansby Swanson,Chicago Cubs,closing,2026-05-18T05:05:27Z,betonlineag,500,16.667,15.700,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Joey Ortiz,Chicago Cubs,closing,2026-05-18T05:05:27Z,betonlineag,700,12.500,11.775,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,William Contreras,Chicago Cubs,closing,2026-05-18T05:05:27Z,betonlineag,400,20.000,18.957,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Sal Frelick,Chicago Cubs,closing,2026-05-18T05:05:27Z,betonlineag,900,10.000,9.357,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Jackson Chourio,Chicago Cubs,closing,2026-05-18T05:05:27Z,betonlineag,350,22.222,21.064,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Andrew Vaughn,Chicago Cubs,closing,2026-05-18T05:05:27Z,betonlineag,350,22.222,21.064,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Carson Kelly,Chicago Cubs,closing,2026-05-18T05:05:27Z,betonlineag,450,18.182,17.127,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Gary Sanchez,Chicago Cubs,closing,2026-05-18T05:05:27Z,betonlineag,350,22.222,21.064,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Luis Rengifo,Chicago Cubs,closing,2026-05-18T05:05:27Z,betonlineag,600,14.286,13.457,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Alex Bregman,Chicago Cubs,closing,2026-05-18T05:05:27Z,betonlineag,350,22.222,21.064,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Moisés Ballesteros,Chicago Cubs,closing,2026-05-18T05:05:27Z,betonlineag,500,16.667,15.700,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Michael Conforto,Chicago Cubs,closing,2026-05-18T05:05:27Z,betonlineag,400,20.000,18.957,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Ozzie Albies,Miami Marlins,closing,2026-05-18T05:05:52Z,betonlineag,600,14.286,13.457,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Austin Riley,Miami Marlins,closing,2026-05-18T05:05:52Z,betonlineag,500,16.667,15.700,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Matt Olson,Miami Marlins,closing,2026-05-18T05:05:52Z,betonlineag,350,22.222,21.064,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Connor Norby,Miami Marlins,closing,2026-05-18T05:05:52Z,betonlineag,700,12.500,11.775,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Xavier Edwards,Miami Marlins,closing,2026-05-18T05:05:52Z,betonlineag,900,10.000,9.357,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Otto Lopez,Miami Marlins,closing,2026-05-18T05:05:52Z,betonlineag,700,12.500,11.775,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Kyle Stowers,Miami Marlins,closing,2026-05-18T05:05:52Z,betonlineag,400,20.000,18.957,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Michael Harris II,Miami Marlins,closing,2026-05-18T05:05:52Z,betonlineag,400,20.000,18.957,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Owen Caissie,Miami Marlins,closing,2026-05-18T05:05:52Z,betonlineag,600,14.286,13.457,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Mauricio Dubon,Miami Marlins,closing,2026-05-18T05:05:52Z,betonlineag,900,10.000,9.357,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Jakob Marsee,Miami Marlins,closing,2026-05-18T05:05:52Z,betonlineag,700,12.500,11.775,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Mike Yastrzemski,Miami Marlins,closing,2026-05-18T05:05:52Z,betonlineag,600,14.286,13.457,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Ha-Seong Kim,Miami Marlins,closing,2026-05-18T05:05:52Z,betonlineag,900,10.000,9.357,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Drake Baldwin,Miami Marlins,closing,2026-05-18T05:05:52Z,betonlineag,450,18.182,17.127,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Joe Mack,Miami Marlins,closing,2026-05-18T05:05:52Z,betonlineag,700,12.500,11.775,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Liam Hicks,Miami Marlins,closing,2026-05-18T05:05:52Z,betonlineag,600,14.286,13.457,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Leo Jimenez,Miami Marlins,closing,2026-05-18T05:05:52Z,betonlineag,900,10.000,9.357,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Dominic Smith,Miami Marlins,closing,2026-05-18T05:05:52Z,betonlineag,700,12.500,11.775,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Tyler Stephenson,Philadelphia Phillies,closing,2026-05-18T05:05:52Z,betonlineag,500,16.667,15.700,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,J.T. Realmuto,Philadelphia Phillies,closing,2026-05-18T05:05:52Z,betonlineag,600,14.286,13.457,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,TJ Friedl,Philadelphia Phillies,closing,2026-05-18T05:05:52Z,betonlineag,700,12.500,11.775,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Bryce Harper,Philadelphia Phillies,closing,2026-05-18T05:05:52Z,betonlineag,400,20.000,18.957,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Alec Bohm,Philadelphia Phillies,closing,2026-05-18T05:05:52Z,betonlineag,700,12.500,11.775,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Kyle Schwarber,Philadelphia Phillies,closing,2026-05-18T05:05:52Z,betonlineag,200,33.333,31.794,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Matt McLain,Philadelphia Phillies,closing,2026-05-18T05:05:52Z,betonlineag,700,12.500,11.775,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Ke'Bryan Hayes,Philadelphia Phillies,closing,2026-05-18T05:05:52Z,betonlineag,900,10.000,9.357,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Edmundo Sosa,Philadelphia Phillies,closing,2026-05-18T05:05:52Z,betonlineag,600,14.286,13.457,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Brandon Marsh,Philadelphia Phillies,closing,2026-05-18T05:05:52Z,betonlineag,600,14.286,13.457,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Spencer Steer,Philadelphia Phillies,closing,2026-05-18T05:05:52Z,betonlineag,450,18.182,17.127,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Trea Turner,Philadelphia Phillies,closing,2026-05-18T05:05:52Z,betonlineag,500,16.667,15.700,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Will Benson,Philadelphia Phillies,closing,2026-05-18T05:05:52Z,betonlineag,350,22.222,21.064,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Elly De La Cruz,Philadelphia Phillies,closing,2026-05-18T05:05:52Z,betonlineag,350,22.222,21.064,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Adolis Garcia,Philadelphia Phillies,closing,2026-05-18T05:05:52Z,betonlineag,400,20.000,18.957,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,JJ Bleday,Philadelphia Phillies,closing,2026-05-18T05:05:52Z,betonlineag,400,20.000,18.957,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Sal Stewart,Philadelphia Phillies,closing,2026-05-18T05:05:52Z,betonlineag,350,22.222,21.064,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Felix Reyes,Philadelphia Phillies,closing,2026-05-18T05:05:52Z,betonlineag,600,14.286,13.457,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Nathaniel Lowe,Philadelphia Phillies,closing,2026-05-18T05:05:52Z,betonlineag,500,16.667,15.700,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Steven Kwan,Detroit Tigers,closing,2026-05-18T05:05:52Z,betonlineag,900,10.000,9.357,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Spencer Torkelson,Detroit Tigers,closing,2026-05-18T05:05:52Z,betonlineag,450,18.182,17.127,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Austin Hedges,Detroit Tigers,closing,2026-05-18T05:05:52Z,betonlineag,900,10.000,9.357,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Jose Ramirez,Detroit Tigers,closing,2026-05-18T05:05:52Z,betonlineag,500,16.667,15.700,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Brayan Rocchio,Detroit Tigers,closing,2026-05-18T05:05:52Z,betonlineag,900,10.000,9.357,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Riley Greene,Detroit Tigers,closing,2026-05-18T05:05:52Z,betonlineag,450,18.182,17.127,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Angel Martinez,Detroit Tigers,closing,2026-05-18T05:05:52Z,betonlineag,700,12.500,11.775,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Zach McKinstry,Detroit Tigers,closing,2026-05-18T05:05:52Z,betonlineag,700,12.500,11.775,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Wenceel Perez,Detroit Tigers,closing,2026-05-18T05:05:52Z,betonlineag,900,10.000,9.357,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,David Fry,Detroit Tigers,closing,2026-05-18T05:05:52Z,betonlineag,900,10.000,9.357,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Matt Vierling,Detroit Tigers,closing,2026-05-18T05:05:52Z,betonlineag,700,12.500,11.775,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Dillon Dingler,Detroit Tigers,closing,2026-05-18T05:05:52Z,betonlineag,500,16.667,15.700,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Colt Keith,Detroit Tigers,closing,2026-05-18T05:05:52Z,betonlineag,700,12.500,11.775,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Travis Bazzana,Detroit Tigers,closing,2026-05-18T05:05:52Z,betonlineag,900,10.000,9.357,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Rhys Hoskins,Detroit Tigers,closing,2026-05-18T05:05:52Z,betonlineag,500,16.667,15.700,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Chase DeLauter,Detroit Tigers,closing,2026-05-18T05:05:52Z,betonlineag,900,10.000,9.357,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Kevin McGonigle,Detroit Tigers,closing,2026-05-18T05:05:52Z,betonlineag,600,14.286,13.457,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Patrick Bailey,Detroit Tigers,closing,2026-05-18T05:05:52Z,betonlineag,900,10.000,9.357,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Gage Workman,Detroit Tigers,closing,2026-05-18T05:05:52Z,betonlineag,700,12.500,11.775,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Keibert Ruiz,Washington Nationals,closing,2026-05-18T05:05:52Z,betonlineag,700,12.500,11.775,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Luis Garcia Jr.,Washington Nationals,closing,2026-05-18T05:05:52Z,betonlineag,600,14.286,13.457,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Mark Vientos,Washington Nationals,closing,2026-05-18T05:05:52Z,betonlineag,350,22.222,21.064,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Jacob Young,Washington Nationals,closing,2026-05-18T05:05:52Z,betonlineag,900,10.000,9.357,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Nasim Nunez,Washington Nationals,closing,2026-05-18T05:05:52Z,betonlineag,900,10.000,9.357,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Brett Baty,Washington Nationals,closing,2026-05-18T05:05:52Z,betonlineag,500,16.667,15.700,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,CJ Abrams,Washington Nationals,closing,2026-05-18T05:05:52Z,betonlineag,450,18.182,17.127,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Drew Millas,Washington Nationals,closing,2026-05-18T05:05:52Z,betonlineag,700,12.500,11.775,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Luis Torrens,Washington Nationals,closing,2026-05-18T05:05:52Z,betonlineag,700,12.500,11.775,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Brady House,Washington Nationals,closing,2026-05-18T05:05:52Z,betonlineag,500,16.667,15.700,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Marcus Semien,Washington Nationals,closing,2026-05-18T05:05:52Z,betonlineag,500,16.667,15.700,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Juan Soto,Washington Nationals,closing,2026-05-18T05:05:52Z,betonlineag,250,28.571,27.082,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Daylen Lile,Washington Nationals,closing,2026-05-18T05:05:52Z,betonlineag,500,16.667,15.700,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Bo Bichette,Washington Nationals,closing,2026-05-18T05:05:52Z,betonlineag,600,14.286,13.457,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Jose Tena,Washington Nationals,closing,2026-05-18T05:05:52Z,betonlineag,500,16.667,15.700,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,James Wood,Washington Nationals,closing,2026-05-18T05:05:52Z,betonlineag,225,30.769,29.165,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,MJ Melendez,Washington Nationals,closing,2026-05-18T05:05:52Z,betonlineag,300,25.000,23.697,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Carson Benge,Washington Nationals,closing,2026-05-18T05:05:52Z,betonlineag,450,18.182,17.127,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,A.J. Ewing,Washington Nationals,closing,2026-05-18T05:05:52Z,betonlineag,600,14.286,13.457,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Vladimir Guerrero Jr.,New York Yankees,closing,2026-05-18T05:05:52Z,betonlineag,500,16.667,15.700,13038bc4537d05af00935232c7a96b21
+2026-05-18,Aaron Judge,New York Yankees,closing,2026-05-18T05:05:52Z,betonlineag,150,40.000,38.153,13038bc4537d05af00935232c7a96b21
+2026-05-18,George Springer,New York Yankees,closing,2026-05-18T05:05:52Z,betonlineag,450,18.182,17.127,13038bc4537d05af00935232c7a96b21
+2026-05-18,Tyler Heineman,New York Yankees,closing,2026-05-18T05:05:52Z,betonlineag,900,10.000,9.357,13038bc4537d05af00935232c7a96b21
+2026-05-18,Anthony Volpe,New York Yankees,closing,2026-05-18T05:05:52Z,betonlineag,500,16.667,15.700,13038bc4537d05af00935232c7a96b21
+2026-05-18,Trent Grisham,New York Yankees,closing,2026-05-18T05:05:52Z,betonlineag,450,18.182,17.127,13038bc4537d05af00935232c7a96b21
+2026-05-18,Ernie Clement,New York Yankees,closing,2026-05-18T05:05:52Z,betonlineag,900,10.000,9.357,13038bc4537d05af00935232c7a96b21
+2026-05-18,Austin Wells,New York Yankees,closing,2026-05-18T05:05:52Z,betonlineag,500,16.667,15.700,13038bc4537d05af00935232c7a96b21
+2026-05-18,Daulton Varsho,New York Yankees,closing,2026-05-18T05:05:52Z,betonlineag,700,12.500,11.775,13038bc4537d05af00935232c7a96b21
+2026-05-18,Ben Rice,New York Yankees,closing,2026-05-18T05:05:52Z,betonlineag,300,25.000,23.697,13038bc4537d05af00935232c7a96b21
+2026-05-18,Davis Schneider,New York Yankees,closing,2026-05-18T05:05:52Z,betonlineag,600,14.286,13.457,13038bc4537d05af00935232c7a96b21
+2026-05-18,Jazz Chisholm Jr.,New York Yankees,closing,2026-05-18T05:05:52Z,betonlineag,400,20.000,18.957,13038bc4537d05af00935232c7a96b21
+2026-05-18,Cody Bellinger,New York Yankees,closing,2026-05-18T05:05:52Z,betonlineag,450,18.182,17.127,13038bc4537d05af00935232c7a96b21
+2026-05-18,Paul Goldschmidt,New York Yankees,closing,2026-05-18T05:05:52Z,betonlineag,400,20.000,18.957,13038bc4537d05af00935232c7a96b21
+2026-05-18,Myles Straw,New York Yankees,closing,2026-05-18T05:05:52Z,betonlineag,700,12.500,11.775,13038bc4537d05af00935232c7a96b21
+2026-05-18,Amed Rosario,New York Yankees,closing,2026-05-18T05:05:52Z,betonlineag,900,10.000,9.357,13038bc4537d05af00935232c7a96b21
+2026-05-18,Brandon Valenzuela,New York Yankees,closing,2026-05-18T05:05:52Z,betonlineag,700,12.500,11.775,13038bc4537d05af00935232c7a96b21
+2026-05-18,Kazuma Okamoto,New York Yankees,closing,2026-05-18T05:05:52Z,betonlineag,400,20.000,18.957,13038bc4537d05af00935232c7a96b21
+2026-05-18,Lenyn Sosa,New York Yankees,closing,2026-05-18T05:05:52Z,betonlineag,700,12.500,11.775,13038bc4537d05af00935232c7a96b21
+2026-05-18,Maikel Garcia,Kansas City Royals,closing,2026-05-18T05:05:52Z,betonlineag,700,12.500,11.775,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Salvador Perez,Kansas City Royals,closing,2026-05-18T05:05:52Z,betonlineag,500,16.667,15.700,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Jarren Duran,Kansas City Royals,closing,2026-05-18T05:05:52Z,betonlineag,500,16.667,15.700,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Kyle Isbel,Kansas City Royals,closing,2026-05-18T05:05:52Z,betonlineag,900,10.000,9.357,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Bobby Witt Jr.,Kansas City Royals,closing,2026-05-18T05:05:52Z,betonlineag,400,20.000,18.957,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Ceddanne Rafaela,Kansas City Royals,closing,2026-05-18T05:05:52Z,betonlineag,600,14.286,13.457,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Michael Massey,Kansas City Royals,closing,2026-05-18T05:05:52Z,betonlineag,600,14.286,13.457,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Vinnie Pasquantino,Kansas City Royals,closing,2026-05-18T05:05:52Z,betonlineag,500,16.667,15.700,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Wilyer Abreu,Kansas City Royals,closing,2026-05-18T05:05:52Z,betonlineag,350,22.222,21.064,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Marcelo Mayer,Kansas City Royals,closing,2026-05-18T05:05:52Z,betonlineag,600,14.286,13.457,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Mickey Gasper,Kansas City Royals,closing,2026-05-18T05:05:52Z,betonlineag,600,14.286,13.457,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Jac Caglianone,Kansas City Royals,closing,2026-05-18T05:05:52Z,betonlineag,450,18.182,17.127,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Carlos Narvaez,Kansas City Royals,closing,2026-05-18T05:05:52Z,betonlineag,600,14.286,13.457,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Carter Jensen,Kansas City Royals,closing,2026-05-18T05:05:52Z,betonlineag,400,20.000,18.957,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Isaac Collins,Kansas City Royals,closing,2026-05-18T05:05:52Z,betonlineag,700,12.500,11.775,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Andruw Monasterio,Kansas City Royals,closing,2026-05-18T05:05:52Z,betonlineag,700,12.500,11.775,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Caleb Durbin,Kansas City Royals,closing,2026-05-18T05:05:52Z,betonlineag,900,10.000,9.357,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Willson Contreras,Kansas City Royals,closing,2026-05-18T05:05:52Z,betonlineag,350,22.222,21.064,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Ian Happ,Chicago Cubs,closing,2026-05-18T05:05:52Z,betonlineag,350,22.222,21.064,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Blake Perkins,Chicago Cubs,closing,2026-05-18T05:05:52Z,betonlineag,700,12.500,11.775,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Christian Yelich,Chicago Cubs,closing,2026-05-18T05:05:52Z,betonlineag,600,14.286,13.457,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Nico Hoerner,Chicago Cubs,closing,2026-05-18T05:05:52Z,betonlineag,900,10.000,9.357,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Seiya Suzuki,Chicago Cubs,closing,2026-05-18T05:05:52Z,betonlineag,350,22.222,21.064,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Brice Turang,Chicago Cubs,closing,2026-05-18T05:05:52Z,betonlineag,600,14.286,13.457,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Michael Busch,Chicago Cubs,closing,2026-05-18T05:05:52Z,betonlineag,300,25.000,23.697,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Pete Crow-Armstrong,Chicago Cubs,closing,2026-05-18T05:05:52Z,betonlineag,450,18.182,17.127,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Dansby Swanson,Chicago Cubs,closing,2026-05-18T05:05:52Z,betonlineag,500,16.667,15.700,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Joey Ortiz,Chicago Cubs,closing,2026-05-18T05:05:52Z,betonlineag,700,12.500,11.775,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,William Contreras,Chicago Cubs,closing,2026-05-18T05:05:52Z,betonlineag,400,20.000,18.957,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Sal Frelick,Chicago Cubs,closing,2026-05-18T05:05:52Z,betonlineag,900,10.000,9.357,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Jackson Chourio,Chicago Cubs,closing,2026-05-18T05:05:52Z,betonlineag,350,22.222,21.064,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Andrew Vaughn,Chicago Cubs,closing,2026-05-18T05:05:52Z,betonlineag,350,22.222,21.064,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Carson Kelly,Chicago Cubs,closing,2026-05-18T05:05:52Z,betonlineag,450,18.182,17.127,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Gary Sanchez,Chicago Cubs,closing,2026-05-18T05:05:52Z,betonlineag,350,22.222,21.064,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Luis Rengifo,Chicago Cubs,closing,2026-05-18T05:05:52Z,betonlineag,600,14.286,13.457,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Alex Bregman,Chicago Cubs,closing,2026-05-18T05:05:52Z,betonlineag,350,22.222,21.064,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Moisés Ballesteros,Chicago Cubs,closing,2026-05-18T05:05:52Z,betonlineag,500,16.667,15.700,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Michael Conforto,Chicago Cubs,closing,2026-05-18T05:05:52Z,betonlineag,400,20.000,18.957,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Ozzie Albies,Miami Marlins,closing,2026-05-18T06:53:24Z,betonlineag,600,14.286,13.457,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Austin Riley,Miami Marlins,closing,2026-05-18T06:53:24Z,betonlineag,500,16.667,15.700,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Matt Olson,Miami Marlins,closing,2026-05-18T06:53:24Z,betonlineag,350,22.222,21.064,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Connor Norby,Miami Marlins,closing,2026-05-18T06:53:24Z,betonlineag,700,12.500,11.775,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Xavier Edwards,Miami Marlins,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Otto Lopez,Miami Marlins,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Kyle Stowers,Miami Marlins,closing,2026-05-18T06:53:24Z,betonlineag,400,20.000,18.957,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Michael Harris II,Miami Marlins,closing,2026-05-18T06:53:24Z,betonlineag,400,20.000,18.957,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Owen Caissie,Miami Marlins,closing,2026-05-18T06:53:24Z,betonlineag,600,14.286,13.457,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Mauricio Dubon,Miami Marlins,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Jakob Marsee,Miami Marlins,closing,2026-05-18T06:53:24Z,betonlineag,700,12.500,11.775,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Mike Yastrzemski,Miami Marlins,closing,2026-05-18T06:53:24Z,betonlineag,600,14.286,13.457,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Ha-Seong Kim,Miami Marlins,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Drake Baldwin,Miami Marlins,closing,2026-05-18T06:53:24Z,betonlineag,450,18.182,17.127,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Joe Mack,Miami Marlins,closing,2026-05-18T06:53:24Z,betonlineag,700,12.500,11.775,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Liam Hicks,Miami Marlins,closing,2026-05-18T06:53:24Z,betonlineag,700,12.500,11.775,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Leo Jimenez,Miami Marlins,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Dominic Smith,Miami Marlins,closing,2026-05-18T06:53:24Z,betonlineag,700,12.500,11.775,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Taylor Walls,Tampa Bay Rays,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,5d7782b4079153d44f30c8b3b9ccf495
+2026-05-18,Yandy Diaz,Tampa Bay Rays,closing,2026-05-18T06:53:24Z,betonlineag,500,16.667,15.700,5d7782b4079153d44f30c8b3b9ccf495
+2026-05-18,Jonathan Aranda,Tampa Bay Rays,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,5d7782b4079153d44f30c8b3b9ccf495
+2026-05-18,Adley Rutschman,Tampa Bay Rays,closing,2026-05-18T06:53:24Z,betonlineag,600,14.286,13.457,5d7782b4079153d44f30c8b3b9ccf495
+2026-05-18,Gunnar Henderson,Tampa Bay Rays,closing,2026-05-18T06:53:24Z,betonlineag,500,16.667,15.700,5d7782b4079153d44f30c8b3b9ccf495
+2026-05-18,Junior Caminero,Tampa Bay Rays,closing,2026-05-18T06:53:24Z,betonlineag,300,25.000,23.697,5d7782b4079153d44f30c8b3b9ccf495
+2026-05-18,Jonny Deluca,Tampa Bay Rays,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,5d7782b4079153d44f30c8b3b9ccf495
+2026-05-18,Taylor Ward,Tampa Bay Rays,closing,2026-05-18T06:53:24Z,betonlineag,600,14.286,13.457,5d7782b4079153d44f30c8b3b9ccf495
+2026-05-18,Chandler Simpson,Tampa Bay Rays,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,5d7782b4079153d44f30c8b3b9ccf495
+2026-05-18,Nick Fortes,Tampa Bay Rays,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,5d7782b4079153d44f30c8b3b9ccf495
+2026-05-18,Ryan Vilade,Tampa Bay Rays,closing,2026-05-18T06:53:24Z,betonlineag,700,12.500,11.775,5d7782b4079153d44f30c8b3b9ccf495
+2026-05-18,Coby Mayo,Tampa Bay Rays,closing,2026-05-18T06:53:24Z,betonlineag,450,18.182,17.127,5d7782b4079153d44f30c8b3b9ccf495
+2026-05-18,Leody Taveras,Tampa Bay Rays,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,5d7782b4079153d44f30c8b3b9ccf495
+2026-05-18,Tyler O'Neill,Tampa Bay Rays,closing,2026-05-18T06:53:24Z,betonlineag,450,18.182,17.127,5d7782b4079153d44f30c8b3b9ccf495
+2026-05-18,Carson Williams,Tampa Bay Rays,closing,2026-05-18T06:53:24Z,betonlineag,700,12.500,11.775,5d7782b4079153d44f30c8b3b9ccf495
+2026-05-18,Pete Alonso,Tampa Bay Rays,closing,2026-05-18T06:53:24Z,betonlineag,400,20.000,18.957,5d7782b4079153d44f30c8b3b9ccf495
+2026-05-18,Ben Williamson,Tampa Bay Rays,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,5d7782b4079153d44f30c8b3b9ccf495
+2026-05-18,Blaze Alexander,Tampa Bay Rays,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,5d7782b4079153d44f30c8b3b9ccf495
+2026-05-18,Weston Wilson,Tampa Bay Rays,closing,2026-05-18T06:53:24Z,betonlineag,700,12.500,11.775,5d7782b4079153d44f30c8b3b9ccf495
+2026-05-18,Tyler Stephenson,Philadelphia Phillies,closing,2026-05-18T06:53:24Z,betonlineag,500,16.667,15.700,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,J.T. Realmuto,Philadelphia Phillies,closing,2026-05-18T06:53:24Z,betonlineag,500,16.667,15.700,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,TJ Friedl,Philadelphia Phillies,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Bryce Harper,Philadelphia Phillies,closing,2026-05-18T06:53:24Z,betonlineag,400,20.000,18.957,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Alec Bohm,Philadelphia Phillies,closing,2026-05-18T06:53:24Z,betonlineag,600,14.286,13.457,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Kyle Schwarber,Philadelphia Phillies,closing,2026-05-18T06:53:24Z,betonlineag,200,33.333,31.794,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Matt McLain,Philadelphia Phillies,closing,2026-05-18T06:53:24Z,betonlineag,700,12.500,11.775,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Ke'Bryan Hayes,Philadelphia Phillies,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Edmundo Sosa,Philadelphia Phillies,closing,2026-05-18T06:53:24Z,betonlineag,600,14.286,13.457,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Brandon Marsh,Philadelphia Phillies,closing,2026-05-18T06:53:24Z,betonlineag,600,14.286,13.457,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Spencer Steer,Philadelphia Phillies,closing,2026-05-18T06:53:24Z,betonlineag,450,18.182,17.127,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Trea Turner,Philadelphia Phillies,closing,2026-05-18T06:53:24Z,betonlineag,500,16.667,15.700,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Will Benson,Philadelphia Phillies,closing,2026-05-18T06:53:24Z,betonlineag,350,22.222,21.064,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Elly De La Cruz,Philadelphia Phillies,closing,2026-05-18T06:53:24Z,betonlineag,350,22.222,21.064,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Adolis Garcia,Philadelphia Phillies,closing,2026-05-18T06:53:24Z,betonlineag,400,20.000,18.957,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,JJ Bleday,Philadelphia Phillies,closing,2026-05-18T06:53:24Z,betonlineag,400,20.000,18.957,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Sal Stewart,Philadelphia Phillies,closing,2026-05-18T06:53:24Z,betonlineag,350,22.222,21.064,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Felix Reyes,Philadelphia Phillies,closing,2026-05-18T06:53:24Z,betonlineag,600,14.286,13.457,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Nathaniel Lowe,Philadelphia Phillies,closing,2026-05-18T06:53:24Z,betonlineag,500,16.667,15.700,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Steven Kwan,Detroit Tigers,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Spencer Torkelson,Detroit Tigers,closing,2026-05-18T06:53:24Z,betonlineag,450,18.182,17.127,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Austin Hedges,Detroit Tigers,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Jose Ramirez,Detroit Tigers,closing,2026-05-18T06:53:24Z,betonlineag,500,16.667,15.700,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Brayan Rocchio,Detroit Tigers,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Riley Greene,Detroit Tigers,closing,2026-05-18T06:53:24Z,betonlineag,450,18.182,17.127,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Angel Martinez,Detroit Tigers,closing,2026-05-18T06:53:24Z,betonlineag,700,12.500,11.775,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Zach McKinstry,Detroit Tigers,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Wenceel Perez,Detroit Tigers,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,David Fry,Detroit Tigers,closing,2026-05-18T06:53:24Z,betonlineag,700,12.500,11.775,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Matt Vierling,Detroit Tigers,closing,2026-05-18T06:53:24Z,betonlineag,700,12.500,11.775,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Dillon Dingler,Detroit Tigers,closing,2026-05-18T06:53:24Z,betonlineag,500,16.667,15.700,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Colt Keith,Detroit Tigers,closing,2026-05-18T06:53:24Z,betonlineag,700,12.500,11.775,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Travis Bazzana,Detroit Tigers,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Rhys Hoskins,Detroit Tigers,closing,2026-05-18T06:53:24Z,betonlineag,500,16.667,15.700,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Chase DeLauter,Detroit Tigers,closing,2026-05-18T06:53:24Z,betonlineag,700,12.500,11.775,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Kevin McGonigle,Detroit Tigers,closing,2026-05-18T06:53:24Z,betonlineag,700,12.500,11.775,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Patrick Bailey,Detroit Tigers,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Gage Workman,Detroit Tigers,closing,2026-05-18T06:53:24Z,betonlineag,700,12.500,11.775,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Keibert Ruiz,Washington Nationals,closing,2026-05-18T06:53:24Z,betonlineag,700,12.500,11.775,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Luis Garcia Jr.,Washington Nationals,closing,2026-05-18T06:53:24Z,betonlineag,600,14.286,13.457,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Mark Vientos,Washington Nationals,closing,2026-05-18T06:53:24Z,betonlineag,350,22.222,21.064,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Jacob Young,Washington Nationals,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Nasim Nunez,Washington Nationals,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Brett Baty,Washington Nationals,closing,2026-05-18T06:53:24Z,betonlineag,500,16.667,15.700,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,CJ Abrams,Washington Nationals,closing,2026-05-18T06:53:24Z,betonlineag,450,18.182,17.127,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Drew Millas,Washington Nationals,closing,2026-05-18T06:53:24Z,betonlineag,700,12.500,11.775,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Luis Torrens,Washington Nationals,closing,2026-05-18T06:53:24Z,betonlineag,700,12.500,11.775,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Brady House,Washington Nationals,closing,2026-05-18T06:53:24Z,betonlineag,500,16.667,15.700,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Marcus Semien,Washington Nationals,closing,2026-05-18T06:53:24Z,betonlineag,500,16.667,15.700,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Juan Soto,Washington Nationals,closing,2026-05-18T06:53:24Z,betonlineag,250,28.571,27.082,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Daylen Lile,Washington Nationals,closing,2026-05-18T06:53:24Z,betonlineag,500,16.667,15.700,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Bo Bichette,Washington Nationals,closing,2026-05-18T06:53:24Z,betonlineag,600,14.286,13.457,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Jose Tena,Washington Nationals,closing,2026-05-18T06:53:24Z,betonlineag,600,14.286,13.457,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,James Wood,Washington Nationals,closing,2026-05-18T06:53:24Z,betonlineag,225,30.769,29.165,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,MJ Melendez,Washington Nationals,closing,2026-05-18T06:53:24Z,betonlineag,300,25.000,23.697,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Carson Benge,Washington Nationals,closing,2026-05-18T06:53:24Z,betonlineag,450,18.182,17.127,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,A.J. Ewing,Washington Nationals,closing,2026-05-18T06:53:24Z,betonlineag,600,14.286,13.457,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Vladimir Guerrero Jr.,New York Yankees,closing,2026-05-18T06:53:24Z,betonlineag,500,16.667,15.700,13038bc4537d05af00935232c7a96b21
+2026-05-18,Aaron Judge,New York Yankees,closing,2026-05-18T06:53:24Z,betonlineag,150,40.000,38.153,13038bc4537d05af00935232c7a96b21
+2026-05-18,George Springer,New York Yankees,closing,2026-05-18T06:53:24Z,betonlineag,450,18.182,17.127,13038bc4537d05af00935232c7a96b21
+2026-05-18,Tyler Heineman,New York Yankees,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,13038bc4537d05af00935232c7a96b21
+2026-05-18,Anthony Volpe,New York Yankees,closing,2026-05-18T06:53:24Z,betonlineag,600,14.286,13.457,13038bc4537d05af00935232c7a96b21
+2026-05-18,Trent Grisham,New York Yankees,closing,2026-05-18T06:53:24Z,betonlineag,450,18.182,17.127,13038bc4537d05af00935232c7a96b21
+2026-05-18,Ernie Clement,New York Yankees,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,13038bc4537d05af00935232c7a96b21
+2026-05-18,Austin Wells,New York Yankees,closing,2026-05-18T06:53:24Z,betonlineag,600,14.286,13.457,13038bc4537d05af00935232c7a96b21
+2026-05-18,Daulton Varsho,New York Yankees,closing,2026-05-18T06:53:24Z,betonlineag,700,12.500,11.775,13038bc4537d05af00935232c7a96b21
+2026-05-18,Ben Rice,New York Yankees,closing,2026-05-18T06:53:24Z,betonlineag,350,22.222,21.064,13038bc4537d05af00935232c7a96b21
+2026-05-18,Davis Schneider,New York Yankees,closing,2026-05-18T06:53:24Z,betonlineag,600,14.286,13.457,13038bc4537d05af00935232c7a96b21
+2026-05-18,Jazz Chisholm Jr.,New York Yankees,closing,2026-05-18T06:53:24Z,betonlineag,400,20.000,18.957,13038bc4537d05af00935232c7a96b21
+2026-05-18,Cody Bellinger,New York Yankees,closing,2026-05-18T06:53:24Z,betonlineag,450,18.182,17.127,13038bc4537d05af00935232c7a96b21
+2026-05-18,Paul Goldschmidt,New York Yankees,closing,2026-05-18T06:53:24Z,betonlineag,400,20.000,18.957,13038bc4537d05af00935232c7a96b21
+2026-05-18,Myles Straw,New York Yankees,closing,2026-05-18T06:53:24Z,betonlineag,700,12.500,11.775,13038bc4537d05af00935232c7a96b21
+2026-05-18,Amed Rosario,New York Yankees,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,13038bc4537d05af00935232c7a96b21
+2026-05-18,Brandon Valenzuela,New York Yankees,closing,2026-05-18T06:53:24Z,betonlineag,700,12.500,11.775,13038bc4537d05af00935232c7a96b21
+2026-05-18,Kazuma Okamoto,New York Yankees,closing,2026-05-18T06:53:24Z,betonlineag,400,20.000,18.957,13038bc4537d05af00935232c7a96b21
+2026-05-18,Lenyn Sosa,New York Yankees,closing,2026-05-18T06:53:24Z,betonlineag,700,12.500,11.775,13038bc4537d05af00935232c7a96b21
+2026-05-18,Max Schuemann,New York Yankees,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,13038bc4537d05af00935232c7a96b21
+2026-05-18,Maikel Garcia,Kansas City Royals,closing,2026-05-18T06:53:24Z,betonlineag,600,14.286,13.457,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Salvador Perez,Kansas City Royals,closing,2026-05-18T06:53:24Z,betonlineag,500,16.667,15.700,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Jarren Duran,Kansas City Royals,closing,2026-05-18T06:53:24Z,betonlineag,500,16.667,15.700,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Kyle Isbel,Kansas City Royals,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Bobby Witt Jr.,Kansas City Royals,closing,2026-05-18T06:53:24Z,betonlineag,400,20.000,18.957,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Ceddanne Rafaela,Kansas City Royals,closing,2026-05-18T06:53:24Z,betonlineag,600,14.286,13.457,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Michael Massey,Kansas City Royals,closing,2026-05-18T06:53:24Z,betonlineag,600,14.286,13.457,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Vinnie Pasquantino,Kansas City Royals,closing,2026-05-18T06:53:24Z,betonlineag,500,16.667,15.700,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Wilyer Abreu,Kansas City Royals,closing,2026-05-18T06:53:24Z,betonlineag,350,22.222,21.064,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Marcelo Mayer,Kansas City Royals,closing,2026-05-18T06:53:24Z,betonlineag,600,14.286,13.457,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Mickey Gasper,Kansas City Royals,closing,2026-05-18T06:53:24Z,betonlineag,600,14.286,13.457,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Jac Caglianone,Kansas City Royals,closing,2026-05-18T06:53:24Z,betonlineag,450,18.182,17.127,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Carlos Narvaez,Kansas City Royals,closing,2026-05-18T06:53:24Z,betonlineag,600,14.286,13.457,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Carter Jensen,Kansas City Royals,closing,2026-05-18T06:53:24Z,betonlineag,400,20.000,18.957,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Isaac Collins,Kansas City Royals,closing,2026-05-18T06:53:24Z,betonlineag,700,12.500,11.775,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Andruw Monasterio,Kansas City Royals,closing,2026-05-18T06:53:24Z,betonlineag,700,12.500,11.775,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Caleb Durbin,Kansas City Royals,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Willson Contreras,Kansas City Royals,closing,2026-05-18T06:53:24Z,betonlineag,350,22.222,21.064,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Ian Happ,Chicago Cubs,closing,2026-05-18T06:53:24Z,betonlineag,350,22.222,21.064,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Blake Perkins,Chicago Cubs,closing,2026-05-18T06:53:24Z,betonlineag,700,12.500,11.775,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Christian Yelich,Chicago Cubs,closing,2026-05-18T06:53:24Z,betonlineag,600,14.286,13.457,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Nico Hoerner,Chicago Cubs,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Seiya Suzuki,Chicago Cubs,closing,2026-05-18T06:53:24Z,betonlineag,350,22.222,21.064,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Brice Turang,Chicago Cubs,closing,2026-05-18T06:53:24Z,betonlineag,600,14.286,13.457,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Michael Busch,Chicago Cubs,closing,2026-05-18T06:53:24Z,betonlineag,300,25.000,23.697,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Pete Crow-Armstrong,Chicago Cubs,closing,2026-05-18T06:53:24Z,betonlineag,450,18.182,17.127,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Dansby Swanson,Chicago Cubs,closing,2026-05-18T06:53:24Z,betonlineag,500,16.667,15.700,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Joey Ortiz,Chicago Cubs,closing,2026-05-18T06:53:24Z,betonlineag,700,12.500,11.775,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,William Contreras,Chicago Cubs,closing,2026-05-18T06:53:24Z,betonlineag,400,20.000,18.957,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Sal Frelick,Chicago Cubs,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Jackson Chourio,Chicago Cubs,closing,2026-05-18T06:53:24Z,betonlineag,350,22.222,21.064,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Andrew Vaughn,Chicago Cubs,closing,2026-05-18T06:53:24Z,betonlineag,350,22.222,21.064,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Carson Kelly,Chicago Cubs,closing,2026-05-18T06:53:24Z,betonlineag,450,18.182,17.127,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Gary Sanchez,Chicago Cubs,closing,2026-05-18T06:53:24Z,betonlineag,350,22.222,21.064,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Luis Rengifo,Chicago Cubs,closing,2026-05-18T06:53:24Z,betonlineag,600,14.286,13.457,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Alex Bregman,Chicago Cubs,closing,2026-05-18T06:53:24Z,betonlineag,350,22.222,21.064,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Moisés Ballesteros,Chicago Cubs,closing,2026-05-18T06:53:24Z,betonlineag,500,16.667,15.700,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Michael Conforto,Chicago Cubs,closing,2026-05-18T06:53:24Z,betonlineag,450,18.182,17.127,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Yordan Alvarez,Minnesota Twins,closing,2026-05-18T06:53:24Z,betonlineag,300,25.000,23.697,42fd4ebc22c3536132b84d9c0a55ef29
+2026-05-18,Byron Buxton,Minnesota Twins,closing,2026-05-18T06:53:24Z,betonlineag,300,25.000,23.697,42fd4ebc22c3536132b84d9c0a55ef29
+2026-05-18,Ryan Jeffers,Minnesota Twins,closing,2026-05-18T06:53:24Z,betonlineag,600,14.286,13.457,42fd4ebc22c3536132b84d9c0a55ef29
+2026-05-18,Trevor Larnach,Minnesota Twins,closing,2026-05-18T06:53:24Z,betonlineag,700,12.500,11.775,42fd4ebc22c3536132b84d9c0a55ef29
+2026-05-18,Christian Vazquez,Minnesota Twins,closing,2026-05-18T06:53:24Z,betonlineag,700,12.500,11.775,42fd4ebc22c3536132b84d9c0a55ef29
+2026-05-18,Royce Lewis,Minnesota Twins,closing,2026-05-18T06:53:24Z,betonlineag,600,14.286,13.457,42fd4ebc22c3536132b84d9c0a55ef29
+2026-05-18,Brooks Lee,Minnesota Twins,closing,2026-05-18T06:53:24Z,betonlineag,700,12.500,11.775,42fd4ebc22c3536132b84d9c0a55ef29
+2026-05-18,Austin Martin,Minnesota Twins,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,42fd4ebc22c3536132b84d9c0a55ef29
+2026-05-18,Zach Dezenzo,Minnesota Twins,closing,2026-05-18T06:53:24Z,betonlineag,700,12.500,11.775,42fd4ebc22c3536132b84d9c0a55ef29
+2026-05-18,Isaac Paredes,Minnesota Twins,closing,2026-05-18T06:53:24Z,betonlineag,500,16.667,15.700,42fd4ebc22c3536132b84d9c0a55ef29
+2026-05-18,Cam Smith,Minnesota Twins,closing,2026-05-18T06:53:24Z,betonlineag,700,12.500,11.775,42fd4ebc22c3536132b84d9c0a55ef29
+2026-05-18,Luke Keaschall,Minnesota Twins,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,42fd4ebc22c3536132b84d9c0a55ef29
+2026-05-18,Christian Walker,Minnesota Twins,closing,2026-05-18T06:53:24Z,betonlineag,400,20.000,18.957,42fd4ebc22c3536132b84d9c0a55ef29
+2026-05-18,Zach Cole,Minnesota Twins,closing,2026-05-18T06:53:24Z,betonlineag,500,16.667,15.700,42fd4ebc22c3536132b84d9c0a55ef29
+2026-05-18,Kody Clemens,Minnesota Twins,closing,2026-05-18T06:53:24Z,betonlineag,500,16.667,15.700,42fd4ebc22c3536132b84d9c0a55ef29
+2026-05-18,Brice Matthews,Minnesota Twins,closing,2026-05-18T06:53:24Z,betonlineag,500,16.667,15.700,42fd4ebc22c3536132b84d9c0a55ef29
+2026-05-18,Josh Bell,Minnesota Twins,closing,2026-05-18T06:53:24Z,betonlineag,600,14.286,13.457,42fd4ebc22c3536132b84d9c0a55ef29
+2026-05-18,Ezequiel Tovar,Colorado Rockies,closing,2026-05-18T06:53:24Z,betonlineag,600,14.286,13.457,13c307bac70250bed56ce2a649cc492e
+2026-05-18,Ezequiel Duran,Colorado Rockies,closing,2026-05-18T06:53:24Z,betonlineag,700,12.500,11.775,13c307bac70250bed56ce2a649cc492e
+2026-05-18,Josh Jung,Colorado Rockies,closing,2026-05-18T06:53:24Z,betonlineag,600,14.286,13.457,13c307bac70250bed56ce2a649cc492e
+2026-05-18,Hunter Goodman,Colorado Rockies,closing,2026-05-18T06:53:24Z,betonlineag,300,25.000,23.697,13c307bac70250bed56ce2a649cc492e
+2026-05-18,Brenton Doyle,Colorado Rockies,closing,2026-05-18T06:53:24Z,betonlineag,600,14.286,13.457,13c307bac70250bed56ce2a649cc492e
+2026-05-18,Evan Carter,Colorado Rockies,closing,2026-05-18T06:53:24Z,betonlineag,700,12.500,11.775,13c307bac70250bed56ce2a649cc492e
+2026-05-18,Mickey Moniak,Colorado Rockies,closing,2026-05-18T06:53:24Z,betonlineag,400,20.000,18.957,13c307bac70250bed56ce2a649cc492e
+2026-05-18,Jake Burger,Colorado Rockies,closing,2026-05-18T06:53:24Z,betonlineag,400,20.000,18.957,13c307bac70250bed56ce2a649cc492e
+2026-05-18,Justin Foscue,Colorado Rockies,closing,2026-05-18T06:53:24Z,betonlineag,700,12.500,11.775,13c307bac70250bed56ce2a649cc492e
+2026-05-18,Jordan Beck,Colorado Rockies,closing,2026-05-18T06:53:24Z,betonlineag,500,16.667,15.700,13c307bac70250bed56ce2a649cc492e
+2026-05-18,Sam Haggerty,Colorado Rockies,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,13c307bac70250bed56ce2a649cc492e
+2026-05-18,Jake McCarthy,Colorado Rockies,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,13c307bac70250bed56ce2a649cc492e
+2026-05-18,Brandon Nimmo,Colorado Rockies,closing,2026-05-18T06:53:24Z,betonlineag,500,16.667,15.700,13c307bac70250bed56ce2a649cc492e
+2026-05-18,Kyle Karros,Colorado Rockies,closing,2026-05-18T06:53:24Z,betonlineag,700,12.500,11.775,13c307bac70250bed56ce2a649cc492e
+2026-05-18,Danny Jansen,Colorado Rockies,closing,2026-05-18T06:53:24Z,betonlineag,500,16.667,15.700,13c307bac70250bed56ce2a649cc492e
+2026-05-18,Willi Castro,Colorado Rockies,closing,2026-05-18T06:53:24Z,betonlineag,700,12.500,11.775,13c307bac70250bed56ce2a649cc492e
+2026-05-18,Andrew McCutchen,Colorado Rockies,closing,2026-05-18T06:53:24Z,betonlineag,500,16.667,15.700,13c307bac70250bed56ce2a649cc492e
+2026-05-18,TJ Rumfield,Colorado Rockies,closing,2026-05-18T06:53:24Z,betonlineag,600,14.286,13.457,13c307bac70250bed56ce2a649cc492e
+2026-05-18,Shea Langeliers,Los Angeles Angels,closing,2026-05-18T06:53:24Z,betonlineag,300,25.000,23.697,a8e5153e31f262e9df1bef1566519c3f
+2026-05-18,Logan O'Hoppe,Los Angeles Angels,closing,2026-05-18T06:53:24Z,betonlineag,600,14.286,13.457,a8e5153e31f262e9df1bef1566519c3f
+2026-05-18,Lawrence Butler,Los Angeles Angels,closing,2026-05-18T06:53:24Z,betonlineag,600,14.286,13.457,a8e5153e31f262e9df1bef1566519c3f
+2026-05-18,Zach Neto,Los Angeles Angels,closing,2026-05-18T06:53:24Z,betonlineag,450,18.182,17.127,a8e5153e31f262e9df1bef1566519c3f
+2026-05-18,Jo Adell,Los Angeles Angels,closing,2026-05-18T06:53:24Z,betonlineag,450,18.182,17.127,a8e5153e31f262e9df1bef1566519c3f
+2026-05-18,Brent Rooker,Los Angeles Angels,closing,2026-05-18T06:53:24Z,betonlineag,350,22.222,21.064,a8e5153e31f262e9df1bef1566519c3f
+2026-05-18,Tyler Soderstrom,Los Angeles Angels,closing,2026-05-18T06:53:24Z,betonlineag,350,22.222,21.064,a8e5153e31f262e9df1bef1566519c3f
+2026-05-18,Mike Trout,Los Angeles Angels,closing,2026-05-18T06:53:24Z,betonlineag,400,20.000,18.957,a8e5153e31f262e9df1bef1566519c3f
+2026-05-18,Zack Gelof,Los Angeles Angels,closing,2026-05-18T06:53:24Z,betonlineag,500,16.667,15.700,a8e5153e31f262e9df1bef1566519c3f
+2026-05-18,Carlos Cortes,Los Angeles Angels,closing,2026-05-18T06:53:24Z,betonlineag,600,14.286,13.457,a8e5153e31f262e9df1bef1566519c3f
+2026-05-18,Yoan Moncada,Los Angeles Angels,closing,2026-05-18T06:53:24Z,betonlineag,500,16.667,15.700,a8e5153e31f262e9df1bef1566519c3f
+2026-05-18,Jorge Soler,Los Angeles Angels,closing,2026-05-18T06:53:24Z,betonlineag,400,20.000,18.957,a8e5153e31f262e9df1bef1566519c3f
+2026-05-18,Nick Kurtz,Los Angeles Angels,closing,2026-05-18T06:53:24Z,betonlineag,300,25.000,23.697,a8e5153e31f262e9df1bef1566519c3f
+2026-05-18,Oswald Peraza,Los Angeles Angels,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,a8e5153e31f262e9df1bef1566519c3f
+2026-05-18,Nolan Schanuel,Los Angeles Angels,closing,2026-05-18T06:53:24Z,betonlineag,700,12.500,11.775,a8e5153e31f262e9df1bef1566519c3f
+2026-05-18,Darell Hernaiz,Los Angeles Angels,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,a8e5153e31f262e9df1bef1566519c3f
+2026-05-18,Henry Bolte,Los Angeles Angels,closing,2026-05-18T06:53:24Z,betonlineag,450,18.182,17.127,a8e5153e31f262e9df1bef1566519c3f
+2026-05-18,Josh Lowe,Los Angeles Angels,closing,2026-05-18T06:53:24Z,betonlineag,700,12.500,11.775,a8e5153e31f262e9df1bef1566519c3f
+2026-05-18,Jeff McNeil,Los Angeles Angels,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,a8e5153e31f262e9df1bef1566519c3f
+2026-05-18,Vaughn Grissom,Los Angeles Angels,closing,2026-05-18T06:53:24Z,betonlineag,700,12.500,11.775,a8e5153e31f262e9df1bef1566519c3f
+2026-05-18,Geraldo Perdomo,Arizona Diamondbacks,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,daf39ff0f5f85b7da76274b743b1ab1f
+2026-05-18,Ketel Marte,Arizona Diamondbacks,closing,2026-05-18T06:53:24Z,betonlineag,400,20.000,18.957,daf39ff0f5f85b7da76274b743b1ab1f
+2026-05-18,Ildemaro Vargas,Arizona Diamondbacks,closing,2026-05-18T06:53:24Z,betonlineag,700,12.500,11.775,daf39ff0f5f85b7da76274b743b1ab1f
+2026-05-18,Corbin Carroll,Arizona Diamondbacks,closing,2026-05-18T06:53:24Z,betonlineag,600,14.286,13.457,daf39ff0f5f85b7da76274b743b1ab1f
+2026-05-18,Gabriel Moreno,Arizona Diamondbacks,closing,2026-05-18T06:53:24Z,betonlineag,700,12.500,11.775,daf39ff0f5f85b7da76274b743b1ab1f
+2026-05-18,Lourdes Gurriel Jr.,Arizona Diamondbacks,closing,2026-05-18T06:53:24Z,betonlineag,600,14.286,13.457,daf39ff0f5f85b7da76274b743b1ab1f
+2026-05-18,Casey Schmitt,Arizona Diamondbacks,closing,2026-05-18T06:53:24Z,betonlineag,500,16.667,15.700,daf39ff0f5f85b7da76274b743b1ab1f
+2026-05-18,Matt Chapman,Arizona Diamondbacks,closing,2026-05-18T06:53:24Z,betonlineag,700,12.500,11.775,daf39ff0f5f85b7da76274b743b1ab1f
+2026-05-18,Rafael Devers,Arizona Diamondbacks,closing,2026-05-18T06:53:24Z,betonlineag,450,18.182,17.127,daf39ff0f5f85b7da76274b743b1ab1f
+2026-05-18,Jung Hoo Lee,Arizona Diamondbacks,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,daf39ff0f5f85b7da76274b743b1ab1f
+2026-05-18,Daniel Susac,Arizona Diamondbacks,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,daf39ff0f5f85b7da76274b743b1ab1f
+2026-05-18,Willy Adames,Arizona Diamondbacks,closing,2026-05-18T06:53:24Z,betonlineag,600,14.286,13.457,daf39ff0f5f85b7da76274b743b1ab1f
+2026-05-18,Jose Fernandez,Arizona Diamondbacks,closing,2026-05-18T06:53:24Z,betonlineag,700,12.500,11.775,daf39ff0f5f85b7da76274b743b1ab1f
+2026-05-18,Drew Gilbert,Arizona Diamondbacks,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,daf39ff0f5f85b7da76274b743b1ab1f
+2026-05-18,Luis Arraez,Arizona Diamondbacks,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,daf39ff0f5f85b7da76274b743b1ab1f
+2026-05-18,Harrison Bader,Arizona Diamondbacks,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,daf39ff0f5f85b7da76274b743b1ab1f
+2026-05-18,Nolan Arenado,Arizona Diamondbacks,closing,2026-05-18T06:53:24Z,betonlineag,500,16.667,15.700,daf39ff0f5f85b7da76274b743b1ab1f
+2026-05-18,Ryan Waldschmidt,Arizona Diamondbacks,closing,2026-05-18T06:53:24Z,betonlineag,700,12.500,11.775,daf39ff0f5f85b7da76274b743b1ab1f
+2026-05-18,J.P. Crawford,Seattle Mariners,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,14c70bb665938baff9719079a82cbb93
+2026-05-18,Andrew Benintendi,Seattle Mariners,closing,2026-05-18T06:53:24Z,betonlineag,500,16.667,15.700,14c70bb665938baff9719079a82cbb93
+2026-05-18,Julio Rodriguez,Seattle Mariners,closing,2026-05-18T06:53:24Z,betonlineag,450,18.182,17.127,14c70bb665938baff9719079a82cbb93
+2026-05-18,Colson Montgomery,Seattle Mariners,closing,2026-05-18T06:53:24Z,betonlineag,400,20.000,18.957,14c70bb665938baff9719079a82cbb93
+2026-05-18,Mitch Garver,Seattle Mariners,closing,2026-05-18T06:53:24Z,betonlineag,450,18.182,17.127,14c70bb665938baff9719079a82cbb93
+2026-05-18,Leo Rivas,Seattle Mariners,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,14c70bb665938baff9719079a82cbb93
+2026-05-18,Miguel Vargas,Seattle Mariners,closing,2026-05-18T06:53:24Z,betonlineag,500,16.667,15.700,14c70bb665938baff9719079a82cbb93
+2026-05-18,Cole Young,Seattle Mariners,closing,2026-05-18T06:53:24Z,betonlineag,700,12.500,11.775,14c70bb665938baff9719079a82cbb93
+2026-05-18,Randy Arozarena,Seattle Mariners,closing,2026-05-18T06:53:24Z,betonlineag,450,18.182,17.127,14c70bb665938baff9719079a82cbb93
+2026-05-18,Chase Meidroth,Seattle Mariners,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,14c70bb665938baff9719079a82cbb93
+2026-05-18,Josh Naylor,Seattle Mariners,closing,2026-05-18T06:53:24Z,betonlineag,600,14.286,13.457,14c70bb665938baff9719079a82cbb93
+2026-05-18,Tristan Peters,Seattle Mariners,closing,2026-05-18T06:53:24Z,betonlineag,700,12.500,11.775,14c70bb665938baff9719079a82cbb93
+2026-05-18,Munetaka Murakami,Seattle Mariners,closing,2026-05-18T06:53:24Z,betonlineag,350,22.222,21.064,14c70bb665938baff9719079a82cbb93
+2026-05-18,Sam Antonacci,Seattle Mariners,closing,2026-05-18T06:53:24Z,betonlineag,700,12.500,11.775,14c70bb665938baff9719079a82cbb93
+2026-05-18,Rob Refsnyder,Seattle Mariners,closing,2026-05-18T06:53:24Z,betonlineag,700,12.500,11.775,14c70bb665938baff9719079a82cbb93
+2026-05-18,Connor Joe,Seattle Mariners,closing,2026-05-18T06:53:24Z,betonlineag,600,14.286,13.457,14c70bb665938baff9719079a82cbb93
+2026-05-18,Jarred Kelenic,Seattle Mariners,closing,2026-05-18T06:53:24Z,betonlineag,450,18.182,17.127,14c70bb665938baff9719079a82cbb93
+2026-05-18,Drew Romo,Seattle Mariners,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,14c70bb665938baff9719079a82cbb93
+2026-05-18,Fernando Tatis Jr.,San Diego Padres,closing,2026-05-18T06:53:24Z,betonlineag,600,14.286,13.457,d98976061eadebf5d9ba5c0632212976
+2026-05-18,Will Smith,San Diego Padres,closing,2026-05-18T06:53:24Z,betonlineag,600,14.286,13.457,d98976061eadebf5d9ba5c0632212976
+2026-05-18,Ty France,San Diego Padres,closing,2026-05-18T06:53:24Z,betonlineag,700,12.500,11.775,d98976061eadebf5d9ba5c0632212976
+2026-05-18,Max Muncy,San Diego Padres,closing,2026-05-18T06:53:24Z,betonlineag,450,18.182,17.127,d98976061eadebf5d9ba5c0632212976
+2026-05-18,Manny Machado,San Diego Padres,closing,2026-05-18T06:53:24Z,betonlineag,600,14.286,13.457,d98976061eadebf5d9ba5c0632212976
+2026-05-18,Teoscar Hernandez,San Diego Padres,closing,2026-05-18T06:53:24Z,betonlineag,600,14.286,13.457,d98976061eadebf5d9ba5c0632212976
+2026-05-18,Shohei Ohtani,San Diego Padres,closing,2026-05-18T06:53:24Z,betonlineag,350,22.222,21.064,d98976061eadebf5d9ba5c0632212976
+2026-05-18,Andy Pages,San Diego Padres,closing,2026-05-18T06:53:24Z,betonlineag,600,14.286,13.457,d98976061eadebf5d9ba5c0632212976
+2026-05-18,Mookie Betts,San Diego Padres,closing,2026-05-18T06:53:24Z,betonlineag,600,14.286,13.457,d98976061eadebf5d9ba5c0632212976
+2026-05-18,Freddie Freeman,San Diego Padres,closing,2026-05-18T06:53:24Z,betonlineag,600,14.286,13.457,d98976061eadebf5d9ba5c0632212976
+2026-05-18,Xander Bogaerts,San Diego Padres,closing,2026-05-18T06:53:24Z,betonlineag,700,12.500,11.775,d98976061eadebf5d9ba5c0632212976
+2026-05-18,Hyeseong Kim,San Diego Padres,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,d98976061eadebf5d9ba5c0632212976
+2026-05-18,Freddy Fermin,San Diego Padres,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,d98976061eadebf5d9ba5c0632212976
+2026-05-18,Gavin Sheets,San Diego Padres,closing,2026-05-18T06:53:24Z,betonlineag,700,12.500,11.775,d98976061eadebf5d9ba5c0632212976
+2026-05-18,Jackson Merrill,San Diego Padres,closing,2026-05-18T06:53:24Z,betonlineag,600,14.286,13.457,d98976061eadebf5d9ba5c0632212976
+2026-05-18,Kyle Tucker,San Diego Padres,closing,2026-05-18T06:53:24Z,betonlineag,600,14.286,13.457,d98976061eadebf5d9ba5c0632212976
+2026-05-18,Miguel Andujar,San Diego Padres,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,d98976061eadebf5d9ba5c0632212976
+2026-05-18,Ramon Laureano,San Diego Padres,closing,2026-05-18T06:53:24Z,betonlineag,900,10.000,9.357,d98976061eadebf5d9ba5c0632212976
+2026-05-18,Ozzie Albies,Miami Marlins,closing,2026-05-18T06:54:04Z,betonlineag,600,14.286,13.457,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Austin Riley,Miami Marlins,closing,2026-05-18T06:54:04Z,betonlineag,500,16.667,15.700,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Matt Olson,Miami Marlins,closing,2026-05-18T06:54:04Z,betonlineag,350,22.222,21.064,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Connor Norby,Miami Marlins,closing,2026-05-18T06:54:04Z,betonlineag,700,12.500,11.775,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Xavier Edwards,Miami Marlins,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Otto Lopez,Miami Marlins,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Kyle Stowers,Miami Marlins,closing,2026-05-18T06:54:04Z,betonlineag,400,20.000,18.957,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Michael Harris II,Miami Marlins,closing,2026-05-18T06:54:04Z,betonlineag,400,20.000,18.957,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Owen Caissie,Miami Marlins,closing,2026-05-18T06:54:04Z,betonlineag,600,14.286,13.457,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Mauricio Dubon,Miami Marlins,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Jakob Marsee,Miami Marlins,closing,2026-05-18T06:54:04Z,betonlineag,700,12.500,11.775,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Mike Yastrzemski,Miami Marlins,closing,2026-05-18T06:54:04Z,betonlineag,600,14.286,13.457,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Ha-Seong Kim,Miami Marlins,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Drake Baldwin,Miami Marlins,closing,2026-05-18T06:54:04Z,betonlineag,450,18.182,17.127,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Joe Mack,Miami Marlins,closing,2026-05-18T06:54:04Z,betonlineag,700,12.500,11.775,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Liam Hicks,Miami Marlins,closing,2026-05-18T06:54:04Z,betonlineag,700,12.500,11.775,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Leo Jimenez,Miami Marlins,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Dominic Smith,Miami Marlins,closing,2026-05-18T06:54:04Z,betonlineag,700,12.500,11.775,60ea4be5f7a9bd97fd35cbbbe9e208fa
+2026-05-18,Taylor Walls,Tampa Bay Rays,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,5d7782b4079153d44f30c8b3b9ccf495
+2026-05-18,Yandy Diaz,Tampa Bay Rays,closing,2026-05-18T06:54:04Z,betonlineag,500,16.667,15.700,5d7782b4079153d44f30c8b3b9ccf495
+2026-05-18,Jonathan Aranda,Tampa Bay Rays,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,5d7782b4079153d44f30c8b3b9ccf495
+2026-05-18,Adley Rutschman,Tampa Bay Rays,closing,2026-05-18T06:54:04Z,betonlineag,600,14.286,13.457,5d7782b4079153d44f30c8b3b9ccf495
+2026-05-18,Gunnar Henderson,Tampa Bay Rays,closing,2026-05-18T06:54:04Z,betonlineag,500,16.667,15.700,5d7782b4079153d44f30c8b3b9ccf495
+2026-05-18,Junior Caminero,Tampa Bay Rays,closing,2026-05-18T06:54:04Z,betonlineag,300,25.000,23.697,5d7782b4079153d44f30c8b3b9ccf495
+2026-05-18,Jonny Deluca,Tampa Bay Rays,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,5d7782b4079153d44f30c8b3b9ccf495
+2026-05-18,Taylor Ward,Tampa Bay Rays,closing,2026-05-18T06:54:04Z,betonlineag,600,14.286,13.457,5d7782b4079153d44f30c8b3b9ccf495
+2026-05-18,Chandler Simpson,Tampa Bay Rays,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,5d7782b4079153d44f30c8b3b9ccf495
+2026-05-18,Nick Fortes,Tampa Bay Rays,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,5d7782b4079153d44f30c8b3b9ccf495
+2026-05-18,Ryan Vilade,Tampa Bay Rays,closing,2026-05-18T06:54:04Z,betonlineag,700,12.500,11.775,5d7782b4079153d44f30c8b3b9ccf495
+2026-05-18,Coby Mayo,Tampa Bay Rays,closing,2026-05-18T06:54:04Z,betonlineag,450,18.182,17.127,5d7782b4079153d44f30c8b3b9ccf495
+2026-05-18,Leody Taveras,Tampa Bay Rays,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,5d7782b4079153d44f30c8b3b9ccf495
+2026-05-18,Tyler O'Neill,Tampa Bay Rays,closing,2026-05-18T06:54:04Z,betonlineag,450,18.182,17.127,5d7782b4079153d44f30c8b3b9ccf495
+2026-05-18,Carson Williams,Tampa Bay Rays,closing,2026-05-18T06:54:04Z,betonlineag,700,12.500,11.775,5d7782b4079153d44f30c8b3b9ccf495
+2026-05-18,Pete Alonso,Tampa Bay Rays,closing,2026-05-18T06:54:04Z,betonlineag,400,20.000,18.957,5d7782b4079153d44f30c8b3b9ccf495
+2026-05-18,Ben Williamson,Tampa Bay Rays,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,5d7782b4079153d44f30c8b3b9ccf495
+2026-05-18,Blaze Alexander,Tampa Bay Rays,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,5d7782b4079153d44f30c8b3b9ccf495
+2026-05-18,Weston Wilson,Tampa Bay Rays,closing,2026-05-18T06:54:04Z,betonlineag,700,12.500,11.775,5d7782b4079153d44f30c8b3b9ccf495
+2026-05-18,Tyler Stephenson,Philadelphia Phillies,closing,2026-05-18T06:54:04Z,betonlineag,500,16.667,15.700,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,J.T. Realmuto,Philadelphia Phillies,closing,2026-05-18T06:54:04Z,betonlineag,500,16.667,15.700,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,TJ Friedl,Philadelphia Phillies,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Bryce Harper,Philadelphia Phillies,closing,2026-05-18T06:54:04Z,betonlineag,400,20.000,18.957,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Alec Bohm,Philadelphia Phillies,closing,2026-05-18T06:54:04Z,betonlineag,600,14.286,13.457,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Kyle Schwarber,Philadelphia Phillies,closing,2026-05-18T06:54:04Z,betonlineag,200,33.333,31.794,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Matt McLain,Philadelphia Phillies,closing,2026-05-18T06:54:04Z,betonlineag,700,12.500,11.775,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Ke'Bryan Hayes,Philadelphia Phillies,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Edmundo Sosa,Philadelphia Phillies,closing,2026-05-18T06:54:04Z,betonlineag,600,14.286,13.457,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Brandon Marsh,Philadelphia Phillies,closing,2026-05-18T06:54:04Z,betonlineag,600,14.286,13.457,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Spencer Steer,Philadelphia Phillies,closing,2026-05-18T06:54:04Z,betonlineag,450,18.182,17.127,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Trea Turner,Philadelphia Phillies,closing,2026-05-18T06:54:04Z,betonlineag,500,16.667,15.700,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Will Benson,Philadelphia Phillies,closing,2026-05-18T06:54:04Z,betonlineag,350,22.222,21.064,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Elly De La Cruz,Philadelphia Phillies,closing,2026-05-18T06:54:04Z,betonlineag,350,22.222,21.064,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Adolis Garcia,Philadelphia Phillies,closing,2026-05-18T06:54:04Z,betonlineag,400,20.000,18.957,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,JJ Bleday,Philadelphia Phillies,closing,2026-05-18T06:54:04Z,betonlineag,400,20.000,18.957,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Sal Stewart,Philadelphia Phillies,closing,2026-05-18T06:54:04Z,betonlineag,350,22.222,21.064,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Felix Reyes,Philadelphia Phillies,closing,2026-05-18T06:54:04Z,betonlineag,600,14.286,13.457,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Nathaniel Lowe,Philadelphia Phillies,closing,2026-05-18T06:54:04Z,betonlineag,500,16.667,15.700,0659b2fd47b200a2c0fe612b8a32e5b1
+2026-05-18,Steven Kwan,Detroit Tigers,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Spencer Torkelson,Detroit Tigers,closing,2026-05-18T06:54:04Z,betonlineag,450,18.182,17.127,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Austin Hedges,Detroit Tigers,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Jose Ramirez,Detroit Tigers,closing,2026-05-18T06:54:04Z,betonlineag,500,16.667,15.700,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Brayan Rocchio,Detroit Tigers,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Riley Greene,Detroit Tigers,closing,2026-05-18T06:54:04Z,betonlineag,450,18.182,17.127,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Angel Martinez,Detroit Tigers,closing,2026-05-18T06:54:04Z,betonlineag,700,12.500,11.775,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Zach McKinstry,Detroit Tigers,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Wenceel Perez,Detroit Tigers,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,David Fry,Detroit Tigers,closing,2026-05-18T06:54:04Z,betonlineag,700,12.500,11.775,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Matt Vierling,Detroit Tigers,closing,2026-05-18T06:54:04Z,betonlineag,700,12.500,11.775,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Dillon Dingler,Detroit Tigers,closing,2026-05-18T06:54:04Z,betonlineag,500,16.667,15.700,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Colt Keith,Detroit Tigers,closing,2026-05-18T06:54:04Z,betonlineag,700,12.500,11.775,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Travis Bazzana,Detroit Tigers,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Rhys Hoskins,Detroit Tigers,closing,2026-05-18T06:54:04Z,betonlineag,500,16.667,15.700,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Chase DeLauter,Detroit Tigers,closing,2026-05-18T06:54:04Z,betonlineag,700,12.500,11.775,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Kevin McGonigle,Detroit Tigers,closing,2026-05-18T06:54:04Z,betonlineag,700,12.500,11.775,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Patrick Bailey,Detroit Tigers,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Gage Workman,Detroit Tigers,closing,2026-05-18T06:54:04Z,betonlineag,700,12.500,11.775,6990aa317792d95bc36b258c5662a9b4
+2026-05-18,Keibert Ruiz,Washington Nationals,closing,2026-05-18T06:54:04Z,betonlineag,700,12.500,11.775,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Luis Garcia Jr.,Washington Nationals,closing,2026-05-18T06:54:04Z,betonlineag,600,14.286,13.457,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Mark Vientos,Washington Nationals,closing,2026-05-18T06:54:04Z,betonlineag,350,22.222,21.064,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Jacob Young,Washington Nationals,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Nasim Nunez,Washington Nationals,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Brett Baty,Washington Nationals,closing,2026-05-18T06:54:04Z,betonlineag,500,16.667,15.700,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,CJ Abrams,Washington Nationals,closing,2026-05-18T06:54:04Z,betonlineag,450,18.182,17.127,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Drew Millas,Washington Nationals,closing,2026-05-18T06:54:04Z,betonlineag,700,12.500,11.775,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Luis Torrens,Washington Nationals,closing,2026-05-18T06:54:04Z,betonlineag,700,12.500,11.775,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Brady House,Washington Nationals,closing,2026-05-18T06:54:04Z,betonlineag,500,16.667,15.700,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Marcus Semien,Washington Nationals,closing,2026-05-18T06:54:04Z,betonlineag,500,16.667,15.700,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Juan Soto,Washington Nationals,closing,2026-05-18T06:54:04Z,betonlineag,250,28.571,27.082,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Daylen Lile,Washington Nationals,closing,2026-05-18T06:54:04Z,betonlineag,500,16.667,15.700,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Bo Bichette,Washington Nationals,closing,2026-05-18T06:54:04Z,betonlineag,600,14.286,13.457,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Jose Tena,Washington Nationals,closing,2026-05-18T06:54:04Z,betonlineag,600,14.286,13.457,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,James Wood,Washington Nationals,closing,2026-05-18T06:54:04Z,betonlineag,225,30.769,29.165,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,MJ Melendez,Washington Nationals,closing,2026-05-18T06:54:04Z,betonlineag,300,25.000,23.697,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Carson Benge,Washington Nationals,closing,2026-05-18T06:54:04Z,betonlineag,450,18.182,17.127,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,A.J. Ewing,Washington Nationals,closing,2026-05-18T06:54:04Z,betonlineag,600,14.286,13.457,8bf07e3c1ae5450be5661196332a989f
+2026-05-18,Vladimir Guerrero Jr.,New York Yankees,closing,2026-05-18T06:54:04Z,betonlineag,500,16.667,15.700,13038bc4537d05af00935232c7a96b21
+2026-05-18,Aaron Judge,New York Yankees,closing,2026-05-18T06:54:04Z,betonlineag,150,40.000,38.153,13038bc4537d05af00935232c7a96b21
+2026-05-18,George Springer,New York Yankees,closing,2026-05-18T06:54:04Z,betonlineag,450,18.182,17.127,13038bc4537d05af00935232c7a96b21
+2026-05-18,Tyler Heineman,New York Yankees,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,13038bc4537d05af00935232c7a96b21
+2026-05-18,Anthony Volpe,New York Yankees,closing,2026-05-18T06:54:04Z,betonlineag,600,14.286,13.457,13038bc4537d05af00935232c7a96b21
+2026-05-18,Trent Grisham,New York Yankees,closing,2026-05-18T06:54:04Z,betonlineag,450,18.182,17.127,13038bc4537d05af00935232c7a96b21
+2026-05-18,Ernie Clement,New York Yankees,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,13038bc4537d05af00935232c7a96b21
+2026-05-18,Austin Wells,New York Yankees,closing,2026-05-18T06:54:04Z,betonlineag,600,14.286,13.457,13038bc4537d05af00935232c7a96b21
+2026-05-18,Daulton Varsho,New York Yankees,closing,2026-05-18T06:54:04Z,betonlineag,700,12.500,11.775,13038bc4537d05af00935232c7a96b21
+2026-05-18,Ben Rice,New York Yankees,closing,2026-05-18T06:54:04Z,betonlineag,350,22.222,21.064,13038bc4537d05af00935232c7a96b21
+2026-05-18,Davis Schneider,New York Yankees,closing,2026-05-18T06:54:04Z,betonlineag,600,14.286,13.457,13038bc4537d05af00935232c7a96b21
+2026-05-18,Jazz Chisholm Jr.,New York Yankees,closing,2026-05-18T06:54:04Z,betonlineag,400,20.000,18.957,13038bc4537d05af00935232c7a96b21
+2026-05-18,Cody Bellinger,New York Yankees,closing,2026-05-18T06:54:04Z,betonlineag,450,18.182,17.127,13038bc4537d05af00935232c7a96b21
+2026-05-18,Paul Goldschmidt,New York Yankees,closing,2026-05-18T06:54:04Z,betonlineag,400,20.000,18.957,13038bc4537d05af00935232c7a96b21
+2026-05-18,Myles Straw,New York Yankees,closing,2026-05-18T06:54:04Z,betonlineag,700,12.500,11.775,13038bc4537d05af00935232c7a96b21
+2026-05-18,Amed Rosario,New York Yankees,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,13038bc4537d05af00935232c7a96b21
+2026-05-18,Brandon Valenzuela,New York Yankees,closing,2026-05-18T06:54:04Z,betonlineag,700,12.500,11.775,13038bc4537d05af00935232c7a96b21
+2026-05-18,Kazuma Okamoto,New York Yankees,closing,2026-05-18T06:54:04Z,betonlineag,400,20.000,18.957,13038bc4537d05af00935232c7a96b21
+2026-05-18,Lenyn Sosa,New York Yankees,closing,2026-05-18T06:54:04Z,betonlineag,700,12.500,11.775,13038bc4537d05af00935232c7a96b21
+2026-05-18,Max Schuemann,New York Yankees,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,13038bc4537d05af00935232c7a96b21
+2026-05-18,Maikel Garcia,Kansas City Royals,closing,2026-05-18T06:54:04Z,betonlineag,600,14.286,13.457,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Salvador Perez,Kansas City Royals,closing,2026-05-18T06:54:04Z,betonlineag,500,16.667,15.700,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Jarren Duran,Kansas City Royals,closing,2026-05-18T06:54:04Z,betonlineag,500,16.667,15.700,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Kyle Isbel,Kansas City Royals,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Bobby Witt Jr.,Kansas City Royals,closing,2026-05-18T06:54:04Z,betonlineag,400,20.000,18.957,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Ceddanne Rafaela,Kansas City Royals,closing,2026-05-18T06:54:04Z,betonlineag,600,14.286,13.457,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Michael Massey,Kansas City Royals,closing,2026-05-18T06:54:04Z,betonlineag,600,14.286,13.457,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Vinnie Pasquantino,Kansas City Royals,closing,2026-05-18T06:54:04Z,betonlineag,500,16.667,15.700,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Wilyer Abreu,Kansas City Royals,closing,2026-05-18T06:54:04Z,betonlineag,350,22.222,21.064,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Marcelo Mayer,Kansas City Royals,closing,2026-05-18T06:54:04Z,betonlineag,600,14.286,13.457,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Mickey Gasper,Kansas City Royals,closing,2026-05-18T06:54:04Z,betonlineag,600,14.286,13.457,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Jac Caglianone,Kansas City Royals,closing,2026-05-18T06:54:04Z,betonlineag,450,18.182,17.127,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Carlos Narvaez,Kansas City Royals,closing,2026-05-18T06:54:04Z,betonlineag,600,14.286,13.457,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Carter Jensen,Kansas City Royals,closing,2026-05-18T06:54:04Z,betonlineag,400,20.000,18.957,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Isaac Collins,Kansas City Royals,closing,2026-05-18T06:54:04Z,betonlineag,700,12.500,11.775,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Andruw Monasterio,Kansas City Royals,closing,2026-05-18T06:54:04Z,betonlineag,700,12.500,11.775,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Caleb Durbin,Kansas City Royals,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Willson Contreras,Kansas City Royals,closing,2026-05-18T06:54:04Z,betonlineag,350,22.222,21.064,82ca2e0ae47260f1183ee3abf8a69169
+2026-05-18,Ian Happ,Chicago Cubs,closing,2026-05-18T06:54:04Z,betonlineag,350,22.222,21.064,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Blake Perkins,Chicago Cubs,closing,2026-05-18T06:54:04Z,betonlineag,700,12.500,11.775,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Christian Yelich,Chicago Cubs,closing,2026-05-18T06:54:04Z,betonlineag,600,14.286,13.457,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Nico Hoerner,Chicago Cubs,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Seiya Suzuki,Chicago Cubs,closing,2026-05-18T06:54:04Z,betonlineag,350,22.222,21.064,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Brice Turang,Chicago Cubs,closing,2026-05-18T06:54:04Z,betonlineag,600,14.286,13.457,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Michael Busch,Chicago Cubs,closing,2026-05-18T06:54:04Z,betonlineag,300,25.000,23.697,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Pete Crow-Armstrong,Chicago Cubs,closing,2026-05-18T06:54:04Z,betonlineag,450,18.182,17.127,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Dansby Swanson,Chicago Cubs,closing,2026-05-18T06:54:04Z,betonlineag,500,16.667,15.700,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Joey Ortiz,Chicago Cubs,closing,2026-05-18T06:54:04Z,betonlineag,700,12.500,11.775,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,William Contreras,Chicago Cubs,closing,2026-05-18T06:54:04Z,betonlineag,400,20.000,18.957,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Sal Frelick,Chicago Cubs,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Jackson Chourio,Chicago Cubs,closing,2026-05-18T06:54:04Z,betonlineag,350,22.222,21.064,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Andrew Vaughn,Chicago Cubs,closing,2026-05-18T06:54:04Z,betonlineag,350,22.222,21.064,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Carson Kelly,Chicago Cubs,closing,2026-05-18T06:54:04Z,betonlineag,450,18.182,17.127,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Gary Sanchez,Chicago Cubs,closing,2026-05-18T06:54:04Z,betonlineag,350,22.222,21.064,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Luis Rengifo,Chicago Cubs,closing,2026-05-18T06:54:04Z,betonlineag,600,14.286,13.457,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Alex Bregman,Chicago Cubs,closing,2026-05-18T06:54:04Z,betonlineag,350,22.222,21.064,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Moisés Ballesteros,Chicago Cubs,closing,2026-05-18T06:54:04Z,betonlineag,500,16.667,15.700,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Michael Conforto,Chicago Cubs,closing,2026-05-18T06:54:04Z,betonlineag,450,18.182,17.127,a18a19981ef7d4e6c9f6244dc08e597a
+2026-05-18,Yordan Alvarez,Minnesota Twins,closing,2026-05-18T06:54:04Z,betonlineag,300,25.000,23.697,42fd4ebc22c3536132b84d9c0a55ef29
+2026-05-18,Byron Buxton,Minnesota Twins,closing,2026-05-18T06:54:04Z,betonlineag,300,25.000,23.697,42fd4ebc22c3536132b84d9c0a55ef29
+2026-05-18,Ryan Jeffers,Minnesota Twins,closing,2026-05-18T06:54:04Z,betonlineag,600,14.286,13.457,42fd4ebc22c3536132b84d9c0a55ef29
+2026-05-18,Trevor Larnach,Minnesota Twins,closing,2026-05-18T06:54:04Z,betonlineag,700,12.500,11.775,42fd4ebc22c3536132b84d9c0a55ef29
+2026-05-18,Christian Vazquez,Minnesota Twins,closing,2026-05-18T06:54:04Z,betonlineag,700,12.500,11.775,42fd4ebc22c3536132b84d9c0a55ef29
+2026-05-18,Royce Lewis,Minnesota Twins,closing,2026-05-18T06:54:04Z,betonlineag,600,14.286,13.457,42fd4ebc22c3536132b84d9c0a55ef29
+2026-05-18,Brooks Lee,Minnesota Twins,closing,2026-05-18T06:54:04Z,betonlineag,700,12.500,11.775,42fd4ebc22c3536132b84d9c0a55ef29
+2026-05-18,Austin Martin,Minnesota Twins,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,42fd4ebc22c3536132b84d9c0a55ef29
+2026-05-18,Zach Dezenzo,Minnesota Twins,closing,2026-05-18T06:54:04Z,betonlineag,700,12.500,11.775,42fd4ebc22c3536132b84d9c0a55ef29
+2026-05-18,Isaac Paredes,Minnesota Twins,closing,2026-05-18T06:54:04Z,betonlineag,500,16.667,15.700,42fd4ebc22c3536132b84d9c0a55ef29
+2026-05-18,Cam Smith,Minnesota Twins,closing,2026-05-18T06:54:04Z,betonlineag,700,12.500,11.775,42fd4ebc22c3536132b84d9c0a55ef29
+2026-05-18,Luke Keaschall,Minnesota Twins,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,42fd4ebc22c3536132b84d9c0a55ef29
+2026-05-18,Christian Walker,Minnesota Twins,closing,2026-05-18T06:54:04Z,betonlineag,400,20.000,18.957,42fd4ebc22c3536132b84d9c0a55ef29
+2026-05-18,Zach Cole,Minnesota Twins,closing,2026-05-18T06:54:04Z,betonlineag,500,16.667,15.700,42fd4ebc22c3536132b84d9c0a55ef29
+2026-05-18,Kody Clemens,Minnesota Twins,closing,2026-05-18T06:54:04Z,betonlineag,500,16.667,15.700,42fd4ebc22c3536132b84d9c0a55ef29
+2026-05-18,Brice Matthews,Minnesota Twins,closing,2026-05-18T06:54:04Z,betonlineag,500,16.667,15.700,42fd4ebc22c3536132b84d9c0a55ef29
+2026-05-18,Josh Bell,Minnesota Twins,closing,2026-05-18T06:54:04Z,betonlineag,600,14.286,13.457,42fd4ebc22c3536132b84d9c0a55ef29
+2026-05-18,Ezequiel Tovar,Colorado Rockies,closing,2026-05-18T06:54:04Z,betonlineag,600,14.286,13.457,13c307bac70250bed56ce2a649cc492e
+2026-05-18,Ezequiel Duran,Colorado Rockies,closing,2026-05-18T06:54:04Z,betonlineag,700,12.500,11.775,13c307bac70250bed56ce2a649cc492e
+2026-05-18,Josh Jung,Colorado Rockies,closing,2026-05-18T06:54:04Z,betonlineag,600,14.286,13.457,13c307bac70250bed56ce2a649cc492e
+2026-05-18,Hunter Goodman,Colorado Rockies,closing,2026-05-18T06:54:04Z,betonlineag,300,25.000,23.697,13c307bac70250bed56ce2a649cc492e
+2026-05-18,Brenton Doyle,Colorado Rockies,closing,2026-05-18T06:54:04Z,betonlineag,600,14.286,13.457,13c307bac70250bed56ce2a649cc492e
+2026-05-18,Evan Carter,Colorado Rockies,closing,2026-05-18T06:54:04Z,betonlineag,700,12.500,11.775,13c307bac70250bed56ce2a649cc492e
+2026-05-18,Mickey Moniak,Colorado Rockies,closing,2026-05-18T06:54:04Z,betonlineag,400,20.000,18.957,13c307bac70250bed56ce2a649cc492e
+2026-05-18,Jake Burger,Colorado Rockies,closing,2026-05-18T06:54:04Z,betonlineag,400,20.000,18.957,13c307bac70250bed56ce2a649cc492e
+2026-05-18,Justin Foscue,Colorado Rockies,closing,2026-05-18T06:54:04Z,betonlineag,700,12.500,11.775,13c307bac70250bed56ce2a649cc492e
+2026-05-18,Jordan Beck,Colorado Rockies,closing,2026-05-18T06:54:04Z,betonlineag,500,16.667,15.700,13c307bac70250bed56ce2a649cc492e
+2026-05-18,Sam Haggerty,Colorado Rockies,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,13c307bac70250bed56ce2a649cc492e
+2026-05-18,Jake McCarthy,Colorado Rockies,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,13c307bac70250bed56ce2a649cc492e
+2026-05-18,Brandon Nimmo,Colorado Rockies,closing,2026-05-18T06:54:04Z,betonlineag,500,16.667,15.700,13c307bac70250bed56ce2a649cc492e
+2026-05-18,Kyle Karros,Colorado Rockies,closing,2026-05-18T06:54:04Z,betonlineag,700,12.500,11.775,13c307bac70250bed56ce2a649cc492e
+2026-05-18,Danny Jansen,Colorado Rockies,closing,2026-05-18T06:54:04Z,betonlineag,500,16.667,15.700,13c307bac70250bed56ce2a649cc492e
+2026-05-18,Willi Castro,Colorado Rockies,closing,2026-05-18T06:54:04Z,betonlineag,700,12.500,11.775,13c307bac70250bed56ce2a649cc492e
+2026-05-18,Andrew McCutchen,Colorado Rockies,closing,2026-05-18T06:54:04Z,betonlineag,500,16.667,15.700,13c307bac70250bed56ce2a649cc492e
+2026-05-18,TJ Rumfield,Colorado Rockies,closing,2026-05-18T06:54:04Z,betonlineag,600,14.286,13.457,13c307bac70250bed56ce2a649cc492e
+2026-05-18,Shea Langeliers,Los Angeles Angels,closing,2026-05-18T06:54:04Z,betonlineag,300,25.000,23.697,a8e5153e31f262e9df1bef1566519c3f
+2026-05-18,Logan O'Hoppe,Los Angeles Angels,closing,2026-05-18T06:54:04Z,betonlineag,600,14.286,13.457,a8e5153e31f262e9df1bef1566519c3f
+2026-05-18,Lawrence Butler,Los Angeles Angels,closing,2026-05-18T06:54:04Z,betonlineag,600,14.286,13.457,a8e5153e31f262e9df1bef1566519c3f
+2026-05-18,Zach Neto,Los Angeles Angels,closing,2026-05-18T06:54:04Z,betonlineag,450,18.182,17.127,a8e5153e31f262e9df1bef1566519c3f
+2026-05-18,Jo Adell,Los Angeles Angels,closing,2026-05-18T06:54:04Z,betonlineag,450,18.182,17.127,a8e5153e31f262e9df1bef1566519c3f
+2026-05-18,Brent Rooker,Los Angeles Angels,closing,2026-05-18T06:54:04Z,betonlineag,350,22.222,21.064,a8e5153e31f262e9df1bef1566519c3f
+2026-05-18,Tyler Soderstrom,Los Angeles Angels,closing,2026-05-18T06:54:04Z,betonlineag,350,22.222,21.064,a8e5153e31f262e9df1bef1566519c3f
+2026-05-18,Mike Trout,Los Angeles Angels,closing,2026-05-18T06:54:04Z,betonlineag,400,20.000,18.957,a8e5153e31f262e9df1bef1566519c3f
+2026-05-18,Zack Gelof,Los Angeles Angels,closing,2026-05-18T06:54:04Z,betonlineag,500,16.667,15.700,a8e5153e31f262e9df1bef1566519c3f
+2026-05-18,Carlos Cortes,Los Angeles Angels,closing,2026-05-18T06:54:04Z,betonlineag,600,14.286,13.457,a8e5153e31f262e9df1bef1566519c3f
+2026-05-18,Yoan Moncada,Los Angeles Angels,closing,2026-05-18T06:54:04Z,betonlineag,500,16.667,15.700,a8e5153e31f262e9df1bef1566519c3f
+2026-05-18,Jorge Soler,Los Angeles Angels,closing,2026-05-18T06:54:04Z,betonlineag,400,20.000,18.957,a8e5153e31f262e9df1bef1566519c3f
+2026-05-18,Nick Kurtz,Los Angeles Angels,closing,2026-05-18T06:54:04Z,betonlineag,300,25.000,23.697,a8e5153e31f262e9df1bef1566519c3f
+2026-05-18,Oswald Peraza,Los Angeles Angels,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,a8e5153e31f262e9df1bef1566519c3f
+2026-05-18,Nolan Schanuel,Los Angeles Angels,closing,2026-05-18T06:54:04Z,betonlineag,700,12.500,11.775,a8e5153e31f262e9df1bef1566519c3f
+2026-05-18,Darell Hernaiz,Los Angeles Angels,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,a8e5153e31f262e9df1bef1566519c3f
+2026-05-18,Henry Bolte,Los Angeles Angels,closing,2026-05-18T06:54:04Z,betonlineag,450,18.182,17.127,a8e5153e31f262e9df1bef1566519c3f
+2026-05-18,Josh Lowe,Los Angeles Angels,closing,2026-05-18T06:54:04Z,betonlineag,700,12.500,11.775,a8e5153e31f262e9df1bef1566519c3f
+2026-05-18,Jeff McNeil,Los Angeles Angels,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,a8e5153e31f262e9df1bef1566519c3f
+2026-05-18,Vaughn Grissom,Los Angeles Angels,closing,2026-05-18T06:54:04Z,betonlineag,700,12.500,11.775,a8e5153e31f262e9df1bef1566519c3f
+2026-05-18,Geraldo Perdomo,Arizona Diamondbacks,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,daf39ff0f5f85b7da76274b743b1ab1f
+2026-05-18,Ketel Marte,Arizona Diamondbacks,closing,2026-05-18T06:54:04Z,betonlineag,400,20.000,18.957,daf39ff0f5f85b7da76274b743b1ab1f
+2026-05-18,Ildemaro Vargas,Arizona Diamondbacks,closing,2026-05-18T06:54:04Z,betonlineag,700,12.500,11.775,daf39ff0f5f85b7da76274b743b1ab1f
+2026-05-18,Corbin Carroll,Arizona Diamondbacks,closing,2026-05-18T06:54:04Z,betonlineag,600,14.286,13.457,daf39ff0f5f85b7da76274b743b1ab1f
+2026-05-18,Gabriel Moreno,Arizona Diamondbacks,closing,2026-05-18T06:54:04Z,betonlineag,700,12.500,11.775,daf39ff0f5f85b7da76274b743b1ab1f
+2026-05-18,Lourdes Gurriel Jr.,Arizona Diamondbacks,closing,2026-05-18T06:54:04Z,betonlineag,600,14.286,13.457,daf39ff0f5f85b7da76274b743b1ab1f
+2026-05-18,Casey Schmitt,Arizona Diamondbacks,closing,2026-05-18T06:54:04Z,betonlineag,500,16.667,15.700,daf39ff0f5f85b7da76274b743b1ab1f
+2026-05-18,Matt Chapman,Arizona Diamondbacks,closing,2026-05-18T06:54:04Z,betonlineag,700,12.500,11.775,daf39ff0f5f85b7da76274b743b1ab1f
+2026-05-18,Rafael Devers,Arizona Diamondbacks,closing,2026-05-18T06:54:04Z,betonlineag,450,18.182,17.127,daf39ff0f5f85b7da76274b743b1ab1f
+2026-05-18,Jung Hoo Lee,Arizona Diamondbacks,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,daf39ff0f5f85b7da76274b743b1ab1f
+2026-05-18,Daniel Susac,Arizona Diamondbacks,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,daf39ff0f5f85b7da76274b743b1ab1f
+2026-05-18,Willy Adames,Arizona Diamondbacks,closing,2026-05-18T06:54:04Z,betonlineag,600,14.286,13.457,daf39ff0f5f85b7da76274b743b1ab1f
+2026-05-18,Jose Fernandez,Arizona Diamondbacks,closing,2026-05-18T06:54:04Z,betonlineag,700,12.500,11.775,daf39ff0f5f85b7da76274b743b1ab1f
+2026-05-18,Drew Gilbert,Arizona Diamondbacks,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,daf39ff0f5f85b7da76274b743b1ab1f
+2026-05-18,Luis Arraez,Arizona Diamondbacks,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,daf39ff0f5f85b7da76274b743b1ab1f
+2026-05-18,Harrison Bader,Arizona Diamondbacks,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,daf39ff0f5f85b7da76274b743b1ab1f
+2026-05-18,Nolan Arenado,Arizona Diamondbacks,closing,2026-05-18T06:54:04Z,betonlineag,500,16.667,15.700,daf39ff0f5f85b7da76274b743b1ab1f
+2026-05-18,Ryan Waldschmidt,Arizona Diamondbacks,closing,2026-05-18T06:54:04Z,betonlineag,700,12.500,11.775,daf39ff0f5f85b7da76274b743b1ab1f
+2026-05-18,J.P. Crawford,Seattle Mariners,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,14c70bb665938baff9719079a82cbb93
+2026-05-18,Andrew Benintendi,Seattle Mariners,closing,2026-05-18T06:54:04Z,betonlineag,500,16.667,15.700,14c70bb665938baff9719079a82cbb93
+2026-05-18,Julio Rodriguez,Seattle Mariners,closing,2026-05-18T06:54:04Z,betonlineag,450,18.182,17.127,14c70bb665938baff9719079a82cbb93
+2026-05-18,Colson Montgomery,Seattle Mariners,closing,2026-05-18T06:54:04Z,betonlineag,400,20.000,18.957,14c70bb665938baff9719079a82cbb93
+2026-05-18,Mitch Garver,Seattle Mariners,closing,2026-05-18T06:54:04Z,betonlineag,450,18.182,17.127,14c70bb665938baff9719079a82cbb93
+2026-05-18,Leo Rivas,Seattle Mariners,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,14c70bb665938baff9719079a82cbb93
+2026-05-18,Miguel Vargas,Seattle Mariners,closing,2026-05-18T06:54:04Z,betonlineag,500,16.667,15.700,14c70bb665938baff9719079a82cbb93
+2026-05-18,Cole Young,Seattle Mariners,closing,2026-05-18T06:54:04Z,betonlineag,700,12.500,11.775,14c70bb665938baff9719079a82cbb93
+2026-05-18,Randy Arozarena,Seattle Mariners,closing,2026-05-18T06:54:04Z,betonlineag,450,18.182,17.127,14c70bb665938baff9719079a82cbb93
+2026-05-18,Chase Meidroth,Seattle Mariners,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,14c70bb665938baff9719079a82cbb93
+2026-05-18,Josh Naylor,Seattle Mariners,closing,2026-05-18T06:54:04Z,betonlineag,600,14.286,13.457,14c70bb665938baff9719079a82cbb93
+2026-05-18,Tristan Peters,Seattle Mariners,closing,2026-05-18T06:54:04Z,betonlineag,700,12.500,11.775,14c70bb665938baff9719079a82cbb93
+2026-05-18,Munetaka Murakami,Seattle Mariners,closing,2026-05-18T06:54:04Z,betonlineag,350,22.222,21.064,14c70bb665938baff9719079a82cbb93
+2026-05-18,Sam Antonacci,Seattle Mariners,closing,2026-05-18T06:54:04Z,betonlineag,700,12.500,11.775,14c70bb665938baff9719079a82cbb93
+2026-05-18,Rob Refsnyder,Seattle Mariners,closing,2026-05-18T06:54:04Z,betonlineag,700,12.500,11.775,14c70bb665938baff9719079a82cbb93
+2026-05-18,Connor Joe,Seattle Mariners,closing,2026-05-18T06:54:04Z,betonlineag,600,14.286,13.457,14c70bb665938baff9719079a82cbb93
+2026-05-18,Jarred Kelenic,Seattle Mariners,closing,2026-05-18T06:54:04Z,betonlineag,450,18.182,17.127,14c70bb665938baff9719079a82cbb93
+2026-05-18,Drew Romo,Seattle Mariners,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,14c70bb665938baff9719079a82cbb93
+2026-05-18,Fernando Tatis Jr.,San Diego Padres,closing,2026-05-18T06:54:04Z,betonlineag,600,14.286,13.457,d98976061eadebf5d9ba5c0632212976
+2026-05-18,Will Smith,San Diego Padres,closing,2026-05-18T06:54:04Z,betonlineag,600,14.286,13.457,d98976061eadebf5d9ba5c0632212976
+2026-05-18,Ty France,San Diego Padres,closing,2026-05-18T06:54:04Z,betonlineag,700,12.500,11.775,d98976061eadebf5d9ba5c0632212976
+2026-05-18,Max Muncy,San Diego Padres,closing,2026-05-18T06:54:04Z,betonlineag,450,18.182,17.127,d98976061eadebf5d9ba5c0632212976
+2026-05-18,Manny Machado,San Diego Padres,closing,2026-05-18T06:54:04Z,betonlineag,600,14.286,13.457,d98976061eadebf5d9ba5c0632212976
+2026-05-18,Teoscar Hernandez,San Diego Padres,closing,2026-05-18T06:54:04Z,betonlineag,600,14.286,13.457,d98976061eadebf5d9ba5c0632212976
+2026-05-18,Shohei Ohtani,San Diego Padres,closing,2026-05-18T06:54:04Z,betonlineag,350,22.222,21.064,d98976061eadebf5d9ba5c0632212976
+2026-05-18,Andy Pages,San Diego Padres,closing,2026-05-18T06:54:04Z,betonlineag,600,14.286,13.457,d98976061eadebf5d9ba5c0632212976
+2026-05-18,Mookie Betts,San Diego Padres,closing,2026-05-18T06:54:04Z,betonlineag,600,14.286,13.457,d98976061eadebf5d9ba5c0632212976
+2026-05-18,Freddie Freeman,San Diego Padres,closing,2026-05-18T06:54:04Z,betonlineag,600,14.286,13.457,d98976061eadebf5d9ba5c0632212976
+2026-05-18,Xander Bogaerts,San Diego Padres,closing,2026-05-18T06:54:04Z,betonlineag,700,12.500,11.775,d98976061eadebf5d9ba5c0632212976
+2026-05-18,Hyeseong Kim,San Diego Padres,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,d98976061eadebf5d9ba5c0632212976
+2026-05-18,Freddy Fermin,San Diego Padres,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,d98976061eadebf5d9ba5c0632212976
+2026-05-18,Gavin Sheets,San Diego Padres,closing,2026-05-18T06:54:04Z,betonlineag,700,12.500,11.775,d98976061eadebf5d9ba5c0632212976
+2026-05-18,Jackson Merrill,San Diego Padres,closing,2026-05-18T06:54:04Z,betonlineag,600,14.286,13.457,d98976061eadebf5d9ba5c0632212976
+2026-05-18,Kyle Tucker,San Diego Padres,closing,2026-05-18T06:54:04Z,betonlineag,600,14.286,13.457,d98976061eadebf5d9ba5c0632212976
+2026-05-18,Miguel Andujar,San Diego Padres,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,d98976061eadebf5d9ba5c0632212976
+2026-05-18,Ramon Laureano,San Diego Padres,closing,2026-05-18T06:54:04Z,betonlineag,900,10.000,9.357,d98976061eadebf5d9ba5c0632212976
+2026-05-19,Xavier Edwards,MIA,opening,2026-05-19T19:25:04Z,,1000,9.091,8.312,
+2026-05-19,Spencer Steer,CIN,opening,2026-05-19T19:25:04Z,,525,16.000,14.760,
+2026-05-19,Jac Caglianone,KC,opening,2026-05-19T19:25:05Z,,900,10.000,9.143,
+2026-05-20,JJ Bleday,CIN,opening,2026-05-20T15:52:28Z,,575,14.815,13.667,
+2026-05-20,Adley Rutschman,BAL,opening,2026-05-20T15:52:28Z,,750,11.765,10.756,
+2026-05-20,Xavier Edwards,MIA,opening,2026-05-20T15:52:28Z,,1000,9.091,8.312,
+2026-05-20,Byron Buxton,MIN,opening,2026-05-20T15:52:28Z,,325,23.529,21.888,
+2026-05-21,JJ Wetherholt,STL,opening,2026-05-21T15:59:31Z,,700,12.500,11.531,
+2026-05-22,Jake Meyers,HOU,opening,2026-05-22T16:41:18Z,,1200,7.692,7.033,
+2026-05-22,Braden Shewmake,HOU,opening,2026-05-22T16:41:18Z,,1000,9.091,8.312,
+2026-05-22,Yordan Alvarez,HOU,opening,2026-05-22T16:41:18Z,,460,17.857,16.473,
+2026-05-22,Christian Walker,HOU,opening,2026-05-22T16:41:18Z,,575,14.815,13.667,
+2026-05-22,Jacob Young,WSH,opening,2026-05-22T16:41:18Z,,1150,8.000,7.314,
+2026-05-23,Jacob Young,WSH,opening,2026-05-23T14:50:11Z,,1300,7.143,6.531,
+2026-05-23,Ryan Kreidler,MIN,opening,2026-05-23T14:50:11Z,,900,10.000,9.143,
+2026-05-24,Ben Rice,NYY,opening,2026-05-24T17:25:19Z,,460,17.857,16.473,
+2026-05-24,Dillon Dingler,DET,opening,2026-05-24T17:25:19Z,,900,10.000,9.143,
+2026-05-24,Michael Harris II,ATL,opening,2026-05-24T17:25:19Z,,575,14.815,13.667,
+2026-05-24,Randal Grichuk,CWS,opening,2026-05-24T17:25:19Z,,575,14.815,13.667,
+2026-05-24,Brandon Lowe,PIT,opening,2026-05-24T17:25:19Z,,700,12.500,11.531,
+2026-05-24,Adley Rutschman,BAL,opening,2026-05-24T17:25:19Z,,850,10.526,9.624,
+2026-05-24,Gunnar Henderson,BAL,opening,2026-05-24T17:25:19Z,,1000,9.091,8.312,
+2026-05-24,Liam Hicks,MIA,opening,2026-05-24T17:25:19Z,,800,11.111,10.159,
+2026-05-24,Paul Goldschmidt,NYY,opening,2026-05-24T17:25:19Z,,950,9.524,8.707,
+2026-05-24,Matt Vierling,DET,opening,2026-05-24T17:25:19Z,,1050,8.696,7.950,
+2026-05-24,Josh Bell,MIN,opening,2026-05-24T17:25:19Z,,1000,9.091,8.312,
+2026-05-24,Ryan McMahon,NYY,opening,2026-05-24T17:25:19Z,,1000,9.091,8.312,
+2026-05-24,Kyle Schwarber,PHI,opening,2026-05-24T17:25:20Z,,360,21.739,20.222,
+2026-05-24,Zack Gelof,ATH,opening,2026-05-24T17:25:20Z,,850,10.526,9.624,
+2026-05-24,Luke Raley,SEA,opening,2026-05-24T17:25:20Z,,550,15.385,14.192,
+2026-05-24,Mookie Betts,LAD,opening,2026-05-24T17:25:20Z,,575,14.815,13.667,
+2026-05-24,Jordan Walker,STL,opening,2026-05-24T17:25:20Z,,325,23.529,21.888,
+2026-05-24,Derek Hill,CWS,opening,2026-05-24T17:25:20Z,,900,10.000,9.143,
+2026-05-24,Weston Wilson,BAL,opening,2026-05-24T17:25:20Z,,1100,8.333,7.619,
+2026-05-24,Dillon Dingler,DET,opening,2026-05-24T17:25:20Z,,900,10.000,9.143,
+2026-05-24,J.P. Crawford,SEA,opening,2026-05-24T17:25:20Z,,800,11.111,10.159,
+2026-05-24,Brice Turang,MIL,opening,2026-05-24T17:25:20Z,,750,11.765,10.756,
+2026-05-24,Miguel Vargas,CWS,opening,2026-05-24T17:25:20Z,,400,20.000,18.605,
+2026-05-26,Munetaka Murakami,CWS,opening,2026-05-26T19:36:46Z,,700,12.500,11.531,
+2026-05-26,James Wood,WSH,opening,2026-05-26T19:36:46Z,,1200,7.692,7.033,
+2026-05-26,Curtis Mead,WSH,opening,2026-05-26T19:36:46Z,,2900,3.333,3.017,
+2026-05-26,Michael Harris II,ATL,opening,2026-05-26T19:36:46Z,,1100,8.333,7.619,
+2026-05-26,CJ Abrams,WSH,opening,2026-05-26T19:36:46Z,,2400,4.000,3.620,
+2026-05-26,Shea Langeliers,ATH,opening,2026-05-26T19:36:46Z,,1000,9.091,8.312,
+2026-05-26,Ty France,SD,opening,2026-05-26T19:36:46Z,,800,11.111,10.159,
+2026-05-26,Zack Gelof,ATH,opening,2026-05-26T19:36:46Z,,2800,3.448,3.121,
+2026-05-26,Jacob Young,WSH,opening,2026-05-26T19:36:46Z,,2400,4.000,3.620,
+2026-05-26,Xander Bogaerts,SD,opening,2026-05-26T19:36:46Z,,2400,4.000,3.620,
+2026-05-26,Dylan Crews,WSH,opening,2026-05-26T19:36:46Z,,2400,4.000,3.620,
+2026-05-26,Colson Montgomery,CWS,opening,2026-05-26T19:36:46Z,,1000,9.091,8.312,
+2026-05-26,Matt Olson,ATL,opening,2026-05-26T19:36:46Z,,1150,8.000,7.314,
+2026-05-26,Rodolfo Durán,SD,opening,2026-05-26T19:36:46Z,,1700,5.556,5.028,
+2026-05-26,Andrés Chaparro,WSH,opening,2026-05-26T19:36:46Z,,2900,3.333,3.017,
+2026-05-26,Harrison Bader,SF,opening,2026-05-26T19:36:46Z,,2900,3.333,3.017,
+2026-05-26,Miguel Andujar,SD,opening,2026-05-26T19:36:46Z,,1800,5.263,4.763,
+2026-05-26,Eli White,ATL,opening,2026-05-26T19:36:46Z,,1900,5.000,4.525,
+2026-05-26,Tristan Peters,CWS,opening,2026-05-26T19:36:46Z,,3400,2.857,2.586,
+2026-05-26,TJ Rumfield,COL,opening,2026-05-26T19:36:46Z,,1300,7.143,6.531,
+2026-05-26,Sterlin Thompson,COL,opening,2026-05-26T19:36:46Z,,2200,4.348,3.935,
+2026-05-26,Nolan Arenado,AZ,opening,2026-05-26T19:36:46Z,,1700,5.556,5.028,
+2026-05-26,Aramis Garcia,AZ,opening,2026-05-26T19:36:46Z,,2900,3.333,3.017,
+2026-05-26,Jake McCarthy,COL,opening,2026-05-26T19:36:46Z,,1900,5.000,4.525,
+2026-05-26,Jose Fernandez,AZ,opening,2026-05-26T19:36:46Z,,2900,3.333,3.017,
+2026-05-26,Miguel Vargas,CWS,opening,2026-05-26T19:36:46Z,,750,11.765,10.756,
+2026-05-26,Tyler Freeman,COL,opening,2026-05-26T19:36:46Z,,2400,4.000,3.620,
+2026-05-26,Ryan Waldschmidt,AZ,opening,2026-05-26T19:36:46Z,,3400,2.857,2.586,
+2026-05-26,Jeff McNeil,ATH,opening,2026-05-26T19:36:46Z,,3400,2.857,2.586,
+2026-05-27,Jordan Walker,STL,opening,2026-05-27T15:39:43Z,,450,18.182,16.773,
+2026-05-29,Casey Schmitt,SF,opening,2026-05-29T10:12:14Z,,575,14.815,13.667,
+2026-05-29,Michael Harris II,ATL,opening,2026-05-29T10:12:14Z,,550,15.385,14.192,
+2026-05-29,Curtis Mead,WSH,opening,2026-05-29T10:12:14Z,,1150,8.000,7.314,
+2026-05-29,Jacob Young,WSH,opening,2026-05-29T10:12:14Z,,1100,8.333,7.619,
+2026-05-29,Dillon Dingler,DET,opening,2026-05-29T10:12:14Z,,700,12.500,11.531,
+2026-05-29,Gavin Sheets,SD,opening,2026-05-29T10:12:14Z,,900,10.000,9.143,
+2026-05-29,Amed Rosario,NYY,opening,2026-05-29T10:12:14Z,,800,11.111,10.159,
+2026-05-29,Ramón Laureano,SD,opening,2026-05-29T10:12:14Z,,950,9.524,8.707,
+2026-05-29,Gage Workman,DET,opening,2026-05-29T10:12:14Z,,900,10.000,9.143,
+2026-05-29,Jordan Walker,STL,opening,2026-05-29T10:12:14Z,,450,18.182,16.773,
+2026-05-29,Michael Harris II,ATL,opening,2026-05-29T21:47:28Z,,550,15.385,14.192,
+2026-05-29,Dillon Dingler,DET,opening,2026-05-29T21:47:28Z,,700,12.500,11.531,
+2026-05-29,Jordan Walker,STL,opening,2026-05-29T21:47:28Z,,450,18.182,16.773,
+2026-05-29,Casey Schmitt,SF,opening,2026-05-29T21:47:28Z,,575,14.815,13.667,
+2026-05-29,James Wood,WSH,opening,2026-05-29T21:47:28Z,,550,15.385,14.192,
+2026-05-29,Curtis Mead,WSH,opening,2026-05-29T21:47:28Z,,1150,8.000,7.314,
+2026-05-29,Gavin Sheets,SD,opening,2026-05-29T21:47:28Z,,900,10.000,9.143,
+2026-05-29,Jacob Young,WSH,opening,2026-05-29T21:47:28Z,,1100,8.333,7.619,
+2026-05-29,Juan Soto,NYM,opening,2026-05-29T21:47:28Z,,370,21.277,19.792,
+2026-05-29,Ramón Laureano,SD,opening,2026-05-29T21:47:28Z,,950,9.524,8.707,
+2026-05-29,TJ Rumfield,COL,opening,2026-05-29T21:47:28Z,,750,11.765,10.756,
+2026-05-29,Liam Hicks,MIA,opening,2026-05-29T21:47:28Z,,850,10.526,9.624,
+2026-05-29,Sal Stewart,CIN,opening,2026-05-29T21:47:28Z,,575,14.815,13.667,
+2026-05-29,Chase Meidroth,CWS,opening,2026-05-29T21:47:28Z,,1300,7.143,6.531,
+2026-05-29,Xander Bogaerts,SD,opening,2026-05-29T21:47:28Z,,1000,9.091,8.312,
+2026-05-29,Ernie Clement,TOR,opening,2026-05-29T21:47:28Z,,900,10.000,9.143,
+2026-05-29,Munetaka Murakami,CWS,opening,2026-05-29T21:47:28Z,,400,20.000,18.605,
+2026-05-29,Matt Olson,ATL,opening,2026-05-29T21:47:28Z,,500,16.667,15.375,
+2026-05-29,Amed Rosario,NYY,opening,2026-05-29T21:47:28Z,,800,11.111,10.159,
+2026-05-29,CJ Abrams,WSH,opening,2026-05-29T21:47:28Z,,650,13.333,12.300,
+2026-05-29,JJ Bleday,CIN,opening,2026-05-29T21:47:28Z,,510,16.393,15.123,
+2026-05-29,Manny Machado,SD,opening,2026-05-29T21:47:28Z,,800,11.111,10.159,
+2026-05-29,Blake Dunn,CIN,opening,2026-05-29T21:47:28Z,,1150,8.000,7.314,
+2026-05-29,Nathaniel Lowe,CIN,opening,2026-05-29T21:47:28Z,,540,15.625,14.414,
+2026-05-30,Casey Schmitt,SF,opening,2026-05-31T02:26:57Z,,850,10.526,9.624,
+2026-05-30,J.P. Crawford,SEA,opening,2026-05-31T02:26:57Z,,900,10.000,9.143,
+2026-05-30,Luke Raley,SEA,opening,2026-05-31T02:26:57Z,,430,18.868,17.406,
+2026-05-30,Willy Adames,SF,opening,2026-05-31T02:26:57Z,,750,11.765,10.756,
+2026-05-30,Eric Haase,SF,opening,2026-05-31T02:26:57Z,,850,10.526,9.624,
+2026-05-30,TJ Rumfield,COL,opening,2026-05-31T02:26:57Z,,850,10.526,9.624,
+2026-05-30,Rafael Devers,SF,opening,2026-05-31T02:26:57Z,,700,12.500,11.531,
+2026-05-30,Hunter Goodman,COL,opening,2026-05-31T02:26:57Z,,540,15.625,14.414,
+2026-05-30,Bryce Harper,PHI,opening,2026-05-31T02:26:57Z,,525,16.000,14.760,
+2026-05-31,Michael Harris II,ATL,opening,2026-05-31T15:11:09Z,,410,19.608,18.088,
+2026-05-31,Ty France,SD,opening,2026-05-31T15:11:09Z,,575,14.815,13.667,
+2026-05-31,Luke Raley,SEA,opening,2026-05-31T15:11:09Z,,430,18.868,17.406,
+2026-05-31,Curtis Mead,WSH,opening,2026-05-31T15:11:09Z,,500,16.667,15.375,
+2026-05-31,Jacob Young,WSH,opening,2026-05-31T15:11:09Z,,850,10.526,9.624,
+2026-05-31,Oswald Peraza,LAA,opening,2026-05-31T15:11:09Z,,750,11.765,10.756,
+2026-05-31,Liam Hicks,MIA,opening,2026-05-31T15:11:09Z,,1150,8.000,7.314,
+2026-05-31,Jarren Duran,BOS,opening,2026-05-31T15:11:09Z,,510,16.393,15.123,
+2026-05-31,J.P. Crawford,SEA,opening,2026-05-31T15:11:09Z,,700,12.500,11.531,
+2026-06-06,Shea Langeliers,ATH,opening,2026-06-06T21:37:38Z,,650,13.333,12.300,
+2026-06-06,Isaac Paredes,HOU,opening,2026-06-06T21:37:38Z,,750,11.765,10.756,
+2026-06-06,Brandon Lowe,PIT,opening,2026-06-06T21:37:38Z,,900,10.000,9.143,
+2026-06-06,Yandy Díaz,TB,opening,2026-06-06T21:37:38Z,,2400,4.000,3.620,
+2026-06-06,Ronald Acuña Jr.,ATL,opening,2026-06-06T21:37:38Z,,950,9.524,8.707,
+2026-06-06,Ketel Marte,AZ,opening,2026-06-06T21:37:38Z,,1050,8.696,7.950,
+2026-06-06,James Wood,WSH,opening,2026-06-06T21:37:38Z,,1200,7.692,7.033,
+2026-06-06,Jonathan Aranda,TB,opening,2026-06-06T21:37:38Z,,1050,8.696,7.950,
+2026-06-06,Ryan O'Hearn,PIT,opening,2026-06-06T21:37:38Z,,1100,8.333,7.619,
+2026-06-06,Spencer Horwitz,PIT,opening,2026-06-06T21:37:38Z,,1900,5.000,4.525,
+2026-06-06,Kyle Schwarber,PHI,opening,2026-06-06T21:37:38Z,,425,19.048,17.572,
+2026-06-06,Miguel Vargas,CWS,opening,2026-06-06T21:37:38Z,,650,13.333,12.300,
+2026-06-06,Corbin Carroll,AZ,opening,2026-06-06T21:37:38Z,,750,11.765,10.756,
+2026-06-06,Andrew Benintendi,CWS,opening,2026-06-06T21:37:38Z,,800,11.111,10.159,
+2026-06-06,Heriberto Hernández,MIA,opening,2026-06-06T21:37:38Z,,1100,8.333,7.619,
+2026-06-06,Junior Caminero,TB,opening,2026-06-06T21:37:38Z,,750,11.765,10.756,
+2026-06-06,Nolan Arenado,AZ,opening,2026-06-06T21:37:38Z,,1000,9.091,8.312,
+2026-06-06,Mauricio Dubón,ATL,opening,2026-06-06T21:37:38Z,,2200,4.348,3.935,
+2026-06-06,CJ Abrams,WSH,opening,2026-06-06T21:37:38Z,,2900,3.333,3.017,
+2026-06-06,Cedric Mullins,TB,opening,2026-06-06T21:37:38Z,,1800,5.263,4.763,
+2026-06-06,Endy Rodríguez,PIT,opening,2026-06-06T21:37:38Z,,1800,5.263,4.763,
+2026-06-06,Xavier Edwards,MIA,opening,2026-06-06T21:37:38Z,,3300,2.941,2.662,
+2026-06-06,Jacob Young,WSH,opening,2026-06-06T21:37:38Z,,2900,3.333,3.017,
+2026-06-06,Christian Walker,HOU,opening,2026-06-06T21:37:38Z,,525,16.000,14.760,
+2026-06-06,Brent Rooker,ATH,opening,2026-06-06T21:37:38Z,,575,14.815,13.667,
+2026-06-06,Matt Olson,ATL,opening,2026-06-06T21:37:38Z,,575,14.815,13.667,
+2026-06-06,Oneil Cruz,PIT,opening,2026-06-06T21:37:38Z,,650,13.333,12.300,
+2026-06-06,Nick Kurtz,ATH,opening,2026-06-06T21:37:38Z,,650,13.333,12.300,
+2026-06-06,Drew Romo,CWS,opening,2026-06-06T21:37:38Z,,800,11.111,10.159,
+2026-06-06,Carlos Cortes,ATH,opening,2026-06-06T21:37:38Z,,1100,8.333,7.619,
+2026-06-06,Dominic Smith,ATL,opening,2026-06-06T21:37:38Z,,900,10.000,9.143,
+2026-06-06,Ozzie Albies,ATL,opening,2026-06-06T21:37:39Z,,1000,9.091,8.312,
+2026-06-06,Bryson Stott,PHI,opening,2026-06-06T21:37:39Z,,1200,7.692,7.033,
+2026-06-06,Esteury Ruiz,MIA,opening,2026-06-06T21:37:39Z,,1700,5.556,5.028,
+2026-06-06,Bryan Reynolds,PIT,opening,2026-06-06T21:37:39Z,,1800,5.263,4.763,
+2026-06-06,Chase Meidroth,CWS,opening,2026-06-06T21:37:39Z,,1900,5.000,4.525,
+2026-06-06,Andrés Chaparro,WSH,opening,2026-06-06T21:37:39Z,,2900,3.333,3.017,
+2026-06-06,Jake Meyers,HOU,opening,2026-06-06T21:37:39Z,,1800,5.263,4.763,
+2026-06-06,Dylan Crews,WSH,opening,2026-06-06T21:37:39Z,,1800,5.263,4.763,
+2026-06-06,Otto Lopez,MIA,opening,2026-06-06T21:37:39Z,,2400,4.000,3.620,
+2026-06-06,Geraldo Perdomo,AZ,opening,2026-06-06T21:37:39Z,,2400,4.000,3.620,
+2026-06-06,Jeremy Peña,HOU,opening,2026-06-06T21:37:39Z,,800,11.111,10.159,
+2026-06-06,Pavin Smith,AZ,opening,2026-06-06T21:37:39Z,,1100,8.333,7.619,
+2026-06-06,Brandon Marsh,PHI,opening,2026-06-06T21:37:39Z,,1100,8.333,7.619,
+2026-06-06,Kyle Stowers,MIA,opening,2026-06-06T21:37:39Z,,1700,5.556,5.028,
+2026-06-06,Daylen Lile,WSH,opening,2026-06-06T21:37:39Z,,2200,4.348,3.935,
+2026-06-06,trea turner,,closing,2026-06-06T21:37:41Z,,900,10.000,9.143,
+2026-06-06,brandon marsh,,closing,2026-06-06T21:37:41Z,,1150,8.000,7.314,
+2026-06-06,j.t. realmuto,,closing,2026-06-06T21:37:41Z,,1100,8.333,7.619,
+2026-06-06,sam antonacci,,closing,2026-06-06T21:37:41Z,,1150,8.000,7.314,
+2026-06-06,chase meidroth,,closing,2026-06-06T21:37:41Z,,1900,5.000,4.525,
+2026-06-06,bryson stott,,closing,2026-06-06T21:37:41Z,,1150,8.000,7.314,
+2026-06-06,bryce harper,,closing,2026-06-06T21:37:41Z,,700,12.500,11.531,
+2026-06-06,kyle schwarber,,closing,2026-06-06T21:37:41Z,,460,17.857,16.473,
+2026-06-06,andrew benintendi,,closing,2026-06-06T21:37:41Z,,750,11.765,10.756,
+2026-06-06,tristan peters,,closing,2026-06-06T21:37:41Z,,1700,5.556,5.028,
+2026-06-06,miguel vargas,,closing,2026-06-06T21:37:41Z,,575,14.815,13.667,
+2026-06-06,adolis garcia,,closing,2026-06-06T21:37:41Z,,650,13.333,12.300,
+2026-06-06,drew romo,,closing,2026-06-06T21:37:41Z,,1200,7.692,7.033,
+2026-06-06,rikuu nishida,,closing,2026-06-06T21:37:41Z,,1000,9.091,8.312,
+2026-06-06,justin crawford,,closing,2026-06-06T21:37:41Z,,1800,5.263,4.763,
+2026-06-06,corbin carroll,,closing,2026-06-06T21:37:41Z,,1800,5.263,4.763,
+2026-06-06,james wood,,closing,2026-06-06T21:37:41Z,,1200,7.692,7.033,
+2026-06-06,gabriel moreno,,closing,2026-06-06T21:37:41Z,,2800,3.448,3.121,
+2026-06-06,andres chaparro,,closing,2026-06-06T21:37:41Z,,2900,3.333,3.017,
+2026-06-06,pavin smith,,closing,2026-06-06T21:37:41Z,,1100,8.333,7.619,
+2026-06-06,geraldo perdomo,,closing,2026-06-06T21:37:41Z,,2400,4.000,3.620,
+2026-06-06,jacob young,,closing,2026-06-06T21:37:41Z,,2800,3.448,3.121,
+2026-06-06,nolan arenado,,closing,2026-06-06T21:37:41Z,,1100,8.333,7.619,
+2026-06-06,ketel marte,,closing,2026-06-06T21:37:41Z,,1100,8.333,7.619,
+2026-06-06,daylen lile,,closing,2026-06-06T21:37:41Z,,2200,4.348,3.935,
+2026-06-06,dylan crews,,closing,2026-06-06T21:37:41Z,,1800,5.263,4.763,
+2026-06-06,cj abrams,,closing,2026-06-06T21:37:41Z,,2800,3.448,3.121,
+2026-06-06,tommy troy,,closing,2026-06-06T21:37:41Z,,2900,3.333,3.017,
+2026-06-06,keibert ruiz,,closing,2026-06-06T21:37:41Z,,2400,4.000,3.620,
+2026-06-06,nasim nunez,,closing,2026-06-06T21:37:41Z,,4000,2.439,2.207,
+2026-06-06,ryan waldschmidt,,closing,2026-06-06T21:37:41Z,,1300,7.143,6.531,
+2026-06-06,zack gelof,,closing,2026-06-06T21:37:41Z,,1000,9.091,8.312,
+2026-06-06,jeremy pena,,closing,2026-06-06T21:37:41Z,,1200,7.692,7.033,
+2026-06-06,shea langeliers,,closing,2026-06-06T21:37:41Z,,650,13.333,12.300,
+2026-06-06,jake meyers,,closing,2026-06-06T21:37:41Z,,1800,5.263,4.763,
+2026-06-06,tyler soderstrom,,closing,2026-06-06T21:37:41Z,,600,14.286,13.179,
+2026-06-06,henry bolte,,closing,2026-06-06T21:37:41Z,,1100,8.333,7.619,
+2026-06-06,nick kurtz,,closing,2026-06-06T21:37:41Z,,700,12.500,11.531,
+2026-06-06,christian walker,,closing,2026-06-06T21:37:41Z,,575,14.815,13.667,
+2026-06-06,jeff mcneil,,closing,2026-06-06T21:37:41Z,,1900,5.000,4.525,
+2026-06-06,brent rooker,,closing,2026-06-06T21:37:41Z,,575,14.815,13.667,
+2026-06-06,carlos cortes,,closing,2026-06-06T21:37:41Z,,1100,8.333,7.619,
+2026-06-06,isaac paredes,,closing,2026-06-06T21:37:41Z,,850,10.526,9.624,
+2026-06-06,christian vazquez,,closing,2026-06-06T21:37:41Z,,1900,5.000,4.525,
+2026-06-06,darell hernaiz,,closing,2026-06-06T21:37:41Z,,1900,5.000,4.525,
+2026-06-06,taylor trammell,,closing,2026-06-06T21:37:41Z,,1050,8.696,7.950,
+2026-06-06,endy rodriguez,,closing,2026-06-06T21:37:41Z,,1800,5.263,4.763,
+2026-06-06,jared triolo,,closing,2026-06-06T21:37:41Z,,2200,4.348,3.935,
+2026-06-06,ha-seong kim,,closing,2026-06-06T21:37:41Z,,1800,5.263,4.763,
+2026-06-06,matt olson,,closing,2026-06-06T21:37:41Z,,950,9.524,8.707,
+2026-06-06,nick gonzales,,closing,2026-06-06T21:37:41Z,,1300,7.143,6.531,
+2026-06-06,ozzie albies,,closing,2026-06-06T21:37:41Z,,2200,4.348,3.935,
+2026-06-06,mauricio dubon,,closing,2026-06-06T21:37:41Z,,2200,4.348,3.935,
+2026-06-06,oneil cruz,,closing,2026-06-06T21:37:41Z,,650,13.333,12.300,
+2026-06-06,mike yastrzemski,,closing,2026-06-06T21:37:41Z,,1100,8.333,7.619,
+2026-06-06,bryan reynolds,,closing,2026-06-06T21:37:41Z,,1800,5.263,4.763,
+2026-06-06,spencer horwitz,,closing,2026-06-06T21:37:41Z,,2200,4.348,3.935,
+2026-06-06,ronald acuna jr.,,closing,2026-06-06T21:37:41Z,,1000,9.091,8.312,
+2026-06-06,ryan o'hearn,,closing,2026-06-06T21:37:41Z,,1150,8.000,7.314,
+2026-06-06,austin riley,,closing,2026-06-06T21:37:41Z,,900,10.000,9.143,
+2026-06-06,brandon lowe,,closing,2026-06-06T21:37:41Z,,1000,9.091,8.312,
+2026-06-06,joe mack,,closing,2026-06-06T21:37:41Z,,2200,4.348,3.935,
+2026-06-06,ben williamson,,closing,2026-06-06T21:37:41Z,,2900,3.333,3.017,
+2026-06-06,taylor walls,,closing,2026-06-06T21:37:41Z,,3300,2.941,2.662,
+2026-06-06,leo jimenez,,closing,2026-06-06T21:37:41Z,,2200,4.348,3.935,
+2026-06-06,nick fortes,,closing,2026-06-06T21:37:41Z,,2900,3.333,3.017,
+2026-06-06,cedric mullins,,closing,2026-06-06T21:37:41Z,,1900,5.000,4.525,
+2026-06-06,connor norby,,closing,2026-06-06T21:37:41Z,,1700,5.556,5.028,
+2026-06-06,junior caminero,,closing,2026-06-06T21:37:41Z,,1200,7.692,7.033,
+2026-06-06,yandy diaz,,closing,2026-06-06T21:37:41Z,,2400,4.000,3.620,
+2026-06-06,heriberto hernandez,,closing,2026-06-06T21:37:41Z,,1100,8.333,7.619,
+2026-06-06,richie palacios,,closing,2026-06-06T21:37:41Z,,2400,4.000,3.620,
+2026-06-06,otto lopez,,closing,2026-06-06T21:37:41Z,,2400,4.000,3.620,
+2026-06-06,kyle stowers,,closing,2026-06-06T21:37:41Z,,1900,5.000,4.525,
+2026-06-06,jonathan aranda,,closing,2026-06-06T21:37:41Z,,2200,4.348,3.935,
+2026-06-06,esteury ruiz,,closing,2026-06-06T21:37:41Z,,1900,5.000,4.525,
+2026-06-06,xavier edwards,,closing,2026-06-06T21:37:41Z,,3400,2.857,2.586,
+2026-06-06,willson contreras,,closing,2026-06-06T21:37:41Z,,400,20.000,18.605,
+2026-06-06,wilyer abreu,,closing,2026-06-06T21:37:41Z,,400,20.000,18.605,
+2026-06-06,jarren duran,,closing,2026-06-06T21:37:41Z,,450,18.182,16.773,
+2026-06-06,ceddanne rafaela,,closing,2026-06-06T21:37:41Z,,600,14.286,13.179,
+2026-06-06,ben rice,,closing,2026-06-06T21:37:41Z,,360,21.739,20.222,
+2026-06-06,paul goldschmidt,,closing,2026-06-06T21:37:41Z,,450,18.182,16.773,
+2026-06-06,cody bellinger,,closing,2026-06-06T21:37:41Z,,525,16.000,14.760,
+2026-06-06,trent grisham,,closing,2026-06-06T21:37:41Z,,460,17.857,16.473,
+2026-06-06,jose caballero,,closing,2026-06-06T21:37:41Z,,800,11.111,10.159,
+2026-06-06,marcelo mayer,,closing,2026-06-06T21:37:41Z,,750,11.765,10.756,
+2026-06-06,mickey gasper,,closing,2026-06-06T21:37:41Z,,600,14.286,13.179,
+2026-06-06,caleb durbin,,closing,2026-06-06T21:37:41Z,,1000,9.091,8.312,
+2026-06-06,masataka yoshida,,closing,2026-06-06T21:37:41Z,,600,14.286,13.179,
+2026-06-06,amed rosario,,closing,2026-06-06T21:37:41Z,,575,14.815,13.667,
+2026-06-06,anthony volpe,,closing,2026-06-06T21:37:41Z,,800,11.111,10.159,
+2026-06-06,jose ramirez,,closing,2026-06-06T21:37:41Z,,420,19.231,17.741,
+2026-06-06,kyle manzardo,,closing,2026-06-06T21:37:41Z,,450,18.182,16.773,
+2026-06-06,chase delauter,,closing,2026-06-06T21:37:41Z,,575,14.815,13.667,
+2026-06-06,angel martinez,,closing,2026-06-06T21:37:41Z,,575,14.815,13.667,
+2026-06-06,joc pederson,,closing,2026-06-06T21:37:41Z,,400,20.000,18.605,
+2026-06-06,corey seager,,closing,2026-06-06T21:37:41Z,,350,22.222,20.672,
+2026-06-06,brandon nimmo,,closing,2026-06-06T21:37:41Z,,500,16.667,15.375,
+2026-06-06,wyatt langford,,closing,2026-06-06T21:37:41Z,,510,16.393,15.123,
+2026-06-06,travis bazzana,,closing,2026-06-06T21:37:41Z,,600,14.286,13.179,
+2026-06-06,steven kwan,,closing,2026-06-06T21:37:41Z,,1300,7.143,6.531,
+2026-06-06,brayan rocchio,,closing,2026-06-06T21:37:41Z,,900,10.000,9.143,
+2026-06-06,patrick bailey,,closing,2026-06-06T21:37:41Z,,800,11.111,10.159,
+2026-06-06,ezequiel duran,,closing,2026-06-06T21:37:41Z,,900,10.000,9.143,
+2026-06-06,kyle higashioka,,closing,2026-06-06T21:37:41Z,,540,15.625,14.414,
+2026-06-06,evan carter,,closing,2026-06-06T21:37:41Z,,750,11.765,10.756,
+2026-06-06,jake burger,,closing,2026-06-06T21:37:41Z,,450,18.182,16.773,
+2026-06-06,josh jung,,closing,2026-06-06T21:37:41Z,,575,14.815,13.667,
+2026-06-06,daniel schneemann,,closing,2026-06-06T21:37:41Z,,700,12.500,11.531,
+2026-06-06,jackson chourio,,closing,2026-06-06T21:37:41Z,,295,25.316,23.550,
+2026-06-06,jake bauers,,closing,2026-06-06T21:37:41Z,,300,25.000,23.256,
+2026-06-06,garrett mitchell,,closing,2026-06-06T21:37:41Z,,360,21.739,20.222,
+2026-06-06,christian yelich,,closing,2026-06-06T21:37:41Z,,460,17.857,16.473,
+2026-06-06,hunter goodman,,closing,2026-06-06T21:37:41Z,,300,25.000,23.256,
+2026-06-06,tj rumfield,,closing,2026-06-06T21:37:41Z,,650,13.333,12.300,
+2026-06-06,ezequiel tovar,,closing,2026-06-06T21:37:41Z,,600,14.286,13.179,
+2026-06-06,jake mccarthy,,closing,2026-06-06T21:37:41Z,,1000,9.091,8.312,
+2026-06-06,william contreras,,closing,2026-06-06T21:37:41Z,,440,18.519,17.084,
+2026-06-06,kyle karros,,closing,2026-06-06T21:37:41Z,,700,12.500,11.531,
+2026-06-06,brett sullivan,,closing,2026-06-06T21:37:41Z,,850,10.526,9.624,
+2026-06-06,tyler freeman,,closing,2026-06-06T21:37:41Z,,1150,8.000,7.314,
+2026-06-06,brice turang,,closing,2026-06-06T21:37:41Z,,460,17.857,16.473,
+2026-06-06,sal frelick,,closing,2026-06-06T21:37:41Z,,950,9.524,8.707,
+2026-06-06,edouard julien,,closing,2026-06-06T21:37:41Z,,950,9.524,8.707,
+2026-06-06,troy johnston,,closing,2026-06-06T21:37:41Z,,900,10.000,9.143,
+2026-06-06,mike trout,,closing,2026-06-06T21:37:41Z,,390,20.408,18.984,
+2026-06-06,zach neto,,closing,2026-06-06T21:37:41Z,,475,17.391,16.044,
+2026-06-06,jo adell,,closing,2026-06-06T21:37:41Z,,550,15.385,14.192,
+2026-06-06,shohei ohtani,,closing,2026-06-06T21:37:41Z,,255,28.169,26.204,
+2026-06-06,max muncy,,closing,2026-06-06T21:37:41Z,,300,25.000,23.256,
+2026-06-06,andy pages,,closing,2026-06-06T21:37:41Z,,450,18.182,16.773,
+2026-06-06,freddie freeman,,closing,2026-06-06T21:37:41Z,,450,18.182,16.773,
+2026-06-06,vaughn grissom,,closing,2026-06-06T21:37:41Z,,600,14.286,13.179,
+2026-06-06,wade meckler,,closing,2026-06-06T21:37:41Z,,850,10.526,9.624,
+2026-06-06,logan o'hoppe,,closing,2026-06-06T21:37:41Z,,600,14.286,13.179,
+2026-06-06,oswald peraza,,closing,2026-06-06T21:37:41Z,,750,11.765,10.756,
+2026-06-06,jorge soler,,closing,2026-06-06T21:37:41Z,,475,17.391,16.044,
+2026-06-06,mookie betts,,closing,2026-06-06T21:37:41Z,,450,18.182,16.773,
+2026-06-06,will smith,,closing,2026-06-06T21:37:41Z,,475,17.391,16.044,
+2026-06-06,juan soto,,closing,2026-06-06T21:37:41Z,,350,22.222,20.672,
+2026-06-06,jared young,,closing,2026-06-06T21:37:41Z,,450,18.182,16.773,
+2026-06-06,mark vientos,,closing,2026-06-06T21:37:41Z,,550,15.385,14.192,
+2026-06-06,bo bichette,,closing,2026-06-06T21:37:41Z,,750,11.765,10.756,
+2026-06-06,manny machado,,closing,2026-06-06T21:37:41Z,,525,16.000,14.760,
+2026-06-06,gavin sheets,,closing,2026-06-06T21:37:41Z,,650,13.333,12.300,
+2026-06-06,fernando tatis jr.,,closing,2026-06-06T21:37:41Z,,550,15.385,14.192,
+2026-06-06,xander bogaerts,,closing,2026-06-06T21:37:41Z,,750,11.765,10.756,
+2026-06-06,carson benge,,closing,2026-06-06T21:37:41Z,,575,14.815,13.667,
+2026-06-06,brett baty,,closing,2026-06-06T21:37:41Z,,750,11.765,10.756,
+2026-06-06,marcus semien,,closing,2026-06-06T21:37:41Z,,750,11.765,10.756,
+2026-06-06,a.j. ewing,,closing,2026-06-06T21:37:41Z,,650,13.333,12.300,
+2026-06-06,freddy fermin,,closing,2026-06-06T21:37:41Z,,900,10.000,9.143,
+2026-06-06,ty france,,closing,2026-06-06T21:37:41Z,,800,11.111,10.159,
+2026-06-06,jackson merrill,,closing,2026-06-06T21:37:41Z,,575,14.815,13.667,
+2026-06-06,travis bazzana,,closing,2026-06-07T01:05:01Z,,900,10.000,9.143,
+2026-06-06,angel martinez,,closing,2026-06-07T01:05:01Z,,1000,9.091,8.312,
+2026-06-06,steven kwan,,closing,2026-06-07T01:05:01Z,,2800,3.448,3.121,
+2026-06-06,joc pederson,,closing,2026-06-07T01:05:01Z,,650,13.333,12.300,
+2026-06-06,corey seager,,closing,2026-06-07T01:05:01Z,,650,13.333,12.300,
+2026-06-06,patrick bailey,,closing,2026-06-07T01:05:01Z,,850,10.526,9.624,
+2026-06-06,ezequiel duran,,closing,2026-06-07T01:05:01Z,,2200,4.348,3.935,
+2026-06-06,kyle higashioka,,closing,2026-06-07T01:05:01Z,,750,11.765,10.756,
+2026-06-06,kyle manzardo,,closing,2026-06-07T01:05:01Z,,650,13.333,12.300,
+2026-06-06,evan carter,,closing,2026-06-07T01:05:01Z,,850,10.526,9.624,
+2026-06-06,jake burger,,closing,2026-06-07T01:05:01Z,,700,12.500,11.531,
+2026-06-06,chase delauter,,closing,2026-06-07T01:05:01Z,,850,10.526,9.624,
+2026-06-06,josh jung,,closing,2026-06-07T01:05:01Z,,1000,9.091,8.312,
+2026-06-06,wyatt langford,,closing,2026-06-07T01:05:01Z,,950,9.524,8.707,
+2026-06-06,daniel schneemann,,closing,2026-06-07T01:05:01Z,,1100,8.333,7.619,
+2026-06-06,brandon nimmo,,closing,2026-06-07T01:05:01Z,,750,11.765,10.756,
+2026-06-06,jackson chourio,,closing,2026-06-07T01:05:01Z,,275,26.667,24.806,
+2026-06-06,jake bauers,,closing,2026-06-07T01:05:01Z,,300,25.000,23.256,
+2026-06-06,garrett mitchell,,closing,2026-06-07T01:05:01Z,,350,22.222,20.672,
+2026-06-06,christian yelich,,closing,2026-06-07T01:05:01Z,,450,18.182,16.773,
+2026-06-06,hunter goodman,,closing,2026-06-07T01:05:01Z,,285,25.974,24.162,
+2026-06-06,tj rumfield,,closing,2026-06-07T01:05:01Z,,650,13.333,12.300,
+2026-06-06,ezequiel tovar,,closing,2026-06-07T01:05:01Z,,600,14.286,13.179,
+2026-06-06,jake mccarthy,,closing,2026-06-07T01:05:01Z,,850,10.526,9.624,
+2026-06-06,william contreras,,closing,2026-06-07T01:05:01Z,,400,20.000,18.605,
+2026-06-06,kyle karros,,closing,2026-06-07T01:05:01Z,,750,11.765,10.756,
+2026-06-06,brett sullivan,,closing,2026-06-07T01:05:01Z,,900,10.000,9.143,
+2026-06-06,tyler freeman,,closing,2026-06-07T01:05:01Z,,1150,8.000,7.314,
+2026-06-06,brice turang,,closing,2026-06-07T01:05:01Z,,420,19.231,17.741,
+2026-06-06,joey ortiz,,closing,2026-06-07T01:05:01Z,,750,11.765,10.756,
+2026-06-06,andrew vaughn,,closing,2026-06-07T01:05:01Z,,400,20.000,18.605,
+2026-06-06,sal frelick,,closing,2026-06-07T01:05:01Z,,900,10.000,9.143,
+2026-06-06,david hamilton,,closing,2026-06-07T01:05:01Z,,750,11.765,10.756,
+2026-06-06,edouard julien,,closing,2026-06-07T01:05:01Z,,850,10.526,9.624,
+2026-06-06,troy johnston,,closing,2026-06-07T01:05:01Z,,900,10.000,9.143,
+2026-06-06,mike trout,,closing,2026-06-07T01:05:01Z,,420,19.231,17.741,
+2026-06-06,zach neto,,closing,2026-06-07T01:05:01Z,,460,17.857,16.473,
+2026-06-06,jo adell,,closing,2026-06-07T01:05:01Z,,540,15.625,14.414,
+2026-06-06,shohei ohtani,,closing,2026-06-07T01:05:01Z,,250,28.571,26.578,
+2026-06-06,max muncy,,closing,2026-06-07T01:05:01Z,,300,25.000,23.256,
+2026-06-06,andy pages,,closing,2026-06-07T01:05:01Z,,450,18.182,16.773,
+2026-06-06,freddie freeman,,closing,2026-06-07T01:05:01Z,,450,18.182,16.773,
+2026-06-06,alex call,,closing,2026-06-07T01:05:01Z,,900,10.000,9.143,
+2026-06-06,wade meckler,,closing,2026-06-07T01:05:01Z,,850,10.526,9.624,
+2026-06-06,dalton rushing,,closing,2026-06-07T01:05:01Z,,380,20.833,19.380,
+2026-06-06,donovan walton,,closing,2026-06-07T01:05:01Z,,800,11.111,10.159,
+2026-06-06,nick madrigal,,closing,2026-06-07T01:05:01Z,,1050,8.696,7.950,
+2026-06-06,ryan ward,,closing,2026-06-07T01:05:01Z,,480,17.241,15.905,
+2026-06-06,alex freeland,,closing,2026-06-07T01:05:01Z,,750,11.765,10.756,
+2026-06-06,logan o'hoppe,,closing,2026-06-07T01:05:01Z,,650,13.333,12.300,
+2026-06-06,oswald peraza,,closing,2026-06-07T01:05:01Z,,700,12.500,11.531,
+2026-06-06,mookie betts,,closing,2026-06-07T01:05:01Z,,440,18.519,17.084,
+2026-06-06,juan soto,,closing,2026-06-07T01:05:01Z,,350,22.222,20.672,
+2026-06-06,jared young,,closing,2026-06-07T01:05:01Z,,450,18.182,16.773,
+2026-06-06,mark vientos,,closing,2026-06-07T01:05:01Z,,600,14.286,13.179,
+2026-06-06,bo bichette,,closing,2026-06-07T01:05:01Z,,700,12.500,11.531,
+2026-06-06,manny machado,,closing,2026-06-07T01:05:01Z,,500,16.667,15.375,
+2026-06-06,gavin sheets,,closing,2026-06-07T01:05:01Z,,650,13.333,12.300,
+2026-06-06,fernando tatis jr.,,closing,2026-06-07T01:05:01Z,,550,15.385,14.192,
+2026-06-06,xander bogaerts,,closing,2026-06-07T01:05:01Z,,700,12.500,11.531,
+2026-06-06,carson benge,,closing,2026-06-07T01:05:01Z,,575,14.815,13.667,
+2026-06-06,brett baty,,closing,2026-06-07T01:05:01Z,,750,11.765,10.756,
+2026-06-06,marcus semien,,closing,2026-06-07T01:05:01Z,,650,13.333,12.300,
+2026-06-06,a.j. ewing,,closing,2026-06-07T01:05:01Z,,750,11.765,10.756,
+2026-06-06,freddy fermin,,closing,2026-06-07T01:05:01Z,,900,10.000,9.143,
+2026-06-06,ty france,,closing,2026-06-07T01:05:01Z,,700,12.500,11.531,
+2026-06-06,jackson merrill,,closing,2026-06-07T01:05:01Z,,540,15.625,14.414,
+2026-06-06,miguel andujar,,closing,2026-06-07T01:05:01Z,,900,10.000,9.143,
+2026-06-06,sung-mun song,,closing,2026-06-07T01:05:01Z,,850,10.526,9.624,
+2026-06-06,luis torrens,,closing,2026-06-07T01:05:01Z,,850,10.526,9.624,
+2026-06-15,Juan Soto,NYM,opening,2026-06-16T01:24:00Z,,350,22.222,20.672,
+2026-06-15,Joc Pederson,TEX,opening,2026-06-16T01:24:00Z,,650,13.333,12.300,
+2026-06-15,Marcus Semien,NYM,opening,2026-06-16T01:24:01Z,,650,13.333,12.300,
+2026-06-15,Josh Jung,TEX,opening,2026-06-16T01:24:01Z,,1050,8.696,7.950,
+2026-06-15,Wade Meckler,LAA,opening,2026-06-16T01:24:01Z,,850,10.526,9.624,
