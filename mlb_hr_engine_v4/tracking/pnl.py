@@ -23,13 +23,14 @@ _STALE_DAYS = 7   # picks older than this with no game log result are auto-voide
 import requests
 
 from tracking import sheets as _sheets
+from tracking._paths import DATA_DIR
 
 _SESSION = requests.Session()
 _SESSION.headers.update({"User-Agent": "Codex-HR-Engine/pnl"})
 
-LOG_PATH       = Path(__file__).parent / "picks_log.csv"
-RESULTS_PATH   = Path(__file__).parent / "results.csv"
-FULL_LOG_PATH  = Path(__file__).parent / "full_slate_log.csv"
+LOG_PATH       = DATA_DIR / "picks_log.csv"
+RESULTS_PATH   = DATA_DIR / "results.csv"
+FULL_LOG_PATH  = DATA_DIR / "full_slate_log.csv"
 
 LOG_FIELDS = [
     "date", "model_version", "player_id", "player_name", "team", "opponent",
@@ -475,7 +476,7 @@ def _load_pending(date_str: str) -> list[dict]:
 def _load_results() -> list[dict]:
     if _sheets.available():
         return _sheets.read_rows("results")
-    pt_path = Path(__file__).parent / "pick_tracker.csv"
+    pt_path = DATA_DIR / "pick_tracker.csv"
     if not pt_path.exists():
         return []
     with open(pt_path, newline="", encoding="utf-8") as f:

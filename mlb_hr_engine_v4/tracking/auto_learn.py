@@ -28,9 +28,10 @@ import statistics
 from pathlib import Path
 
 import config
+from tracking._paths import DATA_DIR
 from tracking.pick_tracker import load_all as _pt_load_all, settled_rows, summary_by, total_summary
 
-ADJUSTMENTS_PATH = Path(__file__).parent / "learned_adjustments.json"
+ADJUSTMENTS_PATH = DATA_DIR / "learned_adjustments.json"
 
 # Feature definitions: (csv_field, display_label, direction_note)
 FEATURES = [
@@ -164,7 +165,7 @@ def auto_apply_safe() -> dict:
 
     Returns {"applied": list[str], "skipped": str | None}.
     """
-    results_path = Path(__file__).parent / "results.csv"
+    results_path = DATA_DIR / "results.csv"
 
     # Skip if no new results since last adjustment write
     if results_path.exists() and ADJUSTMENTS_PATH.exists():

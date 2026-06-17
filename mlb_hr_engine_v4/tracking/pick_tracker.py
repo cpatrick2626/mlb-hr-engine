@@ -36,7 +36,9 @@ import unicodedata
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
-LOG_PATH = Path(__file__).parent / "pick_tracker.csv"
+from tracking._paths import DATA_DIR
+
+LOG_PATH = DATA_DIR / "pick_tracker.csv"
 
 # Session 25 current version tag (bump whenever calibration params change)
 ENGINE_VERSION = "v4"

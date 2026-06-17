@@ -24,6 +24,8 @@ import math
 from collections import defaultdict
 from typing import Optional
 
+from tracking._paths import DATA_DIR
+
 
 # ── Default alert thresholds ──────────────────────────────────────────────────
 _DEFAULTS = {
@@ -344,15 +346,14 @@ def _load_settled() -> list[dict]:
     """Load settled rows from pick_tracker.csv + results.csv."""
     rows: list[dict] = []
     try:
-        from pathlib import Path
         import csv as _csv
-        pt = Path(__file__).parent / "pick_tracker.csv"
+        pt = DATA_DIR / "pick_tracker.csv"
         if pt.exists():
             with open(pt, newline="", encoding="utf-8") as f:
                 for r in _csv.DictReader(f):
                     if r.get("hr_result") in ("0", "1"):
                         rows.append(r)
-        rt = Path(__file__).parent / "results.csv"
+        rt = DATA_DIR / "results.csv"
         if rt.exists():
             with open(rt, newline="", encoding="utf-8") as f:
                 for r in _csv.DictReader(f):

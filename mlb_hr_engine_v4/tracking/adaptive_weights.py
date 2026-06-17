@@ -12,7 +12,9 @@ outside a safe operating range regardless of what the data suggests.
 import json
 from pathlib import Path
 
-ADJUSTMENTS_PATH = Path(__file__).parent / "learned_adjustments.json"
+from tracking._paths import DATA_DIR
+
+ADJUSTMENTS_PATH = DATA_DIR / "learned_adjustments.json"
 
 # Hard bounds — adaptive values are clamped to these on load
 BOUNDS: dict[str, tuple[float, float]] = {

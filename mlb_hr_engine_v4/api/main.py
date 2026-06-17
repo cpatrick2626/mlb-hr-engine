@@ -129,8 +129,10 @@ async def ops_settle(request: Request, background_tasks: BackgroundTasks):
 
 async def _run_settle():
     import sys, os as _os
-    sys.path.insert(0, _os.path.dirname(_os.path.dirname(__file__)))
     try:
+        _app = _os.path.abspath(_os.path.join(_os.path.dirname(__file__), ".."))
+        if _app not in sys.path:
+            sys.path.insert(0, _app)
         from tracking import pnl
         summary = pnl.settle_all_unsettled()
         total = sum(v for k, v in summary.items() if not k.startswith("_"))

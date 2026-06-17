@@ -13,7 +13,9 @@ import csv
 from datetime import date, datetime, timezone
 from pathlib import Path
 
-LOG_PATH = Path(__file__).parent / "line_movement_log.csv"
+from tracking._paths import DATA_DIR
+
+LOG_PATH = DATA_DIR / "line_movement_log.csv"
 FIELDS = ["date", "time_utc", "player_name", "team", "american_odds", "ev_pct", "model_prob_pct"]
 
 _BOOK_ORDER = ["fanduel", "draftkings", "betmgm", "caesars", "pointsbet", "betrivers"]

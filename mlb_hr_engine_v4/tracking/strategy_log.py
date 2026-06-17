@@ -13,7 +13,9 @@ import csv
 from datetime import date
 from pathlib import Path
 
-LOG_PATH = Path(__file__).parent / "strategy_log.csv"
+from tracking._paths import DATA_DIR
+
+LOG_PATH = DATA_DIR / "strategy_log.csv"
 
 FIELDS = [
     "date", "strategy", "player_name", "team",

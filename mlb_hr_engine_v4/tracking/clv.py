@@ -33,11 +33,12 @@ from typing import Optional
 import requests
 
 import config
+from tracking._paths import DATA_DIR
 
 _SESSION = requests.Session()
 _SESSION.headers.update({"User-Agent": "Codex-HR-Engine/clv"})
 
-CLV_LOG = Path(__file__).parent / "clv_log.csv"
+CLV_LOG = DATA_DIR / "clv_log.csv"
 
 # Full CLV log schema (Session 26)
 CLV_FIELDS = [
@@ -552,11 +553,7 @@ def _atomic_write(rows: list[dict]) -> None:
 def _fetch_current_hr_odds() -> dict[str, int]:
     """Best available HR Over odds keyed by normalized player name."""
     if not config.ODDS_API_KEY:
-        import logging as _logging
-        _logging.getLogger(__name__).warning(
-            "[clv] ODDS_API_KEY not set — no odds fetched, no CLV computed"
-        )
-        return {}
+        raise RuntimeError("CLV aborted: ODDS_API_KEY not set")
     try:
         now_utc  = datetime.now(timezone.utc)
         now_et   = now_utc - timedelta(hours=4)

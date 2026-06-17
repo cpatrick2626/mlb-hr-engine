@@ -22,7 +22,9 @@ from datetime import date, datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-SNAPSHOT_PATH = Path(__file__).parent / "line_snapshots.csv"
+from tracking._paths import DATA_DIR
+
+SNAPSHOT_PATH = DATA_DIR / "line_snapshots.csv"
 
 SNAPSHOT_FIELDS = [
     "date",

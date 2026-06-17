@@ -23,10 +23,11 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Optional
 
+from tracking._paths import DATA_DIR
 
-LOG_PATH    = Path(__file__).parent / "pick_tracker.csv"
-RESULTS_CSV = Path(__file__).parent / "results.csv"
-CLV_LOG     = Path(__file__).parent / "clv_log.csv"
+LOG_PATH    = DATA_DIR / "pick_tracker.csv"
+RESULTS_CSV = DATA_DIR / "results.csv"
+CLV_LOG     = DATA_DIR / "clv_log.csv"
 
 
 def run_integrity_check(verbose: bool = True) -> dict:
