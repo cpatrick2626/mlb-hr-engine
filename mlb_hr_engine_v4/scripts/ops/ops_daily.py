@@ -132,6 +132,14 @@ def main():
     else:
         clv_result = _run_clv_capture(today, out)
 
+    # Reconcile CLV values into results.csv so drift_monitor can read them
+    try:
+        from tracking.pnl import reconcile_clv_to_results
+        rec = reconcile_clv_to_results()
+        out(f"  reconcile_clv: {rec['matched']} results rows matched, {rec['unmatched']} unmatched")
+    except Exception as e:
+        out(f"  [reconcile_clv FAILED] {e}")
+
     # ── Phase 5: CLV summary ──────────────────────────────────────────────────
     out(f"\n[PHASE 5] CLV Summary")
     out(f"  {'─'*60}")

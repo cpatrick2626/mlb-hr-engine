@@ -14,6 +14,7 @@ Workflow:
 
 import csv
 import os
+import unicodedata
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Optional
@@ -31,6 +32,7 @@ _SESSION.headers.update({"User-Agent": "Codex-HR-Engine/pnl"})
 LOG_PATH       = DATA_DIR / "picks_log.csv"
 RESULTS_PATH   = DATA_DIR / "results.csv"
 FULL_LOG_PATH  = DATA_DIR / "full_slate_log.csv"
+CLV_LOG_PATH   = DATA_DIR / "clv_log.csv"
 
 LOG_FIELDS = [
     "date", "model_version", "player_id", "player_name", "team", "opponent",
@@ -42,7 +44,7 @@ LOG_FIELDS = [
     "streak_factor", "barrel_pct", "xslg", "platoon_factor", "statcast_source",
 ]
 
-RESULTS_FIELDS   = LOG_FIELDS + ["hr_result", "profit_loss", "notes"]
+RESULTS_FIELDS   = LOG_FIELDS + ["hr_result", "profit_loss", "notes", "clv_pp", "clv_pct_rel", "beats_close"]
 FULL_LOG_FIELDS  = LOG_FIELDS + ["confidence_tier", "qualified", "filter_reasons"]
 
 
@@ -400,6 +402,53 @@ def get_picks_log() -> list[dict]:
         with open(LOG_PATH, newline="", encoding="utf-8") as f:
             rows = list(csv.DictReader(f))
     return list(reversed(rows))
+
+
+def reconcile_clv_to_results() -> dict:
+    “””Copy clv_pp/clv_pct_rel/beats_close from clv_log.csv into results.csv.
+
+    Join key: (date, normalized player_name). Rows with no CLV match stay blank —
+    never writes 0 or placeholder. Uses existing atomic writer.
+    Returns {“matched”: int, “unmatched”: int}.
+    “””
+    def _norm(name: str) -> str:
+        return unicodedata.normalize(“NFKD”, name).encode(“ascii”, “ignore”).decode(“ascii”).lower().strip()
+
+    # Build CLV map — only rows that have clv_pp computed
+    clv_map: dict[tuple, dict] = {}
+    if CLV_LOG_PATH.exists():
+        with open(CLV_LOG_PATH, newline=””, encoding=”utf-8”) as f:
+            for row in csv.DictReader(f):
+                clv_pp = row.get(“clv_pp”, “”)
+                if not clv_pp:
+                    continue
+                key = (row.get(“date”, “”), _norm(row.get(“player_name”, “”)))
+                clv_map[key] = {
+                    “clv_pp”:      clv_pp,
+                    “clv_pct_rel”: row.get(“clv_pct_rel”, “”),
+                    “beats_close”: row.get(“beats_close”, “”),
+                }
+
+    if not RESULTS_PATH.exists():
+        return {“matched”: 0, “unmatched”: 0}
+
+    with open(RESULTS_PATH, newline=””, encoding=”utf-8”) as f:
+        rows = list(csv.DictReader(f))
+
+    matched = unmatched = 0
+    for row in rows:
+        key = (row.get(“date”, “”), _norm(row.get(“player_name”, “”)))
+        clv = clv_map.get(key)
+        if clv:
+            row[“clv_pp”]      = clv[“clv_pp”]
+            row[“clv_pct_rel”] = clv[“clv_pct_rel”]
+            row[“beats_close”] = clv[“beats_close”]
+            matched += 1
+        else:
+            unmatched += 1
+
+    _atomic_csv_write(RESULTS_PATH, RESULTS_FIELDS, rows)
+    return {“matched”: matched, “unmatched”: unmatched}
 
 
 # â”€â”€ Internal helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
