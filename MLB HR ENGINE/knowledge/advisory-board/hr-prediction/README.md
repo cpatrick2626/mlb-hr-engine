@@ -27,4 +27,14 @@ Missing fields → `--` or `DATA GAP`. Never fabricate.
 - Missing data → `--` / `DATA GAP`.
 
 ## Ingested sources
-`DATA GAP` — no sources ingested yet.
+
+| ID | Title | Type | Date |
+|----|-------|------|------|
+| 001 | [[source-001-engine-modeling-method\|Engine Modeling Method]] | internal-doctrine | 2026-06-17 |
+
+## Deferred sources (need /web-scraping)
+
+- Statcast expected-stats methodology (xSLG, xwOBA derivation)
+- Poisson vs empirical-Bayes calibration for low-HR-rate batters
+- Platoon split sample-size stabilization rates
+- Park factor construction methodology

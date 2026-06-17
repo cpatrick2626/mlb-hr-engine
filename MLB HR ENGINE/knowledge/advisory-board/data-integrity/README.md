@@ -27,4 +27,13 @@ Missing fields → `--` or `DATA GAP`. Never fabricate.
 - Missing data → `--` / `DATA GAP`.
 
 ## Ingested sources
-`DATA GAP` — no sources ingested yet.
+
+| ID | Title | Type | Date |
+|----|-------|------|------|
+| 001 | [[source-001-tracking-infrastructure-overhaul\|Tracking Infrastructure Overhaul]] | internal-session | 2026-06-17 |
+
+## Deferred sources (need /web-scraping)
+
+- Idempotency guarantees for settlement re-runs
+- Schema validation frameworks (Pandera, Great Expectations)
+- Automated data-quality monitoring patterns

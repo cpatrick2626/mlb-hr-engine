@@ -27,4 +27,14 @@ Missing fields → `--` or `DATA GAP`. Never fabricate.
 - Missing data → `--` / `DATA GAP`.
 
 ## Ingested sources
-`DATA GAP` — no sources ingested yet.
+
+| ID | Title | Type | Date |
+|----|-------|------|------|
+| 001 | [[source-001-pitch-mix-and-tactical-doctrine\|Pitch Mix Analysis and JIG Tactical Doctrine]] | internal-doctrine | 2026-06-17 |
+
+## Deferred sources (need /web-scraping)
+
+- Pitch-arsenal platoon split tables (batter vs pitch-type by handedness)
+- Park-specific HR zones and spray-chart data
+- Pitch-type sequencing and tunneling theory
+- Weather + wind modeling frameworks beyond current multipliers
