@@ -553,7 +553,9 @@ def _atomic_write(rows: list[dict]) -> None:
 def _fetch_current_hr_odds() -> dict[str, int]:
     """Best available HR Over odds keyed by normalized player name."""
     if not config.ODDS_API_KEY:
-        raise RuntimeError("CLV aborted: ODDS_API_KEY not set")
+        import logging as _logging
+        _logging.getLogger(__name__).warning("[clv] ODDS_API_KEY not set — CLV fetch skipped")
+        return {}
     try:
         now_utc  = datetime.now(timezone.utc)
         now_et   = now_utc - timedelta(hours=4)

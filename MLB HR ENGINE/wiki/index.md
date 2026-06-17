@@ -1,5 +1,5 @@
 # MLB HR ENGINE — Intelligence Wiki Index
-Last updated: 2026-06-16
+Last updated: 2026-06-17
 
 ## DOCTRINE
 | Page | Summary | Agent | Status |
@@ -18,6 +18,7 @@ Last updated: 2026-06-16
 | [Ticket Roles](doctrine/ticket-roles.md) | PRIME/EXPLOSIVE/ADVANTAGE/WILDCARD — usage archetypes, gates, display-only invariants, recalibration history | Claude Code | 2026-06-15 |
 | [Design: Pitch Mix Analysis](doctrine/design-pitch-mix-analysis.md) | Modal de-fabrication 2026-06-15; real data sources; removed 3×3 zone grid | Claude Code | 2026-06-15 |
 | [Known Gaps / Parked](doctrine/known-gaps.md) | xFIP mismatch, silent neutral pitcher default, dead app.py, pitch mix blanks, JIG tier epoch, rooms governance | Claude Code | 2026-06-15 |
+| [Tracking Consolidation Plan](doctrine/tracking-consolidation-plan.md) | Option A phased plan: redirect automated settlement to pnl path, CLV reconcile, reader repoints, pick_tracker retirement | Claude Code | 2026-06-17 |
 
 ## ARCHITECTURE
 | Page | Summary | Agent |
