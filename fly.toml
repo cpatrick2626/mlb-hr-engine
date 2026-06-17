@@ -5,7 +5,8 @@ primary_region = "iad"   # Washington DC — closest to MLB data centers
   dockerfile = "Dockerfile"
 
 [env]
-  PORT = "8080"
+  PORT                = "8080"
+  TRACKING_DATA_DIR   = "/data"
 
 [http_service]
   internal_port        = 8080
@@ -21,7 +22,7 @@ primary_region = "iad"   # Washington DC — closest to MLB data centers
 
 [[mounts]]
   source      = "mlb_tracking"
-  destination = "/app/tracking"    # persists picks_log.csv etc. across deploys
+  destination = "/data"            # moved off /app/tracking to unshadow the code dir
   processes   = ["app"]
 
 # Secrets to set with `fly secrets set KEY=value`:
