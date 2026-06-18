@@ -27,4 +27,14 @@ Missing fields → `--` or `DATA GAP`. Never fabricate.
 - Missing data → `--` / `DATA GAP`.
 
 ## Ingested sources
-`DATA GAP` — no sources ingested yet.
+
+| ID | Title | Type | Date |
+|----|-------|------|------|
+| 001 | [[source-001-ticket-roles-doctrine\|Ticket Roles Doctrine]] | internal-doctrine | 2026-06-17 |
+
+## Deferred sources (need /web-scraping)
+
+- Kelly stake sizing per role
+- Correlation between role pairings (same-game, same-lineup)
+- Devig / no-vig pricing integration with roles
+- Leg-count compounding math
