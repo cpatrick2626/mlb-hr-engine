@@ -82,7 +82,6 @@ window.FILTER_DEFAULTS = {
   sortKey: "none", sortDir: "Descending", maxPlayers: 75,
   excludeStarted: false,
   includeLive: true,
-  noTimeGate: false,
   confirmedLineupsOnly: false,
   preLineupPool: true,
 };
@@ -159,7 +158,6 @@ window.countActiveFilters = function (f) {
   if (f.maxPlayers != null && f.maxPlayers !== d.maxPlayers) n++;
   if (f.excludeStarted !== d.excludeStarted) n++;
   if (f.includeLive !== d.includeLive) n++;
-  if (f.noTimeGate !== d.noTimeGate) n++;
   if (f.confirmedLineupsOnly !== d.confirmedLineupsOnly) n++;
   if (f.preLineupPool !== d.preLineupPool) n++;
   return n;
