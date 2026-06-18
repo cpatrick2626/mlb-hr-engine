@@ -47,7 +47,10 @@ function MasterDashboard() {
         }
         window.dispatchEvent(new CustomEvent("hrEngineDataLoaded", { detail: data }));
       })
-      .catch(err => console.warn("HR Engine API fetch failed:", err));
+      .catch(err => {
+        console.warn("HR Engine API fetch failed:", err);
+        window.dispatchEvent(new CustomEvent("hrEngineDataLoaded", { detail: { _fetchFailed: true } }));
+      });
   }, []);
 
   const defaultLens = (eng) => eng.subs.find((s) => s.tag === "DEFAULT") || eng.subs[0];

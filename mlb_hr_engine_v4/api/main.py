@@ -357,8 +357,10 @@ def _build_slate_payload(data: dict) -> dict:
         odds = (f"+{fd_raw}" if fd_raw and fd_raw > 0
                 else str(fd_raw) if fd_raw else None)
 
-        away = (p.get("opponent") or p.get("team") or "away").upper()
         home = (p.get("home_team") or p.get("team") or "home").upper()
+        _own = (p.get("team") or "").upper()
+        _opp = (p.get("opponent") or "").upper()
+        away = (_own if _own != home else _opp) or "away"
         derived_game_id = f"{away}-{home}".lower().replace(" ", "-")
 
         role = classify_role(p, tier)
@@ -456,8 +458,10 @@ def _build_slate_payload(data: dict) -> dict:
 
     seen_games = {}
     for p in players:
-        _away = (p.get("opponent") or p.get("team") or "away").upper()
         _home = (p.get("home_team") or p.get("team") or "home").upper()
+        _own  = (p.get("team") or "").upper()
+        _opp  = (p.get("opponent") or "").upper()
+        _away = (_own if _own != _home else _opp) or "away"
         gid = f"{_away}-{_home}".lower().replace(" ", "-")
         if gid not in seen_games:
             _w = p.get("weather")
@@ -468,14 +472,14 @@ def _build_slate_payload(data: dict) -> dict:
             )
             seen_games[gid] = {
                 "id":       gid,
-                "away":     p.get("opponent", ""),
-                "home":     p.get("home_team", p.get("team", "")),
+                "away":     _away,
+                "home":     _home,
                 "park":     p.get("venue", ""),
                 "time":     p.get("game_time", ""),
                 "weather":  _weather_str,
                 "wind":     p.get("wind", ""),
                 "hrFactor": round(float(p.get("park_factor") or 1.0), 3),
-                "teams":    [p.get("opponent", ""), p.get("home_team", p.get("team", ""))],
+                "teams":    [_away, _home],
             }
 
     return {

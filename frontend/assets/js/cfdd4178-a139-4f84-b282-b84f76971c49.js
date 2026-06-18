@@ -92,6 +92,8 @@ const Stage = ({ engine, lens, ccOpen, onCloseCC, appliedFilters, onApplyFilters
   const eyebrow = `${engine.name}${engine.suffix ? " " + engine.suffix : ""}${lens ? "  /  " + lens.name.toUpperCase() : ""}`;
   const [mainRows, setMainRows] = React.useState([]);
   const [jigRows, setJigRows] = React.useState([]);
+  const [fetchDone, setFetchDone] = React.useState(false);
+  const [fetchFailed, setFetchFailed] = React.useState(false);
   React.useEffect(() => {
     const hydrateRows = () => {
       const nextMainRows = Array.isArray(window.LEADERBOARD_ROWS) ? window.LEADERBOARD_ROWS : [];
@@ -100,8 +102,13 @@ const Stage = ({ engine, lens, ccOpen, onCloseCC, appliedFilters, onApplyFilters
       setJigRows(nextJigRows);
     };
     hydrateRows();
-    window.addEventListener("hrEngineDataLoaded", hydrateRows);
-    return () => window.removeEventListener("hrEngineDataLoaded", hydrateRows);
+    const onDataLoaded = (e) => {
+      hydrateRows();
+      setFetchFailed(!!(e.detail && e.detail._fetchFailed));
+      setFetchDone(true);
+    };
+    window.addEventListener("hrEngineDataLoaded", onDataLoaded);
+    return () => window.removeEventListener("hrEngineDataLoaded", onDataLoaded);
   }, []);
   let body;
 
@@ -129,18 +136,37 @@ const Stage = ({ engine, lens, ccOpen, onCloseCC, appliedFilters, onApplyFilters
 
 
   } else if (lens && lens.id === "fullSlate") {
-    const sourceRows = engine.id === "jig" ? jigRows : mainRows;
-    const rows = applyRoomFilters(sourceRows, appliedFilters);
-    const nf = countActiveFilters(appliedFilters);
-    body =
-    <div className="md-room">
-        <FullSlateMatrix
-        rows={rows}
-        total={sourceRows.length}
-        onOpen={onOpenPlayer}
-        filterNote={nf > 0 ? `${nf} ACTIVE FILTER${nf > 1 ? "S" : ""}` : "NO ACTIVE FILTERS"}
-        isJigContext={engine.id === "jig"} />
+    if (!fetchDone) {
+      body = <div className="md-room" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div style={{ textAlign: "center" }}>
+          <div style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 11, letterSpacing: "0.22em", color: "var(--fg-3)", textTransform: "uppercase", marginBottom: 8 }}>LOADING SLATE DATA</div>
+          <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--fg-4)", letterSpacing: "0.08em" }}>Fetching picks from HR Engine API…</div>
+        </div>
       </div>;
+    } else {
+      const sourceRows = engine.id === "jig" ? jigRows : mainRows;
+      const rows = applyRoomFilters(sourceRows, appliedFilters);
+      const nf = countActiveFilters(appliedFilters);
+      if (sourceRows.length === 0) {
+        const isPipelineEmpty = !fetchFailed;
+        body = <div className="md-room" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div style={{ textAlign: "center", maxWidth: 420 }}>
+            <div style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 9, letterSpacing: "0.28em", color: isPipelineEmpty ? "var(--amber-500)" : "var(--red-500)", textTransform: "uppercase", marginBottom: 6 }}>{isPipelineEmpty ? "PIPELINE PENDING" : "BOARD OFFLINE"}</div>
+            <div style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 16, letterSpacing: "0.1em", color: "var(--fg-1)", textTransform: "uppercase", marginBottom: 10 }}>{isPipelineEmpty ? "NO SLATE DATA" : "API CONNECTION FAILED"}</div>
+            <div style={{ fontFamily: "var(--font-mono)", fontSize: 11, color: "var(--fg-3)", lineHeight: 1.6 }}>{isPipelineEmpty ? "Pipeline has not run for today's slate. Trigger: POST /api/pipeline/run with X-Cron-Secret header." : "Could not reach HR Engine API. Check connection or refresh to retry."}</div>
+          </div>
+        </div>;
+      } else {
+        body = <div className="md-room">
+          <FullSlateMatrix
+          rows={rows}
+          total={sourceRows.length}
+          onOpen={onOpenPlayer}
+          filterNote={nf > 0 ? `${nf} ACTIVE FILTER${nf > 1 ? "S" : ""}` : "NO ACTIVE FILTERS"}
+          isJigContext={engine.id === "jig"} />
+        </div>;
+      }
+    }
 
   } else if (lens && lens.id === "topTargets") {
     const targetSourceRows = engine.id === "jig" ? jigRows : mainRows;
