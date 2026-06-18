@@ -63,4 +63,9 @@
 - GitHub push does NOT auto-deploy. API needs flyctl deploy + cache
   flush (POST /api/pipeline/run, X-Cron-Secret). Frontend auto-builds
   on Vercel from push.
+- COMMIT BEFORE DEPLOY. `flyctl deploy` ships the working tree, NOT
+  HEAD — deploying uncommitted code leaves production ahead of git and
+  a clean checkout will silently regress. Sequence: commit → push →
+  deploy → cache flush. (Learned 2026-06-18: away-fix + empty-state
+  were deployed before commit; caught and reconciled in 371e071.)
 - config.py = threshold source of truth. pipeline.py = canonical assembly.
