@@ -46,6 +46,11 @@ Last updated: 2026-06-17
 |------|---------|-------|--------|
 | [Feature Backlog](ideas/feature-backlog.md) | Validation-first priority, done/in-progress, build-later, parked, key data facts | Claude Code | 2026-06-16 |
 
+## PROJECTS
+| Page | Summary | Agent | Status |
+|------|---------|-------|--------|
+| [Hermes Phase 1 Architecture](projects/hermes-phase1-architecture.md) | Capture-first ticket/leg data model + Phase 1 build plan for Vercel board; architecture only, no build yet | Claude Code | 2026-06-17 PLAN |
+
 ## CONCEPTS
 (pages added here as concepts are built out)
 

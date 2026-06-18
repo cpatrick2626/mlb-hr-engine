@@ -1,5 +1,7 @@
 # Wiki Log
 
+## [2026-06-17] claude-code | Hermes Phase 1 — data surface verification + architecture plan | COMPLETE — verified /api/slate fields (40+ per player), confirmed picks_log/results are pick-grain not ticket-grain, confirmed zero ticket/leg tables in Supabase, confirmed zero selection state in frontend board. Created wiki/projects/hermes-phase1-architecture.md (PLAN ONLY — no schema created, no code written). wiki/index.md PROJECTS section added. DO NOT COMMIT / DO NOT PUSH without operator authorization.
+
 ## [2026-06-16] claude-code | Obsidian Governance Update — 2026-06-15 validation + capture-loop session capture | COMPLETE — 2 vault notes created (wiki/sessions/2026-06-15-validation-and-capture-loop.md, wiki/ideas/feature-backlog.md). wiki/index.md (IDEAS section added, session row added), wiki/log.md, wiki/sessions/_Index_of_sessions.md updated. No secrets written. DO NOT COMMIT / DO NOT PUSH without operator authorization.
 
 ## [2026-06-15] claude-code | Obsidian Governance Update — 2026-06-15 session capture | COMPLETE — 5 vault notes created (deploy-runbook.md, ticket-roles.md, design-pitch-mix-analysis.md, known-gaps.md, session note). wiki/index.md, wiki/log.md, _Index_of_doctrine.md, _Index_of_sessions.md updated. No secrets written. DO NOT COMMIT / DO NOT PUSH without operator authorization.
