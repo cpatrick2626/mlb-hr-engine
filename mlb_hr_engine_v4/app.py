@@ -386,8 +386,10 @@ def _run_hydration_side_effects_once(data: dict) -> None:
         _ranked_names = {p.get("player_name") for p in ranked}
         non_ranked = [p for p in all_players if p.get("player_name") not in _ranked_names]
         _pt.log_picks_bulk(non_ranked, source_tab="Engine", source_section="All Players")
-    except Exception:
-        pass
+    except Exception as _e:
+        import traceback as _tb, logging as _log
+        _log.getLogger("app").error("pick_tracker bulk log failed: %s\n%s", _e, _tb.format_exc())
+        st.warning(f"⚠️ pick_tracker bulk log failed — picks may not appear in Performance tab: {_e}")
 
     try:
         pnl_tracker.settle_all_unsettled()
@@ -3608,8 +3610,10 @@ def _show_player_modal(player: dict):
                 try:
                     from tracking import pick_tracker as _pt
                     _pt.log_pick(player, _modal_src, _modal_sec)
-                except Exception:
-                    pass
+                except Exception as _e:
+                    import traceback as _tb, logging as _log
+                    _log.getLogger("app").error("pick_tracker.log_pick failed (modal add): %s\n%s", _e, _tb.format_exc())
+                    st.warning(f"⚠️ Pick log failed: {_e}")
                 st.rerun()
     with fd_col:
         st.link_button("📲 Open on FanDuel", _fanduel_url(name), width="stretch")
@@ -3763,8 +3767,10 @@ def _add_legs_to_fd_slip(legs: list[dict], source_tab: str = "Parlays", source_s
             from tracking import pick_tracker as _pt
             for p in logged:
                 _pt.log_pick(p, source_tab, source_section)
-        except Exception:
-            pass
+        except Exception as _e:
+            import traceback as _tb, logging as _log
+            _log.getLogger("app").error("pick_tracker.log_pick failed (bulk add): %s\n%s", _e, _tb.format_exc())
+            st.warning(f"⚠️ Pick log failed: {_e}")
         st.toast(f"✅ {added} player{'s' if added != 1 else ''} added to FD Slip!")
         st.rerun()
     return added
@@ -11439,27 +11445,35 @@ def main():
                              help="Log these picks before placing bets on FanDuel — required to track P&L and closing line value."):
                     _record_interaction("sidebar.log_fd_slip", rerun_source="tracking_log")
                     slip_players = [_slip_map[s] for s in _selected]
-                    try:
-                        n = pnl_tracker.log_slip_picks(slip_players)
-                        if n:
-                            st.success(f"Logged {n} pick{'s' if n != 1 else ''} to Performance tab!")
-                        else:
-                            st.info("All selected players already logged today.")
-                    except Exception as e:
-                        st.error(f"Log failed: {e}")
-                    # Also log to unified pick_tracker with source context
-                    try:
-                        from tracking import pick_tracker as _pt
-                        _sources = st.session_state.get("fd_slip_sources", {})
-                        for _s in _selected:
-                            _sp = _slip_map.get(_s)
-                            if _sp:
-                                _src = _sources.get(_s, {})
-                                _pt.log_pick(_sp,
-                                             _src.get("tab", "FD Slip"),
-                                             _src.get("section", "Manual Selection"))
-                    except Exception:
-                        pass
+                    if not slip_players:
+                        st.warning("No players selected — nothing to log.")
+                    else:
+                        try:
+                            n = pnl_tracker.log_slip_picks(slip_players)
+                            if n:
+                                st.success(f"Logged {n} pick{'s' if n != 1 else ''} to Performance tab!")
+                            else:
+                                st.info("All selected players already logged today.")
+                        except Exception as e:
+                            st.error(f"Log failed: {e}")
+                        # Also log to unified pick_tracker with source context
+                        try:
+                            from tracking import pick_tracker as _pt
+                            _sources = st.session_state.get("fd_slip_sources", {})
+                            for _s in _selected:
+                                _sp = _slip_map.get(_s)
+                                if _sp:
+                                    _src = _sources.get(_s, {})
+                                    _pt.log_pick(_sp,
+                                                 _src.get("tab", "FD Slip"),
+                                                 _src.get("section", "Manual Selection"))
+                        except Exception as _e:
+                            import traceback as _tb, logging as _log
+                            _log.getLogger("app").error(
+                                "pick_tracker.log_pick failed (FD Slip deploy): %s\n%s",
+                                _e, _tb.format_exc()
+                            )
+                            st.error(f"⚠️ Pick tracker log failed — pick not recorded for P&L: {_e}")
                 st.link_button(
                     "📲 FanDuel HR Props", _fanduel_url(),
                     width='stretch', type="primary",
