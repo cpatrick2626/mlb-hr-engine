@@ -7,6 +7,37 @@
 
 ---
 
+## Operator Confirmation (2026-06-19) — Design Locked
+
+Operator confirmed this design in session 2026-06-19. The following points are **locked** and must not be reinterpreted by a future build session without explicit operator re-authorization.
+
+### Tap flow (locked)
+- Operator taps tier icon on a player → currently opens FanDuel.
+- NEW behavior: that tap ALSO adds the player as a leg to the CURRENT TICKET.
+- Current ticket shows selected batters; each has a "–" button to remove a leg.
+- "Ticket Complete" button = operator asserts "I placed this exact parlay on FanDuel." Sets `fd_deployed = true`.
+- One ticket = one FanDuel parlay. After "Ticket Complete," next tap starts a NEW ticket.
+- Per leg, capture at deploy time: player, date, opponent, pitcher, frozen engine snapshot (`model_prob`, `model_tier_rank`, `tier`), ticket linkage.
+
+### Frozen snapshot (locked invariant)
+Calibration needs the prediction AS IT WAS at deploy time. The snapshot is frozen at the moment of leg capture — later engine re-scoring must NOT overwrite it. This is the entire value of the capture layer.
+
+### Live banner (locked — fun only, NOT data)
+- Starts EMPTY. Populates as players are selected.
+- Shows how the operator's picked batters are doing live; notifies on HR.
+- **Collects NO data. Has NO calibration role.** Explicitly distinct from the ticket capture. Do not couple them.
+
+### Hard invariant (locked)
+Capture layer NEVER writes to MAIN prob, JIG score, tiers, ranking, pipeline, or scoring. It READS engine output to snapshot it; it NEVER writes back. Per AGENTS.md / LOOPS.md.
+
+### Build instructions for fresh chat
+BUILD IN A FRESH CHAT. Spans: frontend (ticket UI, tap handler, live banner), data layer (new Supabase tables), wiring change to tier-icon→FanDuel behavior.  
+Fresh chat onboarding: read this doc, LOOPS.md, AGENTS.md, `wiki/architecture/supabase-schema.md`, `wiki/doctrine/feedback-loop-architecture.md`.  
+Read-only audit of existing tap/icon + frontend surface FIRST, per LOOPS §1.  
+Phased delivery: **1a** data layer → **1b** capture wiring → **1c** banner → **1d** settlement.
+
+---
+
 ## Part 1 — Data Surface Verification (read-only findings)
 
 ### 1. `/api/slate` fields available at selection time
