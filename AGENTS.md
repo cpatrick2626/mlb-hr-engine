@@ -492,6 +492,9 @@ Skill source files live under `skills/` in the repo root.
 | `/ce-work` | Execute authorized work through delivery phases |
 | `/ce-code-review` | Review completed work against scope and validation |
 | `/ce-debug` | Troubleshoot failed or unexpected behavior |
+| `/data-integrity-auditor` | Audit write/persistence paths, verify capture completeness, check calibration sample validity, hunt silent failures, bare-except sweeps |
+| `/repository-hygiene` | Verify git working-tree/HEAD/production sync, uncommitted-but-deployed checks, orphaned/dead/contaminated paths, pre-deploy repo verification |
+| `/doctrine-sweep` | Check doctrine-vs-reality drift, validate handoff docs against codebase state, find stale or contradictory documentation |
 
 ### Usage Rules
 
