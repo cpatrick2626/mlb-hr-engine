@@ -19,7 +19,7 @@ Last updated: 2026-06-18
 | [Design: Pitch Mix Analysis](doctrine/design-pitch-mix-analysis.md) | Modal de-fabrication 2026-06-15; real data sources; removed 3×3 zone grid | Claude Code | 2026-06-15 |
 | [Known Gaps / Parked](doctrine/known-gaps.md) | xFIP mismatch, silent neutral pitcher default, dead app.py, pitch mix blanks, JIG tier epoch, rooms governance | Claude Code | 2026-06-15 |
 | [Tracking Consolidation Plan](doctrine/tracking-consolidation-plan.md) | Option A phased plan: redirect automated settlement to pnl path, CLV reconcile, reader repoints, pick_tracker retirement | Claude Code | 2026-06-17 |
-| [Feedback Loop Architecture](doctrine/feedback-loop-architecture.md) | 14-loop catalog, 4-grain warehouse, agent architecture, Hermes strategy, activation thresholds, dual accuracy/market lens | Claude Code | 2026-06-18 |
+| [Feedback Loop Architecture](doctrine/feedback-loop-architecture.md) | 14-loop catalog, 4-grain warehouse, agent architecture, Ticket/Data Capture strategy, activation thresholds, dual accuracy/market lens | Claude Code | 2026-06-18 |
 
 ## ARCHITECTURE
 | Page | Summary | Agent |
@@ -50,7 +50,7 @@ Last updated: 2026-06-18
 ## PROJECTS
 | Page | Summary | Agent | Status |
 |------|---------|-------|--------|
-| [Hermes Phase 1 Architecture](projects/hermes-phase1-architecture.md) | Capture-first ticket/leg data model + Phase 1 build plan for Vercel board; architecture only, no build yet | Claude Code | 2026-06-17 PLAN |
+| [Ticket/Data Capture Phase 1 Architecture](projects/ticket-data-capture-phase1-architecture.md) | Capture-first ticket/leg data model + Phase 1 build plan for Vercel board; architecture only, no build yet | Claude Code | 2026-06-17 PLAN |
 
 ## CONCEPTS
 (pages added here as concepts are built out)
@@ -70,4 +70,4 @@ Last updated: 2026-06-18
 | [2026-06-15 Roles / Pitch Mix / Gauge Session](sessions/2026-06-15-roles-pitchmix-gauge-session.md) | All 4 ticket roles deployed (both boards); pitch mix de-fabricated; threat pie→radial gauge (0.29 ceiling); ADVANTAGE/WILDCARD recalibrated | Claude Code | 2026-06-15 |
 | [2026-06-15 Validation Audit + Cloud Capture Loop](sessions/2026-06-15-validation-and-capture-loop.md) | First calibration audit (737 picks, marginal BSS, YELLOW FLAG on qualified over-prediction); settlement root-cause fixed; all capture jobs migrated to cloud (GitHub Actions + Fly volume) | Claude Code | 2026-06-15 |
 | [2026-06-18 Cold-Load / Matchup / No Time Gate](sessions/2026-06-18-cold-load-matchup-no-time-gate.md) | Items 1–2 diagnostic; Item 3: noTimeGate stub removed; Item 4: three-state board; Item 5: HOME@HOME matchup bug fixed (gameId grouping + slate_games.away, order-independent derivation, blast radius b) | Claude Code | 2026-06-18 |
-| [2026-06-18 Session Handoff + Open Threads](sessions/2026-06-18-handoff-and-open-threads.md) | Verified state: matchup fix, board blank fix, noTimeGate removal, CRON_SECRET reset. Open threads: cold-load HANG, pick logging watch, Hermes Phase 1 build, time-gate wiring deferred | Claude Code | 2026-06-18 |
+| [2026-06-18 Session Handoff + Open Threads](sessions/2026-06-18-handoff-and-open-threads.md) | Verified state: matchup fix, board blank fix, noTimeGate removal, CRON_SECRET reset. Open threads: cold-load HANG, pick logging watch, Ticket/Data Capture Phase 1 build, time-gate wiring deferred | Claude Code | 2026-06-18 |

@@ -1,7 +1,9 @@
-# Hermes Phase 1 Architecture
+# Ticket/Data Capture Phase 1 Architecture
 **Date:** 2026-06-17  
 **Status:** PLAN ONLY — no Supabase tables created, no frontend code, no API changes  
 **Operator sign-off required before any build**
+
+> **Naming correction (2026-06-19):** This document was previously titled "Hermes Phase 1 Architecture." The capture-layer subsystem was mislabeled "Hermes" by an earlier session. "Hermes" actually refers to a separate, future NousResearch Hermes LLM plan (not yet specced). The capture layer is now "Ticket/Data Capture." Do not reuse "Hermes" for capture work.
 
 ---
 
@@ -44,7 +46,7 @@ The board reads `/api/slate` (public, no auth). Each `leaderboard_rows` entry ex
 
 Both are **pick-grain**: one row per player per date. No ticket grouping, no parlay structure, no stake, no sportsbook, no leg relationships. These stores track engine output — not operator betting decisions.
 
-**Conclusion:** Hermes requires its own ticket-grain store. Reuse of existing stores is not possible without corrupting their grain and purpose.
+**Conclusion:** Ticket/Data Capture requires its own ticket-grain store. Reuse of existing stores is not possible without corrupting their grain and purpose.
 
 ### 3. Supabase table state
 
@@ -54,7 +56,7 @@ Confirmed tables in `api/cache.py`:
 - `beta_invites` — invite codes
 - `beta_users` — redeemed beta users
 
-**No ticket, legs, or Hermes-related tables exist.** Supabase is the right home for the new schema: the board already reads from the API which reads from Supabase, adding two new tables (`tickets`, `legs`) is consistent with the existing pattern and requires no new data infrastructure.
+**No ticket, legs, or capture-related tables exist.** Supabase is the right home for the new schema: the board already reads from the API which reads from Supabase, adding two new tables (`tickets`, `legs`) is consistent with the existing pattern and requires no new data infrastructure.
 
 ### 4. Frontend selection state
 
@@ -66,7 +68,7 @@ Confirmed tables in `api/cache.py`:
 
 ### A. Data Model (foundation)
 
-Two tables. One ticket → many legs. Write path is Hermes-only; zero overlap with engine scoring tables.
+Two tables. One ticket → many legs. Write path is capture-layer-only; zero overlap with engine scoring tables.
 
 #### `tickets`
 | Column | Type | Notes |
@@ -131,7 +133,7 @@ Operator on Vercel board
       enters: stake, sportsbook, ticket_type, optional notes
       leg-level odds pre-populated from /api/slate if available, editable
   → taps RECORD TICKET
-  → client POSTs to new endpoint: POST /api/hermes/tickets
+  → client POSTs to new endpoint: POST /api/tickets
       body: { ticket metadata } + legs array (each includes full engine snapshot)
   → API writes:
       INSERT tickets → get ticket_id
@@ -144,9 +146,9 @@ Operator on Vercel board
 **Engine snapshot integrity:** The leg writes exactly what `/api/slate` returned at selection time. No re-computation, no model calls. The snapshot is frozen read-only from the board payload.
 
 **New API endpoint required (Phase 1b/1c):**
-- `POST /api/hermes/tickets` — write a new ticket + legs (no auth friction in Phase 1, or reuse beta auth)
-- `GET /api/hermes/tickets?date=` — read tickets for a date (for Live Banner)
-- `GET /api/hermes/tickets/{ticket_id}` — read one ticket + legs (for Review shell)
+- `POST /api/tickets` — write a new ticket + legs (no auth friction in Phase 1, or reuse beta auth)
+- `GET /api/tickets?date=` — read tickets for a date (for Live Banner)
+- `GET /api/tickets/{ticket_id}` — read one ticket + legs (for Review shell)
 
 These are additive endpoints. They do not touch `/api/slate`, `pipeline.py`, scoring, or existing tables.
 
@@ -155,7 +157,7 @@ These are additive endpoints. They do not touch `/api/slate`, `pipeline.py`, sco
 These surfaces display captured data. They have no write path to the engine.
 
 #### C1. Selected Legs Monitor / Live Banner
-- Reads: `GET /api/hermes/tickets?date=today`
+- Reads: `GET /api/tickets?date=today`
 - Shows: active tickets for today → list of legs with player name, tier, role flags, game status, leg_status
 - Ticket-alive logic: ticket is alive while all legs are `pending` or at least one is `hit` with remaining pending
 - Phase 1 scope: display only. No live score polling. Operator manually settles.
@@ -164,7 +166,7 @@ These surfaces display captured data. They have no write path to the engine.
 - Reads: ticket + legs from Supabase, cross-referenced with `results.csv` or `hr_outcome` on the leg
 - Shows: per-leg outcome, ticket result, engine snapshot vs outcome (model_prob vs actual hit/miss)
 - Phase 1 scope: shell display. No statistical analysis, no pattern learning, no recommendations.
-- Settlement dependency: leg `hr_outcome` is populated by the existing settlement pipeline (`pnl.settle_all_unsettled()` → `results.csv`). Hermes settlement queries results.csv or the `picks` Supabase table by `player_id + game_date` to flip `leg_status` and `hr_outcome`. **Do not rebuild settlement — reuse it.**
+- Settlement dependency: leg `hr_outcome` is populated by the existing settlement pipeline (`pnl.settle_all_unsettled()` → `results.csv`). Ticket/Data Capture settlement queries results.csv or the `picks` Supabase table by `player_id + game_date` to flip `leg_status` and `hr_outcome`. **Do not rebuild settlement — reuse it.**
 
 ### D. What Phase 1 Explicitly Does NOT Do
 
@@ -187,13 +189,13 @@ GitHub Actions daily_settle.yml
   → tracking/pnl.settle_all_unsettled()
   → writes hr_result to results.csv
 
-Hermes settlement (additive, Phase 1c):
+Ticket/Data Capture settlement (additive, Phase 1c):
   → reads results.csv (or picks Supabase table) by player_id + game_date
   → for each pending leg: if match found → set hr_outcome, leg_status = hit/miss
   → updates ticket status (won/lost/partial/void) from leg outcomes
 ```
 
-Hermes settlement can run as a background task on the same `/api/ops/settle` call (add a step), or as a separate `POST /api/ops/hermes-settle` endpoint. The dependency is one-way: Hermes reads from settlement output, never writes to it.
+Ticket/Data Capture settlement can run as a background task on the same `/api/ops/settle` call (add a step), or as a separate `POST /api/ops/tickets-settle` endpoint. The dependency is one-way: Ticket/Data Capture reads from settlement output, never writes to it.
 
 **Settlement must complete before Ticket Review shows outcomes.** This is expected — postgame debrief is not real-time.
 
@@ -203,7 +205,7 @@ Each step is independently shippable and testable:
 
 | Step | Deliverable | Dependencies |
 |------|-------------|-------------|
-| **1a** | Supabase schema (`tickets` + `legs` tables) + `POST /api/hermes/tickets` endpoint + capture panel UI on board | None (pure additive) |
+| **1a** | Supabase schema (`tickets` + `legs` tables) + `POST /api/tickets` endpoint + capture panel UI on board | None (pure additive) |
 | **1b** | Live Banner: reads captured tickets, shows leg status | 1a: tickets must exist |
 | **1c** | Postgame Review shell: reads settled outcomes, shows ticket result | 1a + settlement pipeline running |
 
@@ -212,11 +214,11 @@ Phase 1a is the unlock. 1b and 1c are readers — they only work once tickets ex
 ### G. Risk + Boundaries
 
 **Read-only-over-engine guarantee:**  
-Hermes tables (`tickets`, `legs`) are write-separate from all engine scoring tables. The only engine data Hermes writes is the snapshot — a copy of `/api/slate` fields frozen at selection time. There is no shared write path between Hermes and the engine.
+Capture tables (`tickets`, `legs`) are write-separate from all engine scoring tables. The only engine data the capture layer writes is the snapshot — a copy of `/api/slate` fields frozen at selection time. There is no shared write path between the capture layer and the engine.
 
 **Validation gate (before any build):**  
 - Confirm `tickets` and `legs` table names do not conflict with any existing Supabase table
-- Confirm `POST /api/hermes/tickets` route does not shadow any existing route
+- Confirm `POST /api/tickets` route does not shadow any existing route
 - Confirm capture panel does not touch `window.SLATE_DATA`, `window.SLATE_GAMES`, or any existing board state — it only reads from them
 
 **MAIN/JIG separation preserved:**  
@@ -230,5 +232,5 @@ The `board` column on `tickets` records which lens was active at capture. JIG sc
 - `CLAUDE.md` §6 (Architectural Invariants) — engine pipeline untouched
 - `CLAUDE.md` §7 (MAIN vs JIG Doctrine) — board column preserves lens identity
 - `wiki/architecture/supabase-schema.md` — update after Phase 1a build
-- `wiki/doctrine/room-governance.md` — Hermes is a new surface; may need room entry
+- `wiki/doctrine/room-governance.md` — Ticket/Data Capture is a new surface; may need room entry
 - `wiki/sessions/2026-06-15-validation-and-capture-loop.md` — prior context on capture gap

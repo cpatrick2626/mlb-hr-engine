@@ -50,7 +50,7 @@ Supabase serves as the service layer for the MLB HR Engine's FastAPI surface. It
 | `engine_version` | text NOT NULL | 'v4' |
 | `created_at` | timestamptz | |
 
-**Scope note:** `picks` captures engine-qualified picks — NOT deployed/fd_deployed state. Hermes capture and `fd_deployed` column are separate work.
+**Scope note:** `picks` captures engine-qualified picks — NOT deployed/fd_deployed state. Ticket/Data Capture and `fd_deployed` column are separate work.
 
 ### Environment Variables Required
 - `SUPABASE_URL` — Supabase project URL

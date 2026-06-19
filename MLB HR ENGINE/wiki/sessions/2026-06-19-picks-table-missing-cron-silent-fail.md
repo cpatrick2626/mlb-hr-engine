@@ -66,7 +66,7 @@ confirmed instances:
 
 This fix captures ENGINE-QUALIFIED picks from the cron pipeline. It does
 **not** create deployed-pick tracking. The `fd_deployed` schema gap and
-Hermes capture build are separate work — this fix should not be mistaken
+Ticket/Data Capture build are separate work — this fix should not be mistaken
 for solving the calibration capture problem.
 
 ## Files Changed

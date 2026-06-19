@@ -3,7 +3,7 @@
 Status: DESIGN / PLANNING ONLY. Risk: LOW (doctrine doc; no app/engine/pipeline/schema changes).
 Room: MAIN SKILLS
 
-Cross-references: [[wiki/doctrine/design-expert-agent-layer|design-expert-agent-layer]] · [[wiki/projects/hermes-phase1-architecture|hermes-phase1-architecture]] · [[wiki/doctrine/main-jig-separation|main-jig-separation]] · [[wiki/doctrine/ticket-roles|ticket-roles]] · [[wiki/doctrine/tracking-consolidation-plan|tracking-consolidation-plan]]
+Cross-references: [[wiki/doctrine/design-expert-agent-layer|design-expert-agent-layer]] · [[wiki/projects/ticket-data-capture-phase1-architecture|ticket-data-capture-phase1-architecture]] · [[wiki/doctrine/main-jig-separation|main-jig-separation]] · [[wiki/doctrine/ticket-roles|ticket-roles]] · [[wiki/doctrine/tracking-consolidation-plan|tracking-consolidation-plan]]
 
 ---
 
@@ -63,27 +63,27 @@ Priority legend: **Critical** = foundational, must ship first. **High** = signif
 
 ### L3 — Role Performance (PRIME / EXPLOSIVE / ADVANTAGE / WILDCARD)
 **Purpose:** Validate that role assignments predict distinct HR outcome profiles consistent with their stated archetypes.
-**Inputs:** Role frozen at selection moment (G1, requires Hermes capture) + G2 outcomes.
+**Inputs:** Role frozen at selection moment (G1, requires Ticket/Data Capture) + G2 outcomes.
 **Prediction target:** PRIME and EXPLOSIVE should have highest HR rates; WILDCARD should have highest variance; ADVANTAGE should show edge in specific matchup conditions.
 **Outcome signal:** HR yes/no by role.
 **Feedback:** Hit-rate and variance by role; flag if WILDCARD variance ≠ meaningfully higher than PRIME.
 **Learning:** Role gate recalibration if roles conflate empirically.
 **Future:** Role × tier interaction analysis.
 **Priority: High**
-**Activation threshold: ≥150 settled picks per role + role must be frozen at selection time.** Currently roles may not be consistently captured at selection — Hermes capture layer is the prerequisite.
+**Activation threshold: ≥150 settled picks per role + role must be frozen at selection time.** Currently roles may not be consistently captured at selection — Ticket/Data Capture layer is the prerequisite.
 
 ---
 
 ### L4 — Ticket Structure
 **Purpose:** Evaluate whether ticket construction patterns (PRIME+EXPLOSIVE anchor + supporting roles) correlate with better outcomes at the ticket level vs. leg-level randomness.
-**Inputs:** Ticket-level history with leg composition, role mix, tier mix (G3, net-new grain — near-zero history currently). Requires Hermes capture.
+**Inputs:** Ticket-level history with leg composition, role mix, tier mix (G3, net-new grain — near-zero history currently). Requires Ticket/Data Capture.
 **Prediction target:** Ticket hit-rate and P&L by structure archetype.
 **Outcome signal:** Ticket settled result (all-win / partial / miss) with individual leg outcomes.
 **Feedback:** Structure comparison: same-role tickets vs. mixed-role; role mix vs. EV realized.
 **Learning:** Ticket template recalibration; identify over-represented failure structures.
 **Future:** Correlation analysis (legs correlated by park, opponent, pitcher game-script).
 **Priority: High**
-**Activation threshold: Near-zero current history. Requires Hermes capture layer (G3 Ticket+Legs grain) + ~100+ complete ticket outcomes before structure-level conclusions are valid.**
+**Activation threshold: Near-zero current history. Requires Ticket/Data Capture layer (G3 Ticket+Legs grain) + ~100+ complete ticket outcomes before structure-level conclusions are valid.**
 
 ---
 
@@ -160,7 +160,7 @@ Priority legend: **Critical** = foundational, must ship first. **High** = signif
 **Feedback:** Identifies where the system loses edge: model, selection, or construction.
 **Learning:** Which construction patterns best preserve model edge; where selection discipline matters most.
 **Priority: High** (the integrating loop across all others — tells you if everything together works)
-**Activation threshold: Requires G3 Ticket+Legs history (near-zero currently) + selection logging. Activate after Hermes capture layer is operational and has ~60+ days of history.**
+**Activation threshold: Requires G3 Ticket+Legs history (near-zero currently) + selection logging. Activate after Ticket/Data Capture layer is operational and has ~60+ days of history.**
 
 ---
 
@@ -252,7 +252,7 @@ Four grains. Each is its own immutable store. Joins happen on `(date, player_id)
 ### G1 — Prediction Snapshots
 **What:** Every model output frozen at slate lock: model_prob, JIG score, tier, role, pitch-mix flags (HVY, vulnerability score), park factor, wind, temp, dome flag, platoon split used, odds at prediction time.
 **Immutability rule:** Once written at slate lock, G1 rows are never updated. All joins read from G1 as the authoritative "what the model thought at decision time."
-**Current state:** Partial — pick_tracker captures some fields but not all (role not frozen at selection, matchup snapshot not captured). Full G1 requires Hermes capture layer.
+**Current state:** Partial — pick_tracker captures some fields but not all (role not frozen at selection, matchup snapshot not captured). Full G1 requires Ticket/Data Capture layer.
 **Storage:** Supabase `prediction_snapshots` table (net-new).
 
 ### G2 — Outcomes
@@ -264,8 +264,8 @@ Four grains. Each is its own immutable store. Joins happen on `(date, player_id)
 ### G3 — Tickets + Legs
 **What:** Ticket-level records: ticket ID, construction date, sportsbook, stake, ticket role mix, leg list (player_id, role, model_prob, odds at selection). Net-new grain — does not exist yet.
 **Immutability rule:** Ticket captured at construction. Leg odds frozen at ticket submission. No retroactive editing.
-**Current state:** Near-zero. This is what Hermes Phase 1 builds. See [[wiki/projects/hermes-phase1-architecture|hermes-phase1-architecture]].
-**Storage:** Supabase `tickets` + `ticket_legs` tables (Hermes Phase 1 schema).
+**Current state:** Near-zero. This is what Ticket/Data Capture Phase 1 builds. See [[wiki/projects/ticket-data-capture-phase1-architecture|ticket-data-capture-phase1-architecture]].
+**Storage:** Supabase `tickets` + `ticket_legs` tables (Ticket/Data Capture Phase 1 schema).
 
 ### G4 — Line / CLV History
 **What:** Odds snapshots at multiple time points: open, periodic updates, close (at game lock). One row per player per slate day per sportsbook, timestamped.
@@ -291,7 +291,7 @@ Seven agents. Each owns named loops, has a defined lens, and communicates findin
          ├──► Calibration Agent (L1, L2)
          │         └──► Environmental Sub-Agent (L6, when activated)
          ├──► Vulnerability Agent (L5)
-         ├──► Ticket Agent / Internal Hermes (L3, L4 — after G3 history)
+         ├──► Ticket Agent / Ticket/Data Capture (L3, L4 — after G3 history)
          ├──► Deployment Agent (L9, L10 — meta loop)
          ├──► Data-Integrity Agent (no loop number — pipeline precondition)
          ├──► Explainability Agent (cross-cutting — already shipped v1)
@@ -319,11 +319,11 @@ Seven agents. Each owns named loops, has a defined lens, and communicates findin
 **Invariant:** Any discovered uplift documents JIG signal validity only. Never promotes to MAIN. MAIN/JIG separation enforced at agent boundary.
 **Build timing:** After matchup snapshot capture is reliable.
 
-### Ticket Agent (= Internal Hermes, future product feature)
+### Ticket Agent (= Ticket/Data Capture layer, future product feature)
 **Owns:** L3 (Role Performance), L4 (Ticket Structure)
 **Lens:** Construction intelligence
 **Outputs:** Role hit-rate table, ticket structure archetypes, pattern library
-**Prerequisite:** G3 grain (tickets + legs) must exist with ≥60 days of history. This agent does not exist until Hermes Phase 1 capture layer is operational.
+**Prerequisite:** G3 grain (tickets + legs) must exist with ≥60 days of history. This agent does not exist until Ticket/Data Capture Phase 1 is operational.
 **Note:** This agent reasons over CAPTURED data and frozen ticket context. It never guesses from thin information.
 
 ### Deployment Agent
@@ -351,7 +351,7 @@ Seven agents. Each owns named loops, has a defined lens, and communicates findin
 
 ---
 
-## Section 4 — Agent Strategy / Hermes Strategy
+## Section 4 — Agent Strategy / Research + Capture Layer Strategy
 
 The disciplined capstone. Written as operator strategy, not product hype.
 
@@ -401,7 +401,7 @@ Better than a 3-role taxonomy. Two clean layers with hard boundaries.
 - Hard boundary: Never touches scoring, MAIN model, JIG score, tiers, calibration constants, pipeline code, deployment config, or protected surfaces
 - Output format: documents, design specs, research packets, draft schemas — always for human review before any implementation
 
-**Internal Hermes (= future product feature, not yet built)**
+**Ticket/Data Capture (= future product feature, not yet built)**
 - Scope: Ticket Lab, Ticket Memory, Selected Legs Monitor, Live Banner, Postgame Debrief, Outcome Intelligence, Pattern Library, MAIN/JIG agreement display, ticket-construction review
 - Reasons over: CAPTURED data + frozen ticket context (G1, G2, G3, G4 warehouse grains)
 - Hard invariant: Never guesses from thin information. If the data is not in the warehouse, it shows "--" or declines to answer.
@@ -415,7 +415,7 @@ The real "start learning now" priority is not web research. It is your OWN captu
 
 **What does not appreciate (much):** General-purpose research about betting theory, Kelly variants, or calibration statistics. That knowledge exists in textbooks and papers. It will still be there in two years. Your captured history will not exist if you fail to capture it.
 
-**Implication:** The capture layer (G1 snapshot freezing, G3 Hermes ticket + leg capture) is more time-urgent than any research task. Build capture first.
+**Implication:** The capture layer (G1 snapshot freezing, G3 Ticket/Data Capture, ticket + leg capture) is more time-urgent than any research task. Build capture first.
 
 ### 4.5 — Drift Control
 
@@ -460,7 +460,7 @@ Sequenced by what is buildable now vs. what is data-gated. The through-line: **y
 Rule-based. No outcome data required. Validates null rates, staleness, player-id consistency, settlement lag on yesterday's pipeline output. Precondition for trusting all warehouse grains and all loops. Build this first.
 
 **Capture Layer + Warehouse Grains**
-G1 (frozen prediction snapshot at slate lock) + G3 (Hermes ticket + leg capture). This is the actual "start learning now" action. Not research. Not agents. Capture. Every day without G1 freezing is a day of history the calibration loop can never use.
+G1 (frozen prediction snapshot at slate lock) + G3 (Ticket/Data Capture, ticket + leg capture). This is the actual "start learning now" action. Not research. Not agents. Capture. Every day without G1 freezing is a day of history the calibration loop can never use.
 
 **Schema Unblocks**
 Add `tier` column to pick tracker (unblocks L2). Ensure `role` is frozen at selection time (unblocks L3). These are narrow schema adds, not architecture changes.
@@ -483,7 +483,7 @@ One bounded task: build advisory-seat reference docs for parlay theory, Kelly, d
 
 ### FUTURE — High Data Bar or High Build Cost
 
-**Internal Hermes / Ticket Agent (L3, L4)** — after G3 has ≥60 days of ticket history
+**Ticket/Data Capture / Ticket Agent (L3, L4)** — after G3 has ≥60 days of ticket history
 **L6 Environmental Agent** — highest data threshold; design now, activate last
 **L10 Deployment Agent** — after G3 history + selection logging (~60+ days)
 **L9 Operator Behavior** — after selection logging infrastructure
@@ -497,8 +497,8 @@ One bounded task: build advisory-seat reference docs for parlay theory, Kelly, d
 |------|------|----------|---------------------|--------|
 | L1 | HR Probability Calibration | Critical | ≥200/bin | Design now |
 | L2 | Tier Validity | Critical | ≥150/tier + tier schema | Design now; schema add needed |
-| L3 | Role Performance | High | ≥150/role + Hermes capture | Design now; capture needed |
-| L4 | Ticket Structure | High | ~100+ tickets (Hermes G3) | Design now; capture needed |
+| L3 | Role Performance | High | ≥150/role + Ticket/Data Capture | Design now; capture needed |
+| L4 | Ticket Structure | High | ~100+ tickets (Ticket/Data Capture G3) | Design now; capture needed |
 | L5 | Pitch-Mix Vulnerability | High | ~100+ HVY/non-HVY at tier | Design now; snapshot needed |
 | L6 | Environmental | High / Future | ≥200/bucket — highest bar | Design now; activate last |
 | L7 | CLV | Special / Early | ~30–50 slate days | Build closing-line cron now |

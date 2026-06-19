@@ -51,9 +51,9 @@ Migration added: `supabase/migrations/002_picks_table.sql`.
 ## Scope note (instance #3)
 
 `insert_picks()` captures ENGINE-QUALIFIED picks from the cron pipeline.
-It does **not** capture deployed-state (fd_deployed, Hermes). The missing
+It does **not** capture deployed-state (fd_deployed, Ticket/Data Capture). The missing
 Jun 13–18 data is engine picks data — not a substitute for calibration
-capture, which requires the Hermes build and `fd_deployed` schema work
+capture, which requires the Ticket/Data Capture build and `fd_deployed` schema work
 (separate initiative).
 
 ## Cross-references

@@ -25,7 +25,7 @@
   POST /api/pipeline/run now authenticates correctly.
 - [CARRIED FROM PRIOR — re-verify, not confirmed this session:]
   Tracking pipeline fix, Phase 2 CLV reconcile (committed not deployed),
-  advisory bench (4 seats), Feedback Loop blueprint, Hermes Phase 1
+  advisory bench (4 seats), Feedback Loop blueprint, Ticket/Data Capture Phase 1
   architecture. These predate this chat; confirm against vault before
   treating as current.
 
@@ -38,7 +38,7 @@
    Do in a calm window, never pre-game.
 2. Pick LOGGING watch: no logged picks Jun 16-17. Confirm live-pipeline
    pick logging fires on game days (separate path from settlement).
-3. Hermes Phase 1 BUILD: capture layer (tickets+legs schema, frozen
+3. Ticket/Data Capture Phase 1 BUILD: capture layer (tickets+legs schema, frozen
    engine snapshot per leg), own Supabase tables, write-separate from
    engine. Build in fresh chat / sandbox.
 4. "No Time Gate" wiring (deferred, optional): only if a frontend
