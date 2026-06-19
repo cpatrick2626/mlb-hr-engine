@@ -12,12 +12,45 @@ Supabase serves as the service layer for the MLB HR Engine's FastAPI surface. It
 - The pipeline trigger endpoint is gated by `X-Cron-Secret` header (separate from Supabase auth).
 - Streamlit dashboard does NOT connect to Supabase.
 
-### Known Tables (requires audit to confirm)
-| Table | Purpose | Notes |
-|-------|---------|-------|
-| picks | Pick tracking log | Persisted to Fly.io volume `/app/tracking` |
-| clv | Closing line value log | CLV tracking per pick |
-| (others TBD) | TBD | Requires Supabase CLI audit |
+### Known Tables
+
+| Table | Purpose | Migration | Notes |
+|-------|---------|-----------|-------|
+| `pipeline_runs` | Full JSON payload per date | `001_initial.sql` | `date` PK, `payload` jsonb |
+| `beta_invites` | Manual invite codes | `001_initial.sql` | `code` PK |
+| `beta_users` | Redeemed-code users | `001_initial.sql` | `user_id` PK |
+| `picks` | Per-batter qualified picks from cron | `002_picks_table.sql` | UNIQUE `(date, player_id, source_tab)`; written by `insert_picks()` in `api/cache.py` |
+
+### `picks` Table Columns
+
+| Column | Type | Notes |
+|--------|------|-------|
+| `id` | bigserial PK | |
+| `date` | date NOT NULL | |
+| `player_id` | text | Nullable; NULL disables dedup on UNIQUE constraint |
+| `player_name` | text | |
+| `team` | text | |
+| `opponent` | text | |
+| `pitcher` | text | |
+| `lineup_spot` | integer | |
+| `model_prob_pct` | numeric(7,3) | model_prob × 100 |
+| `market_prob_pct` | numeric(7,3) | market_no_vig_prob × 100 |
+| `ev_pct` | numeric(8,3) | |
+| `edge_pct` | numeric(8,3) | |
+| `american_odds` | numeric(8,2) | best_american |
+| `bet_dollars` | numeric(10,2) | |
+| `barrel_pct` | numeric(6,3) | |
+| `xslg` | numeric(6,3) | |
+| `park_factor` | numeric(6,3) | |
+| `pitcher_factor` | numeric(6,3) | |
+| `confidence_tier` | text | |
+| `qualified` | boolean NOT NULL | always true for cron picks |
+| `filter_reasons` | jsonb NOT NULL | Python list serialized as JSON |
+| `source_tab` | text NOT NULL | 'cron' for pipeline runs |
+| `engine_version` | text NOT NULL | 'v4' |
+| `created_at` | timestamptz | |
+
+**Scope note:** `picks` captures engine-qualified picks — NOT deployed/fd_deployed state. Hermes capture and `fd_deployed` column are separate work.
 
 ### Environment Variables Required
 - `SUPABASE_URL` — Supabase project URL

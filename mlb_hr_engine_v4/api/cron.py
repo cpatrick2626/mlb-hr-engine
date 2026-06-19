@@ -12,7 +12,15 @@ Locally, these are read from .env via python-dotenv.
 
 import sys
 import os
+import logging
+import traceback
 from datetime import date, datetime
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+)
+logger = logging.getLogger(__name__)
 
 # Support running as a module from mlb_hr_engine_v4/
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -59,7 +67,12 @@ def run(target_date: str = None) -> dict:
         n = insert_picks(target_date, data.get("ranked", []), source_tab="cron", engine_version=MODEL_VERSION)
         print(f"[cron] picks table — {n} rows upserted for {target_date}")
     except Exception as e:
-        print(f"[cron] picks table write failed (non-fatal): {e}")
+        logger.error(
+            "[cron] picks table insert FAILED for %s — picks NOT written: %s",
+            target_date, e, exc_info=True,
+        )
+        print(f"[cron] ERROR: picks table insert FAILED for {target_date}: {e}", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
 
     # Log full slate to full_slate_log.csv on the Fly volume (Part 3)
     try:
