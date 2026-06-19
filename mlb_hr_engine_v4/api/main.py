@@ -12,6 +12,8 @@ POST /api/pipeline/run            — trigger pipeline (X-Cron-Secret header)
 POST /api/ops/settle              — settle pick_tracker.csv outcomes (X-Cron-Secret header)
 POST /api/ops/clv-capture         — fetch closing odds + compute CLV (X-Cron-Secret header)
 POST /api/invite/redeem           — redeem invite code (auth required)
+POST /api/tickets/leg             — add leg to ticket; null ticket_id opens new ticket (no auth — deferred)
+POST /api/tickets/complete        — finalize ticket, set fd_deployed=true (no auth — deferred)
 
 The pipeline is normally triggered by GitHub Actions cron (see api/cron.py).
 The /api/pipeline/run endpoint is a manual fallback; it runs in a background
@@ -32,7 +34,7 @@ from fastapi import FastAPI, Depends, HTTPException, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.auth import require_auth, require_beta
-from api.cache import get_picks, store_picks, list_runs, redeem_invite
+from api.cache import get_picks, store_picks, list_runs, redeem_invite, add_leg, complete_ticket
 from clients.arsenal import get_pitcher_arsenal, arsenal_matchup_factor
 from clients.pitch_mix import get_batter_vs_pitches, get_pitcher_pitch_stats
 from config import FS_TIER_THRESHOLDS
@@ -190,6 +192,41 @@ async def redeem(body: dict, user=Depends(require_auth)):
     if not redeem_invite(code, user_id):
         raise HTTPException(status_code=400, detail="Invalid or already-used invite code.")
     return {"status": "ok", "message": "Beta access granted!"}
+
+
+# ── Ticket capture ─────────────────────────────────────────────────────────────
+# Auth intentionally deferred — matches /api/slate open access.
+# Revisit before wider release.
+
+@app.post("/api/tickets/leg")
+async def ticket_add_leg(body: dict):
+    required = {"board", "name", "model_prob", "tier", "generated_at"}
+    missing = required - body.keys()
+    if missing:
+        raise HTTPException(status_code=400, detail=f"Missing fields: {sorted(missing)}")
+    result = add_leg(
+        ticket_id=body.get("ticket_id") or None,
+        board=body["board"],
+        player_name=body["name"],
+        model_prob=float(body["model_prob"]),
+        tier=body["tier"],
+        model_tier_rank=(
+            int(body["model_tier_rank"])
+            if body.get("model_tier_rank") is not None
+            else None
+        ),
+        engine_generated_at=body.get("generated_at"),
+    )
+    return {"status": "ok", **result}
+
+
+@app.post("/api/tickets/complete")
+async def ticket_complete(body: dict):
+    ticket_id = body.get("ticket_id")
+    if not ticket_id:
+        raise HTTPException(status_code=400, detail="ticket_id is required")
+    result = complete_ticket(ticket_id)
+    return {"status": "ok", **result}
 
 
 def _pct(val):
@@ -433,6 +470,12 @@ def _build_slate_payload(data: dict) -> dict:
         key=lambda r: float(r.get("hrprob") or 0),
         reverse=True
     )
+    _tier_ctr: dict = {}
+    for r in leaderboard_rows:
+        t = r.get("tier", "COLD")
+        _tier_ctr[t] = _tier_ctr.get(t, 0) + 1
+        r["model_tier_rank"] = _tier_ctr[t]
+        r["_board"] = "main"
 
     # JIG list — same players, sorted by tactical score descending
     try:
@@ -452,6 +495,12 @@ def _build_slate_payload(data: dict) -> dict:
             r["advantage"] = jig_role["advantage"]
             r["wildcard"]  = jig_role["wildcard"]
         jig_rows.sort(key=lambda r: r["jigScore"], reverse=True)
+        _tier_ctr_jig: dict = {}
+        for r in jig_rows:
+            t = r.get("tier", "COLD")
+            _tier_ctr_jig[t] = _tier_ctr_jig.get(t, 0) + 1
+            r["model_tier_rank"] = _tier_ctr_jig[t]
+            r["_board"] = "jig"
     except Exception as e:
         log.error("JIG row build failed: %s", e, exc_info=True)
         jig_rows = []

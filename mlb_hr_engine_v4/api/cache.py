@@ -4,9 +4,12 @@ Supabase read/write layer for pipeline results and beta invites.
 pipeline_runs  — one row per date, stores full JSON payload
 beta_invites   — invite codes you generate manually
 beta_users     — users who have redeemed a code
+tickets        — one row per operator-submitted FD parlay
+legs           — one row per player per ticket (frozen engine snapshot)
 """
 
 import os
+from datetime import date as _date, datetime as _dt
 from typing import Optional
 
 _supa = None
@@ -128,3 +131,68 @@ def redeem_invite(code: str, user_id: str) -> bool:
     ).execute()
 
     return True
+
+
+# ── Ticket / Data Capture ─────────────────────────────────────────────────────
+
+def add_leg(
+    ticket_id: Optional[str],
+    board: str,
+    player_name: str,
+    model_prob: float,
+    tier: str,
+    model_tier_rank: int,
+    engine_generated_at: Optional[str],
+) -> dict:
+    """
+    Add one leg to a ticket.
+    ticket_id None/empty → opens a new ticket (status='building') first.
+    Returns {ticket_id, leg_id}. WRITE-SEPARATE: touches only tickets/legs.
+    """
+    client = _client()
+
+    if not ticket_id:
+        res = client.table("tickets").insert({
+            "date":   _date.today().isoformat(),
+            "board":  board,
+            "status": "building",
+        }).execute()
+        ticket_id = res.data[0]["ticket_id"]
+
+    leg_res = client.table("legs").insert({
+        "ticket_id":           ticket_id,
+        "player_name":         player_name,
+        "model_prob":          model_prob,
+        "tier":                tier,
+        "model_tier_rank":     model_tier_rank,
+        "engine_generated_at": engine_generated_at or None,
+    }).execute()
+    leg_id = leg_res.data[0]["leg_id"]
+
+    return {"ticket_id": ticket_id, "leg_id": leg_id}
+
+
+def complete_ticket(ticket_id: str) -> dict:
+    """
+    Finalize ticket: fd_deployed=True, status='pending', completed_at=now(), num_legs=count.
+    Counts only non-removed legs. Returns {ticket_id, num_legs, fd_deployed}.
+    """
+    client = _client()
+
+    count_res = (
+        client.table("legs")
+        .select("leg_id", count="exact")
+        .eq("ticket_id", ticket_id)
+        .eq("removed", False)
+        .execute()
+    )
+    num_legs = count_res.count if count_res.count is not None else 0
+
+    client.table("tickets").update({
+        "fd_deployed":  True,
+        "status":       "pending",
+        "completed_at": _dt.utcnow().isoformat() + "Z",
+        "num_legs":     num_legs,
+    }).eq("ticket_id", ticket_id).execute()
+
+    return {"ticket_id": ticket_id, "num_legs": num_legs, "fd_deployed": True}
