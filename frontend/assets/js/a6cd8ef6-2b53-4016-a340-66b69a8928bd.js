@@ -45,6 +45,9 @@ function MasterDashboard() {
         if (data.slate_games?.length) {
           window.SLATE_GAMES = data.slate_games;
         }
+        if (data.generated_at) {
+          window.SLATE_GENERATED_AT = data.generated_at;
+        }
         window.dispatchEvent(new CustomEvent("hrEngineDataLoaded", { detail: data }));
       })
       .catch(err => {
