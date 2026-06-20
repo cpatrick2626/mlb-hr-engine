@@ -21,6 +21,10 @@ JIG
 - Main = quantitative / model-driven
 - JIG = tactical / matchup-driven
 - Preserve system separation at all times
+- MAIN remains HR probability focused.
+- JIG remains matchup/exploit focused.
+- Preserve MAIN/JIG separation.
+- Do not merge scoring systems.
 
 
 ---
@@ -196,6 +200,21 @@ over:
 ---
 
 ## PROJECT OPERATING RULES
+
+## PROTECTED SYSTEMS
+
+The following systems require explicit authorization before edits:
+
+- MAIN probability formula
+- JIG scoring formula
+- HVY logic
+- tier thresholds
+- ticket role logic
+- calibration
+- API payload contract
+- deployment/runtime config
+
+After edits, report protected systems touched: yes/no.
 
 ### 1. ROOM ROUTING
 
