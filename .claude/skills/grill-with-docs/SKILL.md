@@ -4,4 +4,8 @@ description: A relentless interview to sharpen a plan or design, which also crea
 disable-model-invocation: true
 ---
 
-Run a `/grilling` session, using the `/domain-modeling` skill.
+# Grill With Docs → DOCTRINE-SWEEP
+
+**Authoritative source:** `AGENTS.md` → DOCTRINE-SWEEP (wiki-rooted impl-vs-docs audit)
+
+No standalone procedure. Follow DOCTRINE-SWEEP for the grilling + domain-modeling workflow.
