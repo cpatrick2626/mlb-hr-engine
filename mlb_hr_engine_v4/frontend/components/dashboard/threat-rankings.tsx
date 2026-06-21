@@ -45,14 +45,17 @@ function scoreSize(rank: number): string {
   return 'text-[11px] font-semibold text-zinc-200'
 }
 
-const COLS = ['#', 'PLAYER', 'POS', 'SCORE', 'P(HR)', 'EV%', 'EDGE', 'BREL%']
+const BASE_COLS = ['#', 'PLAYER', 'POS', 'SCORE', 'P(HR)', 'EV%', 'EDGE', 'BREL%']
 
-export function ThreatRankingsTable({ rows }: { rows: ThreatRankRow[] }) {
+export function ThreatRankingsTable({ rows, board = 'main' }: { rows: ThreatRankRow[]; board?: 'main' | 'jig' }) {
+  const cols = board === 'jig'
+    ? [...BASE_COLS.slice(0, 6), 'JIG IDX', BASE_COLS[7]]
+    : BASE_COLS
   return (
     <div className="p-2.5">
       {/* Header */}
       <div className="grid grid-cols-[20px_1fr_26px_42px_38px_36px_40px_40px] gap-x-2 pb-[5px] mb-[3px] border-b border-white/[0.07]">
-        {COLS.map((c) => (
+        {cols.map((c) => (
           <span key={c} className="text-[6.5px] font-mono tracking-[0.22em] text-zinc-700 uppercase leading-none">
             {c}
           </span>
@@ -112,9 +115,9 @@ export function ThreatRankingsTable({ rows }: { rows: ThreatRankRow[] }) {
               {r.evPct > 0 ? '+' : ''}{r.evPct.toFixed(1)}
             </span>
 
-            {/* Edge */}
+            {/* Edge / JIG IDX */}
             <span className="text-[9.5px] font-mono text-sky-400/80 tabular-nums leading-none">
-              {r.edgePct.toFixed(1)}%
+              {board === 'jig' ? r.edgePct.toFixed(1) : `${r.edgePct.toFixed(1)}%`}
             </span>
 
             {/* Barrel */}

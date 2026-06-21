@@ -213,7 +213,7 @@ export default function DashboardPage() {
             <EscalationFeed events={JIG_ESCALATIONS} />
           </Panel>
           <Panel label="JIG — Qualified Picks"  zoneId="JIG-RNK" status="ACTIVE"               className="col-start-3 col-span-5 row-start-1 row-span-2">
-            <ThreatRankingsTable rows={jigRows} />
+            <ThreatRankingsTable rows={jigRows} board="jig" />
           </Panel>
           <Panel label="JIG Matchup Matrix"     zoneId="JIG-MTH" status="ACTIVE" accent="sky"   className="col-start-8 col-span-5 row-start-1">
             <MatchupIntelPanel rows={JIG_MATCHUPS} />

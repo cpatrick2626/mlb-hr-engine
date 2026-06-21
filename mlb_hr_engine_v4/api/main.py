@@ -265,6 +265,7 @@ def _jig_score(player: dict, arsenal_data: dict | None = None) -> float:
     Inputs: raw Statcast contact/power profile + optional
     arsenal/pitch-mix signals.
     No model_prob. No HVY modifier (display-only per doctrine).
+    Returns 0-100+ index (uncapped by design).
     """
     def _f(key):
         v = player.get(key, 0)
@@ -275,16 +276,19 @@ def _jig_score(player: dict, arsenal_data: dict | None = None) -> float:
         except (ValueError, TypeError):
             return 0.0
 
-    # --- Contact/power base (0.78 weight) ---
-    # Percent-scale stats normalized to 0-1 so they share the decimal
-    # scale of xSLG/xISO (Candidate D correction).
-    xslg        = _f("xslg")        * 0.20
-    barrel      = (_f("barrel_pct") / 100.0) * 0.17
-    xiso        = _f("xiso")        * 0.12
-    pull_air    = (_f("pull_air_pct") / 100.0) * 0.11
-    hard_hit    = (_f("hard_hit") / 100.0)    * 0.11
-    sweet_spot  = (_f("sweet_spot_pct") / 100.0) * 0.07
-    base_score  = xslg + barrel + xiso + pull_air + hard_hit + sweet_spot
+    def _n(x: float, center: float, sigma: float) -> float:
+        """Linear ramp: 0 at (center-sigma), 0.5 at center, 1 at (center+sigma), clamped [0,1]."""
+        return max(0.0, min(1.0, (x - center) / sigma + 0.5))
+
+    # --- Contact/power base — operator weights, _n-normalized, RAW percents ---
+    base_score = (
+        _n(_f("xslg"),          0.40, 0.15) * 0.25
+        + _n(_f("barrel_pct"),  5.0,  6.0)  * 0.20
+        + _n(_f("xiso"),        0.15, 0.12) * 0.15
+        + _n(_f("pull_air_pct"),12.0, 8.0)  * 0.15
+        + _n(_f("hard_hit"),    35.0, 12.0) * 0.15
+        + _n(_f("sweet_spot_pct"),28.0, 8.0)* 0.10
+    )
 
     # --- PA stabilization + HR/PA term (Candidate D) ---
     pa = _f("season_pa")
@@ -360,7 +364,7 @@ def _jig_score(player: dict, arsenal_data: dict | None = None) -> float:
             pitch_mix_signal = 0.0
 
     tactical = arsenal_signal + pitch_dmg_signal + pitch_mix_signal
-    return ((base_score + hr_term) * stab) + tactical
+    return round(((base_score + hr_term) * stab + tactical) * 100, 2)
 
 
 # ── Full Slate ─────────────────────────────────────────────────────────────────
