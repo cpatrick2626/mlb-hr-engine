@@ -32,28 +32,38 @@ function MasterDashboard() {
   React.useEffect(() => { setCcOpen(false); }, [active.engineId, active.lensId]);
 
   // Fetch live slate data after React mounts so hrEngineDataLoaded fires after listeners attach.
+  // Retries up to 4 times with backoff to tolerate Fly.io cold-start latency (~4-12s).
   React.useEffect(() => {
-    fetch("https://mlb-hr-api.fly.dev/api/slate?t=" + Date.now())
-      .then(r => r.json())
-      .then(data => {
-        if (data.leaderboard_rows?.length) {
-          window.LEADERBOARD_ROWS = data.leaderboard_rows;
+    const ATTEMPTS = 4, BASE_DELAY_MS = 1500, TIMEOUT_MS = 15000;
+    async function fetchSlate() {
+      let lastErr;
+      for (let i = 0; i < ATTEMPTS; i++) {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
+        try {
+          const res = await fetch("https://mlb-hr-api.fly.dev/api/slate?t=" + Date.now(), { signal: ctrl.signal });
+          clearTimeout(timer);
+          if (res.ok) {
+            const data = await res.json();
+            if (data.leaderboard_rows?.length) window.LEADERBOARD_ROWS = data.leaderboard_rows;
+            if (data.leaderboard_rows_jig?.length) window.LEADERBOARD_ROWS_JIG = data.leaderboard_rows_jig;
+            if (data.slate_games?.length) window.SLATE_GAMES = data.slate_games;
+            if (data.generated_at) window.SLATE_GENERATED_AT = data.generated_at;
+            window.dispatchEvent(new CustomEvent("hrEngineDataLoaded", { detail: data }));
+            return;
+          }
+          if (res.status >= 400 && res.status < 500) throw new Error("Slate " + res.status);
+          lastErr = new Error("Slate " + res.status);
+        } catch (err) {
+          clearTimeout(timer);
+          lastErr = err;
         }
-        if (data.leaderboard_rows_jig?.length) {
-          window.LEADERBOARD_ROWS_JIG = data.leaderboard_rows_jig;
-        }
-        if (data.slate_games?.length) {
-          window.SLATE_GAMES = data.slate_games;
-        }
-        if (data.generated_at) {
-          window.SLATE_GENERATED_AT = data.generated_at;
-        }
-        window.dispatchEvent(new CustomEvent("hrEngineDataLoaded", { detail: data }));
-      })
-      .catch(err => {
-        console.warn("HR Engine API fetch failed:", err);
-        window.dispatchEvent(new CustomEvent("hrEngineDataLoaded", { detail: { _fetchFailed: true } }));
-      });
+        if (i < ATTEMPTS - 1) await new Promise(r => setTimeout(r, BASE_DELAY_MS * Math.pow(2, i)));
+      }
+      console.warn("HR Engine API unreachable:", lastErr);
+      window.dispatchEvent(new CustomEvent("hrEngineDataLoaded", { detail: { _fetchFailed: true } }));
+    }
+    fetchSlate();
   }, []);
 
   const defaultLens = (eng) => eng.subs.find((s) => s.tag === "DEFAULT") || eng.subs[0];
