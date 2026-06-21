@@ -1,7 +1,7 @@
 ---
 created: 2026-06-20
-phase: 1-complete
-next-phase: 2
+phase: 3-complete
+next-phase: 4
 ---
 
 # Agent/Skill Consolidation Status
@@ -46,11 +46,11 @@ Matt Pocock skills are registered in `skills-lock.json` and duplicated into both
 
 ---
 
-## Phase 3 — Pending
+## Phase 3 — Complete 2026-06-20
 
-**Gap: PROJECT_MISSION.md does not exist.**
+**Done: PROJECT_MISSION.md created at repo root.**
 
-No project-objectives / north-star document exists at repo root or in `MLB HR ENGINE/wiki/`. CLAUDE.md §1 has a two-paragraph descriptive overview but no structured mission with success criteria or strategic priorities. Build `PROJECT_MISSION.md` in Phase 3.
+`PROJECT_MISSION.md` exists as authoritative north-star doc. Covers mission, priority hierarchy, what engine is/is not, success criteria, known reality (net negative history, ~18% HR hit rate, edge UNRESOLVED, calibration deferred N=4), non-negotiable invariants (linked not restated), cross-references to AGENTS.md/LOOPS.md/CLAUDE.md/feedback-loop-architecture.md/ticket-data-capture-phase1-architecture.md. CLAUDE.md §6/§9 anchor links verified correct. File encoding confirmed clean UTF-8 (no mojibake). Staged; awaiting operator commit authorization.
 
 ---
 
