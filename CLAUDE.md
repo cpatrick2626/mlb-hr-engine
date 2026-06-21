@@ -353,3 +353,17 @@ Rules:
 - If mlb_hr_engine_v4/graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
 - Read mlb_hr_engine_v4/graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
 - After modifying code, run `graphify update mlb_hr_engine_v4` to keep the graph current (AST-only, no API cost). The `.graphifyignore` in `mlb_hr_engine_v4/` excludes `frontend/`, `Docs/`, `_archive/`, and `node_modules/`.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live as local markdown files under `.scratch/` — do not auto-create GitHub Issues. See `MLB HR ENGINE/wiki/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default workflow states (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`) plus project category tags (`bug`, `feature`, `MAIN`, `JIG`, `HVY-display-only`, etc.). See `MLB HR ENGINE/wiki/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context, wiki-rooted. Domain context lives under `MLB HR ENGINE/wiki/` — no root `CONTEXT.md` or `docs/adr/`. See `MLB HR ENGINE/wiki/agents/domain.md`.
