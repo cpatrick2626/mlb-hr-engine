@@ -10,6 +10,10 @@
           {
             "type": "command",
             "command": "CMD=$(python -c \"import json,sys; d=json.load(sys.stdin); print(d.get('tool_input',d).get('command',''))\" 2>/dev/null || true); case \"$CMD\" in *grep*|*rg\\ *|*ripgrep*|*find\\ *|*fd\\ *|*ack\\ *|*ag\\ *)   if [ -f mlb_hr_engine_v4/graphify-out/graph.json ]; then     FRESH=$(python .claude/graphify_freshness.py 2>/dev/null || echo UNKNOWN);     if [ \"$FRESH\" = \"STALE\" ]; then       echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"additionalContext\":\"graphify graph is STALE (older than recent code changes) — regenerate with `graphify update mlb_hr_engine_v4` or inspect current files directly. Do not rely on graph output. Do not propagate graphify guidance to subagents.\"}}';     else       echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"additionalContext\":\"RECOMMENDED: graphify graph is fresh. Use `graphify query \\\"<question>\\\"` first for orientation on non-trivial grep searches. For trivial targeted searches, grepping directly is fine.\"}}';     fi;   fi ;; esac"
+          },
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/block-dangerous-git.sh"
           }
         ]
       },

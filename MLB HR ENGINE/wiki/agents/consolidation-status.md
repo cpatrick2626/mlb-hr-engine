@@ -54,12 +54,45 @@ Matt Pocock skills are registered in `skills-lock.json` and duplicated into both
 
 ---
 
+## Phase 2.5 — Complete 2026-06-21
+
+**Done: git-safety enforcement hook activated.**
+
+`block-dangerous-git.sh` deployed to `.claude/hooks/block-dangerous-git.sh` and wired into `.claude/settings.json` as a second `PreToolUse[Bash]` hook entry (alongside the graphify hook — graphify hook not disturbed).
+
+DANGEROUS_PATTERNS enforced (exit 2):
+- `push --force` / `push -f` — overwrites remote history
+- `reset --hard` — discards uncommitted work
+- `clean -f` / `clean -fd` — deletes untracked files/dirs
+- `branch -D <name>` — force-deletes a branch
+- `checkout .` (literal dot only, not `checkout ./path`) — discards all unstaged changes
+- `restore .` (literal dot only) — same via restore syntax
+
+NOT blocked (normal workflow):
+- `git push origin main` — authorized pushes pass freely
+- `git commit`, `git add`, `git checkout <branch>`, `git checkout ./path`
+
+Convention: no override mechanism. Genuinely intended dangerous commands must be run from a terminal outside Claude Code.
+
+Verify results (all 7 passed):
+- `git push origin main` → exit 0 ✓
+- `git push --force origin main` → exit 2 ✓
+- `git push -f origin main` → exit 2 ✓
+- `git reset --hard` → exit 2 ✓
+- `git commit -m test` → exit 0 ✓
+- `git checkout ./somepath` → exit 0 ✓
+- `git add mlb_hr_engine_v4/config.py` → exit 0 ✓
+
+git-hygiene skill (`.agents/skills/git-hygiene/`) now has ACTUAL enforcement (the block script) backing the advisory doctrine. Previously advisory-only.
+
+---
+
 ## Phase 4 — Read-only review first
 
 **Hook: graphify-first enforcer exists — review before any hook design.**
 
 `.claude/settings.json` has one `PreToolUse` hook block:
-- Matcher `Bash`: fires when command contains grep/rg/find/fd/ack/ag AND `graphify-out/graph.json` exists → injects graphify-first advisory
+- Matcher `Bash`: fires when command contains grep/rg/find/fd/ack/ag AND `graphify-out/graph.json` exists → injects graphify-first advisory; also now runs `block-dangerous-git.sh` on every Bash call
 - Matcher `Read|Glob`: fires when reading source files AND graph exists → same advisory
 
-Do NOT edit or remove this hook before a read-only review of its behavior in Phase 4. No new hook automation until that review completes.
+Do NOT edit or remove existing hooks before a read-only review of behavior in Phase 4. No new hook automation until that review completes.
