@@ -615,6 +615,7 @@ function FsmArsenalTable({ title, arsenal, pitchStats }) {
         <div className="fsm-pt__hd"><span>PITCH TYPE</span><span>USAGE</span><span>VELO</span><span>WHIFF%</span><span>HR</span><span>K%</span><span>HH%</span></div>
         {arsenal.map((p, i) => {
           const ps = pitchStats[p.code] || {};
+          const velo = p.velo ?? ps.avg_speed;
           const hrVal = ps.hr != null ? ps.hr : null;
           const kPct = ps.k_pct != null ? ps.k_pct * 100 : null;
           const hh = ps.display_hh != null ? ps.display_hh * 100 : null;
@@ -622,7 +623,7 @@ function FsmArsenalTable({ title, arsenal, pitchStats }) {
             <div className="fsm-pt__row" key={i}>
               <span className="fsm-pt__type">{p.name || fsmPitchName(p.code)}</span>
               <span className="fsm-pt__usage"><span className="fsm-pt__bar" style={{ width: Math.min(100, p.usage) + "%" }} /><i>{p.usage != null ? p.usage.toFixed(1) : "—"}%</i></span>
-              <span className="fsm-pt__num">{p.velo != null ? p.velo.toFixed(1) : "—"}</span>
+              <span className="fsm-pt__num">{velo != null ? velo.toFixed(1) : "—"}</span>
               <span className="fsm-pt__num">{p.whiff != null ? p.whiff.toFixed(1) + "%" : "—"}</span>
               <span className="fsm-pt__num">{hrVal != null ? hrVal : "—"}</span>
               <span className="fsm-pt__num">{kPct != null ? kPct.toFixed(1) + "%" : "—"}</span>
