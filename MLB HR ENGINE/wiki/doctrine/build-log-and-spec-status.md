@@ -377,6 +377,63 @@ See session [[wiki/sessions/2026-06-11-tier-ranking-foundation-completion]] for 
 
 ---
 
+## Frontend / Vercel Source-of-Truth Recovery
+
+**Completed:** 2026-06-22
+
+### Root Cause
+
+Commit `cedfd89` ("chore: remove dead trees, stale artifacts, and junk") deleted all tracked files from root `frontend/`:
+
+- `frontend/index.html` — 3,887-line static HTML/JS/CSS Master Dashboard
+- `frontend/image-slot.js` — 642-line JS module
+- `frontend/assets/js/full-slate-matrix.js` — 1,122 lines
+- `frontend/assets/js/jig-command.js` — 45 lines
+- `frontend/assets/js/*.js` — ~10 bundled JS files
+- `frontend/assets/fonts/*.woff2` — 35 Barlow font files
+
+The folder was classified DEAD in repo references, but it is the Vercel Root Directory (configured in the Vercel dashboard, not in any repo file — `fly.toml`, `Dockerfile`, and GitHub workflows contain no reference to it). Every Vercel deploy from `cedfd89` onward failed. The live board was frozen on the last pre-deletion Vercel build.
+
+**Key failure mode:** a repo-only audit cannot see Vercel's Root Directory setting. The dependency was invisible.
+
+### Recovery
+
+`git checkout cedfd89~1 -- frontend/` restored the full static dashboard into the working tree. Restore commit: `e619711` (on `origin/main`).
+
+Audit written to `.scratch/2026-06-22-frontend-vercel-audit.md` (commit `bc2864f`, local only).
+
+### Governance Rule — Before Deleting Top-Level Folders
+
+> "DEAD per the repo" ≠ "DEAD per everything that consumes the repo."
+
+Before deleting any top-level directory (especially `frontend/`, `public/`, `static/`, `dist/`):
+
+1. Check Vercel dashboard → Project Settings → Root Directory.
+2. Check any CI build configs (`.github/workflows/`) for path references.
+3. Check Netlify / Render / Railway / Fly.io configs for static-asset paths.
+4. Only delete after confirming no external service targets that path.
+
+### Frontend Surface Truth (as of e619711)
+
+| Surface | Path | Type | Vercel target | Status |
+|---------|------|------|--------------|--------|
+| LIVE static production | `frontend/` | Static HTML/JS, no build step | **Yes** | Restored — operational |
+| Next.js tactical shell | `mlb_hr_engine_v4/frontend/` | Next.js 14 | **No** | MIXED — rankings panels fetch live; all other panels mock-heavy; hardcoded date/counts; NOT production-ready |
+
+**Do NOT repoint Vercel Root Directory to `mlb_hr_engine_v4/frontend/`** until all panels are wired to real `/api/slate` data and the hardcoded `CommandHeader` values (date, slateCount, activeThreats) are replaced with live values.
+
+### Key Commits
+
+| Commit | Role |
+|--------|------|
+| `cedfd89` | The deletion — broke Vercel |
+| `e619711` | Restore — root `frontend/` recovered, Vercel unblocked |
+| `bc2864f` | Audit doc (`.scratch/2026-06-22-frontend-vercel-audit.md`) |
+
+See session [[2026-06-22-frontend-vercel-source-of-truth-recovery]] for full detail.
+
+---
+
 ## Cross-References
 
 - [Room Governance](room-governance.md)
