@@ -7,6 +7,27 @@
 
 ---
 
+> **CORRECTION — 2026-06-21 (live API measurement, GET /api/slate, n=318)**
+>
+> Production JIG is **HEALTHY**. The "3 metrics dead / ceiling 55 / every player APEX / stale 13.5 thresholds" diagnostics that surrounded this investigation were derived from `app.py` (the dead Streamlit surface: `_hvy_metrics`, `barrel_pct/hard_hit/sweet_spot_pct` display strings, `config.py JIG_TIER_THRESHOLDS`). Streamlit is not production. Those findings do NOT apply to the live API.
+>
+> Live measurements:
+> - `jigScore` range: min 5.6 / max 93.0 / mean 47.5 / median 46.2 — well-spread, NOT capped at 55
+> - Tier pyramid (n=318): APEX 14 (4.4%), ELITE 32, EDGE 78, SIGNAL 106, WATCH 63, COLD 25 — correct shape, NOT "everyone APEX"
+> - Live tier thresholds are fractional (APEX 0.2, ELITE 0.16, …) served dynamically — NOT the stale 13.5 constants in `config.py`
+> - Live JIG fields: `barrel`, `hh`, `sweet` (real floats) — NOT the Streamlit `_pct` display strings
+>
+> **Formula saturation (base_score clamping) is CONFIRMED as a code fact** — `_n()` clamps to 1.0 before elite Statcast values. Recompute-verified (Alvarez match).
+> **Distribution-level ceiling clustering is RESOLVED — NOT occurring (2026-06-21, n=318):**
+> - >= 95: 0 (0%) / >= 90: 7 (2.2%) / >= 85: 21 (6.6%) / >= 80: 38 (11.9%)
+> - Top 10: 93.01, 92.36, 92.0, 91.87, 91.71, 90.87, 90.85, 89.67, 88.72, 88.63 — spread, smooth taper, zero at ceiling
+>
+> The clamp mechanism exists but does not compress the live distribution. "Elite hitters jam to identical scores" was a Streamlit ceiling-55 artifact, not production behavior. No live saturation problem as of 2026-06-21. Revisit only if a future slate shows top-end bunching.
+
+---
+
+---
+
 ## What was verified (and is confirmed GOOD)
 
 Live API runs the realigned `_jig_score` from `e4d19db`. Confirmed three ways:

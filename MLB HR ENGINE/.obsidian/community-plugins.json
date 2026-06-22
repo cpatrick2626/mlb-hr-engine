@@ -14,5 +14,19 @@
   "canvas2document",
   "meld-build",
   "obsidian-chartsview-plugin",
-  "obsidian-git"
+  "obsidian-git",
+  "vault-intelligence",
+  "simple-exporter-for-llm",
+  "querydash",
+  "semantic-auto-linker",
+  "llm-wiki",
+  "infranodus-graph-view",
+  "hangarx",
+  "activity-graph",
+  "atomic-insights",
+  "cannoli",
+  "canvas-card-materializer",
+  "canvas-explorer",
+  "dataview-publisher",
+  "dataview-serializer"
 ]

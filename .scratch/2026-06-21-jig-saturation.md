@@ -6,6 +6,14 @@
 
 ---
 
+> **CORRECTION — 2026-06-21 (live API measurement, GET /api/slate leaderboard_rows_jig, n=318)**
+>
+> Verified against live API: production JIG is **HEALTHY**. "3 metrics dead / ceiling 55 / every player APEX / stale 13.5 thresholds" were derived from `app.py` (dead Streamlit surface) — not production. This finding applies only to the dead Streamlit surface for those claims.
+>
+> Live: jigScore 5.6–93.0, mean 47.5, 14 APEX (4.4%) — well-spread pyramid. **Formula saturation (base_score clamping) is CONFIRMED as a code fact** (recompute-verified). **Distribution-level ceiling clustering is RESOLVED — NOT occurring (2026-06-21, n=318):** >= 90: 7 (2.2%), >= 85: 21 (6.6%), top 10 scores well-separated (93.01 → 88.63), zero at ceiling. The clamp exists but does not compress live output. "Elite hitters jam to identical scores" was a Streamlit ceiling-55 artifact. No live saturation problem as of 2026-06-21; revisit if future slate shows top-end bunching.
+
+---
+
 ## Finding
 
 The realigned power weights (xSLG .25 / barrel .20 / xISO .15 / pull_air .15 / hard_hit .15 / sweet_spot .10, confirmed live at commit e4d19db) are **inert at the elite tier** because all six base components clamp to 1.0 before elite Statcast values. `base_score` is identical across elite hitters; ranking at the top is driven by `hr_term` + tactical signals, not the power weights.
