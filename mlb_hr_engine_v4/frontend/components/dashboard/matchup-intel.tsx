@@ -4,9 +4,9 @@ export interface MatchupRow {
   pitcher: string
   pitcherTeam: string
   hand: string
-  hvyScore: number
-  barrelPct: number
-  pitcherHR9: number
+  hvyScore: number | null
+  barrelPct: number | null
+  pitcherHR9: number | null
   edge: 'FAVORABLE' | 'NEUTRAL' | 'UNFAVORABLE'
 }
 
@@ -82,18 +82,18 @@ export function MatchupIntelPanel({ rows }: { rows: MatchupRow[] }) {
             <span className="text-[8px] font-mono text-zinc-600 tabular-nums">{r.hand}</span>
 
             {/* HVY score */}
-            <span className={`text-[10px] font-mono font-semibold tabular-nums leading-none ${hvyColor(r.hvyScore)}`}>
-              {r.hvyScore.toFixed(2)}
+            <span className={`text-[10px] font-mono font-semibold tabular-nums leading-none ${r.hvyScore != null ? hvyColor(r.hvyScore) : 'text-zinc-700'}`}>
+              {r.hvyScore != null ? r.hvyScore.toFixed(2) : '—'}
             </span>
 
             {/* Barrel */}
-            <span className={`text-[9.5px] font-mono tabular-nums leading-none ${barrelHeat(r.barrelPct)}`}>
-              {r.barrelPct.toFixed(1)}%
+            <span className={`text-[9.5px] font-mono tabular-nums leading-none ${r.barrelPct != null ? barrelHeat(r.barrelPct) : 'text-zinc-700'}`}>
+              {r.barrelPct != null ? `${r.barrelPct.toFixed(1)}%` : '—'}
             </span>
 
             {/* HR/9 */}
-            <span className={`text-[9.5px] font-mono tabular-nums leading-none ${hr9Heat(r.pitcherHR9)}`}>
-              {r.pitcherHR9.toFixed(2)}
+            <span className={`text-[9.5px] font-mono tabular-nums leading-none ${r.pitcherHR9 != null ? hr9Heat(r.pitcherHR9) : 'text-zinc-700'}`}>
+              {r.pitcherHR9 != null ? r.pitcherHR9.toFixed(2) : '—'}
             </span>
 
             {/* Edge pill */}

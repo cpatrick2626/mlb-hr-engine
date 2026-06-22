@@ -150,10 +150,10 @@ function mapApiRow(row: ApiRow, idx: number): ThreatRankRow {
 }
 
 function mapMatchupRow(row: ApiRow): MatchupRow {
-  const h2h = Number(row.h2h_factor ?? 1.0)
+  const rawH2h = row.h2h_factor != null ? Number(row.h2h_factor) : null
   let edge: MatchupRow['edge'] = 'NEUTRAL'
-  if (h2h > 1.05) edge = 'FAVORABLE'
-  else if (h2h < 0.95) edge = 'UNFAVORABLE'
+  if (rawH2h != null && rawH2h > 1.05) edge = 'FAVORABLE'
+  else if (rawH2h != null && rawH2h < 0.95) edge = 'UNFAVORABLE'
 
   const bats  = String(row.bats         ?? '').charAt(0) || '?'
   const pHand = String(row.pitcher_hand ?? '').charAt(0) || '?'
@@ -164,9 +164,9 @@ function mapMatchupRow(row: ApiRow): MatchupRow {
     pitcher:     String(row.pitcher_name ?? ''),
     pitcherTeam: '',
     hand:        `${bats}/${pHand}`,
-    hvyScore:    h2h,
-    barrelPct:   Number(row.barrel       ?? 0),
-    pitcherHR9:  Number(row.opphr        ?? 0),
+    hvyScore:    rawH2h,
+    barrelPct:   row.barrel != null ? Number(row.barrel) : null,
+    pitcherHR9:  row.opphr  != null ? Number(row.opphr)  : null,
     edge,
   }
 }
