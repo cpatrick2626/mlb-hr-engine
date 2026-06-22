@@ -198,6 +198,24 @@ def main():
     else:
         out(f"\n  ✓ No action required. All systems nominal.")
 
+    # Quota status — reads odds_cache.json, no new API request
+    quota_info = _read_cached_quota()
+    q_rem = quota_info.get("remaining")
+    if q_rem is None:
+        q_action = "UNKNOWN"
+    elif q_rem == 0:
+        q_action = "EXHAUSTED"
+    elif q_rem < 25:
+        q_action = "SWAP_SOON"
+    elif q_rem < 100:
+        q_action = "WATCH"
+    else:
+        q_action = "OK"
+    out(f"\n  Odds API quota remaining : {q_rem if q_rem is not None else 'unknown'}")
+    out(f"  Quota source             : {quota_info.get('source', 'unavailable')}")
+    out(f"  Quota captured at        : {quota_info.get('captured_at', 'unknown')}")
+    out(f"  Quota action             : {q_action}")
+
     out(f"\n  Next run: tomorrow morning (settle {today})")
     out(f"  CLV capture: run capture_closing_lines.py ~30 min before first pitch")
     out(f"{'='*W}\n")
@@ -368,6 +386,30 @@ def _run_clv_capture(date_str: str, out) -> dict:
     except Exception as e:
         out(f"  [FAILED] {e}")
         return {}
+
+
+def _read_cached_quota() -> dict:
+    """Read last-known Odds API quota from odds_cache.json — zero API requests."""
+    import json as _json
+    cache_path = Path(__file__).parent.parent.parent / "data" / "odds_cache.json"
+    try:
+        if not cache_path.exists():
+            return {"remaining": None, "source": "unavailable", "captured_at": "unknown"}
+        with open(cache_path, encoding="utf-8") as f:
+            data = _json.load(f)
+        quota = data.get("quota", {})
+        ts_raw = data.get("timestamp")
+        captured_at = (
+            datetime.fromtimestamp(ts_raw, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            if ts_raw else "unknown"
+        )
+        return {
+            "remaining":   quota.get("remaining"),
+            "source":      "odds_cache_json",
+            "captured_at": captured_at,
+        }
+    except Exception:
+        return {"remaining": None, "source": "unavailable", "captured_at": "unknown"}
 
 
 def _cleanup_old_reports(reports_dir: Path, keep_days: int = 90) -> None:
