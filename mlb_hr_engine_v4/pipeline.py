@@ -737,9 +737,12 @@ def load_game_data(
             p["confidence_tier"] = _rp.get("confidence_tier", "C")
             p["score"]           = _rp.get("score", 0)
         else:
-            edge = p.get("edge_pct", 0)
-            conf = p.get("confidence", 0)
-            p["confidence_tier"] = ranker.confidence_tier(conf, edge)
+            if "confidence" not in p:
+                p["confidence_tier"] = "NE"
+            else:
+                edge = p.get("edge_pct", 0)
+                conf = p.get("confidence", 0)
+                p["confidence_tier"] = ranker.confidence_tier(conf, edge)
             p["score"]           = ranker.composite_score(p.get("model_prob", 0))
 
     ranker.rank_within_tiers(all_players)
