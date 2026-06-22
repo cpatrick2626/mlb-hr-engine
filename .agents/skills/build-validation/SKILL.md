@@ -1,0 +1,32 @@
+---
+name: build-validation
+description: Use when a change may affect build, frontend runtime, API runtime, deployment readiness, or production validation in MLB HR ENGINE.
+---
+
+- Confirm repo root, branch, and `git status --short` before validation.
+- Classify the change first:
+  - frontend-only
+  - API/backend
+  - pipeline/formula
+  - docs-only
+  - deployment-related
+- Run the smallest validation that matches the change scope.
+- Prefer targeted build, test, lint, or runtime checks over full-suite runs when they are sufficient.
+- Protect MLB HR ENGINE boundaries:
+  - MAIN / JIG separation
+  - HVY display-only boundaries
+  - formula containment
+  - API payload contracts
+  - frontend tactical UI behavior
+  - GitHub Actions cron/cache path
+  - Fly API deployment validation
+  - Vercel frontend validation
+  - no accidental package churn
+- Never treat a passing build as proof that formulas, payloads, or runtime behavior are correct.
+- Never deploy unless explicitly authorized.
+- Stop and report if validation requires secrets, live deploy access, browser access, or unavailable tooling.
+- Report:
+  - exact command(s) run
+  - results
+  - files changed
+  - final git status
