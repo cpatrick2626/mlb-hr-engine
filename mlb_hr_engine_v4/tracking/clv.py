@@ -24,7 +24,9 @@ Workflow:
 from __future__ import annotations
 
 import csv
+import json
 import os
+import time
 import unicodedata
 from datetime import date, datetime, timezone, timedelta
 from pathlib import Path
@@ -39,6 +41,12 @@ _SESSION = requests.Session()
 _SESSION.headers.update({"User-Agent": "Codex-HR-Engine/clv"})
 
 CLV_LOG = DATA_DIR / "clv_log.csv"
+# Per-capture-window disk cache: prevents duplicate quota burn if the CLV endpoint
+# is called twice within the same ~30-minute window (e.g. manual dispatch + cron overlap).
+# The two intentional daily runs (12:30 PM and 6:30 PM ET) are 6 hours apart so the
+# cache is always stale between them — those runs still fetch independently.
+_CLV_WINDOW_CACHE = DATA_DIR / "clv_window_cache.json"
+_CLV_WINDOW_TTL_MINUTES = 30
 
 # Full CLV log schema (Session 26)
 CLV_FIELDS = [
@@ -158,10 +166,19 @@ def fetch_and_compute_clv(
         return []
 
     # Fetch current odds from The Odds API
-    live_odds = _fetch_current_hr_odds()
+    import logging as _logging
+    _log = _logging.getLogger(__name__)
+    live_odds, clv_meta = _fetch_current_hr_odds()
+    _log.info(
+        "[clv] odds fetch: source=%s props=%d quota_remaining=%s window=%s slate=%s",
+        clv_meta.get("clv_odds_source"),
+        clv_meta.get("clv_odds_prop_count", 0),
+        clv_meta.get("clv_quota_remaining"),
+        clv_meta.get("clv_capture_window"),
+        clv_meta.get("clv_slate_date"),
+    )
     if not live_odds:
-        import logging as _logging
-        _logging.getLogger(__name__).warning(
+        _log.warning(
             "[clv] no live odds available for %s — CLV computation skipped, returning %d existing rows unchanged",
             date_str, len(picks),
         )
@@ -550,12 +567,54 @@ def _atomic_write(rows: list[dict]) -> None:
         raise
 
 
-def _fetch_current_hr_odds() -> dict[str, int]:
-    """Best available HR Over odds keyed by normalized player name."""
+def _load_clv_window_cache() -> "tuple[dict, dict] | None":
+    try:
+        if not _CLV_WINDOW_CACHE.exists():
+            return None
+        with open(_CLV_WINDOW_CACHE, encoding="utf-8") as f:
+            data = json.load(f)
+        if (time.time() - data["ts"]) / 60 > _CLV_WINDOW_TTL_MINUTES:
+            return None
+        return data["best"], data["meta"]
+    except Exception:
+        return None
+
+
+def _save_clv_window_cache(best: dict, meta: dict) -> None:
+    try:
+        with open(_CLV_WINDOW_CACHE, "w", encoding="utf-8") as f:
+            json.dump({"ts": time.time(), "best": best, "meta": meta}, f)
+    except Exception:
+        pass
+
+
+def _fetch_current_hr_odds() -> "tuple[dict[str, int], dict]":
+    """Best available HR Over odds keyed by normalized player name.
+    Returns (odds_dict, metadata_dict). metadata keys:
+      clv_odds_source, clv_capture_window, clv_slate_date,
+      clv_odds_prop_count, clv_quota_remaining, clv_skipped_reason (on skip).
+    """
+    meta: dict = {
+        "clv_odds_source":     "fresh_api",
+        "clv_capture_window":  datetime.now(timezone.utc).isoformat(),
+        "clv_slate_date":      date.today().isoformat(),
+        "clv_odds_prop_count": 0,
+        "clv_quota_remaining": None,
+    }
+
     if not config.ODDS_API_KEY:
         import logging as _logging
         _logging.getLogger(__name__).warning("[clv] ODDS_API_KEY not set — CLV fetch skipped")
-        return {}
+        meta["clv_odds_source"] = "skipped"
+        meta["clv_skipped_reason"] = "no_api_key"
+        return {}, meta
+
+    cached = _load_clv_window_cache()
+    if cached is not None:
+        best, cached_meta = cached
+        cached_meta["clv_odds_source"] = "window_cache"
+        return best, cached_meta
+
     try:
         now_utc  = datetime.now(timezone.utc)
         now_et   = now_utc - timedelta(hours=4)
@@ -573,9 +632,18 @@ def _fetch_current_hr_odds() -> dict[str, int]:
             },
             timeout=12,
         )
+        try:
+            remaining = resp.headers.get("x-requests-remaining")
+            if remaining is not None:
+                meta["clv_quota_remaining"] = int(remaining)
+        except (ValueError, TypeError):
+            pass
+
         if resp.status_code != 200:
             print(f"[clv] events fetch failed: {resp.status_code}")
-            return {}
+            meta["clv_odds_source"] = "skipped"
+            meta["clv_skipped_reason"] = f"events_http_{resp.status_code}"
+            return {}, meta
 
         events = resp.json()
         best: dict[str, int] = {}
@@ -591,6 +659,12 @@ def _fetch_current_hr_odds() -> dict[str, int]:
                 },
                 timeout=12,
             )
+            try:
+                remaining2 = r2.headers.get("x-requests-remaining")
+                if remaining2 is not None:
+                    meta["clv_quota_remaining"] = int(remaining2)
+            except (ValueError, TypeError):
+                pass
             if r2.status_code != 200:
                 continue
             for book in r2.json().get("bookmakers", []):
@@ -612,7 +686,12 @@ def _fetch_current_hr_odds() -> dict[str, int]:
                             continue
                         if name not in best or price > best[name]:
                             best[name] = price
-        return best
+
+        meta["clv_odds_prop_count"] = len(best)
+        _save_clv_window_cache(best, meta)
+        return best, meta
     except Exception as e:
         print(f"[clv] fetch failed: {e}")
-        return {}
+        meta["clv_odds_source"] = "skipped"
+        meta["clv_skipped_reason"] = str(e)
+        return {}, meta
