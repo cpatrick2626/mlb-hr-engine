@@ -149,14 +149,37 @@ function mapApiRow(row: ApiRow, idx: number): ThreatRankRow {
   }
 }
 
+function mapMatchupRow(row: ApiRow): MatchupRow {
+  const h2h = Number(row.h2h_factor ?? 1.0)
+  let edge: MatchupRow['edge'] = 'NEUTRAL'
+  if (h2h > 1.05) edge = 'FAVORABLE'
+  else if (h2h < 0.95) edge = 'UNFAVORABLE'
+
+  const bats  = String(row.bats         ?? '').charAt(0) || '?'
+  const pHand = String(row.pitcher_hand ?? '').charAt(0) || '?'
+
+  return {
+    batter:      String(row.name         ?? ''),
+    batterTeam:  String(row.teamAbbr     ?? ''),
+    pitcher:     String(row.pitcher_name ?? ''),
+    pitcherTeam: '',
+    hand:        `${bats}/${pHand}`,
+    hvyScore:    h2h,
+    barrelPct:   Number(row.barrel       ?? 0),
+    pitcherHR9:  Number(row.opphr        ?? 0),
+    edge,
+  }
+}
+
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 
 const GRID = 'flex-1 min-h-0 grid grid-cols-12 grid-rows-2 gap-[6px] p-[6px]'
 
 export default function DashboardPage() {
   const [activeWorkspace, setActiveWorkspace] = useState<WorkspaceId>('main')
-  const [mainRows, setMainRows] = useState<ThreatRankRow[]>(MOCK_RANKINGS)
-  const [jigRows, setJigRows]   = useState<ThreatRankRow[]>(JIG_RANKINGS)
+  const [mainRows, setMainRows]               = useState<ThreatRankRow[]>(MOCK_RANKINGS)
+  const [jigRows, setJigRows]                 = useState<ThreatRankRow[]>(JIG_RANKINGS)
+  const [jigMatchupRows, setJigMatchupRows]   = useState<MatchupRow[]>(JIG_MATCHUPS)
 
   useEffect(() => {
     fetch('https://mlb-hr-api.fly.dev/api/slate')
@@ -167,6 +190,7 @@ export default function DashboardPage() {
         }
         if (Array.isArray(data.leaderboard_rows_jig) && data.leaderboard_rows_jig.length) {
           setJigRows(data.leaderboard_rows_jig.map(mapApiRow))
+          setJigMatchupRows(data.leaderboard_rows_jig.map(mapMatchupRow))
         }
       })
       .catch(err => console.warn('HR Engine API fetch failed:', err))
@@ -198,7 +222,7 @@ export default function DashboardPage() {
             <PitcherVulnerabilityPanel rows={MOCK_PITCHERS} />
           </Panel>
           <Panel label="Matchup Intelligence"   zoneId="MTH-01" status="ACTIVE" accent="sky"   className="col-start-3 col-span-6 row-start-2">
-            <MatchupIntelPanel rows={MOCK_MATCHUPS} />
+            <MatchupIntelPanel rows={jigMatchupRows} />
           </Panel>
           <Panel label="Threat Rankings"        zoneId="RNK-01" status="ACTIVE"               className="col-start-9 col-span-4 row-start-2">
             <ThreatRankingsTable rows={mainRows} />
@@ -216,7 +240,7 @@ export default function DashboardPage() {
             <ThreatRankingsTable rows={jigRows} board="jig" />
           </Panel>
           <Panel label="JIG Matchup Matrix"     zoneId="JIG-MTH" status="ACTIVE" accent="sky"   className="col-start-8 col-span-5 row-start-1">
-            <MatchupIntelPanel rows={JIG_MATCHUPS} />
+            <MatchupIntelPanel rows={jigMatchupRows} />
           </Panel>
           <Panel label="JIG — Engine Status"    zoneId="JIG-SYS" status="STANDBY"              className="col-start-8 col-span-5 row-start-2">
             <div className="p-4 flex flex-col gap-3">
