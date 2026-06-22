@@ -570,6 +570,56 @@ Codex does not receive the Claude-specific freshness hook automatically. Codex m
 
 ---
 
+---
+
+## MANDATORY OBSIDIAN/WIKI DOCUMENTATION GATE
+
+> **STOP before finalizing if there are production-affecting changes or durable discoveries but no wiki checkpoint has been done.**
+
+### Scope
+
+This gate fires on:
+
+- **Production-affecting changes** — any commit, push, deploy, or code/config edit that changes production behavior, operator workflow, UI, API payloads, MAIN/JIG behavior, formulas/scoring/tiers, deployment surface, or Vercel/Fly configuration.
+- **Durable architecture discoveries** — any read-only audit that uncovers system truth future agents must know before acting (e.g., undocumented surfaces, mismatched configs, silent failure paths, surface ownership corrections).
+
+This gate does NOT fire on:
+
+- Casual planning chats with no code or doc output.
+- Tiny non-production checks that discover no durable project truth.
+- Read-only inspections that confirm expected state and find nothing new.
+
+### Required Agent Behavior
+
+Before final reporting, explicitly decide:
+
+**Did this work change or discover anything affecting:**
+UI · production surface · Vercel/Fly deployment · MAIN/JIG behavior · formulas/scoring/tiers · API payloads · architecture · doctrine · operator workflow?
+
+- **YES →** Update `MLB HR ENGINE/wiki/` before final reporting. Final report must include:
+  - Code files changed
+  - Wiki files changed
+  - Validation performed
+  - Commit hash(es) (if authorized)
+  - Final git status
+
+- **NO →** Final response must explicitly state:
+  > "No wiki update needed because [specific reason]."
+
+  Never silently skip the checkpoint.
+
+### Commit Separation
+
+Code/app commits and wiki/docs commits must remain **separate** unless the operator explicitly approves a combined commit.
+
+### Enforcement
+
+This rule applies to Claude Code, Codex, Claude App, and all future AI operators acting in this repository.
+
+> **STOP before finalizing if there are production-affecting changes or durable discoveries but no wiki checkpoint has been done.**
+
+---
+
 ### Invariants — Skills Do Not Override
 
 Skills do not override protected-surface governance. Skills do not authorize runtime or code edits by themselves. Any implementation work produced by a skill must still follow:

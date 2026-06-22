@@ -344,6 +344,8 @@ No modification without operator authorization:
 
 **Git:** DO NOT COMMIT. DO NOT PUSH unless operator authorizes.
 
+**Documentation gate:** See `AGENTS.md § Mandatory Obsidian/Wiki Documentation Gate` for the full rule. Never silently skip it.
+
 ## graphify
 
 This project has a knowledge graph at mlb_hr_engine_v4/graphify-out/ with god nodes, community structure, and cross-file relationships.

@@ -72,8 +72,19 @@ These are the only files used by the `mlb-hr-api` Fly.io app.
 
 ---
 
+## Mandatory Documentation Gate
+
+All agents working in this repo must apply the documentation gate before finalizing any task.
+
+Full rule: `AGENTS.md § Mandatory Obsidian/Wiki Documentation Gate`
+
+Summary: if the work changed or discovered anything affecting production surfaces, UI, deployment, MAIN/JIG behavior, formulas, API payloads, architecture, doctrine, or operator workflow — update the wiki before final reporting. If not, state explicitly "No wiki update needed because [reason]." Never silently skip the checkpoint.
+
+---
+
 ## Cross-References
 
 - [App Shell Layout](app-shell-layout.md)
 - [Visual Design Doctrine](visual-design-doctrine.md)
 - [Room Governance](room-governance.md)
+- [Obsidian Governance Doctrine](OBSIDIAN_GOVERNANCE_DOCTRINE.md)
