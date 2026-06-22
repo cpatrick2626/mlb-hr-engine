@@ -28,6 +28,7 @@ Last updated: 2026-06-18
 | [Session State Map](architecture/session-state-map.md) | session_state ownership and protected keys | Claude Code |
 | [Cache Ownership Map](architecture/cache-ownership-map.md) | Cache surfaces and ownership boundaries | Claude Code |
 | [Supabase Schema](architecture/supabase-schema.md) | Service layer, tables, and key records | Claude Code |
+| [Pitch-Mix Data Availability](architecture/pitch-mix-data-availability.md) | Arsenal Exploit Score audit: what pitch-type data exists/doesn't; reduced score scope; null rule; PAUSED | Claude Code |
 
 ## FORMULAS
 | Page | Summary | Agent |
