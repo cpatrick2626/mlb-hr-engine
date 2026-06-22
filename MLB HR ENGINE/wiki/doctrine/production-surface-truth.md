@@ -1,12 +1,26 @@
 # Production Surface Truth
 
-**Last Updated:** 2026-06-08
+**Last Updated:** 2026-06-22 (correction — see note below)
+
+---
+
+## ⚠ Correction (2026-06-22)
+
+This document originally described two frontend surfaces. That was incomplete. **Three surfaces exist:**
+
+1. `frontend/` (root) — static production board (Vercel)
+2. `mlb_hr_engine_v4/app.py` — Streamlit operator dashboard (**ACTIVE** — not dead, not safe to delete)
+3. `mlb_hr_engine_v4/frontend/` — Next.js tactical shell (MIXED/prototype)
+
+The authoritative three-surface map is now: **`wiki/architecture/frontend-topology.md`**
+
+app.py was omitted from this document's original "two-surface" framing. That omission was incorrect. app.py is the primary operator workflow surface (pick logging, FD slip, CLV tracking). It is NOT a candidate for deletion until a validated replacement exists.
 
 ---
 
 ## Summary
 
-Two frontend surfaces exist in the repo. They are not equivalent. This document records which surface is production and which is a prototype, and confirms canonical branch truth as of 2026-06-08.
+Two frontend surfaces were originally documented here. As of 2026-06-22 the full topology is three surfaces. See `wiki/architecture/frontend-topology.md` for the current authoritative map. This document is retained for the branch-canonicity record and deployment surface details below.
 
 ---
 
