@@ -530,6 +530,46 @@ All MLB HR ENGINE rooms may invoke these skills when the task matches the trigge
 - Use `/ingest-source` for durable captured material.
 - Use `/web-scraping` when current external verification or source discovery is needed.
 
+---
+
+## GRAPHIFY WORKFLOW RULE
+
+Graphify output lives at `mlb_hr_engine_v4/graphify-out/`. The `.graphifyignore` at `mlb_hr_engine_v4/.graphifyignore` is tracked by git and excludes `frontend/`, `Docs/`, `_archive/`, and `node_modules/`.
+
+### When to use Graphify
+
+Use Graphify for backend/API/pipeline/formula/odds/CLV architecture discovery:
+- `graphify query "<question>"` — scoped subgraph for a codebase question
+- `graphify path "<A>" "<B>"` — relationship between two nodes
+- `graphify explain "<concept>"` — focused concept drill-down
+
+Do NOT use Graphify for frontend/Vercel/Claude Design/Obsidian source-of-truth questions. Those surfaces are intentionally excluded from the graph. Read current files directly for those.
+
+### Freshness gate — required before covered-surface work
+
+Before any backend/API/pipeline/formula task, report Graphify status:
+
+```
+GRAPHIFY: FRESH   ← graph is current; query results are reliable
+GRAPHIFY: STALE   ← graph is behind recent commits; do not rely on it
+```
+
+If STALE: either obtain explicit operator approval to run `graphify update mlb_hr_engine_v4` (AST-only, no API cost) or inspect files directly instead of querying the graph. Do not silently query a stale graph and present results as authoritative.
+
+### Final report requirement
+
+When a task touches covered surfaces (backend/API/pipeline/formula/odds/CLV), the completion report must include:
+
+```
+GRAPHIFY STATUS: FRESH | STALE | NOT APPLICABLE
+```
+
+### Codex note
+
+Codex does not receive the Claude-specific freshness hook automatically. Codex must follow this rule from AGENTS.md directly. Codex must check whether `graphify-out/graph.json` exists and compare its mtime against recent git commits before querying.
+
+---
+
 ### Invariants — Skills Do Not Override
 
 Skills do not override protected-surface governance. Skills do not authorize runtime or code edits by themselves. Any implementation work produced by a skill must still follow:
