@@ -6,7 +6,6 @@
   "extended-graph",
   "advanced-canvas",
   "link-exploder",
-  "canvas2document",
   "obsidian-chartsview-plugin",
   "obsidian-git",
   "vault-intelligence",
@@ -18,7 +17,6 @@
   "activity-graph",
   "atomic-insights",
   "cannoli",
-  "canvas-card-materializer",
   "canvas-explorer",
   "dataview-serializer"
 ]
