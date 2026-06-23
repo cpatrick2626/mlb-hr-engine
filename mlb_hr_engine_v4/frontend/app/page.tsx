@@ -13,16 +13,10 @@ import type { PitcherVulnRow } from '@/components/dashboard/pitcher-vulnerabilit
 import { ThreatRankingsTable } from '@/components/dashboard/threat-rankings'
 import type { ThreatRankRow } from '@/components/dashboard/threat-rankings'
 import { HRThreatCard } from '@/components/hr/hr-threat-card'
-import type { HRThreatCardProps } from '@/components/hr/hr-threat-card'
+import type { HRThreatCardProps, EscalationTier } from '@/components/hr/hr-threat-card'
 
 // ─── Mock Data — MAIN workspace ───────────────────────────────────────────────
 
-const MOCK_THREATS: HRThreatCardProps[] = [
-  { playerName: 'Aaron Judge',    team: 'NYY · RF', hrThreatScore: 87, barrelPct: 15.2, hardHitPct: 57.3, pitchMatchupEdge: 0.28, weatherBoost: 1.07, pitcherVulnerability: 74, escalationTier: 'CRITICAL' },
-  { playerName: 'Shohei Ohtani',  team: 'LAD · DH', hrThreatScore: 82, barrelPct: 13.8, hardHitPct: 54.1, pitchMatchupEdge: 0.21, weatherBoost: 1.03, pitcherVulnerability: 81, escalationTier: 'CRITICAL' },
-  { playerName: 'Yordan Alvarez', team: 'HOU · LF', hrThreatScore: 76, barrelPct: 12.4, hardHitPct: 52.7, pitchMatchupEdge: 0.14, weatherBoost: 1.05, pitcherVulnerability: 68, escalationTier: 'HIGH'     },
-  { playerName: 'Pete Alonso',    team: 'NYM · 1B', hrThreatScore: 71, barrelPct: 10.9, hardHitPct: 48.2, pitchMatchupEdge: 0.18, weatherBoost: 1.04, pitcherVulnerability: 72, escalationTier: 'HIGH'     },
-]
 
 const MOCK_ESCALATIONS: EscalationEvent[] = [
   { id: 'e1', tier: 'CRITICAL', player: 'Aaron Judge',      team: 'NYY', signal: 'Barrel Rate',  value: '15.2%', ts: '09:41' },
@@ -128,10 +122,34 @@ type ApiRow = Record<string, unknown>
 
 function mapTier(t: unknown): ThreatRankRow['tier'] {
   const s = String(t ?? '').toUpperCase()
-  if (s === 'CRITICAL') return 'CRITICAL'
-  if (s === 'STRONG' || s === 'EDGE') return 'HIGH'
+  if (s === 'APEX' || s === 'CRITICAL') return 'CRITICAL'
+  if (s === 'ELITE' || s === 'STRONG' || s === 'EDGE') return 'HIGH'
   if (s === 'SIGNAL' || s === 'QUALITY') return 'MODERATE'
   return 'LOW'
+}
+
+function mapEscalationTier(t: unknown): EscalationTier {
+  const s = String(t ?? '').toUpperCase()
+  if (s === 'APEX' || s === 'CRITICAL') return 'CRITICAL'
+  if (s === 'ELITE' || s === 'EDGE' || s === 'STRONG') return 'HIGH'
+  if (s === 'SIGNAL' || s === 'QUALITY') return 'MODERATE'
+  return 'LOW'
+}
+
+function mapThreatCardRow(row: ApiRow): HRThreatCardProps {
+  const h2h = row.h2h_factor != null ? Number(row.h2h_factor) : null
+  return {
+    playerName:           String(row.name ?? ''),
+    team:                 String(row.teamAbbr ?? ''),
+    hrThreatScore:        Math.round(Number(row.hrprob ?? 0)),
+    barrelPct:            row.barrel != null ? Number(row.barrel) : null,
+    hardHitPct:           row.hh != null ? Number(row.hh) : null,
+    // h2h_factor is a multiplier; edge = factor - 1
+    pitchMatchupEdge:     h2h != null ? h2h - 1 : null,
+    weatherBoost:         null, // no weather field in /api/slate leaderboard_rows
+    pitcherVulnerability: null, // opphr exists but converting to 0-100 is model math — omit
+    escalationTier:       mapEscalationTier(row.tier),
+  }
 }
 
 function mapApiRow(row: ApiRow, idx: number): ThreatRankRow {
@@ -178,6 +196,7 @@ const GRID = 'flex-1 min-h-0 grid grid-cols-12 grid-rows-2 gap-[6px] p-[6px]'
 export default function DashboardPage() {
   const [activeWorkspace, setActiveWorkspace] = useState<WorkspaceId>('main')
   const [mainRows, setMainRows]               = useState<ThreatRankRow[]>(MOCK_RANKINGS)
+  const [mainThreatCards, setMainThreatCards] = useState<HRThreatCardProps[] | null>(null)
   const [jigRows, setJigRows]                 = useState<ThreatRankRow[]>(JIG_RANKINGS)
   const [jigMatchupRows, setJigMatchupRows]   = useState<MatchupRow[]>(JIG_MATCHUPS)
 
@@ -187,6 +206,8 @@ export default function DashboardPage() {
       .then(data => {
         if (Array.isArray(data.leaderboard_rows) && data.leaderboard_rows.length) {
           setMainRows(data.leaderboard_rows.map(mapApiRow))
+          // Top 4 by API-delivered model_tier_rank order — do not re-sort locally
+          setMainThreatCards(data.leaderboard_rows.slice(0, 4).map(mapThreatCardRow))
         }
         if (Array.isArray(data.leaderboard_rows_jig) && data.leaderboard_rows_jig.length) {
           setJigRows(data.leaderboard_rows_jig.map(mapApiRow))
@@ -215,7 +236,17 @@ export default function DashboardPage() {
           </Panel>
           <Panel label="Primary HR Threat Zone" zoneId="THR-01" status="ACTIVE"               className="col-start-3 col-span-6 row-start-1">
             <div className="flex gap-[6px] p-[6px] overflow-x-auto h-full items-start">
-              {MOCK_THREATS.map((t, i) => <HRThreatCard key={i} {...t} className="shrink-0" />)}
+              {mainThreatCards === null ? (
+                <div className="flex items-center justify-center w-full h-full">
+                  <span className="text-[7px] font-mono tracking-[0.28em] text-zinc-700 uppercase">LOADING THREATS…</span>
+                </div>
+              ) : mainThreatCards.length === 0 ? (
+                <div className="flex items-center justify-center w-full h-full">
+                  <span className="text-[7px] font-mono tracking-[0.28em] text-zinc-700 uppercase">NO THREATS — NO SLATE DATA</span>
+                </div>
+              ) : (
+                mainThreatCards.map((t, i) => <HRThreatCard key={i} {...t} className="shrink-0" />)
+              )}
             </div>
           </Panel>
           <Panel label="Pitcher Vulnerability"  zoneId="VUL-01" status="ACTIVE" accent="amber" className="col-start-9 col-span-4 row-start-1">

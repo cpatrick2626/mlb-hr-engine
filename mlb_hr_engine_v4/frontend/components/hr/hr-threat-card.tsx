@@ -10,11 +10,11 @@ export interface HRThreatCardProps {
   playerName: string
   team: string
   hrThreatScore: number
-  barrelPct: number
-  hardHitPct: number
-  pitchMatchupEdge: number
-  weatherBoost: number
-  pitcherVulnerability: number
+  barrelPct: number | null
+  hardHitPct: number | null
+  pitchMatchupEdge: number | null
+  weatherBoost: number | null
+  pitcherVulnerability: number | null
   escalationTier: EscalationTier
   className?: string
 }

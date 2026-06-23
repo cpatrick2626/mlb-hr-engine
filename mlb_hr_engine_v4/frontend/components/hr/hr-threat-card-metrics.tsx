@@ -1,11 +1,11 @@
 import React from 'react'
 
 interface HRThreatCardMetricsProps {
-  barrelPct: number
-  hardHitPct: number
-  pitchMatchupEdge: number
-  weatherBoost: number
-  pitcherVulnerability: number
+  barrelPct: number | null
+  hardHitPct: number | null
+  pitchMatchupEdge: number | null
+  weatherBoost: number | null
+  pitcherVulnerability: number | null
 }
 
 function MicroBar({ fill, color, glow }: { fill: number; color: string; glow?: string }) {
@@ -108,6 +108,8 @@ function vulnColor(v: number) {
   return { text: 'text-zinc-600', bar: 'bg-zinc-700', glow: undefined, label: 'CONTAINED' }
 }
 
+const NO_SIGNAL = '—'
+
 export function HRThreatCardMetrics({
   barrelPct,
   hardHitPct,
@@ -115,9 +117,9 @@ export function HRThreatCardMetrics({
   weatherBoost,
   pitcherVulnerability,
 }: HRThreatCardMetricsProps) {
-  const bc = barrelColor(barrelPct)
-  const vc = vulnColor(pitcherVulnerability)
-  const wc = weatherColor(weatherBoost)
+  const bc = barrelPct != null ? barrelColor(barrelPct) : null
+  const vc = pitcherVulnerability != null ? vulnColor(pitcherVulnerability) : null
+  const wc = weatherBoost != null ? weatherColor(weatherBoost) : null
 
   return (
     <div className="px-4 pb-4">
@@ -125,21 +127,21 @@ export function HRThreatCardMetrics({
       <div className="grid grid-cols-3 gap-x-3 border-b border-zinc-800/50">
         <MetricCell
           label="BARREL %"
-          value={`${barrelPct.toFixed(1)}%`}
-          valueColor={bc.text}
-          bar={{ fill: (barrelPct / 20) * 100, color: bc.bar, glow: bc.glow }}
+          value={barrelPct != null ? `${barrelPct.toFixed(1)}%` : NO_SIGNAL}
+          valueColor={bc ? bc.text : 'text-zinc-700'}
+          bar={bc && barrelPct != null ? { fill: (barrelPct / 20) * 100, color: bc.bar, glow: bc.glow } : undefined}
         />
         <MetricCell
           label="HRD HIT %"
-          value={`${hardHitPct.toFixed(1)}%`}
-          valueColor={hardHitColor(hardHitPct)}
-          bar={{ fill: (hardHitPct / 70) * 100, color: hardHitPct >= 50 ? 'bg-amber-500' : 'bg-zinc-600' }}
+          value={hardHitPct != null ? `${hardHitPct.toFixed(1)}%` : NO_SIGNAL}
+          valueColor={hardHitPct != null ? hardHitColor(hardHitPct) : 'text-zinc-700'}
+          bar={hardHitPct != null ? { fill: (hardHitPct / 70) * 100, color: hardHitPct >= 50 ? 'bg-amber-500' : 'bg-zinc-600' } : undefined}
         />
         <MetricCell
           label="PITCH EDGE"
-          value={edgeValue(pitchMatchupEdge)}
-          valueColor={edgeColor(pitchMatchupEdge)}
-          subtext={edgeLabel(pitchMatchupEdge)}
+          value={pitchMatchupEdge != null ? edgeValue(pitchMatchupEdge) : NO_SIGNAL}
+          valueColor={pitchMatchupEdge != null ? edgeColor(pitchMatchupEdge) : 'text-zinc-700'}
+          subtext={pitchMatchupEdge != null ? edgeLabel(pitchMatchupEdge) : undefined}
         />
       </div>
 
@@ -147,17 +149,17 @@ export function HRThreatCardMetrics({
       <div className="grid grid-cols-2 gap-x-4">
         <MetricCell
           label="WEATHER"
-          value={weatherValue(weatherBoost)}
-          valueColor={wc.text}
-          subtext={wc.label}
-          subtextColor={wc.lc}
+          value={wc && weatherBoost != null ? weatherValue(weatherBoost) : NO_SIGNAL}
+          valueColor={wc ? wc.text : 'text-zinc-700'}
+          subtext={wc ? wc.label : undefined}
+          subtextColor={wc ? wc.lc : undefined}
         />
         <MetricCell
           label="PTCHR VULN"
-          value={String(pitcherVulnerability)}
-          valueColor={vc.text}
-          bar={{ fill: pitcherVulnerability, color: vc.bar, glow: vc.glow }}
-          subtext={vc.label}
+          value={vc && pitcherVulnerability != null ? String(pitcherVulnerability) : NO_SIGNAL}
+          valueColor={vc ? vc.text : 'text-zinc-700'}
+          bar={vc && pitcherVulnerability != null ? { fill: pitcherVulnerability, color: vc.bar, glow: vc.glow } : undefined}
+          subtext={vc ? vc.label : undefined}
         />
       </div>
     </div>
