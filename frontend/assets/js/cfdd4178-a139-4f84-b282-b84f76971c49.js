@@ -157,14 +157,17 @@ const Stage = ({ engine, lens, ccOpen, onCloseCC, appliedFilters, onApplyFilters
           </div>
         </div>;
       } else {
-        body = <div className="md-room">
-          <FullSlateMatrix
-          rows={rows}
-          total={sourceRows.length}
-          onOpen={onOpenPlayer}
-          filterNote={nf > 0 ? `${nf} ACTIVE FILTER${nf > 1 ? "S" : ""}` : "NO ACTIVE FILTERS"}
-          isJigContext={engine.id === "jig"} />
-        </div>;
+        body = <React.Fragment>
+          <HRThreatZone rows={rows} isJigContext={engine.id === "jig"} />
+          <div className="md-room">
+            <FullSlateMatrix
+            rows={rows}
+            total={sourceRows.length}
+            onOpen={onOpenPlayer}
+            filterNote={nf > 0 ? `${nf} ACTIVE FILTER${nf > 1 ? "S" : ""}` : "NO ACTIVE FILTERS"}
+            isJigContext={engine.id === "jig"} />
+          </div>
+        </React.Fragment>;
       }
     }
 

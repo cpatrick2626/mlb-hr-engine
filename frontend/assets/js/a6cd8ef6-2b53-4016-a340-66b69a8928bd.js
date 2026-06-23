@@ -136,6 +136,8 @@ function MasterDashboard() {
         </button>
       </div>
 
+      <SlateCommandStrip />
+
       {/* 2 — SPLIT */}
       <div className="md-split">
         <div className="md-left">

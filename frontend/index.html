@@ -3860,6 +3860,249 @@ button.fsm-tier { appearance: none; text-decoration: none; }
   }
 }
 </style>
+<style>
+/* ============================================================
+   SLATE COMMAND STRIP (scs-*)
+   ============================================================ */
+.scs-strip {
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  height: 34px;
+  background: rgba(4, 7, 10, 0.72);
+  border-bottom: 1px solid rgba(180, 220, 200, 0.08);
+  flex-shrink: 0;
+  overflow: hidden;
+  gap: 0;
+}
+.scs-strip--pending { gap: 8px; }
+.scs-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 0 10px;
+  gap: 1px;
+  flex-shrink: 0;
+}
+.scs-eye {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 7px;
+  letter-spacing: 0.18em;
+  color: var(--fg-4);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.scs-val {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 11px;
+  color: var(--fg-2);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.scs-val--main-live { color: #ff3344; }
+.scs-val--jig-live  { color: #00d9ff; }
+.scs-val--warn      { color: #ffb020; }
+.scs-val--apex      { color: #ff3344; text-shadow: 0 0 8px rgba(255,51,68,0.55); }
+.scs-val--env       { color: var(--fg-3); font-size: 10px; }
+.scs-val--ts        { color: var(--fg-3); font-size: 10px; }
+.scs-sep {
+  width: 1px;
+  height: 18px;
+  background: rgba(180, 220, 200, 0.1);
+  flex-shrink: 0;
+}
+.scs-push { flex: 1; }
+.scs-pulse {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ffb020;
+  box-shadow: 0 0 8px #ffb020;
+  animation: scs-blink 1.4s ease-in-out infinite;
+  flex-shrink: 0;
+}
+.scs-acquiring {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  color: var(--fg-4);
+  text-transform: uppercase;
+}
+@keyframes scs-blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.25; }
+}
+
+/* ============================================================
+   HR THREAT ZONE (hrtz-*)
+   ============================================================ */
+.hrtz-zone {
+  padding: 10px 12px 0;
+  border-bottom: 1px solid rgba(180, 220, 200, 0.07);
+  flex-shrink: 0;
+}
+.hrtz-zone__head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.hrtz-zone__label {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 9px;
+  letter-spacing: 0.22em;
+  color: var(--fg-2);
+  text-transform: uppercase;
+}
+.hrtz-zone--jig .hrtz-zone__label { color: #00d9ff; }
+.hrtz-zone__sub {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  color: var(--fg-4);
+  text-transform: uppercase;
+}
+.hrtz-desktop {
+  display: flex;
+  gap: 8px;
+  padding-bottom: 10px;
+}
+.hrtz-mobile { display: none; }
+.hrtz-card {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 10px;
+  background: rgba(8, 12, 16, 0.7);
+  border: 1px solid rgba(180, 220, 200, 0.08);
+  border-top: 2px solid var(--tc, rgba(180,220,200,0.2));
+  border-radius: 5px;
+}
+.hrtz-card__rank {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--fg-4);
+  flex-shrink: 0;
+  line-height: 1;
+  padding-top: 1px;
+}
+.hrtz-card__body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.hrtz-card__name {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  color: var(--fg-1);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.15;
+}
+.hrtz-card__meta {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.hrtz-card__team {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  color: var(--fg-3);
+  text-transform: uppercase;
+}
+.hrtz-card__vs {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  color: var(--fg-4);
+  text-transform: uppercase;
+}
+.hrtz-card__tags {
+  display: flex;
+  gap: 3px;
+  flex-wrap: wrap;
+  margin-top: 2px;
+}
+.hrtz-card__tag {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 7.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 1px 4px;
+  border-radius: 2px;
+  white-space: nowrap;
+}
+.hrtz-card__stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  flex-shrink: 0;
+  gap: 0;
+}
+.hrtz-card__prob {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--tc, var(--fg-1));
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.hrtz-card__prob-lbl {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 7px;
+  letter-spacing: 0.14em;
+  color: var(--fg-4);
+  text-transform: uppercase;
+  text-align: right;
+}
+.hrtz-card__tier {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 8px;
+  letter-spacing: 0.14em;
+  color: var(--tc, var(--fg-3));
+  text-transform: uppercase;
+  text-align: right;
+  margin-top: 2px;
+}
+@media (max-width: 768px) {
+  .hrtz-desktop { display: none; }
+  .hrtz-mobile {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding-bottom: 10px;
+  }
+  .hrtz-card--compact {
+    flex: none;
+    width: 100%;
+  }
+  .hrtz-card--compact .hrtz-card__name { font-size: 13px; }
+  .hrtz-card--compact .hrtz-card__prob { font-size: 20px; }
+  .scs-strip { height: auto; min-height: 34px; flex-wrap: wrap; padding: 4px 8px; gap: 0; }
+  .scs-cell  { padding: 3px 6px; }
+}
+</style>
 </head>
 <body>
   <div id="root"></div>
@@ -3880,6 +4123,8 @@ button.fsm-tier { appearance: none; text-decoration: none; }
   <script type="text/babel" src="assets/js/f2ee1fd2-870f-4558-913d-08f4e822a1fd.js"></script>
   <script type="text/babel" src="assets/js/5f833816-55c8-4414-8d1a-9009ae5e9fd7.js"></script>
   <script type="text/babel" src="assets/js/32ab40c7-e667-469e-9b09-c6a46761c1cd.js"></script>
+  <script type="text/babel" src="assets/js/slate-command-strip.js"></script>
+  <script type="text/babel" src="assets/js/hr-threat-zone.js"></script>
   <script type="text/babel" src="assets/js/cfdd4178-a139-4f84-b282-b84f76971c49.js"></script>
   <script type="text/babel" src="assets/js/a6cd8ef6-2b53-4016-a340-66b69a8928bd.js"></script>
 
