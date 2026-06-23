@@ -13,5 +13,6 @@
   "infranodus-graph-view",
   "activity-graph",
   "canvas-explorer",
-  "dataview-serializer"
+  "dataview-serializer",
+  "zoottelkeeper-obsidian-plugin"
 ]

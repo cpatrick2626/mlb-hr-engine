@@ -68,6 +68,22 @@ Cross-ref: [[deploy-runbook]] — Streamlit listed as DEAD/NON-PRODUCTION there.
 
 ---
 
+## opphr vs pitcher_hr9 Field Name Ambiguity
+
+**Gap:** Two different field names appear to reference the same pitcher HR/9 value:
+- `opphr` — accessed as `row.opphr` in FSM_COLS (confirmed in the leaderboard row payload from `/api/slate`)
+- `pitcher_hr9` — accessed as `row.pitcher_hr9` in `FsmPitchMix` (full-slate-matrix.js) for the pitcher tier label
+
+**Discovered:** 2026-06-23, during Phase 2A audit (Pitcher Vulnerability Strip build for live board). The Pitcher Vulnerability Strip (pvs-*) uses `opphr` exclusively (confirmed column).
+
+**Risk:** If the two fields are computed differently (e.g., different epochs, normalizations, or null-handling), the PVS strip bucket labels may diverge from the FsmPitchMix pitcher tier label for the same pitcher. Currently unverified whether they are identical values under different keys or genuinely distinct.
+
+**Status:** Parked. Needs one targeted backend audit to confirm field identity or divergence. No frontend action until backend resolves. Using `opphr` is safe for display purposes (it's the confirmed FSM column with established bucket thresholds).
+
+**Cross-ref:** `wiki/sessions/2026-06-23-pvs-live-board-build.md`
+
+---
+
 ## Cross-References
 
 - [[deploy-runbook]] — deploy surface truth
