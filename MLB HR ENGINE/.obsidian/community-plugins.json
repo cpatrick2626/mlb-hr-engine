@@ -2,7 +2,6 @@
   "dataview",
   "dataview-properties",
   "templater-obsidian",
-  "default-template",
   "obsidian-clipper",
   "data-cards",
   "extended-graph",
@@ -24,6 +23,5 @@
   "cannoli",
   "canvas-card-materializer",
   "canvas-explorer",
-  "dataview-publisher",
   "dataview-serializer"
 ]
