@@ -493,6 +493,42 @@ Where rules overlap, the stricter gate wins.
 
 ---
 
+### 18. DEFAULT COMPLETION LOOP
+
+For every coding, repo, audit, validation, or docs-edit task, Claude Code and Codex must automatically run a complete goal/build/validate/self-judge loop without requiring the operator to prompt a separate judge/review step.
+
+The agent must:
+
+- Restate the task as a clear goal.
+- Define DONE MEANS before editing.
+- Identify protected files/surfaces before editing.
+- Perform the smallest safe implementation.
+- Run relevant validation directly, including terminal/PowerShell commands when available.
+- Not ask the operator to run PowerShell unless blocked by permissions, login, authentication, or tool limitation.
+- Self-review the result against DONE MEANS.
+- Report PASS / FAIL / PARTIAL.
+- Report changed files.
+- Report commands run and validation results.
+- Report protected systems touched: yes/no.
+- Recommend the next action.
+- Include commit/push/deploy recommendation, while preserving DO NOT COMMIT / DO NOT PUSH unless operator authorization exists.
+
+The agent must not:
+
+- Start a second task.
+- Refactor unrelated code.
+- Expand scope.
+- Bury the result in long background.
+
+For HIGH-risk work, keep the existing two-stage rule (Rule 13):
+
+- Stage 1 = Audit
+- Stage 2 = Execution
+- Do not combine HIGH-risk audit and execution in one packet.
+- Request explicit operator authorization before protected edits, commit, push, or deploy.
+
+---
+
 ## GLOBAL UTILITY SKILL LIBRARY
 
 Skill source files live under `skills/` in the repo root.

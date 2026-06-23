@@ -263,6 +263,7 @@ Historical session/changelog material lives in the `OPTIMIZATION_RESULTS_*.md`, 
 - New `.env`-dependent scripts: confirm the script's cwd before recommending an invocation pattern; `load_dotenv()` is cwd-sensitive (see section 11).
 - Never fabricate Statcast/Savant data. Fall back gracefully when input is incomplete; preserve real provider integrity. (`AGENTS.md` § Pitch Mix Rules.)
 - Do not adjust model thresholds or calibration based on small samples. The operator's stated rule is no threshold/calibration changes from n<200 settled real picks; verify in current ops docs before any such change.
+- **DEFAULT COMPLETION LOOP:** Claude Code must follow `AGENTS.md § DEFAULT COMPLETION LOOP`. For each task, automatically define DONE MEANS, execute the smallest safe change, validate directly, self-judge PASS / FAIL / PARTIAL, and report changed files, commands run, validation, protected surfaces touched, and next action. Do not require the operator to provide a separate judge prompt unless the work is risky, unclear, or explicitly requests independent review.
 
 ## 14. What Not To Do
 
