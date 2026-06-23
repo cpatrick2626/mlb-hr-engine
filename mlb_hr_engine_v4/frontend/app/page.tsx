@@ -195,6 +195,48 @@ function mapPitcherRows(rows: ApiRow[]): PitcherVulnRow[] {
   return [...seen.values()].sort((a, b) => (b.hr9 ?? 0) - (a.hr9 ?? 0))
 }
 
+function mapEscalationEvents(rows: ApiRow[], prefix: string): EscalationEvent[] {
+  const events: EscalationEvent[] = []
+  for (let i = 0; i < Math.min(rows.length, 8); i++) {
+    const row    = rows[i]
+    const rawTier = mapEscalationTier(row.tier)
+    if (rawTier === 'LOW') continue
+    const tier = rawTier as EscalationEvent['tier']
+
+    const barrel = row.barrel     != null ? Number(row.barrel)     : null
+    const hh     = row.hh         != null ? Number(row.hh)         : null
+    const h2h    = row.h2h_factor != null ? Number(row.h2h_factor) : null
+    const opphr  = row.opphr      != null ? Number(row.opphr)      : null
+
+    let signal: string | null = null
+    let value:  string | null = null
+
+    if (tier === 'CRITICAL') {
+      if (barrel != null)      { signal = 'Barrel Rate';   value = `${barrel.toFixed(1)}%` }
+      else if (hh != null)     { signal = 'Hard Hit%';     value = `${hh.toFixed(1)}%` }
+    } else if (tier === 'HIGH') {
+      if (h2h != null)         { signal = 'Platoon Edge';  value = `${h2h >= 1 ? '+' : ''}${((h2h - 1) * 100).toFixed(1)}%` }
+      else if (barrel != null) { signal = 'Barrel Rate';   value = `${barrel.toFixed(1)}%` }
+    } else {
+      if (hh != null)          { signal = 'Hard Hit%';     value = `${hh.toFixed(1)}%` }
+      else if (opphr != null)  { signal = 'Pitcher HR/9';  value = opphr.toFixed(2) }
+    }
+
+    if (signal == null || value == null) continue
+
+    events.push({
+      id:     `${prefix}-${i}`,
+      tier,
+      player: String(row.name     ?? ''),
+      team:   String(row.teamAbbr ?? ''),
+      signal,
+      value,
+      ts:     'LIVE',
+    })
+  }
+  return events
+}
+
 function mapMatchupRow(row: ApiRow): MatchupRow {
   const rawH2h = row.h2h_factor != null ? Number(row.h2h_factor) : null
   let edge: MatchupRow['edge'] = 'NEUTRAL'
@@ -225,9 +267,11 @@ export default function DashboardPage() {
   const [activeWorkspace, setActiveWorkspace] = useState<WorkspaceId>('main')
   const [mainRows, setMainRows]               = useState<ThreatRankRow[]>(MOCK_RANKINGS)
   const [mainThreatCards, setMainThreatCards] = useState<HRThreatCardProps[] | null>(null)
+  const [mainEscalations, setMainEscalations] = useState<EscalationEvent[]>(MOCK_ESCALATIONS)
   const [pitcherVulnRows, setPitcherVulnRows] = useState<PitcherVulnRow[]>(MOCK_PITCHERS)
   const [jigRows, setJigRows]                 = useState<ThreatRankRow[]>(JIG_RANKINGS)
   const [jigMatchupRows, setJigMatchupRows]   = useState<MatchupRow[]>(JIG_MATCHUPS)
+  const [jigEscalations, setJigEscalations]   = useState<EscalationEvent[]>(JIG_ESCALATIONS)
 
   useEffect(() => {
     fetch('https://mlb-hr-api.fly.dev/api/slate')
@@ -237,11 +281,13 @@ export default function DashboardPage() {
           setMainRows(data.leaderboard_rows.map(mapApiRow))
           // Top 4 by API-delivered model_tier_rank order — do not re-sort locally
           setMainThreatCards(data.leaderboard_rows.slice(0, 4).map(mapThreatCardRow))
+          setMainEscalations(mapEscalationEvents(data.leaderboard_rows, 'main'))
           setPitcherVulnRows(mapPitcherRows(data.leaderboard_rows))
         }
         if (Array.isArray(data.leaderboard_rows_jig) && data.leaderboard_rows_jig.length) {
           setJigRows(data.leaderboard_rows_jig.map(mapApiRow))
           setJigMatchupRows(data.leaderboard_rows_jig.map(mapMatchupRow))
+          setJigEscalations(mapEscalationEvents(data.leaderboard_rows_jig, 'jig'))
         }
       })
       .catch(err => console.warn('HR Engine API fetch failed:', err))
@@ -262,7 +308,7 @@ export default function DashboardPage() {
       {activeWorkspace === 'main' && (
         <div className={GRID}>
           <Panel label="Escalation Feed"        zoneId="ESC-01" status="ALERT"  accent="red"   className="col-start-1 col-span-2 row-start-1 row-span-2">
-            <EscalationFeed events={MOCK_ESCALATIONS} />
+            <EscalationFeed events={mainEscalations} />
           </Panel>
           <Panel label="Primary HR Threat Zone" zoneId="THR-01" status="ACTIVE"               className="col-start-3 col-span-6 row-start-1">
             <div className="flex gap-[6px] p-[6px] overflow-x-auto h-full items-start">
@@ -295,7 +341,7 @@ export default function DashboardPage() {
       {activeWorkspace === 'jig' && (
         <div className={GRID}>
           <Panel label="JIG Signal Feed"        zoneId="JIG-ESC" status="ALERT"  accent="red"   className="col-start-1 col-span-2 row-start-1 row-span-2">
-            <EscalationFeed events={JIG_ESCALATIONS} />
+            <EscalationFeed events={jigEscalations} />
           </Panel>
           <Panel label="JIG — Qualified Picks"  zoneId="JIG-RNK" status="ACTIVE"               className="col-start-3 col-span-5 row-start-1 row-span-2">
             <ThreatRankingsTable rows={jigRows} board="jig" />
