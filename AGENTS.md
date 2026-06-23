@@ -520,12 +520,12 @@ The agent must not:
 - Expand scope.
 - Bury the result in long background.
 
-For HIGH-risk work, keep the existing two-stage rule (Rule 13):
+For HIGH-risk work (prediction logic, formulas, MAIN/JIG separation, deployment, authentication, secrets, or production data flow), keep the existing two-stage rule (Rule 13):
 
 - Stage 1 = Audit
 - Stage 2 = Execution
 - Do not combine HIGH-risk audit and execution in one packet.
-- Request explicit operator authorization before protected edits, commit, push, or deploy.
+- Stop after audit or implementation report and request explicit operator authorization before commit, push, deploy, or further risky changes.
 
 ---
 
