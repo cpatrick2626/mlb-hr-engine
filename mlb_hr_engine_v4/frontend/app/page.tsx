@@ -167,6 +167,34 @@ function mapApiRow(row: ApiRow, idx: number): ThreatRankRow {
   }
 }
 
+function pitcherTier(opphr: number | null, barrel: number | null): PitcherVulnRow['tier'] {
+  const hr  = opphr  ?? 0
+  const brl = barrel ?? 0
+  if (hr >= 1.5 || brl >= 0.08) return 'EXPLOITABLE'
+  if (hr >= 1.0 || brl >= 0.065) return 'ELEVATED'
+  return 'STANDARD'
+}
+
+function mapPitcherRows(rows: ApiRow[]): PitcherVulnRow[] {
+  const seen = new Map<number, PitcherVulnRow>()
+  for (const row of rows) {
+    const pid = Number(row.pitcher_id)
+    if (!pid || seen.has(pid)) continue
+    const opphr  = row.opphr                  != null ? Number(row.opphr)                  : null
+    const barrel = row.pitcher_barrel_allowed != null ? Number(row.pitcher_barrel_allowed) : null
+    seen.set(pid, {
+      name:  String(row.pitcher_name ?? '—'),
+      team:  '',
+      opp:   String(row.teamAbbr     ?? '—'),
+      hr9:   opphr,
+      fbPct: row.pitcher_fb_allowed != null ? Number(row.pitcher_fb_allowed) * 100 : null,
+      kPct:  row.pitcher_k_pct      != null ? Number(row.pitcher_k_pct)            : null,
+      tier:  pitcherTier(opphr, barrel),
+    })
+  }
+  return [...seen.values()].sort((a, b) => (b.hr9 ?? 0) - (a.hr9 ?? 0))
+}
+
 function mapMatchupRow(row: ApiRow): MatchupRow {
   const rawH2h = row.h2h_factor != null ? Number(row.h2h_factor) : null
   let edge: MatchupRow['edge'] = 'NEUTRAL'
@@ -197,6 +225,7 @@ export default function DashboardPage() {
   const [activeWorkspace, setActiveWorkspace] = useState<WorkspaceId>('main')
   const [mainRows, setMainRows]               = useState<ThreatRankRow[]>(MOCK_RANKINGS)
   const [mainThreatCards, setMainThreatCards] = useState<HRThreatCardProps[] | null>(null)
+  const [pitcherVulnRows, setPitcherVulnRows] = useState<PitcherVulnRow[]>(MOCK_PITCHERS)
   const [jigRows, setJigRows]                 = useState<ThreatRankRow[]>(JIG_RANKINGS)
   const [jigMatchupRows, setJigMatchupRows]   = useState<MatchupRow[]>(JIG_MATCHUPS)
 
@@ -208,6 +237,7 @@ export default function DashboardPage() {
           setMainRows(data.leaderboard_rows.map(mapApiRow))
           // Top 4 by API-delivered model_tier_rank order — do not re-sort locally
           setMainThreatCards(data.leaderboard_rows.slice(0, 4).map(mapThreatCardRow))
+          setPitcherVulnRows(mapPitcherRows(data.leaderboard_rows))
         }
         if (Array.isArray(data.leaderboard_rows_jig) && data.leaderboard_rows_jig.length) {
           setJigRows(data.leaderboard_rows_jig.map(mapApiRow))
@@ -250,7 +280,7 @@ export default function DashboardPage() {
             </div>
           </Panel>
           <Panel label="Pitcher Vulnerability"  zoneId="VUL-01" status="ACTIVE" accent="amber" className="col-start-9 col-span-4 row-start-1">
-            <PitcherVulnerabilityPanel rows={MOCK_PITCHERS} />
+            <PitcherVulnerabilityPanel rows={pitcherVulnRows} />
           </Panel>
           <Panel label="Matchup Intelligence"   zoneId="MTH-01" status="ACTIVE" accent="sky"   className="col-start-3 col-span-6 row-start-2">
             <MatchupIntelPanel rows={jigMatchupRows} />
