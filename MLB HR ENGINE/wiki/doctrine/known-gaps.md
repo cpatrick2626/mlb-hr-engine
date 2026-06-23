@@ -84,6 +84,36 @@ Cross-ref: [[deploy-runbook]] — Streamlit listed as DEAD/NON-PRODUCTION there.
 
 ---
 
+## Full Slate Lineup-Hydration Degradation + No Pipeline Observability
+
+**Discovered:** 2026-06-23, Full Slate completeness audit (read-only — nothing changed).
+
+**Real finding (actionable):**
+Some games hydrate with suspiciously few batters. On the 2026-06-23 slate: az-stl returned only 2 batters for an entire game (critical anomaly); nyy-det 4, kc-tb 5, lad-min 5 (low). Cannot be explained by the PA filter alone — confirmed June starters have season PA. Most likely cause: lineup fetch failure for those games — `lineups.get("homePlayers"/"awayPlayers")` returned empty → roster fallback (`get_team_active_roster`) pulled players → most failed the `season_pa==0 AND recent_pa==0` check → only a handful survived.
+
+**Silent failure signature:** No warning, no flag, no alert. Found only by audit. Same silent-failure pattern as prior bugs (swallowed failures that zero out instead of erroring).
+
+**Open question (resolve before treating as a code bug):** Was the az-stl lineup actually posted at slate-build time? If lineups weren't out yet, "2 batters" may be a timing artifact that self-heals as lineups drop later in the day (same confirmed-lineup timing pattern noted elsewhere). If the lineup WAS posted and still only 2 → real hydration bug. **Resolve the read-only timing check FIRST next session.**
+
+**Highest-value fix (proposed, not yet done — protected surface, gated):**
+Add pipeline observability: a `pipeline_stats` field surfacing batters-attempted vs all_players-emitted vs dropped-for-no-PA vs games-with-few-batters. Makes the silent hydration failure visible (same principle as odds-quota visibility wired earlier). NOTE: touches `/api/slate` payload shape — protected surface, requires explicit gate before implementation.
+
+**Separate thread (do not conflate):**
+`leaderboard_rows_jig` came back empty on this slate. Could be a real JIG build failure OR legitimately no qualifying JIG rows for this slate. Needs its own read-only check — is JIG supposed to have data here? Not part of the batter-count question.
+
+**Audit misreads — do NOT act on these:**
+- "~170 missing batters / expected 15×18=270" is a phantom target. The pipeline models bettable HR threats, not every lineup spot. The `season_pa==0 AND recent_pa==0` drop is CORRECT, intended behavior — you cannot compute HR probability for a player with zero batting data. ~100 modelable batters across 15 games is plausibly correct. Do NOT "fix" the PA filter; it is working as designed.
+- The frontend display caps (HR Threat Cards `slice(0,4)`, Escalation top 8) are intentional summary-panel limits, not data loss. ThreatRankings renders all rows uncapped. Not a bug.
+
+**Next session order:**
+1. Read-only timing check on az-stl lineup posting → bug vs timing artifact.
+2. Decide on `pipeline_stats` observability (gated).
+3. Separate JIG-empty check.
+
+**Status:** Parked. Audit was read-only. Pipeline is a protected surface — no action until gated.
+
+---
+
 ## Cross-References
 
 - [[deploy-runbook]] — deploy surface truth
