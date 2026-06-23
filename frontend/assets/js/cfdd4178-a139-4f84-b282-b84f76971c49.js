@@ -160,6 +160,7 @@ const Stage = ({ engine, lens, ccOpen, onCloseCC, appliedFilters, onApplyFilters
         body = <React.Fragment>
           <HRThreatZone rows={rows} isJigContext={engine.id === "jig"} />
           <PitcherVulnerabilityStrip rows={rows} isJigContext={engine.id === "jig"} />
+          <EscalationFeed rows={rows} isJigContext={engine.id === "jig"} />
           <div className="md-room">
             <FullSlateMatrix
             rows={rows}
