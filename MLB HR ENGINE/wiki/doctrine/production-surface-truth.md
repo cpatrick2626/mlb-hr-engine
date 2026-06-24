@@ -24,6 +24,21 @@ Two frontend surfaces were originally documented here. As of 2026-06-22 the full
 
 ---
 
+## ⚠ AGENT WARNING — TWO `frontend/` TREES EXIST (2026-06-23)
+
+This repo has **two directories named `frontend/`**. Two agents have analyzed the wrong tree and produced incorrect doctrine. This block is the authoritative disambiguation.
+
+| Tree | Path | Type | Deploys to Vercel? |
+|------|------|------|--------------------|
+| **LIVE PRODUCTION** | `frontend/` (repo root) | Static HTML + CDN React 18 + `@babel/standalone` — **no build step** | **YES** — Vercel Root Dir = `frontend` |
+| **DEAD PROTOTYPE** | `mlb_hr_engine_v4/frontend/` | Next.js 14 (`app/page.tsx`) | **NO** |
+
+Root `frontend/` is NOT a Next.js app. It loads React 18 + Babel from unpkg CDN and transpiles JSX bundles at runtime via `<script type="text/babel">`. The named live component bundles are: `hr-threat-zone.js`, `jig-command.js`, `full-slate-matrix.js`, `escalation-feed.js`, `slate-command-strip.js`, `pitcher-vulnerability-strip.js` — all in `frontend/assets/js/`. Existence confirmed 2026-06-23.
+
+**Authoritative full topology:** `wiki/architecture/frontend-topology.md`
+
+---
+
 ## Frontend Surface Map
 
 | Path | Type | Status | Data |

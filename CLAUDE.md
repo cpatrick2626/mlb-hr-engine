@@ -168,7 +168,18 @@ Subdirectories (only those that exist are listed):
 
 Note: the same `clients/`, `engine/`, `output/`, `data/`, `tracking/`, `backtest/` module names also exist (with reduced surface area) in v1/v2/v3. Treat each version's tree as self-contained.
 
-## 10. Frontend Surface (Next.js Prototype)
+## 10. Frontend Surfaces — TWO TREES, ONLY ONE DEPLOYS
+
+> **AGENT WARNING (2026-06-23):** This repo has **two directories named `frontend/`**. Multiple agents have analyzed the wrong tree. Read this block before any frontend work.
+>
+> | Tree | Type | Vercel? | Deploys? |
+> |------|------|---------|---------|
+> | `frontend/` **(repo root)** | Static HTML + CDN React 18 + `@babel/standalone` — **no build step** | **YES — Root Dir = `frontend`** | **YES — LIVE PRODUCTION** |
+> | `mlb_hr_engine_v4/frontend/` | Next.js 14 (`app/page.tsx`) | No | **NO — dead prototype** |
+>
+> Root `frontend/` is NOT Next.js. It loads React 18 + Babel from unpkg CDN and transpiles JSX via `<script type="text/babel">` at runtime. Live component bundles: `hr-threat-zone.js`, `jig-command.js`, `full-slate-matrix.js`, `escalation-feed.js`, `slate-command-strip.js`, `pitcher-vulnerability-strip.js` — in `frontend/assets/js/`. Existence confirmed 2026-06-23.
+>
+> Authoritative topology: `wiki/architecture/frontend-topology.md`
 
 `mlb_hr_engine_v4/frontend/` is a Next.js 14 prototype surface used for design iteration of HR threat card components and related tactical UI. As of 2026-05-25 it is **standalone**: no Python runtime, FastAPI service, or Fly.io deployment invokes it. Streamlit (`app.py`) and Next.js (`frontend/`) are isolated operational surfaces with no runtime cross-dependency.
 

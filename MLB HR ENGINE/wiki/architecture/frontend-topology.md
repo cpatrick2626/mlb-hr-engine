@@ -13,6 +13,21 @@ metadata:
 
 ---
 
+## ⚠ AGENT WARNING — TWO `frontend/` TREES EXIST
+
+**This repo has TWO directories named `frontend/`:** `frontend/` (repo root) and `mlb_hr_engine_v4/frontend/`. Multiple agents have analyzed the wrong tree. Read this before touching any frontend work.
+
+| Tree | Path | Type | Vercel? | Deploys? |
+|------|------|------|---------|---------|
+| **LIVE PRODUCTION** | `frontend/` (repo root) | Static HTML + CDN React 18 + Babel standalone — NO build step | **YES — Root Dir = `frontend`** | YES |
+| **DEAD PROTOTYPE** | `mlb_hr_engine_v4/frontend/` | Next.js 14 (`app/page.tsx`) — no `.next/` build in prod | No | NO |
+
+**Root `frontend/` runtime:** `index.html` loads React 18 + ReactDOM 18 + `@babel/standalone` from unpkg CDN, then executes JSX bundles as `<script type="text/babel">`. No `npm run build`, no `.next/` output, no webpack. The live component bundles are: `hr-threat-zone.js`, `jig-command.js`, `full-slate-matrix.js`, `escalation-feed.js`, `slate-command-strip.js`, `pitcher-vulnerability-strip.js` (plus UUID-named supporting files) — all in `frontend/assets/js/`.
+
+**Rule:** For any production frontend work, always confirm you are in repo-root `frontend/`. Do NOT open `mlb_hr_engine_v4/frontend/` and treat it as production.
+
+---
+
 ## Three-Surface Overview
 
 MLB HR Engine has three distinct frontend/operator surfaces. They are NOT interchangeable and must not be collapsed.
