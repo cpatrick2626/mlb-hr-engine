@@ -629,8 +629,11 @@ def get_team_active_roster(team_id: int) -> list[dict]:
             name = person.get("fullName", "")
             if pid and name:
                 roster.append({"id": pid, "name": name, "lineup_spot": None})
+        if len(roster) < 9:
+            print(f"[mlb_stats] WARNING: roster team_id={team_id} returned only {len(roster)} non-pitchers (suspiciously short)")
         return roster
-    except Exception:
+    except Exception as e:
+        print(f"[mlb_stats] WARNING: roster fetch failed (team_id={team_id}): {e}")
         return []
 
 

@@ -118,6 +118,7 @@ def _build_player_profile(
     season_pa = int(season_stats.get("plateAppearances", 0))
     recent_pa = int(recent_stats.get("plateAppearances", 0))
     if season_pa == 0 and recent_pa == 0:
+        print(f"[pipeline] zero-PA drop: {player_name} (id={player_id})")
         return None
 
     power_mult = statcast_client.batter_power_multiplier(player_id, batter_data)
@@ -635,6 +636,7 @@ def load_game_data(
                         _roster_cache[team_id] = mlb_stats.get_team_active_roster(team_id)
                     lineup = _roster_cache[team_id]
                 if not lineup:
+                    print(f"[pipeline] WARNING: no lineup and empty roster fallback for {team} (team_id={team_id}) — skipping")
                     continue
             for batter in lineup:
                 pid  = batter.get("id")
@@ -657,6 +659,8 @@ def load_game_data(
 
     _cb(f"Building profiles for {len(tasks)} players...")
 
+    _drop_no_profile = [0]  # mutable counter: profiles that returned None (zero-PA or other)
+
     def _profile(args: tuple):
         pid, name, spot, team, opp, home_team, opp_pitcher, game_time_utc, game_pk, game_status = args
         try:
@@ -666,6 +670,8 @@ def load_game_data(
                 game_time_utc=game_time_utc,
                 bat_tracking_data=bat_tracking_data,
             )
+            if profile is None:
+                _drop_no_profile[0] += 1
             if profile:
                 profile["game_time_utc"] = game_time_utc
                 profile["game_pk"]       = game_pk
@@ -724,6 +730,19 @@ def load_game_data(
         sorted_fails = sorted(_fail_reason_counts.items(), key=lambda x: x[1], reverse=True)
         print(f"[pipeline] filter failure summary: {dict(sorted_fails)}")
     print(f"[pipeline] {len(qualified)} qualified of {len(all_players)} total")
+
+    _game_batter_counts: dict = {}
+    for _p in all_players:
+        _gk = str(_p.get("game_pk", "unknown"))
+        _game_batter_counts[_gk] = _game_batter_counts.get(_gk, 0) + 1
+    _low_games = {k: v for k, v in _game_batter_counts.items() if v < 7}
+    print(
+        f"[pipeline] SLATE_STATS | attempted={len(tasks)} emitted={len(all_players)} "
+        f"dropped_zero_pa={_drop_no_profile[0]} "
+        f"dropped_exception={len(tasks) - len(all_players) - _drop_no_profile[0]} "
+        f"game_batter_counts={_game_batter_counts}"
+        + (f" LOW_COUNT={_low_games}" if _low_games else "")
+    )
 
     ranked      = ranker.rank_picks(qualified)
     all_by_model = ranker.rank_all_by_model(all_players)
