@@ -4,7 +4,8 @@ on:
   schedule:
     # 10:00 AM ET = 14:00 UTC (adjust for EDT/EST: EDT is UTC-4, EST is UTC-5)
     # Run at 14:05 to let lineups post before we fetch
-    - cron: '5 14 * * *'
+    - cron: '5 14 * * *'    # 10:05 AM ET — morning run
+    - cron: '5 17 * * *'    # 1:05 PM ET — mid-day probable-pitcher refresh (after 12:30 CLV day capture, before 6:30 night capture)
   workflow_dispatch:
     inputs:
       date:
