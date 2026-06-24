@@ -1,6 +1,6 @@
 # Known Gaps / Parked
 
-**Last Updated:** 2026-06-15
+**Last Updated:** 2026-06-23
 
 Items that are real gaps but NOT currently authorized for action. Check here before opening new issues on the same items.
 
@@ -88,15 +88,30 @@ Cross-ref: [[deploy-runbook]] — Streamlit listed as DEAD/NON-PRODUCTION there.
 
 **Discovered:** 2026-06-23, Full Slate completeness audit (read-only — nothing changed).
 
+**Diagnosis updated:** 2026-06-23, az-stl timing check (read-only — nothing changed). VERDICT: MIXED — timing confirmed correct behavior for az-stl + a real secondary partial-hydration failure identified.
+
 **Real finding (actionable):**
-Some games hydrate with suspiciously few batters. On the 2026-06-23 slate: az-stl returned only 2 batters for an entire game (critical anomaly); nyy-det 4, kc-tb 5, lad-min 5 (low). Cannot be explained by the PA filter alone — confirmed June starters have season PA. Most likely cause: lineup fetch failure for those games — `lineups.get("homePlayers"/"awayPlayers")` returned empty → roster fallback (`get_team_active_roster`) pulled players → most failed the `season_pa==0 AND recent_pa==0` check → only a handful survived.
+Some games hydrate with suspiciously few batters. On the 2026-06-23 slate: az-stl returned only 2 batters for an entire game; nyy-det 4, kc-tb 5, lad-min 5 (low). Root cause is now partially understood — see resolved diagnosis below.
 
-**Silent failure signature:** No warning, no flag, no alert. Found only by audit. Same silent-failure pattern as prior bugs (swallowed failures that zero out instead of erroring).
+**Resolved: az-stl timing check (was open question)**
 
-**Open question (resolve before treating as a code bug):** Was the az-stl lineup actually posted at slate-build time? If lineups weren't out yet, "2 batters" may be a timing artifact that self-heals as lineups drop later in the day (same confirmed-lineup timing pattern noted elsewhere). If the lineup WAS posted and still only 2 → real hydration bug. **Resolve the read-only timing check FIRST next session.**
+1. **TIMING — confirmed correct behavior, not a bug:**
+   - Slate built 12:37 PM ET; az-stl first pitch 7:45 PM ET (7h gap). Lineups typically post ~2–4h before first pitch. At slate-build time, az-stl's lineup was NOT posted. Roster fallback (`get_team_active_roster`) fired by design. This half is correct behavior.
+   - NOTE on re-testing: `/api/slate` has a 12h TTL — re-pulling returns the SAME cached slate. You cannot observe self-healing by re-pulling. Diagnosis was done by timestamp reasoning. Today's az-stl slate will NOT re-hydrate (cache); tomorrow's 14:05 UTC cron rebuilds fresh.
 
-**Highest-value fix (proposed, not yet done — protected surface, gated):**
-Add pipeline observability: a `pipeline_stats` field surfacing batters-attempted vs all_players-emitted vs dropped-for-no-PA vs games-with-few-batters. Makes the silent hydration failure visible (same principle as odds-quota visibility wired earlier). NOTE: touches `/api/slate` payload shape — protected surface, requires explicit gate before implementation.
+2. **PARTIAL HYDRATION FAILURE — the real find:**
+   - The other late games whose lineups also weren't posted (kc-tb, nyy-det, lad-min) got 5–6 players from their roster fallbacks. az-stl got only 1 per team (Carroll/AZ, Walker/STL — both stars with bulletproof Statcast). If it were pure timing, az-stl would look like the others (~5–6 survivors). Instead AZ and STL each resolved to a single viable player → the roster fallback for those two teams returned or resolved PARTIAL or degraded data, not the expected ~13–15 non-pitchers.
+   - Both survivors had `best_american: null` (no HR props in The Odds API at build time), so they fail `filters.py:62` Rule 7 and appear in `leaderboard_rows` only because that endpoint serves `all_players`, not `qualified`.
+
+3. **ROOT PROBLEM — no observability (this is what to fix):**
+   - Cannot determine from code alone WHICH mechanism failed for AZ/STL — roster call errored vs returned partial vs returned full-then-gutted-downstream — because all three drop points are SILENT. Three silent-drop locations, all missing log statements:
+     - `mlb_stats.py:633–634` — `except Exception: return []` (roster fetch failure swallowed)
+     - `pipeline.py:637` — `if not lineup: continue` (team skipped, no log)
+     - `pipeline.py:120–121` — `if season_pa==0 and recent_pa==0: return None` (player dropped, no log)
+   - Matches the original audit's `pipeline_stats` observability proposal from a second angle.
+
+**Proposed fix (next focused session — NOT done, protected surface, gated):**
+Add ADDITIVE LOGGING ONLY at the three points above — print/log statements, ZERO logic change — so the next hydration failure is fully diagnosable from cron output alone. Pipeline is the most-gated surface: do as its own scoped session, reviewed line-by-line, confirmed purely additive before commit. Not urgent (nothing on fire; cache rebuilds tomorrow; observability only pays off on next occurrence). Optional later: a min-batters-per-game warning flag, and/or surfacing roster-fallback counts, once logging confirms the mechanism.
 
 **Separate thread (do not conflate):**
 `leaderboard_rows_jig` came back empty on this slate. Could be a real JIG build failure OR legitimately no qualifying JIG rows for this slate. Needs its own read-only check — is JIG supposed to have data here? Not part of the batter-count question.
@@ -106,11 +121,11 @@ Add pipeline observability: a `pipeline_stats` field surfacing batters-attempted
 - The frontend display caps (HR Threat Cards `slice(0,4)`, Escalation top 8) are intentional summary-panel limits, not data loss. ThreatRankings renders all rows uncapped. Not a bug.
 
 **Next session order:**
-1. Read-only timing check on az-stl lineup posting → bug vs timing artifact.
-2. Decide on `pipeline_stats` observability (gated).
+1. Additive logging at the three silent-drop points (gated, pipeline surface).
+2. Decide on `pipeline_stats` observability in `/api/slate` payload (separate gate — touches API shape).
 3. Separate JIG-empty check.
 
-**Status:** Parked. Audit was read-only. Pipeline is a protected surface — no action until gated.
+**Status:** Parked. Diagnosis complete (read-only). az-stl open question resolved. Pipeline is a protected surface — no action until gated.
 
 ---
 
