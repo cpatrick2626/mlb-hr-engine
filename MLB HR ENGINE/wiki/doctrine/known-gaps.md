@@ -1,4 +1,4 @@
-# Known Gaps / Parked
+﻿# Known Gaps / Parked
 
 **Last Updated:** 2026-06-24
 
@@ -159,6 +159,20 @@ Velocity is NOT available from `pitch-arsenal-stats`, and the alternate `pitch-a
 
 ---
 
+
+## Probable-Pitcher Labeling — `pitcher_confirmed` Misnomer
+
+**Discovered:** 2026-06-23, probable-pitcher audit (read-only).
+
+**Findings:**
+- Pipeline fetches `MLB probablePitcher` at `mlb_stats.py:165`, extracted at ~184–185. This feeds into full scoring. No roster fallback exists for probable pitcher; "TBD" appears when MLB posts no probable — correct behavior by design.
+- `pitcher_confirmed` (`pipeline.py:302`) is a misnomer: it is set `True` for merely-probable pitchers (not confirmed starters). A player flagged `pitcher_confirmed=True` may still be scratched pre-game.
+- **Proposed rename:** `pitcher_status ∈ {PROBABLE, TBD, CONFIRMED}` — surface the distinction rather than flatten it to a boolean. `CONFIRMED` reserved for when a real confirmation signal exists (not currently sourced).
+- **Blast radius of rename:** touches `pipeline.py:302` (assignment), `api/main.py:454` (payload serialization — PROTECTED), and any `app.py` display sites reading `pitcher_confirmed`. Scoring logic is unaffected — the field is metadata only.
+
+**Status:** Deferred. Scoring unaffected. Rename is a gated change (touches protected surfaces: `pipeline.py`, `api/main.py`). Do not rename until operator explicitly authorizes a scoped session that reviews all three touch points.
+
+---
 ## Cross-References
 
 - [[deploy-runbook]] — deploy surface truth
