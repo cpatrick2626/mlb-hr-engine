@@ -482,6 +482,7 @@ def _build_slate_payload(data: dict) -> dict:
         r["_board"] = "main"
 
     # JIG list — same players, sorted by tactical score descending
+    jig_build_error = False
     try:
         _arsenal_data = get_pitcher_arsenal(_dt.datetime.now().year)
         # Key lookup by stable player_id (same scheme as row "id") to avoid
@@ -508,6 +509,7 @@ def _build_slate_payload(data: dict) -> dict:
     except Exception as e:
         log.error("JIG row build failed: %s", e, exc_info=True)
         jig_rows = []
+        jig_build_error = True
 
     seen_games = {}
     for p in players:
@@ -542,6 +544,7 @@ def _build_slate_payload(data: dict) -> dict:
         "generated_at":         _dt.datetime.utcnow().isoformat(),
         "date":                 date.today().strftime("%Y-%m-%d"),
         "fs_tier_thresholds":   dict(FS_TIER_THRESHOLDS),
+        "jig_build_error":      jig_build_error,
     }
 
 
