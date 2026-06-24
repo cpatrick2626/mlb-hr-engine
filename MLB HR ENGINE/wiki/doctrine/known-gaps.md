@@ -1,6 +1,6 @@
 # Known Gaps / Parked
 
-**Last Updated:** 2026-06-23
+**Last Updated:** 2026-06-24
 
 Items that are real gaps but NOT currently authorized for action. Check here before opening new issues on the same items.
 
@@ -126,6 +126,36 @@ Add ADDITIVE LOGGING ONLY at the three points above — print/log statements, ZE
 3. Separate JIG-empty check.
 
 **Status:** Parked. Diagnosis complete (read-only). az-stl open question resolved. Pipeline is a protected surface — no action until gated.
+
+---
+
+## Arsenal Velocity Data Gap — Pitch-Arsenal-Stats Endpoint Carries No Velocity Column
+
+**Discovered:** 2026-06-24, deployed pipeline logging (4e15147) surfaced `[arsenal] stats endpoint: 690 pitchers loaded for year=2026, fastball avg_speed: 0/690 pitchers` on first production run. Read-only deep diagnostic followed.
+
+**Verdict:** Code/mapping mismatch, but DORMANT — touches no live scoring. Not urgent.
+
+**Findings:**
+- The Savant pitch-arsenal-stats endpoint (`arsenal.py:231 _fetch_arsenal_from_stats`) does NOT contain a velocity column — confirmed for both 2026 and 2025 (identical schemas). The code looks for `mph` / `avg_speed` / `pitch_speed_mean` / `avg_mph`; none exist in the CSV. The code comment claiming the CSV "uses mph" is wrong for the current schema.
+- Decisive test: 2025 has the same schema (no velocity), so this is NOT a 2026 seasonal-availability gap — it is a permanent endpoint/mapping mismatch. Velocity was likely never carried by this endpoint, or the endpoint schema changed.
+- The 0/690 count: `arsenal.py:254–257` counts pitchers where `avg_speed is not None`; since every row resolves to `speed=None`, the count is 0.
+
+**Blast radius — essentially zero:**
+- `arsenal_matchup_factor` (IS in live HR scoring): UNAFFECTED — uses `rv_per100`, whiff, usage, PA; does not read velocity. Working correctly.
+- `pitcher_velo_decline_factor` (the velocity consumer): returns `1.0` / neutral for all 690 pitchers — but grep confirms it is NOT wired into `pipeline.py` or `engine/`. Only called by `scripts/analysis/analyze_2026_full.py` (research script). Dormant signal returning neutral, zero live consequence.
+- Display (`app.py:4290`): renders `"—"` when velocity is null. Correct defensive handling.
+- NULL-AS-ZERO trap: NOT present. Empty velocity handled defensively everywhere; no numeric contamination, no fake zeros.
+
+**Correctness risk today:** NONE. Live scoring (MAIN/JIG) does not consume velocity. The gap is cosmetically visible (blank velocity in UI, shown as `"—"`) only.
+
+**The real fix (deferred — data-sourcing project, NOT a field-name tweak):**
+Velocity is NOT available from `pitch-arsenal-stats`, and the alternate `pitch-arsenals` endpoint's 2026 velocity columns are also empty. A working velocity source would need a different Savant endpoint (statcast search or pitch-level aggregation), then wiring into `_fetch_arsenal_from_stats`. Do NOT pursue until a feature actually needs velocity.
+
+**Link to parked work:** Directly affects the parked Arsenal Exploit Score. If/when that feature is built and wants pitch velocity as an input, this sourcing gap must be resolved first. Whoever builds Arsenal Exploit should read this entry — velocity is not currently available from the arsenal client.
+
+**Status:** Parked. Read-only diagnostic. Nothing changed. No fix attempted (correctly — dormant, non-urgent, and the fix is a data-sourcing task for a future gated session).
+
+**Cross-ref:** `wiki/architecture/pitch-mix-data-availability.md`
 
 ---
 
