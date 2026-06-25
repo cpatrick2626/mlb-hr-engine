@@ -1,24 +1,29 @@
 """
 JWT verification and beta-access gating.
 
-Supabase issues HS256 JWTs signed with your project's JWT secret.
+Supabase issues ES256 JWTs signed with a per-project EC private key.
 FastAPI routes declare `user=Depends(require_beta)` to gate on beta access,
 or `user=Depends(require_auth)` to require login only (e.g. invite redemption).
 """
 
 import os
+import requests as _requests
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from jose import jwt, JWTError
+from jose import jwt, jwk, JWTError
 
-SUPABASE_URL      = os.environ["SUPABASE_URL"]
+SUPABASE_URL         = os.environ["SUPABASE_URL"]
 SUPABASE_SERVICE_KEY = os.environ["SUPABASE_SERVICE_KEY"]
-JWT_SECRET        = os.environ["SUPABASE_JWT_SECRET"]
+JWT_SECRET           = os.environ.get("SUPABASE_JWT_SECRET")  # retained; no longer used for decode
+
+_JWKS_URL = f"{SUPABASE_URL.rstrip('/')}/auth/v1/.well-known/jwks.json"
 
 _bearer = HTTPBearer()
 
 # Lazy Supabase client — created once on first use
 _supa = None
+# JWKS cache: { kid: jwk_dict }
+_jwks_cache: dict = {}
 
 
 def _client():
@@ -29,9 +34,52 @@ def _client():
     return _supa
 
 
+def _get_jwks(force_refresh: bool = False) -> dict:
+    """Fetch JWKS from Supabase and return {kid: jwk_dict}. Raises 401 on network failure."""
+    global _jwks_cache
+    if _jwks_cache and not force_refresh:
+        return _jwks_cache
+    try:
+        resp = _requests.get(_JWKS_URL, timeout=5)
+        resp.raise_for_status()
+        keys = resp.json().get("keys", [])
+        _jwks_cache = {k["kid"]: k for k in keys if "kid" in k}
+        return _jwks_cache
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Failed to fetch JWKS: {exc}",
+        )
+
+
 def _decode(token: str) -> dict:
     try:
-        return jwt.decode(token, JWT_SECRET, algorithms=["HS256"], audience="authenticated")
+        header = jwt.get_unverified_header(token)
+    except JWTError as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc))
+
+    alg = header.get("alg")
+    kid = header.get("kid")
+
+    if alg != "ES256":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Unsupported algorithm: {alg}. Only ES256 is accepted.",
+        )
+
+    # Look up the signing key; retry once on cache miss (key rotation)
+    cache = _get_jwks()
+    if kid not in cache:
+        cache = _get_jwks(force_refresh=True)
+    if kid not in cache:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=f"Unknown kid: {kid}",
+        )
+
+    try:
+        public_key = jwk.construct(cache[kid], algorithm="ES256")
+        return jwt.decode(token, public_key, algorithms=["ES256"], audience="authenticated")
     except JWTError as exc:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(exc))
 
