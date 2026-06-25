@@ -52,7 +52,7 @@ function MasterDashboard() {
             window.dispatchEvent(new CustomEvent("hrEngineDataLoaded", { detail: data }));
             return;
           }
-          if (res.status >= 400 && res.status < 500) throw new Error("Slate " + res.status);
+          if (res.status >= 400 && res.status < 500) { lastErr = new Error("Slate " + res.status); break; }
           lastErr = new Error("Slate " + res.status);
         } catch (err) {
           clearTimeout(timer);
