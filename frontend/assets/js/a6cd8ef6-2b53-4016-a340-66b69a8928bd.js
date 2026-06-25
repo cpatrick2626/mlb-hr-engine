@@ -126,14 +126,17 @@ function MasterDashboard() {
             ))}
           </div>
         )}
-        <button
-          className={`md-cc-btn ${ccOpen ? "is-open" : ""}`}
-          onClick={() => setCcOpen((o) => !o)}
-        >
-          <span className="md-cc-btn__chev"><Icon name={ccOpen ? "chevron" : "chevronR"} size={16} color="currentColor" /></span>
-          <span className="md-cc-btn__gear"><Icon name="gear" size={16} color="currentColor" /></span>
-          <span className="md-cc-btn__label">Tactical Command Center</span>
-        </button>
+        <div className="md-topbar-right">
+          <div id="auth-root" />
+          <button
+            className={`md-cc-btn ${ccOpen ? "is-open" : ""}`}
+            onClick={() => setCcOpen((o) => !o)}
+          >
+            <span className="md-cc-btn__chev"><Icon name={ccOpen ? "chevron" : "chevronR"} size={16} color="currentColor" /></span>
+            <span className="md-cc-btn__gear"><Icon name="gear" size={16} color="currentColor" /></span>
+            <span className="md-cc-btn__label">Tactical Command Center</span>
+          </button>
+        </div>
       </div>
 
       <SlateCommandStrip />

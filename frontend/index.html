@@ -2083,8 +2083,9 @@ html, body { height: 100%; overflow: hidden; }
   display: flex;
   align-items: center;
   gap: 14px;
-  height: 50px;
+  min-height: 50px;
   flex-shrink: 0;
+  position: relative;
 }
 
 .md-crumb {
@@ -2209,6 +2210,21 @@ html, body { height: 100%; overflow: hidden; }
 .md-cc-btn.is-open .md-cc-btn__gear { color: var(--green-500); }
 .md-cc-btn__chev { color: var(--fg-3); display: inline-flex; transition: color var(--dur-fast); }
 .md-cc-btn__gear { color: var(--fg-2); display: inline-flex; }
+
+/* ---- Right column: auth identity (top) + TCC button (bottom) ---- */
+.md-topbar-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 5px;
+  flex-shrink: 0;
+  margin-left: auto;
+}
+/* Remove the individual margin-left: auto from .md-cc-btn inside the column */
+.md-topbar-right > .md-cc-btn {
+  margin-left: 0;
+}
 
 /* ============================================================
    2 — MAIN SPLIT  (left column + right rail)
@@ -3133,6 +3149,7 @@ html, body { height: 100%; overflow: hidden; }
   <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
   <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
   <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style id="fsm-styles">/* ===========================================================
    FULL SLATE INTELLIGENCE MATRIX
    =========================================================== */
@@ -3829,6 +3846,15 @@ button.fsm-tier { appearance: none; text-decoration: none; }
   .md-cc-btn__label { display: none; }
   .md-cc-btn__chev  { display: none; }
 
+  /* 11b — Right column becomes a row on mobile: [auth] [TCC gear] side-by-side */
+  .md-topbar-right {
+    flex-direction: row;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+  }
+  #auth-root button { min-height: 44px; }
+
   /* 12 — Mobile bottom nav */
   .md-bottom-nav {
     display: flex;
@@ -4084,6 +4110,81 @@ button.fsm-tier { appearance: none; text-decoration: none; }
   text-transform: uppercase;
   text-align: right;
   margin-top: 2px;
+}
+/* Add-to-ticket button (Step 2a) */
+.hrtz-card__add {
+  margin-top: 5px;
+  width: 100%;
+  background: transparent;
+  border: 1px solid rgba(180, 220, 200, 0.18);
+  border-radius: 3px;
+  color: var(--fg-3);
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 2px 4px;
+  cursor: pointer;
+  line-height: 1.4;
+  text-align: center;
+  transition: border-color 0.12s, color 0.12s;
+}
+.hrtz-card__add:hover:not(:disabled) {
+  border-color: rgba(26, 255, 102, 0.45);
+  color: var(--green-500);
+}
+.hrtz-card__add--loading { color: var(--fg-4); cursor: default; }
+.hrtz-card__add--added   { border-color: rgba(26, 255, 102, 0.35); color: var(--green-500); cursor: default; }
+.hrtz-card__add--error   { border-color: rgba(255, 51, 68, 0.4);   color: var(--red-500); }
+.hrtz-card__add--noauth  { border-color: rgba(255, 176, 32, 0.4);  color: var(--amber-500); }
+/* Session tray (Step 2a) */
+.hrtz-tray {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 10px;
+  margin-top: 2px;
+  margin-bottom: 8px;
+  background: rgba(26, 255, 102, 0.04);
+  border: 1px solid rgba(26, 255, 102, 0.16);
+  border-radius: 4px;
+  flex-wrap: wrap;
+}
+.hrtz-tray__head {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 8px;
+  letter-spacing: 0.2em;
+  color: var(--green-500);
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+.hrtz-tray__legs { display: flex; gap: 6px; flex-wrap: wrap; }
+.hrtz-tray__leg {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(180, 220, 200, 0.05);
+  border: 1px solid rgba(180, 220, 200, 0.1);
+  border-radius: 3px;
+  padding: 2px 6px;
+}
+.hrtz-tray__name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  color: var(--fg-1);
+  text-transform: uppercase;
+}
+.hrtz-tray__tier {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  color: var(--fg-3);
+  text-transform: uppercase;
 }
 @media (max-width: 768px) {
   .hrtz-desktop { display: none; }
@@ -4640,6 +4741,7 @@ button.fsm-tier { appearance: none; text-decoration: none; }
   <script type="text/babel" src="assets/js/command-tab.js"></script>
   <script type="text/babel" src="assets/js/cfdd4178-a139-4f84-b282-b84f76971c49.js"></script>
   <script type="text/babel" src="assets/js/a6cd8ef6-2b53-4016-a340-66b69a8928bd.js"></script>
+  <script type="text/babel" src="assets/js/auth.js"></script>
 
 
 </body></html>
