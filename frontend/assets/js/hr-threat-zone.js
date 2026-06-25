@@ -1,5 +1,5 @@
 /* HR Engine — HR Threat Zone
-   Desktop: Primary HR Threat Zone — top 5 batters by MAIN model HR probability (hrpa).
+   Desktop: Primary HR Threat Zone — top 5 batters by MAIN model HR probability (hrprob).
    Mobile:  Top HR Threats strip — top 3 compact tap-friendly cards.
    Receives rows prop already filtered/sorted upstream by Stage.
    Display-only — no scoring changes, no API calls, no new formulas. */
@@ -24,13 +24,13 @@ function hrtzLabels(row) {
 }
 
 function hrtzFmtProb(v) {
-  return v != null ? (v * 100).toFixed(1) + "%" : "—";
+  return v != null ? Number(v).toFixed(1) + "%" : "—";
 }
 
 function HRThreatCard({ row, rank, compact }) {
   const tc   = HRTZ_TIER_COLOR[row.tier] || "#6b7872";
   const tags = hrtzLabels(row);
-  const prob = hrtzFmtProb(row.hrpa);
+  const prob = hrtzFmtProb(row.hrprob);
   const name = row.name || "—";
   const lastName = name.replace("…", "").split(" ").slice(-1)[0] || name;
   const pitcherLast = row.pitcher_name
@@ -68,7 +68,7 @@ function HRThreatCard({ row, rank, compact }) {
 }
 
 function HRThreatZone({ rows, isJigContext }) {
-  const sorted  = [...(rows || [])].sort((a, b) => (b.hrpa || 0) - (a.hrpa || 0));
+  const sorted  = [...(rows || [])].sort((a, b) => (b.hrprob || 0) - (a.hrprob || 0));
   const desktop = sorted.slice(0, 5);
   const mobile  = sorted.slice(0, 3);
 
