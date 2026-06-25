@@ -1,5 +1,7 @@
 ﻿# Wiki Log
 
+## [2026-06-25] claude-code | docs(spec): multi-user accepted as product direction (was non-goal); auth/identity phased build authorized | DOCS ONLY — Removed "Multi-user / team features" from Section 15 non-goals table. Added Section 15.1 recording accepted multi-user direction with phased build plan (Phase 1: gate writes; Phase 2: user_id schema + RLS; Phase 3: friend signup). Updated Section 2 persona note and Section 14 IS NOT list for consistency. No code touched. product-spec.md only (+ this log).
+
 ## [2026-06-25] claude-code | hr-threat-zone.js hrpa/hrprob display bug — RESOLVED | SHIPPED — fix(frontend) commit 6807532 pushed to main; Vercel auto-deployed. Four-line edit: removed ×100 from formatter, changed read field hrpa→hrprob, changed sort key hrpa→hrprob, updated comment. Schwarber shows ~19.1% (was 8.6%), matches COMMAND tab and Full Slate Matrix. Only hr-threat-zone.js changed. known-gaps.md entry marked RESOLVED.
 
 ## [2026-06-24] claude-code | hr-threat-zone.js displays hrpa as "HR PROB" instead of hrprob — display bug logged, no scoring impact | DOCS ONLY — Appended known-gap entry to known-gaps.md. Bug: hr-threat-zone.js reads row.hrpa (HR/PA rate) ×100, labels it "HR PROB"; correct field is row.hrprob (already a percentage). full-slate-matrix.js and command-tab.js use hrprob correctly. Deferred fix documented. No code touched.

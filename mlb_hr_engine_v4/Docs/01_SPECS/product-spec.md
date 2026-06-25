@@ -26,7 +26,7 @@ The system is not a general sports analytics tool, a prediction dashboard for pu
 
 ## 2. Operator Persona
 
-**Single operator.** Not a multi-user platform.
+**Primary operator + accepted multi-user direction (2026-06-25).** See Section 15.1.
 
 The operator:
 - Is the system owner and sole user
@@ -550,7 +550,6 @@ Normal pipeline runs triggered via `api/cron.py`. Manual trigger via `POST /api/
 ### What this product IS NOT
 
 - A public-facing betting advice platform
-- A multi-user or team system
 - A DFS (daily fantasy sports) tool
 - A live in-game betting tool
 - A general sports prediction engine
@@ -566,7 +565,6 @@ The following are explicitly out of scope. Do not implement without new doctrine
 | Non-Goal | Reason |
 |----------|--------|
 | Mobile-native optimization | Desktop is primary; mobile is a degraded access mode. No mobile-specific CSS, touch controls, or PWA configuration. |
-| Multi-user / team features | Single operator design. Auth, RBAC, shared state not relevant. |
 | DFS lineup optimization | Different product. Different math. Different output. |
 | Live in-game betting | No live score feed, no in-play model. Pre-game picks only. |
 | Automated sportsbook execution | Deliberation layer and execution platform are intentionally separated. |
@@ -577,6 +575,19 @@ The following are explicitly out of scope. Do not implement without new doctrine
 | Non-MLB sports | Engine is MLB-specific (Statcast, park factors, HR Poisson math). |
 | "Responsible gambling" / limit features | Not relevant to single professional operator context. |
 | Automatic model recalibration | Platt parameters require CV-fitted runs, not auto-adjustment. |
+
+---
+
+## 15.1 Multi-User Direction (Accepted 2026-06-25)
+
+The system supports multiple users (operator + friends). Each user deploys and tracks their own picks. Auth is Supabase JWT (`api/auth.py`), which already gates all read endpoints.
+
+**Phased build:**
+1. **Phase 1 (write-endpoint gate):** `POST /api/tickets/leg` and `POST /api/tickets/complete` gated behind existing `require_auth`. No schema change required.
+2. **Phase 2 (per-user schema):** Add `user_id` column to tickets/legs tables. Update `cache.py` to stamp `user.get("sub")`. Add Supabase RLS policies for per-user data isolation.
+3. **Phase 3 (friend access):** Friend signup/login flow + token-authenticated frontend ticket capture.
+
+**Invariants unchanged:** MAIN/JIG separation, scoring formulas, calibration parameters, pipeline sequence, and all other architectural invariants are unaffected by multi-user support.
 
 ---
 
