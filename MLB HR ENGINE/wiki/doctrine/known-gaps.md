@@ -173,6 +173,22 @@ Velocity is NOT available from `pitch-arsenal-stats`, and the alternate `pitch-a
 **Status:** Deferred. Scoring unaffected. Rename is a gated change (touches protected surfaces: `pipeline.py`, `api/main.py`). Do not rename until operator explicitly authorizes a scoped session that reviews all three touch points.
 
 ---
+## hr-threat-zone.js Displays `hrpa` as "HR PROB" Instead of `hrprob` — Display Bug
+
+**Discovered:** 2026-06-24, pre-commit audit of live hr-threat-zone.js bundle.
+
+**What:** `frontend/assets/js/hr-threat-zone.js` reads `row.hrpa` (the raw season HR/PA rate = `season_hr / season_pa`, a small decimal e.g. 0.045) and multiplies it ×100 (`hrtzFmtProb`, ~line 33), displaying the result labeled **"HR PROB"** in the Primary HR Threat Zone panel.
+
+**Why it's wrong:** The model HR probability is the separate field `row.hrprob` — already expressed as a percentage (e.g. `14.2`). `hrpa` is NOT the model probability; it is the raw season batting-average-for-HR, a fundamentally different quantity. The live threat-zone panel therefore shows the HR/PA rate masquerading as model HR probability — mislabeled and numerically incorrect for that panel.
+
+**Scope / impact:** Display-only on the existing hr-threat-zone.js bundle. No scoring impact. The correct field (`hrprob`) is already used in `full-slate-matrix.js`. The new COMMAND tab build (`command-tab.js`) also uses `hrprob` correctly and does not inherit this bug.
+
+**Deferred fix:** Change `hr-threat-zone.js` to read `hrprob` directly and display `hrprob.toFixed(1) + "%"` without the ×100 multiplication. Gated as a scoped frontend fix — not done here.
+
+**Status:** Parked. Docs-only record. No code touched.
+
+---
+
 ## Cross-References
 
 - [[deploy-runbook]] — deploy surface truth
