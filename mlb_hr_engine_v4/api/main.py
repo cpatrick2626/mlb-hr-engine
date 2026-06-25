@@ -195,8 +195,7 @@ async def redeem(body: dict, user=Depends(require_auth)):
 
 
 # ── Ticket capture ─────────────────────────────────────────────────────────────
-# Phase 1: write endpoints gated by Supabase JWT (require_auth).
-# user_id stamping deferred to Phase 2 (schema change required).
+# Phase 2: user_id stamped on new ticket rows (nullable; NOT NULL + RLS deferred to Phase 3).
 
 @app.post("/api/tickets/leg")
 async def ticket_add_leg(body: dict, user=Depends(require_auth)):
@@ -216,6 +215,7 @@ async def ticket_add_leg(body: dict, user=Depends(require_auth)):
             else None
         ),
         engine_generated_at=body.get("generated_at"),
+        user_id=user.get("sub"),
     )
     return {"status": "ok", **result}
 
@@ -225,7 +225,7 @@ async def ticket_complete(body: dict, user=Depends(require_auth)):
     ticket_id = body.get("ticket_id")
     if not ticket_id:
         raise HTTPException(status_code=400, detail="ticket_id is required")
-    result = complete_ticket(ticket_id)
+    result = complete_ticket(ticket_id, user_id=user.get("sub"))
     return {"status": "ok", **result}
 
 

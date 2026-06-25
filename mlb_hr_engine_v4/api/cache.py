@@ -143,6 +143,7 @@ def add_leg(
     tier: str,
     model_tier_rank: int,
     engine_generated_at: Optional[str],
+    user_id: Optional[str] = None,
 ) -> dict:
     """
     Add one leg to a ticket.
@@ -152,11 +153,14 @@ def add_leg(
     client = _client()
 
     if not ticket_id:
-        res = client.table("tickets").insert({
+        ticket_row: dict = {
             "date":   _date.today().isoformat(),
             "board":  board,
             "status": "building",
-        }).execute()
+        }
+        if user_id:
+            ticket_row["user_id"] = user_id
+        res = client.table("tickets").insert(ticket_row).execute()
         ticket_id = res.data[0]["ticket_id"]
 
     leg_res = client.table("legs").insert({
@@ -172,12 +176,23 @@ def add_leg(
     return {"ticket_id": ticket_id, "leg_id": leg_id}
 
 
-def complete_ticket(ticket_id: str) -> dict:
+def complete_ticket(ticket_id: str, user_id: Optional[str] = None) -> dict:
     """
     Finalize ticket: fd_deployed=True, status='pending', completed_at=now(), num_legs=count.
     Counts only non-removed legs. Returns {ticket_id, num_legs, fd_deployed}.
     """
     client = _client()
+
+    if user_id:
+        owns = (
+            client.table("tickets")
+            .select("ticket_id")
+            .eq("ticket_id", ticket_id)
+            .eq("user_id", user_id)
+            .execute()
+        )
+        if not owns.data:
+            raise ValueError(f"ticket {ticket_id} not found for user")
 
     count_res = (
         client.table("legs")
