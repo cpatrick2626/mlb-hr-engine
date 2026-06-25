@@ -12,8 +12,8 @@ POST /api/pipeline/run            — trigger pipeline (X-Cron-Secret header)
 POST /api/ops/settle              — settle pick_tracker.csv outcomes (X-Cron-Secret header)
 POST /api/ops/clv-capture         — fetch closing odds + compute CLV (X-Cron-Secret header)
 POST /api/invite/redeem           — redeem invite code (auth required)
-POST /api/tickets/leg             — add leg to ticket; null ticket_id opens new ticket (no auth — deferred)
-POST /api/tickets/complete        — finalize ticket, set fd_deployed=true (no auth — deferred)
+POST /api/tickets/leg             — add leg to ticket; null ticket_id opens new ticket (JWT required — Phase 1)
+POST /api/tickets/complete        — finalize ticket, set fd_deployed=true (JWT required — Phase 1)
 
 The pipeline is normally triggered by GitHub Actions cron (see api/cron.py).
 The /api/pipeline/run endpoint is a manual fallback; it runs in a background
@@ -195,11 +195,11 @@ async def redeem(body: dict, user=Depends(require_auth)):
 
 
 # ── Ticket capture ─────────────────────────────────────────────────────────────
-# Auth intentionally deferred — matches /api/slate open access.
-# Revisit before wider release.
+# Phase 1: write endpoints gated by Supabase JWT (require_auth).
+# user_id stamping deferred to Phase 2 (schema change required).
 
 @app.post("/api/tickets/leg")
-async def ticket_add_leg(body: dict):
+async def ticket_add_leg(body: dict, user=Depends(require_auth)):
     required = {"board", "name", "model_prob", "tier", "generated_at"}
     missing = required - body.keys()
     if missing:
@@ -221,7 +221,7 @@ async def ticket_add_leg(body: dict):
 
 
 @app.post("/api/tickets/complete")
-async def ticket_complete(body: dict):
+async def ticket_complete(body: dict, user=Depends(require_auth)):
     ticket_id = body.get("ticket_id")
     if not ticket_id:
         raise HTTPException(status_code=400, detail="ticket_id is required")
