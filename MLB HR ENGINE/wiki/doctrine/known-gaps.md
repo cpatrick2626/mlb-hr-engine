@@ -1,6 +1,6 @@
 ﻿# Known Gaps / Parked
 
-**Last Updated:** 2026-06-24
+**Last Updated:** 2026-06-25
 
 Items that are real gaps but NOT currently authorized for action. Check here before opening new issues on the same items.
 
@@ -183,9 +183,9 @@ Velocity is NOT available from `pitch-arsenal-stats`, and the alternate `pitch-a
 
 **Scope / impact:** Display-only on the existing hr-threat-zone.js bundle. No scoring impact. The correct field (`hrprob`) is already used in `full-slate-matrix.js`. The new COMMAND tab build (`command-tab.js`) also uses `hrprob` correctly and does not inherit this bug.
 
-**Deferred fix:** Change `hr-threat-zone.js` to read `hrprob` directly and display `hrprob.toFixed(1) + "%"` without the ×100 multiplication. Gated as a scoped frontend fix — not done here.
+**Fix applied:** `hr-threat-zone.js` updated to read `hrprob` directly, display `hrprob.toFixed(1) + "%"` without ×100, and sort by `hrprob` descending. Four-line surgical edit — comment, formatter, read field, sort key. Vercel auto-deploys on push.
 
-**Status:** Parked. Docs-only record. No code touched.
+**Status:** RESOLVED — commit `6807532` (2026-06-25). Schwarber shows ~19.1% (was 8.6%), matching COMMAND tab and Full Slate Matrix. Only `frontend/assets/js/hr-threat-zone.js` changed. No scoring, API, or other bundles touched.
 
 ---
 
