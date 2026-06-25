@@ -130,6 +130,12 @@ function HRThreatZone({ rows, isJigContext }) {
     // First leg: omit ticket_id → backend opens new ticket and returns ticket_id
     // Subsequent legs: pass the ticket_id returned from the first leg
     if (ticketId) body.ticket_id = ticketId;
+    // Calibration fields — sent when available on the row; backend writes NULL for omitted fields
+    if (row.id)           body.player_id = row.id;
+    if (row.teamAbbr)     body.team      = row.teamAbbr;
+    if (row.pitcher_name) body.pitcher   = row.pitcher_name;
+    // opponent: not in row shape — omitted (NULL server-side)
+    // market_odds_american / market_prob: not on row — omitted (NULL server-side, no source yet)
 
     try {
       const res = await window.__hrAuth.authFetch(

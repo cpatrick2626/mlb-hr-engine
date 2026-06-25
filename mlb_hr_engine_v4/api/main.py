@@ -216,6 +216,20 @@ async def ticket_add_leg(body: dict, user=Depends(require_auth)):
         ),
         engine_generated_at=body.get("generated_at"),
         user_id=user.get("sub"),
+        player_id=body.get("player_id") or None,
+        team=body.get("team") or None,
+        opponent=body.get("opponent") or None,
+        pitcher=body.get("pitcher") or None,
+        market_odds_american=(
+            int(body["market_odds_american"])
+            if body.get("market_odds_american") is not None
+            else None
+        ),
+        market_prob=(
+            float(body["market_prob"])
+            if body.get("market_prob") is not None
+            else None
+        ),
     )
     return {"status": "ok", **result}
 

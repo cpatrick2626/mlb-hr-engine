@@ -144,6 +144,12 @@ def add_leg(
     model_tier_rank: int,
     engine_generated_at: Optional[str],
     user_id: Optional[str] = None,
+    player_id: Optional[str] = None,
+    team: Optional[str] = None,
+    opponent: Optional[str] = None,
+    pitcher: Optional[str] = None,
+    market_odds_american: Optional[int] = None,
+    market_prob: Optional[float] = None,
 ) -> dict:
     """
     Add one leg to a ticket.
@@ -153,8 +159,9 @@ def add_leg(
     client = _client()
 
     if not ticket_id:
+        slate_date = _date.today().isoformat()
         ticket_row: dict = {
-            "date":   _date.today().isoformat(),
+            "date":   slate_date,
             "board":  board,
             "status": "building",
         }
@@ -162,14 +169,24 @@ def add_leg(
             ticket_row["user_id"] = user_id
         res = client.table("tickets").insert(ticket_row).execute()
         ticket_id = res.data[0]["ticket_id"]
+    else:
+        t_res = client.table("tickets").select("date").eq("ticket_id", ticket_id).execute()
+        slate_date = t_res.data[0]["date"] if t_res.data else _date.today().isoformat()
 
     leg_res = client.table("legs").insert({
-        "ticket_id":           ticket_id,
-        "player_name":         player_name,
-        "model_prob":          model_prob,
-        "tier":                tier,
-        "model_tier_rank":     model_tier_rank,
-        "engine_generated_at": engine_generated_at or None,
+        "ticket_id":            ticket_id,
+        "player_name":          player_name,
+        "player_id":            player_id,
+        "team":                 team,
+        "opponent":             opponent,
+        "pitcher":              pitcher,
+        "model_prob":           model_prob,
+        "tier":                 tier,
+        "model_tier_rank":      model_tier_rank,
+        "engine_generated_at":  engine_generated_at or None,
+        "market_odds_american": market_odds_american,
+        "market_prob":          market_prob,
+        "leg_date":             slate_date,
     }).execute()
     leg_id = leg_res.data[0]["leg_id"]
 
