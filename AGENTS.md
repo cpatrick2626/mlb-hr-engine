@@ -568,6 +568,55 @@ All MLB HR ENGINE rooms may invoke these skills when the task matches the trigge
 
 ---
 
+## DESIGN SKILL PICKER
+
+### When This Rule Fires
+
+Before starting any frontend, UI, or visual design task, agents must confirm which design skill to use — unless the operator's prompt already names one explicitly.
+
+Do not auto-select a design skill. Ask.
+
+### Available Design Skills
+
+| # | Skill | Claude Code command | Codex path |
+|---|-------|--------------------|-----------:|
+| 1 | frontend-design | `/frontend-design` | `C:\Users\ChrisPatrick\.agents\skills\frontend-design\SKILL.md` |
+| 2 | gpt-taste | `/gpt-taste` | `C:\Users\ChrisPatrick\.agents\skills\gpt-taste\SKILL.md` |
+| 3 | design-taste-frontend | `/design-taste-frontend` | `C:\Users\ChrisPatrick\.agents\skills\design-taste-frontend\SKILL.md` |
+| 4 | high-end-visual-design | `/high-end-visual-design` | `C:\Users\ChrisPatrick\.agents\skills\high-end-visual-design\SKILL.md` |
+| 5 | redesign-existing-projects | `/redesign-existing-projects` | `C:\Users\ChrisPatrick\.agents\skills\redesign-existing-projects\SKILL.md` |
+| 6 | webapp-testing | `/webapp-testing` | `C:\Users\ChrisPatrick\.agents\skills\webapp-testing\SKILL.md` |
+
+### MLB HR ENGINE Priority Override
+
+MLB HR ENGINE project doctrine overrides generic design skill defaults. Any skill applied to this project must respect the following identity:
+
+- Cinematic tactical command-center identity
+- MLB home run threat-intelligence hierarchy
+- Predictive, machine-driven, operationally believable interface
+- Premium realism over generic dashboard styling
+- Restrained glow and layered HUD depth
+- Tactical clarity over visual noise
+- No sportsbook, fantasy, DFS, or spreadsheet drift
+
+HR ENGINE identity wins over any skill's default aesthetic direction. If a skill's defaults conflict, override them to match HR ENGINE identity.
+
+### Default Skill (No Operator Override Set)
+
+No default has been set yet. Ask the operator which skill to use before proceeding.
+
+Once the operator designates a preferred skill, record it here:
+
+```
+DEFAULT DESIGN SKILL: <skill name>
+```
+
+### Invariants
+
+Design skills do not authorize runtime code edits, scoring changes, or protected-surface modifications. All design work must still follow Rule 14 (Protected Surface Declaration), Rule 13 (High-Risk Two-Stage), and the Mandatory Obsidian/Wiki Documentation Gate.
+
+---
+
 ## GRAPHIFY WORKFLOW RULE
 
 Graphify output lives at `mlb_hr_engine_v4/graphify-out/`. The `.graphifyignore` at `mlb_hr_engine_v4/.graphifyignore` is tracked by git and excludes `frontend/`, `Docs/`, `_archive/`, and `node_modules/`.
