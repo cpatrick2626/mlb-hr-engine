@@ -4331,6 +4331,288 @@ button.fsm-tier { appearance: none; text-decoration: none; }
   }
 }
 </style>
+<style>/* ============================================================
+   COMMAND TAB (cmt-*)
+   ============================================================ */
+
+/* ---- scope chip ---- */
+.cmt-chip {
+  display: inline-flex; align-items: center;
+  font-family: var(--font-display); font-weight: 800; font-size: 8px;
+  letter-spacing: 0.22em; text-transform: uppercase;
+  padding: 2px 7px; border-radius: 3px; flex-shrink: 0;
+}
+.cmt-chip--main    { color: #ff3344; box-shadow: inset 0 0 0 1px rgba(255,51,68,0.5);    background: rgba(255,51,68,0.08); }
+.cmt-chip--jig     { color: #00d9ff; box-shadow: inset 0 0 0 1px rgba(0,217,255,0.5);    background: rgba(0,217,255,0.08); }
+.cmt-chip--neutral { color: #6b7872; box-shadow: inset 0 0 0 1px rgba(107,120,114,0.4);  background: rgba(107,120,114,0.05); }
+
+/* ---- root ---- */
+.cmt-root { display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; }
+
+/* ---- header ---- */
+.cmt-header {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding-bottom: 12px; border-bottom: 1px solid rgba(180,220,200,0.1);
+}
+.cmt-header__brand { display: flex; align-items: center; gap: 10px; }
+.cmt-header__name {
+  font-family: var(--font-display); font-weight: 800; font-size: 22px;
+  letter-spacing: 0.06em; text-transform: uppercase; color: var(--fg-1);
+}
+.cmt-header__sub {
+  font-family: var(--font-display); font-weight: 600; font-size: 10px;
+  letter-spacing: 0.16em; color: var(--fg-3); text-transform: uppercase;
+}
+
+/* ---- engine toggle ---- */
+.cmt-etoggle {
+  display: flex; border: 1px solid rgba(180,220,200,0.16); border-radius: 5px; overflow: hidden;
+}
+.cmt-etoggle__btn {
+  font-family: var(--font-display); font-weight: 700; font-size: 11px; letter-spacing: 0.14em;
+  text-transform: uppercase; padding: 7px 16px; background: transparent; color: var(--fg-3);
+  border: 0; cursor: pointer; transition: all .15s ease;
+}
+.cmt-etoggle__btn + .cmt-etoggle__btn { border-left: 1px solid rgba(180,220,200,0.12); }
+.cmt-etoggle__btn:hover { color: var(--fg-1); background: rgba(180,220,200,0.04); }
+.cmt-etoggle__btn--on.cmt-etoggle__btn--main {
+  color: #fff; background: rgba(255,51,68,0.18);
+  box-shadow: inset 0 0 0 1px rgba(255,51,68,0.6), 0 0 12px rgba(255,51,68,0.2);
+}
+.cmt-etoggle__btn--on.cmt-etoggle__btn--jig {
+  color: #fff; background: rgba(0,217,255,0.18);
+  box-shadow: inset 0 0 0 1px rgba(0,217,255,0.6), 0 0 12px rgba(0,217,255,0.2);
+}
+
+/* ---- P1: slate command strip ---- */
+.cmt-strip {
+  display: flex; align-items: center; gap: 0;
+  background: var(--bg-raised); border: 1px solid rgba(180,220,200,0.08);
+  border-radius: 5px; padding: 8px 12px; flex-wrap: wrap; gap: 4px;
+}
+.cmt-strip__sep { width: 1px; height: 24px; background: rgba(180,220,200,0.1); flex-shrink: 0; margin: 0 6px; }
+.cmt-strip__push { flex: 1; }
+.cmt-strip__cell { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 2px 6px; }
+.cmt-strip__eye {
+  font-family: var(--font-display); font-weight: 600; font-size: 8px;
+  letter-spacing: 0.18em; color: var(--fg-3); text-transform: uppercase;
+}
+.cmt-strip__val {
+  font-family: var(--font-mono); font-weight: 700; font-size: 14px;
+  color: var(--fg-1); font-variant-numeric: tabular-nums;
+}
+.cmt-strip__val--apex  { color: #ff3344; text-shadow: 0 0 8px rgba(255,51,68,0.4); }
+.cmt-strip__val--warn  { color: var(--amber-500); }
+
+/* ---- P2: threat zone ---- */
+.cmt-zone {
+  background: var(--bg-raised); border: 1px solid rgba(180,220,200,0.08);
+  border-radius: 6px; overflow: hidden;
+}
+.cmt-zone__head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px; border-bottom: 1px solid rgba(180,220,200,0.07);
+  background: linear-gradient(180deg, rgba(0,0,0,0.1), transparent);
+}
+.cmt-zone__label {
+  font-family: var(--font-display); font-weight: 800; font-size: 11px;
+  letter-spacing: 0.18em; color: var(--fg-2); text-transform: uppercase;
+}
+.cmt-zone__sub {
+  font-family: var(--font-display); font-weight: 600; font-size: 8px;
+  letter-spacing: 0.12em; color: var(--fg-4); text-transform: uppercase;
+}
+.cmt-zone__cards { display: flex; gap: 8px; padding: 10px 10px 12px; overflow-x: auto; }
+.cmt-zone__cards::-webkit-scrollbar { height: 5px; }
+.cmt-zone__cards::-webkit-scrollbar-thumb { background: rgba(180,220,200,0.12); border-radius: 3px; }
+
+/* ---- threat card ---- */
+.cmt-card {
+  position: relative; flex: 1; min-width: 130px; max-width: 180px;
+  display: flex; flex-direction: column; gap: 6px;
+  background: var(--bg-base); border: 1px solid rgba(180,220,200,0.08);
+  border-radius: 5px; padding: 10px 10px 8px; overflow: hidden;
+  transition: border-color .15s ease;
+}
+.cmt-card:hover { border-color: rgba(180,220,200,0.2); }
+.cmt-card--top  { flex: 1.25; }
+
+/* tier hairline top */
+.cmt-card__hairline {
+  position: absolute; top: 0; left: 0; right: 0; height: 2px;
+}
+
+/* corner brackets */
+.cmt-card__corner {
+  position: absolute; width: 8px; height: 8px;
+  border-color: var(--cc, #ff3344); border-style: solid;
+  border-width: 0;
+}
+.cmt-card__corner--tl { top: 3px;  left: 3px;  border-top-width: 1.5px; border-left-width: 1.5px; }
+.cmt-card__corner--tr { top: 3px;  right: 3px; border-top-width: 1.5px; border-right-width: 1.5px; }
+.cmt-card__corner--bl { bottom: 3px; left: 3px;  border-bottom-width: 1.5px; border-left-width: 1.5px; }
+.cmt-card__corner--br { bottom: 3px; right: 3px; border-bottom-width: 1.5px; border-right-width: 1.5px; }
+
+.cmt-card__rank {
+  font-family: var(--font-display); font-weight: 700; font-size: 9px;
+  letter-spacing: 0.12em; color: var(--fg-4); text-transform: uppercase;
+}
+.cmt-card__body { display: flex; flex-direction: column; gap: 4px; }
+.cmt-card__name {
+  font-family: var(--font-display); font-weight: 800; font-size: 13px;
+  letter-spacing: 0.04em; text-transform: uppercase; color: var(--fg-1);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.cmt-card__meta {
+  display: flex; align-items: center; gap: 4px; flex-wrap: wrap;
+  font-family: var(--font-display); font-weight: 600; font-size: 9px;
+  letter-spacing: 0.08em; text-transform: uppercase;
+}
+.cmt-card__team { color: var(--fg-3); }
+.cmt-card__opp  { color: var(--fg-4); }
+.cmt-card__time { color: var(--cyan-500); }
+
+.cmt-card__pills    { display: flex; gap: 4px; flex-wrap: wrap; }
+.cmt-card__secondary{ display: flex; gap: 3px; flex-wrap: wrap; }
+
+.cmt-card__tier-row {
+  display: flex; align-items: center; gap: 5px; margin-top: 2px;
+}
+.cmt-card__tier-lbl {
+  font-family: var(--font-display); font-weight: 600; font-size: 7.5px;
+  letter-spacing: 0.16em; color: var(--fg-4); text-transform: uppercase;
+}
+.cmt-card__tier-val {
+  font-family: var(--font-display); font-weight: 800; font-size: 9px;
+  letter-spacing: 0.12em; text-transform: uppercase;
+}
+
+/* ---- pills ---- */
+.cmt-pill {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-family: var(--font-display); font-weight: 700; font-size: 9px;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  padding: 3px 6px; border-radius: 3px;
+  background: rgba(180,220,200,0.05);
+  box-shadow: inset 0 0 0 1px rgba(180,220,200,0.12);
+  color: var(--fg-2);
+}
+.cmt-pill__lbl { color: var(--fg-4); font-size: 7.5px; }
+.cmt-pill__val { color: var(--fg-1); font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+
+/* primary pill: uses --pc color */
+.cmt-pill[style*="--pc"] .cmt-pill__val { color: var(--pc); }
+
+/* barrel = green accent */
+.cmt-pill--barrel .cmt-pill__val { color: #1aff66; }
+.cmt-pill--env    .cmt-pill__val { color: #00d9ff; }
+
+/* HVY flag */
+.cmt-pill--hvy {
+  background: rgba(255,176,32,0.1); box-shadow: inset 0 0 0 1px rgba(255,176,32,0.5);
+  color: #ffb020; font-weight: 800;
+}
+
+/* ---- P3: pitcher vulnerability ---- */
+.cmt-pvs {
+  background: var(--bg-raised); border: 1px solid rgba(180,220,200,0.08);
+  border-radius: 6px; overflow: hidden;
+}
+.cmt-pvs__head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px; border-bottom: 1px solid rgba(180,220,200,0.07);
+}
+.cmt-pvs__label {
+  font-family: var(--font-display); font-weight: 800; font-size: 11px;
+  letter-spacing: 0.18em; color: var(--fg-2); text-transform: uppercase;
+}
+.cmt-pvs__sub {
+  font-family: var(--font-display); font-weight: 600; font-size: 8px;
+  letter-spacing: 0.12em; color: var(--fg-4); text-transform: uppercase;
+}
+.cmt-pvs__cards { display: flex; gap: 6px; padding: 10px 10px 12px; overflow-x: auto; }
+.cmt-pvs__cards::-webkit-scrollbar { height: 5px; }
+.cmt-pvs__cards::-webkit-scrollbar-thumb { background: rgba(180,220,200,0.12); border-radius: 3px; }
+
+.cmt-pvs__card {
+  flex: 1; min-width: 90px; display: flex; flex-direction: column; gap: 5px;
+  background: var(--bg-base); border-top: 2px solid var(--tc, rgba(180,220,200,0.2));
+  border-radius: 4px; padding: 7px 8px;
+}
+.cmt-pvs__name {
+  font-family: var(--font-display); font-weight: 800; font-size: 11px;
+  letter-spacing: 0.04em; text-transform: uppercase; color: var(--fg-1);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.cmt-pvs__hr9 {
+  font-family: var(--font-mono); font-weight: 700; font-size: 15px;
+  color: var(--tc); font-variant-numeric: tabular-nums;
+}
+.cmt-pvs__bar-wrap {
+  height: 3px; background: rgba(180,220,200,0.06); border-radius: 2px; overflow: hidden;
+}
+.cmt-pvs__bar { height: 100%; border-radius: 2px; }
+.cmt-pvs__badge {
+  font-family: var(--font-display); font-weight: 800; font-size: 7.5px;
+  letter-spacing: 0.16em; text-transform: uppercase; color: var(--tc);
+}
+
+/* ---- P4: escalation feed ---- */
+.cmt-esc {
+  background: var(--bg-raised); border: 1px solid rgba(180,220,200,0.08);
+  border-radius: 6px; overflow: hidden;
+}
+.cmt-esc__head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px; border-bottom: 1px solid rgba(180,220,200,0.07);
+}
+.cmt-esc__label {
+  font-family: var(--font-display); font-weight: 800; font-size: 11px;
+  letter-spacing: 0.18em; color: var(--fg-2); text-transform: uppercase;
+}
+.cmt-esc__sub {
+  font-family: var(--font-display); font-weight: 600; font-size: 8px;
+  letter-spacing: 0.12em; color: var(--fg-4); text-transform: uppercase;
+}
+.cmt-esc__rows { display: flex; flex-direction: column; gap: 2px; padding: 6px 10px 10px; }
+.cmt-esc__row {
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px; border-left: 2px solid var(--tc, #6b7872);
+  border-radius: 0 3px 3px 0; background: rgba(255,255,255,0.015);
+}
+.cmt-esc__row--dim { opacity: 0.45; }
+.cmt-esc__dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--tc); flex-shrink: 0;
+  box-shadow: 0 0 5px var(--tc);
+}
+.cmt-esc__level {
+  font-family: var(--font-display); font-weight: 800; font-size: 9px;
+  letter-spacing: 0.18em; text-transform: uppercase; color: var(--tc);
+  min-width: 64px; flex-shrink: 0;
+}
+.cmt-esc__name {
+  font-family: var(--font-display); font-weight: 700; font-size: 12px;
+  text-transform: uppercase; letter-spacing: 0.04em; color: var(--fg-1);
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cmt-esc__team {
+  font-family: var(--font-mono); font-size: 10px; color: var(--fg-3); flex-shrink: 0;
+}
+.cmt-esc__live {
+  font-family: var(--font-display); font-weight: 800; font-size: 8px;
+  letter-spacing: 0.2em; text-transform: uppercase;
+  color: #1aff66; background: rgba(26,255,102,0.08);
+  padding: 2px 5px; border-radius: 2px; flex-shrink: 0;
+}
+
+/* ---- empty state ---- */
+.cmt-empty {
+  font-family: var(--font-display); font-weight: 600; font-size: 10px;
+  letter-spacing: 0.18em; color: var(--fg-4); text-transform: uppercase;
+  padding: 16px 12px; text-align: center;
+}
+</style>
 </head>
 <body>
   <div id="root"></div>
@@ -4355,6 +4637,7 @@ button.fsm-tier { appearance: none; text-decoration: none; }
   <script type="text/babel" src="assets/js/hr-threat-zone.js"></script>
   <script type="text/babel" src="assets/js/pitcher-vulnerability-strip.js"></script>
   <script type="text/babel" src="assets/js/escalation-feed.js"></script>
+  <script type="text/babel" src="assets/js/command-tab.js"></script>
   <script type="text/babel" src="assets/js/cfdd4178-a139-4f84-b282-b84f76971c49.js"></script>
   <script type="text/babel" src="assets/js/a6cd8ef6-2b53-4016-a340-66b69a8928bd.js"></script>
 

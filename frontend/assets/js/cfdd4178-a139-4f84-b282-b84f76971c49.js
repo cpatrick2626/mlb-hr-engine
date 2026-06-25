@@ -184,6 +184,8 @@ const Stage = ({ engine, lens, ccOpen, onCloseCC, appliedFilters, onApplyFilters
         <Leaderboard rows={rows} onOpen={onOpenPlayer} tierHeaderLabel={engine.id === "jig" ? "MODEL TIER" : "TIER"} />
       </div>;
 
+  } else if (engine.id === "command") {
+    body = <CommandTabPanel />;
   } else if (lens && lens.id === "builder") {
     body = <JigCommand engine={engine} lens={lens} onOpenPlayer={onOpenPlayer} />;
   } else {

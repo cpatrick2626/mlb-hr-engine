@@ -72,6 +72,11 @@ window.ENGINES = [
     color: "#1aff66", glow: "rgba(26,255,102,0.2)", tint: "rgba(26,255,102,0.05)",
     desc: "Track player and pitcher performance trends",
   },
+  {
+    id: "command", name: "COMMAND", suffix: "", icon: "target",
+    color: "#ff8a93", glow: "rgba(255,138,147,0.2)", tint: "rgba(255,138,147,0.05)",
+    desc: "Tactical overview · MAIN / JIG",
+  },
 ];
 
 /* ---- Room filters: how Tactical Command Center values affect a room ---- */
