@@ -49,7 +49,52 @@ function stratOpenFanduel(e, strat, players) {
   el._t = setTimeout(() => { el.style.opacity = "0"; }, 2800);
 }
 
-const StratHead = ({ stratId, player }) => {
+const STRAT_SLIP_COLORS = {
+  idle:    { border: 'rgba(59,111,255,0.6)',  color: '#3b6fff' },
+  loading: { border: 'rgba(107,120,114,0.4)', color: '#6b7872' },
+  added:   { border: 'rgba(26,255,102,0.6)',  color: '#1aff66' },
+  error:   { border: 'rgba(255,51,68,0.6)',   color: '#ff3344' },
+  noauth:  { border: 'rgba(255,176,32,0.5)',  color: '#ffb020' },
+};
+const STRAT_SLIP_GLYPH = { idle: '+', loading: '…', added: '✓', error: '!', noauth: '⚿' };
+const STRAT_SLIP_TITLE = { idle: 'Add to slip', loading: 'Adding…', added: 'Added to slip', error: 'Error — retry', noauth: 'Log in to add' };
+
+const StratSlipBtn = ({ status, onClick, label }) => {
+  const s = status || 'idle';
+  const c = STRAT_SLIP_COLORS[s] || STRAT_SLIP_COLORS.idle;
+  const disabled = s === 'loading' || s === 'added';
+  return (
+    <button
+      type="button"
+      onClick={disabled ? undefined : onClick}
+      title={STRAT_SLIP_TITLE[s]}
+      aria-label={"Add " + label + " to slip"}
+      style={{
+        background: 'transparent',
+        border: '1px solid ' + c.border,
+        borderRadius: '3px',
+        cursor: disabled ? 'default' : 'pointer',
+        fontSize: '11px',
+        fontWeight: '700',
+        width: '20px',
+        height: '20px',
+        padding: '0',
+        lineHeight: '1',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontFamily: 'inherit',
+        color: c.color,
+        transition: 'border-color .15s, color .15s',
+        flexShrink: 0,
+        marginTop: '3px',
+      }}>
+      {STRAT_SLIP_GLYPH[s]}
+    </button>
+  );
+};
+
+const StratHead = ({ stratId, player, slipStatus, onAddLeg }) => {
   const teamColor = (window.FSM_TEAM_COLOR || {})[player.teamAbbr] || "#3b6fff";
   const initials = player.name.replace("…", "").split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
   const last = player.name.replace("…", "").split(" ").slice(-1)[0];
@@ -57,6 +102,7 @@ const StratHead = ({ stratId, player }) => {
     <div className="md-strat-head" style={{ "--team": teamColor }} title={player.name}>
       <image-slot id={`strat-${stratId}-${player.id}`} shape="circle" placeholder={initials}></image-slot>
       <span className="md-strat-head__name">{last}</span>
+      <StratSlipBtn status={slipStatus} onClick={() => onAddLeg(player)} label={player.name} />
     </div>
   );
 };
@@ -66,6 +112,32 @@ const StratCard = ({ strat, rows, count }) => {
   const avg = players.reduce((a, p) => a + p.hrprob, 0) / (players.length || 1);
   const score = Math.min(9.9, 6 + avg * 0.17).toFixed(1);
   const addFD = (e) => stratOpenFanduel(e, strat, players);
+
+  const [slipState, setSlipState] = React.useState(() => window.__hrSlip ? window.__hrSlip.getState() : { cardStatus: {} });
+  React.useEffect(() => {
+    if (!window.__hrSlip) return;
+    return window.__hrSlip.subscribe(() => setSlipState(window.__hrSlip.getState()));
+  }, []);
+  const { cardStatus } = slipState;
+
+  const handleAddLeg = (p) => {
+    if (!window.__hrSlip) return;
+    window.__hrSlip.addLeg({
+      player_id:       p.id,
+      name:            p.name,
+      team:            p.teamAbbr,
+      pitcher:         p.pitcher_name,
+      pitcher_name:    p.pitcher_name,
+      model_prob:      p.model_prob,
+      tier:            p.tier,
+      model_tier_rank: p.model_tier_rank,
+      board:           'main',
+      hrprob:          p.hrprob,
+      barrel:          p.barrel,
+      hh:              p.hh,
+    });
+  };
+
   return (
     <div
       className="md-qp__card"
@@ -82,7 +154,15 @@ const StratCard = ({ strat, rows, count }) => {
         <span className="md-qp__score">HR ENV SCORE <b>{score}</b></span>
       </div>
       <div className="md-qp__heads" style={{ gridTemplateColumns: `repeat(${count}, 1fr)` }} onClick={(e) => e.stopPropagation()}>
-        {players.map((p) => <StratHead key={p.id} stratId={strat.id} player={p} />)}
+        {players.map((p) => (
+          <StratHead
+            key={p.id}
+            stratId={strat.id}
+            player={p}
+            slipStatus={cardStatus[p.id || p.name] || 'idle'}
+            onAddLeg={handleAddLeg}
+          />
+        ))}
       </div>
       <div className="md-qp__tag">{strat.tag}</div>
     </div>
