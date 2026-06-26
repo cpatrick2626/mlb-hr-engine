@@ -527,6 +527,25 @@ def _build_slate_payload(data: dict) -> dict:
         jig_rows = []
         jig_build_error = True
 
+    # AEE precompute — display-only, after JIG so pitch-mix caches are warm
+    try:
+        from engine.arsenal_edge import compute_aee_score
+        _aee_arsenal = get_pitcher_arsenal(_dt.datetime.now().year)  # cache hit
+        _aee_players = {
+            (p.get("player_id") or (p.get("player_name") or "").lower().replace(" ", "-")): p
+            for p in players
+        }
+        _aee_map: dict[str, dict] = {
+            pid: compute_aee_score(p, _aee_arsenal)
+            for pid, p in _aee_players.items()
+        }
+        for r in leaderboard_rows:
+            r.update(_aee_map.get(r.get("id"), {}))
+        for r in jig_rows:
+            r.update(_aee_map.get(r.get("id"), {}))
+    except Exception as e:
+        log.error("AEE precompute failed: %s", e, exc_info=True)
+
     seen_games = {}
     for p in players:
         _home = (p.get("home_team") or p.get("team") or "home").upper()
