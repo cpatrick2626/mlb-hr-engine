@@ -3,8 +3,8 @@
    Mobile:  Top HR Threats strip — top 3 compact tap-friendly cards.
    Receives rows prop already filtered/sorted upstream by Stage.
    Display-only — no scoring changes, no API calls, no new formulas.
-   Step 2a: "Add to Ticket" button calls POST /api/tickets/leg with user JWT.
-   Ticket state lives in HRThreatZone (shared across cards so 2nd+ leg reuses same ticket_id). */
+   Step 2a: "Add to Ticket" button delegates to window.__hrSlip.addLeg().
+   Ticket state lives in window.__hrSlip (shared across all surfaces). */
 
 const HRTZ_TIER_COLOR = {
   APEX:   "#ff3344",
@@ -88,91 +88,41 @@ function HRThreatCard({ row, rank, compact, onAdd, addStatus }) {
   );
 }
 
+function useSlipState() {
+  const [state, setState] = React.useState(() => window.__hrSlip.getState());
+  React.useEffect(() => {
+    return window.__hrSlip.subscribe(() => setState(window.__hrSlip.getState()));
+  }, []);
+  return state;
+}
+
 function HRThreatZone({ rows, isJigContext }) {
   const sorted  = [...(rows || [])].sort((a, b) => (b.hrprob || 0) - (a.hrprob || 0));
   const desktop = sorted.slice(0, 5);
   const mobile  = sorted.slice(0, 3);
 
-  // Ticket state — shared across all cards so 2nd+ leg appends to the same ticket
-  const [ticketId, setTicketId] = React.useState(null);
-  const [legs, setLegs] = React.useState([]);          // [{n, name, teamAbbr, tier, hrprob, barrel, hh, pitcher_name, id}] — session only
-  const [cardStatus, setCardStatus] = React.useState({}); // {rowKey: 'idle'|'loading'|'added'|'error'|'noauth'}
+  const { ticketId, legs, cardStatus } = useSlipState();
   const [slipOpen, setSlipOpen] = React.useState(false);
 
-  const addLeg = async (row) => {
-    const key = row.id || row.name;
-    const cur = cardStatus[key] || 'idle';
-
-    // Already in-flight or done — no-op (button is disabled for these states)
-    if (cur === 'loading' || cur === 'added') return;
-
-    // Not logged in — open sign-in modal and stop
-    if (cur === 'noauth') {
-      const authBtn = document.querySelector('#auth-root button');
-      if (authBtn) authBtn.click();
-      return;
-    }
-
-    setCardStatus(s => ({ ...s, [key]: 'loading' }));
-
-    if (!window.__hrAuth?.authFetch) {
-      setCardStatus(s => ({ ...s, [key]: 'noauth' }));
-      return;
-    }
-
-    const body = {
-      board:        row._board || 'main',
-      name:         row.name,
-      model_prob:   row.model_prob,
-      tier:         row.tier,
-      generated_at: window.SLATE_GENERATED_AT || null,
-    };
-    if (row.model_tier_rank != null) body.model_tier_rank = row.model_tier_rank;
-    // First leg: omit ticket_id → backend opens new ticket and returns ticket_id
-    // Subsequent legs: pass the ticket_id returned from the first leg
-    if (ticketId) body.ticket_id = ticketId;
-    // Calibration fields — sent when available on the row; backend writes NULL for omitted fields
-    if (row.id)           body.player_id = row.id;
-    if (row.teamAbbr)     body.team      = row.teamAbbr;
-    if (row.pitcher_name) body.pitcher   = row.pitcher_name;
-    // opponent: not in row shape — omitted (NULL server-side)
-    // market_odds_american / market_prob: not on row — omitted (NULL server-side, no source yet)
-
-    try {
-      const res = await window.__hrAuth.authFetch(
-        'https://mlb-hr-api.fly.dev/api/tickets/leg',
-        { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
-      );
-      if (res._noAuth) {
-        setCardStatus(s => ({ ...s, [key]: 'noauth' }));
-        const authBtn = document.querySelector('#auth-root button');
-        if (authBtn) authBtn.click();
-        return;
-      }
-      if (!res.ok) {
-        setCardStatus(s => ({ ...s, [key]: 'error' }));
-        return;
-      }
-      const data = await res.json();
-      if (!ticketId) setTicketId(data.ticket_id);
-      setLegs(l => [...l, {
-        n:            l.length + 1,
-        name:         row.name,
-        teamAbbr:     row.teamAbbr,
-        tier:         row.tier,
-        hrprob:       row.hrprob,
-        barrel:       row.barrel,
-        hh:           row.hh,
-        pitcher_name: row.pitcher_name,
-        id:           row.id,
-      }]);
-      setCardStatus(s => ({ ...s, [key]: 'added' }));
-    } catch (_e) {
-      setCardStatus(s => ({ ...s, [key]: 'error' }));
-    }
+  const addLeg = (row) => {
+    window.__hrSlip.addLeg({
+      player_id:       row.id,
+      name:            row.name,
+      teamAbbr:        row.teamAbbr,
+      team:            row.teamAbbr,
+      pitcher:         row.pitcher_name,
+      pitcher_name:    row.pitcher_name,
+      model_prob:      row.model_prob,
+      tier:            row.tier,
+      model_tier_rank: row.model_tier_rank,
+      board:           row._board || 'main',
+      hrprob:          row.hrprob,
+      barrel:          row.barrel,
+      hh:              row.hh,
+    });
   };
 
-  const removeLeg = (n) => setLegs(ls => ls.filter(l => l.n !== n));
+  const removeLeg = (n) => window.__hrSlip.removeLeg(n);
 
   if (!desktop.length) return null;
 
