@@ -413,7 +413,7 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, i
               <>
                 <span style={{ fontFamily: "var(--font-display)", fontSize: "12px", fontWeight: 900, lineHeight: 1, whiteSpace: "nowrap" }}>{fsmAeeScoreText(row)}</span>
                 <span style={{ fontFamily: "var(--font-display)", fontSize: "9px", fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{aeeLabel}</span>
-                {row.arsenal_edge_confidence != null && <span style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "#6b7872", whiteSpace: "nowrap" }}>CONF {Number(row.arsenal_edge_confidence).toFixed(0)}%</span>}
+                {row.arsenal_edge_confidence != null && <span style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "#6b7872", whiteSpace: "nowrap" }}>CONF {Math.round(Number(row.arsenal_edge_confidence) * 100)}%</span>}
                 {aeeKeyPitch && <code style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "#6b7872", whiteSpace: "nowrap" }}>KEY {aeeKeyPitch}</code>}
               </>
             )}
