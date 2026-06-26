@@ -287,7 +287,51 @@ function fsmRoleTip(role, row) {
   return role.toUpperCase();
 }
 
-function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, isJigContext = false, jigLabel = null, jigRank = null }) {
+const FSM_SLIP_COLORS = {
+  idle:   { border: 'rgba(59,111,255,0.6)',  color: '#3b6fff' },
+  loading:{ border: 'rgba(107,120,114,0.4)', color: '#6b7872' },
+  added:  { border: 'rgba(26,255,102,0.6)',  color: '#1aff66' },
+  error:  { border: 'rgba(255,51,68,0.6)',   color: '#ff3344' },
+  noauth: { border: 'rgba(255,176,32,0.5)',  color: '#ffb020' },
+};
+const FSM_SLIP_GLYPH = { idle: '+', loading: '…', added: '✓', error: '!', noauth: '⚿' };
+const FSM_SLIP_TITLE = { idle: 'Add to slip', loading: 'Adding…', added: 'Added to slip', error: 'Error — retry', noauth: 'Log in to add' };
+
+function FsmSlipBtn({ status, onClick, label }) {
+  const s = status || 'idle';
+  const c = FSM_SLIP_COLORS[s] || FSM_SLIP_COLORS.idle;
+  const disabled = s === 'loading' || s === 'added';
+  return (
+    <button
+      type="button"
+      onClick={disabled ? undefined : onClick}
+      title={FSM_SLIP_TITLE[s]}
+      aria-label={"Add " + label + " to slip"}
+      style={{
+        background: 'transparent',
+        border: '1px solid ' + c.border,
+        borderRadius: '3px',
+        cursor: disabled ? 'default' : 'pointer',
+        fontSize: '13px',
+        fontWeight: '700',
+        width: '24px',
+        height: '24px',
+        padding: '0',
+        lineHeight: '1',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontFamily: 'inherit',
+        color: c.color,
+        transition: 'border-color .15s, color .15s',
+        flexShrink: 0,
+      }}>
+      {FSM_SLIP_GLYPH[s]}
+    </button>
+  );
+}
+
+function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, isJigContext = false, jigLabel = null, jigRank = null, onAddLeg, slipStatus = 'idle' }) {
   const displayTier = isJigContext && jigLabel ? jigLabel : row.tier;
   const t = FSM_TIERS[displayTier] || FSM_TIERS.COLD;
   const m = FSM_MATCHUP[row.quality] || FSM_MATCHUP.AVG;
@@ -345,6 +389,9 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, i
         </button>
       </td>
       {cols.map((c) => <FsmCell key={c.key} col={c} row={row} />)}
+      <td className="fsm-cell fsm-cell--slip" style={{ textAlign: 'center', padding: '0 4px' }}>
+        <FsmSlipBtn status={slipStatus} onClick={() => onAddLeg && onAddLeg(row)} label={row.name} />
+      </td>
     </tr>);
 
 }
@@ -446,6 +493,32 @@ function FsmRadioGroup({ label, value, onChange, options }) {
 let fsmDragKey = null;
 
 function FsmTable({ rows, cols, showGame, onBatter, onPitch, onReorder, onSort, sortState, builderMode = false, isJigContext = false }) {
+  const [slipState, setSlipState] = React.useState(() => window.__hrSlip ? window.__hrSlip.getState() : { cardStatus: {} });
+  React.useEffect(() => {
+    if (!window.__hrSlip) return;
+    return window.__hrSlip.subscribe(() => setSlipState(window.__hrSlip.getState()));
+  }, []);
+  const { cardStatus } = slipState;
+
+  const handleAddLeg = (row) => {
+    if (!window.__hrSlip) return;
+    window.__hrSlip.addLeg({
+      player_id:       row.id,
+      name:            row.name,
+      teamAbbr:        row.teamAbbr,
+      team:            row.teamAbbr,
+      pitcher:         row.pitcher_name,
+      pitcher_name:    row.pitcher_name,
+      model_prob:      row.model_prob,
+      tier:            row.tier,
+      model_tier_rank: row.model_tier_rank,
+      board:           isJigContext || builderMode ? 'jig' : (row._board || 'main'),
+      hrprob:          row.hrprob,
+      barrel:          row.barrel,
+      hh:              row.hh,
+    });
+  };
+
   const thProps = (c) => ({
     draggable: true,
     onDragStart: (e) => { fsmDragKey = c.key; e.dataTransfer.effectAllowed = "move"; },
@@ -463,11 +536,13 @@ function FsmTable({ rows, cols, showGame, onBatter, onPitch, onReorder, onSort, 
       <colgroup>
         <col style={{ width: "72px" }} /><col style={{ width: "128px" }} /><col style={{ width: "98px" }} />
         {cols.map((c) => <col key={c.key} style={{ width: c.key === "pa" ? "46px" : "60px" }} />)}
+        <col style={{ width: "36px" }} />
       </colgroup>
       <thead>
         <tr className="fsm-grouprow">
           <th className="fsm-gband fsm-gband--id" colSpan={3}>BATTER</th>
           {bands.map((b, i) => <th key={i} className={"fsm-gband fsm-gband--" + b.label.toLowerCase()} colSpan={b.span}>{b.label}</th>)}
+          <th className="fsm-gband" style={{ width: "36px" }} />
         </tr>
         <tr className="fsm-colhead">
           <th className="fsm-th-tier">{isJigContext ? "JIG TIER" : builderMode ? "MODEL TIER" : "TIER"}</th>
@@ -476,6 +551,7 @@ function FsmTable({ rows, cols, showGame, onBatter, onPitch, onReorder, onSort, 
           {cols.map((c) =>
           <th key={c.key} className={"fsm-th-stat" + (c.danger ? " fsm-th-danger" : "") + (sortState && sortState.key === c.key ? " is-sorted" : "")} {...thProps(c)}>{c.head}{arrow(c)}</th>
           )}
+          <th className="fsm-th-stat" style={{ width: "36px", textAlign: "center", cursor: "default" }} title="Add to slip">SLIP</th>
         </tr>
       </thead>
       <tbody>
@@ -488,7 +564,7 @@ function FsmTable({ rows, cols, showGame, onBatter, onPitch, onReorder, onSort, 
               tierCounts[jigLabel] = (tierCounts[jigLabel] || 0) + 1;
               jigRank = tierCounts[jigLabel];
             }
-            return <FsmRow key={r.id} row={r} cols={cols} showGame={showGame} onBatter={onBatter} onPitch={onPitch} builderMode={builderMode} isJigContext={isJigContext} jigLabel={jigLabel} jigRank={jigRank} />;
+            return <FsmRow key={r.id} row={r} cols={cols} showGame={showGame} onBatter={onBatter} onPitch={onPitch} builderMode={builderMode} isJigContext={isJigContext} jigLabel={jigLabel} jigRank={jigRank} onAddLeg={handleAddLeg} slipStatus={cardStatus[r.id || r.name] || 'idle'} />;
           });
         })()}
       </tbody>
