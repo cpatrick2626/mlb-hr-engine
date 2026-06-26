@@ -114,7 +114,15 @@ function CmtPill({ label, val, color, barrel, env }) {
   );
 }
 
-function CmtThreatCard({ row, rank, engine, games, isTop }) {
+function useSlipState() {
+  const [state, setState] = React.useState(() => window.__hrSlip.getState());
+  React.useEffect(() => {
+    return window.__hrSlip.subscribe(() => setState(window.__hrSlip.getState()));
+  }, []);
+  return state;
+}
+
+function CmtThreatCard({ row, rank, engine, games, isTop, onAdd, addStatus }) {
   const isJig    = engine === "jig";
   const accentC  = isJig ? "#00d9ff" : "#ff3344";
   const tierC    = CMT_TIER_ACCENT[row.tier] || "#3a4642";
@@ -125,6 +133,16 @@ function CmtThreatCard({ row, rank, engine, games, isTop }) {
 
   // LOCKED: read hrprob directly — it is already ×100
   const hrProbDisplay = row.hrprob != null ? Number(row.hrprob).toFixed(1) + "%" : "—";
+
+  const slipStatus = addStatus || 'idle';
+  const slipLabel  = slipStatus === 'loading' ? '…'
+    : slipStatus === 'added'  ? '✓'
+    : slipStatus === 'error'  ? '!'
+    : slipStatus === 'noauth' ? '🔒'
+    : '+';
+  const slipTitle  = slipStatus === 'added'  ? 'Added to slip'
+    : slipStatus === 'noauth' ? 'Sign in to add'
+    : 'Add to slip';
 
   return (
     <div
@@ -182,6 +200,13 @@ function CmtThreatCard({ row, rank, engine, games, isTop }) {
           <span className="cmt-card__tier-lbl">{isJig ? "MODEL TIER" : "TIER"}</span>
           <span className="cmt-card__tier-val" style={{ color: tierC }}>{row.tier || "—"}</span>
         </div>
+
+        <button
+          className={`cmt-card__add cmt-card__add--${slipStatus}`}
+          onClick={e => { e.stopPropagation(); onAdd && onAdd(row); }}
+          disabled={slipStatus === 'loading' || slipStatus === 'added'}
+          title={slipTitle}
+        >{slipLabel}</button>
       </div>
     </div>
   );
@@ -194,6 +219,26 @@ function CmtThreatZone({ mainRows, jigRows, games, engine }) {
     ? [...src].sort((a, b) => (b.jigScore || 0) - (a.jigScore || 0))
     : [...src]
   ).slice(0, 6);
+
+  const { cardStatus } = useSlipState();
+
+  const handleAdd = (row) => {
+    window.__hrSlip.addLeg({
+      player_id:       row.id,
+      name:            row.name,
+      teamAbbr:        row.teamAbbr,
+      team:            row.teamAbbr,
+      pitcher:         row.pitcher_name,
+      pitcher_name:    row.pitcher_name,
+      model_prob:      row.model_prob,
+      tier:            row.tier,
+      model_tier_rank: row.model_tier_rank,
+      board:           isJig ? 'jig' : 'main',
+      hrprob:          row.hrprob,
+      barrel:          row.barrel,
+      hh:              row.hh,
+    });
+  };
 
   const accentC = isJig ? "#00d9ff" : "#ff3344";
   const chipCls = isJig ? "cmt-chip--jig" : "cmt-chip--main";
@@ -216,6 +261,8 @@ function CmtThreatZone({ mainRows, jigRows, games, engine }) {
                 row={row} rank={i + 1}
                 engine={engine} games={games}
                 isTop={i === 0}
+                onAdd={handleAdd}
+                addStatus={cardStatus[row.id || row.name] || 'idle'}
               />
             ))}
       </div>
