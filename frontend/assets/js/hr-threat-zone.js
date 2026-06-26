@@ -95,8 +95,9 @@ function HRThreatZone({ rows, isJigContext }) {
 
   // Ticket state — shared across all cards so 2nd+ leg appends to the same ticket
   const [ticketId, setTicketId] = React.useState(null);
-  const [legs, setLegs] = React.useState([]);          // [{name, tier}] — session only
+  const [legs, setLegs] = React.useState([]);          // [{n, name, teamAbbr, tier, hrprob, barrel, hh, pitcher_name, id}] — session only
   const [cardStatus, setCardStatus] = React.useState({}); // {rowKey: 'idle'|'loading'|'added'|'error'|'noauth'}
+  const [slipOpen, setSlipOpen] = React.useState(false);
 
   const addLeg = async (row) => {
     const key = row.id || row.name;
@@ -154,12 +155,24 @@ function HRThreatZone({ rows, isJigContext }) {
       }
       const data = await res.json();
       if (!ticketId) setTicketId(data.ticket_id);
-      setLegs(l => [...l, { name: row.name, tier: row.tier }]);
+      setLegs(l => [...l, {
+        n:            l.length + 1,
+        name:         row.name,
+        teamAbbr:     row.teamAbbr,
+        tier:         row.tier,
+        hrprob:       row.hrprob,
+        barrel:       row.barrel,
+        hh:           row.hh,
+        pitcher_name: row.pitcher_name,
+        id:           row.id,
+      }]);
       setCardStatus(s => ({ ...s, [key]: 'added' }));
     } catch (_e) {
       setCardStatus(s => ({ ...s, [key]: 'error' }));
     }
   };
+
+  const removeLeg = (n) => setLegs(ls => ls.filter(l => l.n !== n));
 
   if (!desktop.length) return null;
 
@@ -189,7 +202,7 @@ function HRThreatZone({ rows, isJigContext }) {
         ))}
       </div>
 
-      {/* Session tray — shows legs added this session (no persist, no remove) */}
+      {/* Session tray — shows legs added this session + VIEW TICKET button */}
       {legs.length > 0 && (
         <div className="hrtz-tray">
           <span className="hrtz-tray__head">TICKET · {legs.length} LEG{legs.length !== 1 ? 'S' : ''}</span>
@@ -201,7 +214,19 @@ function HRThreatZone({ rows, isJigContext }) {
               </div>
             ))}
           </div>
+          <button
+            className="hrtz-tray__view-btn"
+            onClick={() => setSlipOpen(true)}
+          >
+            VIEW TICKET →
+          </button>
         </div>
+      )}
+
+      {/* Ticket Command Slip overlay — portal to body, zero routing change */}
+      {slipOpen && window.TicketCommandSlip && React.createElement(
+        window.TicketCommandSlip,
+        { legs, ticketId, onClose: () => setSlipOpen(false), onRemoveLeg: removeLeg }
       )}
     </div>
   );

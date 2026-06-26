@@ -193,10 +193,10 @@ def add_leg(
     return {"ticket_id": ticket_id, "leg_id": leg_id}
 
 
-def complete_ticket(ticket_id: str, user_id: Optional[str] = None) -> dict:
+def complete_ticket(ticket_id: str, user_id: Optional[str] = None, stake: Optional[float] = None) -> dict:
     """
     Finalize ticket: fd_deployed=True, status='pending', completed_at=now(), num_legs=count.
-    Counts only non-removed legs. Returns {ticket_id, num_legs, fd_deployed}.
+    Counts only non-removed legs. Writes stake if provided. Returns {ticket_id, num_legs, fd_deployed}.
     """
     client = _client()
 
@@ -220,11 +220,15 @@ def complete_ticket(ticket_id: str, user_id: Optional[str] = None) -> dict:
     )
     num_legs = count_res.count if count_res.count is not None else 0
 
-    client.table("tickets").update({
+    update_payload = {
         "fd_deployed":  True,
         "status":       "pending",
         "completed_at": _dt.utcnow().isoformat() + "Z",
         "num_legs":     num_legs,
-    }).eq("ticket_id", ticket_id).execute()
+    }
+    if stake is not None:
+        update_payload["stake"] = stake
+
+    client.table("tickets").update(update_payload).eq("ticket_id", ticket_id).execute()
 
     return {"ticket_id": ticket_id, "num_legs": num_legs, "fd_deployed": True}

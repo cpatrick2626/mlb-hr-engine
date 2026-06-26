@@ -239,7 +239,9 @@ async def ticket_complete(body: dict, user=Depends(require_auth)):
     ticket_id = body.get("ticket_id")
     if not ticket_id:
         raise HTTPException(status_code=400, detail="ticket_id is required")
-    result = complete_ticket(ticket_id, user_id=user.get("sub"))
+    raw_stake = body.get("stake")
+    stake = float(raw_stake) if raw_stake is not None else None
+    result = complete_ticket(ticket_id, user_id=user.get("sub"), stake=stake)
     return {"status": "ok", **result}
 
 
