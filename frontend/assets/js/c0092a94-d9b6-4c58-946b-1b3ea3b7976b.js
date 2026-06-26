@@ -117,7 +117,51 @@ function cellStyle(col, value) {
   return { cls: "", text, style: {} };
 }
 
-const LeaderRow = ({ row, onOpen }) => (
+const LB_SLIP_COLORS = {
+  idle:   { border: 'rgba(59,111,255,0.6)',  color: '#3b6fff' },
+  loading:{ border: 'rgba(107,120,114,0.4)', color: '#6b7872' },
+  added:  { border: 'rgba(26,255,102,0.6)',  color: '#1aff66' },
+  error:  { border: 'rgba(255,51,68,0.6)',   color: '#ff3344' },
+  noauth: { border: 'rgba(255,176,32,0.5)',  color: '#ffb020' },
+};
+const LB_SLIP_GLYPH = { idle: '+', loading: '…', added: '✓', error: '!', noauth: '⚿' };
+const LB_SLIP_TITLE = { idle: 'Add to slip', loading: 'Adding…', added: 'Added to slip', error: 'Error — retry', noauth: 'Log in to add' };
+
+const LbSlipBtn = ({ status, onClick, label }) => {
+  const s = status || 'idle';
+  const c = LB_SLIP_COLORS[s] || LB_SLIP_COLORS.idle;
+  const disabled = s === 'loading' || s === 'added';
+  return (
+    <button
+      type="button"
+      onClick={disabled ? undefined : onClick}
+      title={LB_SLIP_TITLE[s]}
+      aria-label={"Add " + label + " to slip"}
+      style={{
+        background: 'transparent',
+        border: '1px solid ' + c.border,
+        borderRadius: '3px',
+        cursor: disabled ? 'default' : 'pointer',
+        fontSize: '13px',
+        fontWeight: '700',
+        width: '24px',
+        height: '24px',
+        padding: '0',
+        lineHeight: '1',
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontFamily: 'inherit',
+        color: c.color,
+        transition: 'border-color .15s, color .15s',
+        flexShrink: 0,
+      }}>
+      {LB_SLIP_GLYPH[s]}
+    </button>
+  );
+};
+
+const LeaderRow = ({ row, onOpen, onAddLeg, slipStatus = 'idle' }) => (
   <tr className="hr-lb__row" onClick={() => onOpen(row.id)}>
     <td className="hr-lb__tier"><TierBadge tier={row.tier} /></td>
     <td className="hr-lb__player">
@@ -139,25 +183,65 @@ const LeaderRow = ({ row, onOpen }) => (
       const { cls, text } = cellStyle(col, row[col.key]);
       return <td key={col.key} className={`hr-lb__cell ${cls}`}>{text}</td>;
     })}
+    <td className="hr-lb__cell hr-lb__cell--slip" onClick={(e) => e.stopPropagation()}>
+      <LbSlipBtn status={slipStatus} onClick={() => onAddLeg(row)} label={row.name} />
+    </td>
   </tr>
 );
 
-const Leaderboard = ({ rows, onOpen, tierHeaderLabel = "TIER" }) => (
-  <div className="hr-lb">
-    <table className="hr-lb__table">
-      <thead>
-        <tr>
-          <th className="hr-lb__th-tier">{tierHeaderLabel}</th>
-          <th className="hr-lb__th-player">PLAYER</th>
-          <th className="hr-lb__th-gauge">MATCHUP QUALITY</th>
-          {COLS.map((c) => <th key={c.key} className={c.key === "opphr" ? "hr-lb__th-opp" : ""}>{c.head}</th>)}
-        </tr>
-      </thead>
-      <tbody>
-        {rows.map((r) => <LeaderRow key={r.id} row={r} onOpen={onOpen} />)}
-      </tbody>
-    </table>
-  </div>
-);
+const Leaderboard = ({ rows, onOpen, tierHeaderLabel = "TIER" }) => {
+  const [slipState, setSlipState] = React.useState(() => window.__hrSlip ? window.__hrSlip.getState() : { cardStatus: {} });
+  React.useEffect(() => {
+    if (!window.__hrSlip) return;
+    return window.__hrSlip.subscribe(() => setSlipState(window.__hrSlip.getState()));
+  }, []);
+  const { cardStatus } = slipState;
+
+  const handleAddLeg = (row) => {
+    if (!window.__hrSlip) return;
+    window.__hrSlip.addLeg({
+      player_id:       row.id,
+      name:            row.name,
+      teamAbbr:        row.teamAbbr,
+      team:            row.teamAbbr,
+      pitcher:         row.pitcher_name,
+      pitcher_name:    row.pitcher_name,
+      model_prob:      row.model_prob,
+      tier:            row.tier,
+      model_tier_rank: row.model_tier_rank,
+      board:           'main',
+      hrprob:          row.hrprob,
+      barrel:          row.barrel,
+      hh:              row.hh,
+    });
+  };
+
+  return (
+    <div className="hr-lb">
+      <table className="hr-lb__table">
+        <thead>
+          <tr>
+            <th className="hr-lb__th-tier">{tierHeaderLabel}</th>
+            <th className="hr-lb__th-player">PLAYER</th>
+            <th className="hr-lb__th-gauge">MATCHUP QUALITY</th>
+            {COLS.map((c) => <th key={c.key} className={c.key === "opphr" ? "hr-lb__th-opp" : ""}>{c.head}</th>)}
+            <th className="hr-lb__th-slip"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r) => (
+            <LeaderRow
+              key={r.id}
+              row={r}
+              onOpen={onOpen}
+              onAddLeg={handleAddLeg}
+              slipStatus={cardStatus[r.id || r.name] || 'idle'}
+            />
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+};
 
 Object.assign(window, { Leaderboard, LeaderRow, TierBadge, MatchupGauge });
