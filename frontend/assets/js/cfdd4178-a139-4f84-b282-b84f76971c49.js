@@ -188,6 +188,13 @@ const Stage = ({ engine, lens, ccOpen, onCloseCC, appliedFilters, onApplyFilters
     body = <CommandTabPanel />;
   } else if (lens && lens.id === "builder") {
     body = <JigCommand engine={engine} lens={lens} onOpenPlayer={onOpenPlayer} />;
+  } else if (lens && lens.id === "arsenal") {
+    const arsenalRows = engine.id === "jig" ? jigRows : mainRows;
+    body = (
+      <div className="md-room">
+        <ArsenalEdgeExploit rows={applyRoomFilters(arsenalRows, appliedFilters)} />
+      </div>
+    );
   } else {
     body = <RadarScope engineName={engine.name + (engine.suffix ? " " + engine.suffix : "")} lensName={lens ? lens.name : "Overview"} accent={engine.color} />;
   }
