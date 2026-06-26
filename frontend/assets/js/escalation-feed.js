@@ -26,11 +26,30 @@ function escHeadline(row) {
   return null;
 }
 
-function EscRow({ row, meta }) {
+function useEscSlipState() {
+  const [state, setState] = React.useState(() => window.__hrSlip.getState());
+  React.useEffect(() => {
+    return window.__hrSlip.subscribe(() => setState(window.__hrSlip.getState()));
+  }, []);
+  return state;
+}
+
+function EscRow({ row, meta, onAdd, addStatus }) {
   const headline = escHeadline(row);
   if (headline === null) return null;
   const name = row.player || row.name || "—";
   const team = row.team   || "";
+
+  const status   = addStatus || 'idle';
+  const btnLabel = status === 'loading' ? '…'
+    : status === 'added'  ? '✓'
+    : status === 'error'  ? '!'
+    : status === 'noauth' ? '🔒'
+    : '+';
+  const btnTitle = status === 'noauth' ? 'Sign in to add'
+    : status === 'added'  ? 'Added to ticket'
+    : status === 'error'  ? 'Error — retry'
+    : 'Add to ticket';
 
   return (
     <div className="esc-row" style={{ "--tc": meta.color }}>
@@ -39,12 +58,33 @@ function EscRow({ row, meta }) {
       {team && <span className="esc-row__team">{team}</span>}
       <span className="esc-row__stat">{headline}</span>
       <span className="esc-row__badge">LIVE</span>
+      <button
+        className={`esc-row__add esc-row__add--${status}`}
+        onClick={(e) => { e.stopPropagation(); onAdd && onAdd(row); }}
+        disabled={status === 'loading' || status === 'added'}
+        title={btnTitle}
+      >{btnLabel}</button>
     </div>
   );
 }
 
 function EscalationFeed({ rows, isJigContext }) {
   if (isJigContext) return null;
+
+  const { cardStatus } = useEscSlipState();
+
+  const addLeg = (row) => {
+    window.__hrSlip.addLeg({
+      player_id:       row.id,
+      name:            row.player || row.name,
+      team:            row.teamAbbr || row.team,
+      pitcher:         row.pitcher_name,
+      model_prob:      row.model_prob,
+      tier:            row.tier,
+      model_tier_rank: row.model_tier_rank,
+      board:           row._board || 'main',
+    });
+  };
 
   const src = Array.isArray(rows) ? rows : [];
 
@@ -72,12 +112,16 @@ function EscalationFeed({ rows, isJigContext }) {
       </div>
       <div className="esc-desktop">
         {desktop.map((e, i) => (
-          <EscRow key={i} row={e.row} meta={e.meta} />
+          <EscRow key={i} row={e.row} meta={e.meta}
+            onAdd={addLeg}
+            addStatus={cardStatus[e.row.id || e.row.name] || 'idle'} />
         ))}
       </div>
       <div className="esc-mobile">
         {mobile.map((e, i) => (
-          <EscRow key={i} row={e.row} meta={e.meta} />
+          <EscRow key={i} row={e.row} meta={e.meta}
+            onAdd={addLeg}
+            addStatus={cardStatus[e.row.id || e.row.name] || 'idle'} />
         ))}
       </div>
     </div>
