@@ -2211,13 +2211,13 @@ html, body { height: 100%; overflow: hidden; }
 .md-cc-btn__chev { color: var(--fg-3); display: inline-flex; transition: color var(--dur-fast); }
 .md-cc-btn__gear { color: var(--fg-2); display: inline-flex; }
 
-/* ---- Right column: auth identity (top) + TCC button (bottom) ---- */
+/* ---- Right row: [slip btn] [auth identity] [TCC button] side-by-side ---- */
 .md-topbar-right {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  justify-content: center;
-  gap: 5px;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
   flex-shrink: 0;
   margin-left: auto;
 }
@@ -3854,6 +3854,8 @@ button.fsm-tier { appearance: none; text-decoration: none; }
     margin-left: auto;
   }
   #auth-root button { min-height: 44px; }
+  #slip-btn-root { display: inline-flex; align-items: center; }
+  #slip-btn-root button { min-height: 44px; }
 
   /* 12 — Mobile bottom nav */
   .md-bottom-nav {
@@ -5260,6 +5262,7 @@ button.fsm-tier { appearance: none; text-decoration: none; }
   <script src="assets/js/slip-state.js"></script>
   <script type="text/babel" src="assets/js/hr-threat-zone.js"></script>
   <script type="text/babel" src="assets/js/ticket-command.js"></script>
+  <script type="text/babel" src="assets/js/slip-btn.js"></script>
   <script type="text/babel" src="assets/js/pitcher-vulnerability-strip.js"></script>
   <script type="text/babel" src="assets/js/escalation-feed.js"></script>
   <script type="text/babel" src="assets/js/command-tab.js"></script>

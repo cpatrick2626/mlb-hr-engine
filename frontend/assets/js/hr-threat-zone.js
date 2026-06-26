@@ -102,7 +102,6 @@ function HRThreatZone({ rows, isJigContext }) {
   const mobile  = sorted.slice(0, 3);
 
   const { ticketId, legs, cardStatus } = useSlipState();
-  const [slipOpen, setSlipOpen] = React.useState(false);
 
   const addLeg = (row) => {
     window.__hrSlip.addLeg({
@@ -166,18 +165,13 @@ function HRThreatZone({ rows, isJigContext }) {
           </div>
           <button
             className="hrtz-tray__view-btn"
-            onClick={() => setSlipOpen(true)}
+            onClick={() => window.__hrSlip.openSlip()}
           >
             VIEW TICKET →
           </button>
         </div>
       )}
 
-      {/* Ticket Command Slip overlay — portal to body, zero routing change */}
-      {slipOpen && window.TicketCommandSlip && React.createElement(
-        window.TicketCommandSlip,
-        { legs, ticketId, onClose: () => setSlipOpen(false), onRemoveLeg: removeLeg }
-      )}
     </div>
   );
 }

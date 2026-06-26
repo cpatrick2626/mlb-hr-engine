@@ -6,6 +6,7 @@
     ticketId: null,
     legs: [],
     cardStatus: {},
+    isOpen: false,
   };
   var _listeners = [];
 
@@ -18,7 +19,18 @@
       ticketId:   _state.ticketId,
       legs:       _state.legs.slice(),
       cardStatus: Object.assign({}, _state.cardStatus),
+      isOpen:     _state.isOpen,
     };
+  }
+
+  function openSlip() {
+    _state.isOpen = true;
+    _notify();
+  }
+
+  function closeSlip() {
+    _state.isOpen = false;
+    _notify();
   }
 
   function subscribe(fn) {
@@ -124,5 +136,7 @@
     addLeg:          addLeg,
     removeLeg:       removeLeg,
     buildLegPayload: buildLegPayload,
+    openSlip:        openSlip,
+    closeSlip:       closeSlip,
   };
 })();

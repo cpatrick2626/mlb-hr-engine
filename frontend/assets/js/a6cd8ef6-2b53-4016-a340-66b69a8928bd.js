@@ -127,6 +127,7 @@ function MasterDashboard() {
           </div>
         )}
         <div className="md-topbar-right">
+          <div id="slip-btn-root" />
           <div id="auth-root" />
           <button
             className={`md-cc-btn ${ccOpen ? "is-open" : ""}`}
