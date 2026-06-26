@@ -336,6 +336,10 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, i
   const t = FSM_TIERS[displayTier] || FSM_TIERS.COLD;
   const m = FSM_MATCHUP[row.quality] || FSM_MATCHUP.AVG;
   const game = showGame ? (window.SLATE_GAMES || []).find((g) => g.id === row.gameId) : null;
+  const aeeGap = fsmAeeIsGap(row);
+  const aeeLabel = fsmAeeLabel(row);
+  const aeeColor = fsmAeeColor(aeeLabel);
+  const aeeKeyPitch = fsmAeeKeyPitch(row);
   return (
     <tr className="fsm-row">
       <td className="fsm-tiercell">
@@ -381,12 +385,40 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, i
         </button>
       </td>
       <td className="fsm-matchup">
-        <button type="button" className="fsm-matchup__in" onClick={() => onPitch(row)} title="Open Pitch Mix Analysis">
-          <FsmGauge fraction={fsmThreatFill(row.model_prob)} color={t.color} />
-          <span className="fsm-matchup__label" style={{ color: m.color }}>
-            <span>{row.quality}</span><span className="fsm-matchup__sub">MATCHUP</span>
-          </span>
-        </button>
+        <div style={{ display: "flex", flexDirection: "column", gap: "6px", minWidth: 0 }}>
+          <button type="button" className="fsm-matchup__in" onClick={() => onPitch(row)} title="Open Pitch Mix Analysis">
+            <FsmGauge fraction={fsmThreatFill(row.model_prob)} color={t.color} />
+            <span className="fsm-matchup__label" style={{ color: m.color }}>
+              <span>{row.quality}</span><span className="fsm-matchup__sub">MATCHUP</span>
+            </span>
+          </button>
+          <div
+            className="fsm-aee"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              minWidth: 0,
+              padding: "3px 6px",
+              border: `1px solid ${aeeColor}26`,
+              borderLeft: `3px solid ${aeeColor}`,
+              borderRadius: "4px",
+              background: aeeGap ? "rgba(107,120,114,0.06)" : `${aeeColor}0a`,
+              color: aeeColor,
+              overflow: "hidden"
+            }}>
+            {aeeGap ? (
+              <span style={{ fontFamily: "var(--font-display)", fontSize: "9px", fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", whiteSpace: "nowrap" }}>DATA GAP</span>
+            ) : (
+              <>
+                <span style={{ fontFamily: "var(--font-display)", fontSize: "12px", fontWeight: 900, lineHeight: 1, whiteSpace: "nowrap" }}>{fsmAeeScoreText(row)}</span>
+                <span style={{ fontFamily: "var(--font-display)", fontSize: "9px", fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{aeeLabel}</span>
+                {row.arsenal_edge_confidence != null && <span style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "#6b7872", whiteSpace: "nowrap" }}>CONF {Number(row.arsenal_edge_confidence).toFixed(0)}%</span>}
+                {aeeKeyPitch && <code style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "#6b7872", whiteSpace: "nowrap" }}>KEY {aeeKeyPitch}</code>}
+              </>
+            )}
+          </div>
+        </div>
       </td>
       {cols.map((c) => <FsmCell key={c.key} col={c} row={row} />)}
       <td className="fsm-cell fsm-cell--slip" style={{ textAlign: 'center', padding: '0 4px' }}>
@@ -574,6 +606,42 @@ function FsmTable({ rows, cols, showGame, onBatter, onPitch, onReorder, onSort, 
 
 /* ---- detail overlays: Batter Card + Pitch Mix Analysis ---- */
 const FSM_BUCKET_COLOR = { ELITE: "#1aff66", STRONG: "#6dffae", AVERAGE: "#b8c2c0", WEAK: "#ff8a93", DANGER: "#ff3344", NA: "#6b7872", NEUTRAL: "#b8c2c0" };
+const FSM_AEE_PITCH = {
+  FF: "4S", FT: "2S", SI: "SNK", FC: "CUT", FS: "SPL",
+  FO: "FRK", SL: "SLD", SW: "SWP", ST: "SWP", SV: "SLV",
+  CU: "CB", KC: "KC", CH: "CH", SC: "SCR", KN: "KN"
+};
+const FSM_AEE_LABEL_COLOR = {
+  "ARSENAL MISMATCH": FSM_BUCKET_COLOR.DANGER,
+  "PITCH MIX EXPLOIT": FSM_BUCKET_COLOR.ELITE,
+  "SOFT EDGE": "#ffb020",
+  "NEUTRAL": FSM_BUCKET_COLOR.NEUTRAL,
+  "DATA GAP": FSM_BUCKET_COLOR.NA,
+  "UNKNOWN": FSM_BUCKET_COLOR.NA
+};
+function fsmAeeIsGap(row) {
+  return row.arsenal_edge_score == null || row.arsenal_edge_label === "DATA GAP";
+}
+function fsmAeeLabel(row) {
+  if (fsmAeeIsGap(row)) return "DATA GAP";
+  if (row.arsenal_edge_label) return row.arsenal_edge_label;
+  const score = Number(row.arsenal_edge_score);
+  if (Number.isNaN(score)) return "UNKNOWN";
+  if (score >= 8) return "ARSENAL MISMATCH";
+  if (score >= 6) return "PITCH MIX EXPLOIT";
+  if (score >= 4) return "SOFT EDGE";
+  return "NEUTRAL";
+}
+function fsmAeeColor(label) {
+  return FSM_AEE_LABEL_COLOR[label] || FSM_BUCKET_COLOR.NEUTRAL;
+}
+function fsmAeeScoreText(row) {
+  return fsmAeeIsGap(row) ? "—" : Number(row.arsenal_edge_score).toFixed(1);
+}
+function fsmAeeKeyPitch(row) {
+  const code = row.arsenal_edge_key_pitch;
+  return code ? (FSM_AEE_PITCH[code] || code) : null;
+}
 const fsmColFor = (key) => FSM_COLS.find((c) => c.key === key);
 function fsmStatColor(key, row) {
   const c = fsmColFor(key);
