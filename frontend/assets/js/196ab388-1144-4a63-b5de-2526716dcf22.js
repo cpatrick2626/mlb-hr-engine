@@ -135,13 +135,23 @@ function CommandCenter({ onClose }) {
             <Stepper label="Launch Angle Trend" value={0} step={0.5} decimals={1} min={-50} max={50} />
           </FilterPanel>
 
-          <FilterPanel num="8" title="GAME CONTEXT" className="hr-panel-cc--toggles">
-            <Toggle label="Exclude Started Games" on={false} />
-            <Toggle label="Include Live Games" on={true} />
-            <Toggle label="No Time Gate" on={false} />
-            <Toggle label="No Time Gate" on={false} />
-            <Toggle label="Confirmed Lineups Only" on={false} />
-            <Toggle label="Pre-Lineup Pool Toggle" on={true} />
+          <FilterPanel num="8" title="GAME CONTEXT" cols={1}>
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+              <span className="hr-cc__k">LINEUP MODE</span>
+              <span style={{ color: "var(--fg-1)", fontSize: "11px", letterSpacing: "0.04em" }}>Confirmed lineups</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+              <span className="hr-cc__k">POOL EXPANSION</span>
+              <span style={{ color: "var(--fg-1)", fontSize: "11px", letterSpacing: "0.04em" }}>Not active</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+              <span className="hr-cc__k">REASON</span>
+              <span style={{ color: "var(--fg-2)", fontSize: "11px", letterSpacing: "0.04em" }}>Projected lineup source unavailable</span>
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "3px 0" }}>
+              <span className="hr-cc__k">FALLBACK</span>
+              <span style={{ color: "var(--fg-2)", fontSize: "11px", letterSpacing: "0.04em", textAlign: "right", maxWidth: "55%" }}>Active roster used only when an official lineup is missing</span>
+            </div>
           </FilterPanel>
         </div>
 
