@@ -189,6 +189,29 @@ Velocity is NOT available from `pitch-arsenal-stats`, and the alternate `pitch-a
 
 ---
 
+---
+
+## Batter Card + Arsenal Edge Exploit — PARKED (new room required)
+
+**Gap:** Arsenal/pitch-mix data is computed by the pipeline but NOT emitted in `/api/slate` payload. Pitcher fatigue and vulnerability score (0–100) are also computed-but-not-emitted. `arsenal-edge-exploit.js` exists as an untracked file representing the parked work.
+
+**Blockers:**
+1. Live At-Bat panel requires real-time inning/count/pitch data — new infrastructure
+2. Spray chart requires coordinate data source (not in current API)
+3. Arsenal/pitch-mix emission from API requires explicit new-room authorization
+
+**Status:** PARKED. Do NOT implement without new-room authorization from operator.
+
+---
+
+## LIVE Targets Banner — add-to-slip intentionally blocked
+
+**Gap:** The LIVE Targets Banner in the live production board uses hardcoded mock data with no real `player_id`. Wiring add-to-slip to it would write legs with NULL or incorrect player IDs, corrupting calibration data.
+
+**Status:** INTENTIONAL BLOCK. Unblock only after banner is wired to real `/api/slate` rows with valid `player_id` values.
+
+---
+
 ## Cross-References
 
 - [[deploy-runbook]] — deploy surface truth

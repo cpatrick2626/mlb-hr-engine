@@ -32,6 +32,63 @@ Streamlit's `session_state` is a protected surface in the MLB HR Engine. Each ke
 - Default set to `0.0`
 - Display-reference only
 
+---
+
+## Frontend Global State — window.__hrSlip
+
+The frontend (root `frontend/`, Vercel static) uses a separate state system from Streamlit `session_state`. The primary shared-state object is `window.__hrSlip`, defined in `frontend/assets/js/slip-state.js`.
+
+**This is NOT Streamlit session_state.** It is a JavaScript global on the live production board.
+
+### Architecture
+
+```js
+window.__hrSlip = {
+  getState()                    // → { ticketId, legs: [] }
+  subscribe(fn)                 // register reactive listener
+  addLeg(payload)               // add a leg to active slip
+  removeLeg(legId)              // remove a leg by id
+  buildLegPayload(row, board)   // constructs valid leg payload from API row
+  openSlip()                    // show slip overlay
+  closeSlip()                   // hide slip overlay
+}
+```
+
+### Leg Payload Invariant
+
+Every leg payload carries:
+- `player_id` — from `row.id` (API field, used for Supabase `legs.player_id`)
+- `model_prob` — decimal from `row.model_prob` (e.g. `0.187`)
+- `board` — `'main'` or `'jig'`
+
+**NEVER:** `row.hrprob × 100`, `row.jigScore`, `row.hrpa`. These are display values, not calibration values.
+
+### Ownership Rules
+
+- `window.__hrSlip` is owned by `slip-state.js` exclusively
+- All add-to-slip surfaces (`hr-threat-zone.js`, `full-slate-matrix.js`, `jig-command.js`, etc.) call `window.__hrSlip.addLeg()` — they do NOT maintain their own slip state
+- `slip-btn.js` subscribes to `window.__hrSlip` to reactively update the topbar count
+- `ticket-command.js` (Ticket Command Slip Card) subscribes to display current legs
+
+### Surfaces That Write to window.__hrSlip
+
+| Surface | Board | Notes |
+|---------|-------|-------|
+| HR Threat Zone | MAIN | Origin surface |
+| Full Slate Matrix | MAIN/JIG | |
+| JIG Command | JIG | |
+| All Batters Leaderboard | MAIN | |
+| Strategy Rail | MAIN | |
+| Command Tab | MAIN + JIG | board:'main' and board:'jig' |
+| Escalation Feed | MAIN | |
+| LIVE Targets Banner | — | **INTENTIONALLY BLOCKED** — no real player_id |
+
+### Cross-References
+
+- [Frontend Topology](frontend-topology.md) — live bundle inventory
+- [Supabase Schema](supabase-schema.md) — legs table (calibration target)
+- [Production Surface Truth](../doctrine/production-surface-truth.md) — add-to-slip surface map
+
 ## Cross-References
 
 - [Cache Ownership Map](cache-ownership-map.md)

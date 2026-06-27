@@ -7,6 +7,7 @@
  [[wiki/formulas/_Index_of_formulas|_Index_of_formulas]]
  [[wiki/ideas/_Index_of_ideas|_Index_of_ideas]]
  [[wiki/index|index]]
+ [[wiki/log.md.tmp.17112.676fe44204b9|log.md.tmp.17112.676fe44204b9]]
  [[wiki/log|log]]
  [[wiki/projects/_Index_of_projects|_Index_of_projects]]
  [[wiki/sessions/_Index_of_sessions|_Index_of_sessions]]

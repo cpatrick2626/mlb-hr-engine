@@ -111,6 +111,63 @@ Summary: if the work changed or discovered anything affecting production surface
 
 ---
 
+---
+
+## Slip Architecture (Live — 2026-06-26)
+
+### window.__hrSlip — Shared Slip State
+
+`frontend/assets/js/slip-state.js` is the architectural backbone for all add-to-slip. A single JavaScript global manages the active ticket legs. See [Session State Map](../architecture/session-state-map.md) for the full API.
+
+### Ticket Command Slip Card (ticket-command.js)
+
+The live slip card displays current ticket legs with real data:
+- Player name, team, HR prob (decimal model_prob), tier, barrel%, hard hit%, pitcher
+- "SAMPLE" tags on panels not yet wired to real data (probability engine, grade, confidence, payout)
+- Empty fields hidden (no NULL placeholder display)
+- Mobile + desktop responsive
+
+**Integrity rule:** No fabricated numbers. "SAMPLE" is the explicit contract for non-real panels.
+
+### Persistent Top-Bar Slip Button (slip-btn.js)
+
+"SLIP · N" button appears left of the account auth chip when legs ≥ 1. Opens the shared slip overlay from any page. Uses `window.__hrSlip.subscribe()` for reactive count updates. SlipOverlayHost is a centralized single mount (no per-component duplicate overlays).
+
+### Add-to-Slip Surface Map
+
+| Surface | Board | Wired? |
+|---------|-------|--------|
+| HR Threat Zone | MAIN | YES |
+| Full Slate Matrix | MAIN/JIG | YES |
+| JIG Command | JIG | YES |
+| All Batters Leaderboard | MAIN | YES |
+| Strategy Rail | MAIN | YES |
+| Command Tab | MAIN + JIG | YES |
+| Escalation Feed | MAIN | YES |
+| **LIVE Targets Banner** | MAIN | **NO — intentional block** |
+
+**LIVE Targets Banner block:** Hardcoded mock data, no real `player_id`. Wiring would corrupt calibration data. Must not be wired until banner is connected to real API rows.
+
+---
+
+## Authentication (Live — 2026-06-26)
+
+### Auth System Summary
+
+- **JWT validation:** ES256/JWKS (Supabase issues ES256; original HS256 was incorrect). See [Supabase Schema](../architecture/supabase-schema.md) for implementation detail.
+- **Write-endpoint gating:** `require_auth` (login required) and `require_beta` (beta_users membership required)
+- **Per-user ownership:** `user_id` stamped on all write paths (tickets, legs)
+- **Frontend:** `auth.js` provides Supabase login modal, email-confirm flow, invite redemption (beta_invites → beta_users), auth chip in topbar
+
+### Live Auth Bundles
+
+| File | Purpose |
+|------|---------|
+| `frontend/assets/js/auth.js` | Login modal, invite redemption, auth chip |
+| `frontend/assets/js/slip-btn.js` | Auth-aware slip button (requires login to add legs) |
+
+---
+
 ## Cross-References
 
 - [App Shell Layout](app-shell-layout.md)

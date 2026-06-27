@@ -22,7 +22,9 @@ metadata:
 | **LIVE PRODUCTION** | `frontend/` (repo root) | Static HTML + CDN React 18 + Babel standalone — NO build step | **YES — Root Dir = `frontend`** | YES |
 | **DEAD PROTOTYPE** | `mlb_hr_engine_v4/frontend/` | Next.js 14 (`app/page.tsx`) — no `.next/` build in prod | No | NO |
 
-**Root `frontend/` runtime:** `index.html` loads React 18 + ReactDOM 18 + `@babel/standalone` from unpkg CDN, then executes JSX bundles as `<script type="text/babel">`. No `npm run build`, no `.next/` output, no webpack. The live component bundles are: `hr-threat-zone.js`, `jig-command.js`, `full-slate-matrix.js`, `escalation-feed.js`, `slate-command-strip.js`, `pitcher-vulnerability-strip.js` (plus UUID-named supporting files) — all in `frontend/assets/js/`.
+**Root `frontend/` runtime:** `index.html` loads React 18 + ReactDOM 18 + `@babel/standalone` from unpkg CDN, then executes JSX bundles as `<script type="text/babel">`. No `npm run build`, no `.next/` output, no webpack. Live component bundles in `frontend/assets/js/` (confirmed 2026-06-26): `hr-threat-zone.js`, `jig-command.js`, `full-slate-matrix.js`, `escalation-feed.js`, `slate-command-strip.js`, `pitcher-vulnerability-strip.js`, `auth.js`, `slip-state.js`, `slip-btn.js`, `ticket-command.js` (plus UUID-named supporting files).
+
+Note: `arsenal-edge-exploit.js` exists as an UNTRACKED file — parked, do NOT treat as production.
 
 **Rule:** For any production frontend work, always confirm you are in repo-root `frontend/`. Do NOT open `mlb_hr_engine_v4/frontend/` and treat it as production.
 
@@ -54,6 +56,8 @@ MLB HR Engine has three distinct frontend/operator surfaces. They are NOT interc
 
 - A real drill-in matchup card for Arsenal Exploit Score or per-pitcher arsenal breakdown.
 - Any component abstraction (everything is inline in `index.html` + monolithic JS).
+- Live At-Bat or spray chart data source (architecture blocker for Batter Card).
+- LIVE Targets Banner wired to real player data (intentionally blocked — see [Session State Map](session-state-map.md)).
 
 ---
 
