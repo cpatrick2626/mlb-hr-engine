@@ -654,6 +654,49 @@ function fsmStatVal(key, row) {
   return v == null ? "—" : c.fmt(v);
 }
 
+/* Arsenal semantic scaling — HR-threat perspective.
+   Whiff%/K% high = pitcher suppression (green-safe).
+   HR/HH% high = danger (red). Null → neutral dim. */
+function fsmArsWhiffCls(v) {
+  if (v == null) return "fsm-pt__num";
+  if (v >= 32) return "fsm-ht is-strong";
+  if (v <= 15) return "fsm-ht is-danger";
+  if (v <= 20) return "fsm-ht is-weak";
+  return "fsm-pt__num";
+}
+function fsmArsHrCls(v) {
+  if (v == null) return "fsm-pt__num";
+  if (v >= 3) return "fsm-ht is-danger";
+  if (v >= 2) return "fsm-ht is-weak";
+  return "fsm-pt__num";
+}
+function fsmArsKCls(v) {
+  if (v == null) return "fsm-pt__num";
+  if (v >= 30) return "fsm-ht is-strong";
+  if (v <= 15) return "fsm-ht is-danger";
+  if (v <= 20) return "fsm-ht is-weak";
+  return "fsm-pt__num";
+}
+function fsmArsHhCls(v) {
+  if (v == null) return "fsm-pt__num";
+  if (v >= 45) return "fsm-ht is-danger";
+  if (v >= 38) return "fsm-ht is-weak";
+  if (v <= 27) return "fsm-ht is-strong";
+  return "fsm-pt__num";
+}
+/* Batter vs pitch semantic scaling — batter-positive perspective. */
+function fsmBvpHrCls(v) {
+  if (v == null || v === 0) return "fsm-pt__num";
+  if (v >= 2) return "fsm-ht is-strong";
+  return "fsm-ht is-avg";
+}
+function fsmBvpKCls(v) {
+  if (v == null) return "fsm-pt__num";
+  if (v <= 14) return "fsm-ht is-strong";
+  if (v >= 30) return "fsm-ht is-weak";
+  return "fsm-pt__num";
+}
+
 // Module-level cache for on-demand pitcher detail fetches.
 const FSM_PITCHER_DETAIL_CACHE = new Map();
 
@@ -747,13 +790,13 @@ function FsmStatRail({ title, stats }) {
 /* Arsenal table — pitcher's pitch mix with real Savant stats */
 function FsmArsenalTable({ title, arsenal, pitchStats }) {
   if (!arsenal || arsenal.length === 0) return (
-    <div className="fsm-pt fsm-pt--red">
+    <div className="fsm-pt fsm-pt--red fsm-pt--arsenal">
       <div className="fsm-pt__title">{title}</div>
       <div className="fsm-pt__empty">No arsenal data available</div>
     </div>
   );
   return (
-    <div className="fsm-pt fsm-pt--red">
+    <div className="fsm-pt fsm-pt--red fsm-pt--arsenal">
       <div className="fsm-pt__title">{title}</div>
       <div className="fsm-pt__grid">
         <div className="fsm-pt__hd"><span>PITCH TYPE</span><span>USAGE</span><span>VELO</span><span>WHIFF%</span><span>HR</span><span>K%</span><span>HH%</span></div>
@@ -766,12 +809,12 @@ function FsmArsenalTable({ title, arsenal, pitchStats }) {
           return (
             <div className="fsm-pt__row" key={i}>
               <span className="fsm-pt__type">{p.name || fsmPitchName(p.code)}</span>
-              <span className="fsm-pt__usage"><span className="fsm-pt__bar" style={{ width: Math.min(100, p.usage) + "%" }} /><i>{p.usage != null ? p.usage.toFixed(1) : "—"}%</i></span>
+              <span className="fsm-pt__usage"><span className="fsm-pt__bar" style={{ width: Math.min(100, p.usage ?? 0) + "%" }} /><i>{p.usage != null ? p.usage.toFixed(1) : "—"}%</i></span>
               <span className="fsm-pt__num">{velo != null ? velo.toFixed(1) : "—"}</span>
-              <span className="fsm-pt__num">{p.whiff != null ? p.whiff.toFixed(1) + "%" : "—"}</span>
-              <span className="fsm-pt__num">{hrVal != null ? hrVal : "—"}</span>
-              <span className="fsm-pt__num">{kPct != null ? kPct.toFixed(1) + "%" : "—"}</span>
-              <span className="fsm-pt__num">{hh != null ? hh.toFixed(1) + "%" : "—"}</span>
+              <span className={fsmArsWhiffCls(p.whiff)}>{p.whiff != null ? p.whiff.toFixed(1) + "%" : "—"}</span>
+              <span className={fsmArsHrCls(hrVal)}>{hrVal != null ? hrVal : "—"}</span>
+              <span className={fsmArsKCls(kPct)}>{kPct != null ? kPct.toFixed(1) + "%" : "—"}</span>
+              <span className={fsmArsHhCls(hh)}>{hh != null ? hh.toFixed(1) + "%" : "—"}</span>
             </div>
           );
         })}
@@ -787,7 +830,7 @@ function FsmBatterVsPitchTable({ title, bvp, arsenal }) {
     : Object.keys(bvp || {});
   const rows = pitchCodes.filter((c) => bvp[c]).map((c) => ({ code: c, ...bvp[c] }));
   if (rows.length === 0) return (
-    <div className="fsm-pt fsm-pt--blue">
+    <div className="fsm-pt fsm-pt--blue fsm-pt--bvp">
       <div className="fsm-pt__title">{title}</div>
       <div className="fsm-pt__empty">No batter-vs-pitch data available</div>
     </div>
@@ -808,8 +851,8 @@ function FsmBatterVsPitchTable({ title, bvp, arsenal }) {
               <span className="fsm-pt__num">{p.pa != null ? p.pa : "—"}</span>
               <span className={"fsm-ht " + fsmHeatClass(ba, [0.320, 0.275, 0.230, 0.180])}>{ba != null ? ba.toFixed(3).replace(/^0/, "") : "—"}</span>
               <span className={"fsm-ht " + fsmHeatClass(slg, [0.520, 0.430, 0.350, 0.270])}>{slg != null ? slg.toFixed(3).replace(/^0/, "") : "—"}</span>
-              <span className="fsm-pt__num">{p.hr != null ? p.hr : "—"}</span>
-              <span className="fsm-pt__num">{kPct != null ? kPct.toFixed(1) + "%" : "—"}</span>
+              <span className={fsmBvpHrCls(p.hr)}>{p.hr != null ? p.hr : "—"}</span>
+              <span className={fsmBvpKCls(kPct)}>{kPct != null ? kPct.toFixed(1) + "%" : "—"}</span>
             </div>
           );
         })}
@@ -887,7 +930,32 @@ function FsmPitchMix({ row, onClose, onBatter, builderMode = false }) {
             <div className="fsm-h2h__name">{pitcherName}</div>
             <span className="fsm-h2h__badge">{pitcherHand || "?"}HP</span>
           </div>
-          <div className="fsm-h2h__portrait"><span>{initials(pitcherName)}</span></div>
+          {arsenal.length === 0 ? (
+            <div className="fsm-ah">
+              <div className="fsm-ah__title">ARSENAL</div>
+              <div className="fsm-ah__empty">{fetchState === "loading" ? "Arsenal loading…" : "No arsenal data"}</div>
+            </div>
+          ) : (
+            <div className="fsm-ah">
+              <div className="fsm-ah__title">ARSENAL</div>
+              {[...arsenal].sort((a, b) => (b.usage ?? 0) - (a.usage ?? 0)).map((p, i) => {
+                const ps = pitchStats[p.code] || {};
+                const velo = p.velo ?? ps.avg_speed;
+                const isExploit = row.arsenal_edge_key_pitch && p.code === row.arsenal_edge_key_pitch;
+                return (
+                  <div key={i} className={"fsm-ah__row" + (isExploit ? " fsm-ah__row--hunt" : "")}>
+                    <div className="fsm-ah__pname-wrap">
+                      <span className="fsm-ah__pname">{p.name || fsmPitchName(p.code)}</span>
+                      {isExploit && <span className="fsm-ah__hunt">HUNT THIS</span>}
+                    </div>
+                    <span className="fsm-ah__bar-wrap"><span className="fsm-ah__bar" style={{ width: Math.min(100, p.usage ?? 0) + "%" }} /></span>
+                    <span className="fsm-ah__velo">{velo != null ? velo.toFixed(0) : "—"}</span>
+                    <span className="fsm-ah__whiff">{p.whiff != null ? p.whiff.toFixed(0) + "%" : "—"}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
           <FsmStatRail title="PITCHER SEASON STATS" stats={[
             ["ERA",    row.pitcher_era   != null ? row.pitcher_era.toFixed(2)   : "—"],
             ["WHIP",   row.pitcher_whip  != null ? row.pitcher_whip.toFixed(2)  : "—"],
