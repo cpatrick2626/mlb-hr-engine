@@ -4327,6 +4327,16 @@ button.fsm-tier { appearance: none; text-decoration: none; }
 .aei-vcard--raw .aei-vcard__big { color: var(--green-300); }
 .aei-vcard--raw .aei-vbar i { background: linear-gradient(90deg, #0e8a3e, var(--green-500)); }
 .aei-vcard--raw .aei-vcard__trust { color: var(--green-500); }
+/* overall exploit confidence — matchup-level arsenal_edge_confidence */
+.aei-vcard--conf {
+  border-color: rgba(59,111,255,0.35);
+  background: linear-gradient(180deg, rgba(59,111,255,0.07), var(--bg-base));
+}
+.aei-vcard--conf .aei-vcard__lbl { color: var(--fg-1); }
+.aei-vcard__big--conf { color: #6a9fff; font-size: 24px; }
+.aei-vcard--conf .aei-vbar i { background: linear-gradient(90deg, #2040a0, #6a9fff); }
+.aei-vcard--conf .aei-vcard__bot { flex-direction: column; align-items: flex-start; gap: 2px; }
+
 /* model HR prob — clearly labeled as model output, not "adjusted" */
 .aei-vcard--model {
   border: 1.5px solid var(--green-500);

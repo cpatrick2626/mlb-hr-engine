@@ -413,7 +413,7 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, i
               <>
                 <span style={{ fontFamily: "var(--font-display)", fontSize: "12px", fontWeight: 900, lineHeight: 1, whiteSpace: "nowrap" }}>{fsmAeeScoreText(row)}</span>
                 <span style={{ fontFamily: "var(--font-display)", fontSize: "9px", fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{aeeLabel}</span>
-                {row.arsenal_edge_confidence != null && <span style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "#6b7872", whiteSpace: "nowrap" }}>CONF {Math.round(Number(row.arsenal_edge_confidence) * 100)}%</span>}
+                {row.arsenal_edge_confidence != null && <span style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "#6b7872", whiteSpace: "nowrap" }}>EXPLOIT CONF {Math.round(Number(row.arsenal_edge_confidence) * 100)}%</span>}
                 {aeeKeyPitch && <code style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "#6b7872", whiteSpace: "nowrap" }}>KEY {aeeKeyPitch}</code>}
               </>
             )}
@@ -1093,13 +1093,6 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false }) {
   const edgeLabel    = row.arsenal_edge_label || (isGap ? "DATA GAP" : "—");
   const confidence   = row.arsenal_edge_confidence;
 
-  /* RAW PITCH EXPLOIT HR/PA — reads pitch_stats[keyPitch].hr_rate; display read only */
-  const keyPs   = keyPitch && pitchStats[keyPitch] ? pitchStats[keyPitch] : null;
-  const rawHrPa = keyPs
-    ? (keyPs.hr_rate != null ? (Number(keyPs.hr_rate) * 100).toFixed(1) + "%"
-      : (keyPs.hr != null && keyPs.pa > 0) ? (keyPs.hr / keyPs.pa * 100).toFixed(1) + "%"
-      : "—")
-    : "—";
 
   /* BARREL PATH — display band derived from row.barrel; NOT a model output, NOT numeric precision */
   const barrelBand = (() => {
@@ -1246,6 +1239,25 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false }) {
           </div>
           <div className="aei-panel__body">
 
+            {/* ARSENAL EDGE VERDICT — primary signal: edge score + label + confidence */}
+            <div className="aei-edge-active">
+              <div className="aei-ea__title">ARSENAL EDGE: {edgeLabel}</div>
+              <div className="aei-ea__row">
+                <span className="aei-ea__lbl">EDGE SCORE</span>
+                <span className="aei-ea__val">{isGap ? "—" : Number(score).toFixed(1)}</span>
+              </div>
+              <div className="aei-ea__row">
+                <span className="aei-ea__lbl">CONFIDENCE</span>
+                <span className="aei-ea__val">{confidence != null ? Math.round(Number(confidence) * 100) + "%" : "—"}</span>
+              </div>
+              {keyPitch && (
+                <div style={{marginTop:"4px",fontFamily:"var(--font-display)",fontWeight:700,fontSize:"9px",letterSpacing:"0.1em",color:"var(--fg-2)"}}>KEY PITCH: {keyPitchName}</div>
+              )}
+              {(edgeLabel === "VOLATILE" || (confidence != null && Number(confidence) < 0.5)) && (
+                <div style={{marginTop:"6px",fontFamily:"var(--font-display)",fontWeight:700,fontSize:"9px",letterSpacing:"0.1em",color:"var(--fg-2)"}}>LOW CONFIDENCE · SMALL SAMPLE</div>
+              )}
+            </div>
+
             {/* H2H HR Signal — career head-to-head */}
             <div className="aei-vcard aei-vcard--h2h">
               <div className="aei-vcard__top">
@@ -1270,18 +1282,20 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false }) {
               </div>
             </div>
 
-            {/* RAW PITCH EXPLOIT HR/PA — from pitch_stats[keyPitch] */}
-            <div className="aei-vcard aei-vcard--raw">
+            {/* OVERALL EXPLOIT CONFIDENCE — matchup-level arsenal_edge_confidence */}
+            <div className="aei-vcard aei-vcard--conf">
               <div className="aei-vcard__top">
-                <span className="aei-vcard__lbl">RAW PITCH EXPLOIT HR/PA</span>
-                <span className="aei-vcard__big">{rawHrPa}</span>
+                <span className="aei-vcard__lbl">OVERALL EXPLOIT CONFIDENCE</span>
+                <span className="aei-vcard__big aei-vcard__big--conf">
+                  {confidence != null ? Math.round(Number(confidence) * 100) + "%" : "—"}
+                </span>
               </div>
               <div className="aei-vbar">
-                <i style={{width: rawHrPa !== "—" ? Math.min(100, parseFloat(rawHrPa)*3)+"%" : "2%"}} />
+                <i style={{width: confidence != null ? Math.min(100, Math.round(Number(confidence) * 100)) + "%" : "2%"}} />
               </div>
               <div className="aei-vcard__bot">
-                <span className="aei-vcard__note">PITCH EXPLOIT: {keyPitchName}</span>
-                <span className="aei-vcard__trust">{rawHrPa !== "—" ? "ACTIVE SIGNAL" : "NO DATA"}</span>
+                <span className="aei-vcard__note">FULL ARSENAL MATCHUP READ</span>
+                <span className="aei-vcard__trust" style={{color:"var(--fg-2)",fontSize:"9px",letterSpacing:"0.08em"}}>WEIGHTED BY PITCH MIX + CONTRIBUTION CONFIDENCE</span>
               </div>
             </div>
 
@@ -1299,19 +1313,6 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false }) {
               <div className="aei-vcard__bot">
                 <span className="aei-vcard__note">KEY PITCH: {keyPitchName}</span>
                 <span className="aei-odds">HR ODDS <b>{row.odds || "—"}</b></span>
-              </div>
-            </div>
-
-            {/* Edge active — score / confidence */}
-            <div className="aei-edge-active">
-              <div className="aei-ea__title">ARSENAL EDGE: {edgeLabel}</div>
-              <div className="aei-ea__row">
-                <span className="aei-ea__lbl">EDGE SCORE</span>
-                <span className="aei-ea__val">{isGap ? "—" : Number(score).toFixed(1)}</span>
-              </div>
-              <div className="aei-ea__row">
-                <span className="aei-ea__lbl">CONFIDENCE</span>
-                <span className="aei-ea__val">{confidence != null ? Number(confidence).toFixed(2) : "—"}</span>
               </div>
             </div>
 
