@@ -888,7 +888,7 @@ function FsmPitchMix({ row, onClose, onBatter, builderMode = false }) {
             <span className="fsm-h2h__badge">{pitcherHand || "?"}HP</span>
           </div>
           <div className="fsm-h2h__portrait"><span>{initials(pitcherName)}</span></div>
-          <FsmStatRail title={`vs ${batHand}HB`} stats={[
+          <FsmStatRail title="PITCHER SEASON STATS" stats={[
             ["ERA",    row.pitcher_era   != null ? row.pitcher_era.toFixed(2)   : "—"],
             ["WHIP",   row.pitcher_whip  != null ? row.pitcher_whip.toFixed(2)  : "—"],
             ["K%",     row.pitcher_k_pct != null ? row.pitcher_k_pct.toFixed(1) : "—"],
