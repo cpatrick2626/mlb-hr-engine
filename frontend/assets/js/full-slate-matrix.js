@@ -836,7 +836,7 @@ function FsmBatterVsPitchTable({ title, bvp, arsenal }) {
     </div>
   );
   return (
-    <div className="fsm-pt fsm-pt--blue">
+    <div className="fsm-pt fsm-pt--blue fsm-pt--bvp">
       <div className="fsm-pt__title">{title}</div>
       <div className="fsm-pt__grid">
         <div className="fsm-pt__hd"><span>PITCH TYPE</span><span>PA</span><span>BA</span><span>SLG</span><span>HR</span><span>K%</span></div>
@@ -1052,6 +1052,389 @@ function FsmPitchMix({ row, onClose, onBatter, builderMode = false }) {
   );
 }
 
+/* ============================================================
+   ARSENAL EDGE INTEL — FsmArsenalEdgeIntel
+   Replaces FsmPitchMix as the modal.type==="pitch" destination.
+   FsmPitchMix is left below (unrouted) for easy rollback.
+   ============================================================ */
+function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false }) {
+  const [detail, setDetail] = React.useState(null);
+  const [fetchState, setFetchState] = React.useState("loading");
+
+  const pitcherId  = row.pitcher_id;
+  const batterId   = row.id;
+  const batterSide = row.bats || "";
+  const pitcherHand = row.pitcher_hand || "";
+
+  React.useEffect(() => {
+    const cacheKey = `${pitcherId}:${batterId}:${batterSide}`;
+    if (FSM_PITCHER_DETAIL_CACHE.has(cacheKey)) {
+      setDetail(FSM_PITCHER_DETAIL_CACHE.get(cacheKey));
+      setFetchState("done");
+      return;
+    }
+    if (!pitcherId) { setFetchState("no-pitcher"); return; }
+    const url = `https://mlb-hr-api.fly.dev/api/pitcher-detail?pitcher_id=${encodeURIComponent(pitcherId)}&batter_id=${encodeURIComponent(batterId || 0)}&batter_side=${encodeURIComponent(batterSide)}&pitcher_hand=${encodeURIComponent(pitcherHand)}`;
+    fetch(url)
+      .then(r => r.json())
+      .then(data => { FSM_PITCHER_DETAIL_CACHE.set(cacheKey, data); setDetail(data); setFetchState("done"); })
+      .catch(() => setFetchState("error"));
+  }, [pitcherId, batterId]);
+
+  const arsenal    = detail ? (detail.arsenal || []) : [];
+  const pitchStats = detail ? (detail.pitch_stats || {}) : {};
+  const bvp        = detail ? (detail.batter_vs_pitches || {}) : {};
+  const h2h        = detail && detail.h2h && detail.h2h.pa ? detail.h2h : null;
+
+  const keyPitch     = row.arsenal_edge_key_pitch || null;
+  const keyPitchName = keyPitch ? (fsmPitchName(keyPitch) || keyPitch) : "—";
+  const isGap        = row.arsenal_edge_score == null || row.arsenal_edge_label === "DATA GAP";
+  const score        = row.arsenal_edge_score;
+  const edgeLabel    = row.arsenal_edge_label || (isGap ? "DATA GAP" : "—");
+  const confidence   = row.arsenal_edge_confidence;
+
+  /* RAW PITCH EXPLOIT HR/PA — reads pitch_stats[keyPitch].hr_rate; display read only */
+  const keyPs   = keyPitch && pitchStats[keyPitch] ? pitchStats[keyPitch] : null;
+  const rawHrPa = keyPs
+    ? (keyPs.hr_rate != null ? (Number(keyPs.hr_rate) * 100).toFixed(1) + "%"
+      : (keyPs.hr != null && keyPs.pa > 0) ? (keyPs.hr / keyPs.pa * 100).toFixed(1) + "%"
+      : "—")
+    : "—";
+
+  /* BARREL PATH — display band derived from row.barrel; NOT a model output, NOT numeric precision */
+  const barrelBand = (() => {
+    const b = row.barrel;
+    if (b == null) return { label: "—",        cls: "" };
+    if (b >= 10)   return { label: "ELITE",    cls: "v-elite" };
+    if (b >= 7)    return { label: "ACTIVE",   cls: "v-active" };
+    if (b >= 4)    return { label: "MODERATE", cls: "v-elev" };
+    if (b >= 2)    return { label: "LIMITED",  cls: "v-weak" };
+    return               { label: "LOW",       cls: "v-weak" };
+  })();
+
+  /* DEPLOYMENT — display band derived from row.tier; NOT a model output */
+  const deployBand = (() => {
+    const t = row.tier;
+    if (t === "APEX")   return { label: "ELITE",      cls: "v-elite" };
+    if (t === "ELITE")  return { label: "STRONG",     cls: "v-strong" };
+    if (t === "EDGE")   return { label: "ACTIVE",     cls: "v-active" };
+    if (t === "SIGNAL") return { label: "STANDARD",   cls: "v-elev" };
+    if (t === "WATCH")  return { label: "MONITORING", cls: "v-weak" };
+    return                     { label: "COLD",       cls: "v-weak" };
+  })();
+
+  const h2hTrust  = !h2h ? "NO DATA" : h2h.pa < 10 ? "VERY LOW" : h2h.pa < 30 ? "LOW" : "MODERATE";
+  const h2hSigCls = !h2h || h2h.pa < 10 ? "v-weak" : (h2h.hr > 0 ? "v-strong" : "v-weak");
+  const h2hSigLbl = !h2h ? "NO DATA" : h2h.pa < 10 ? "WEAK" : (h2h.hr > 0 ? "SIGNAL" : "WEAK");
+  const exploitCls = isGap ? "v-weak" : score >= 8 ? "v-elite" : score >= 6 ? "v-strong" : score >= 4 ? "v-elev" : "v-weak";
+  const exploitLbl = isGap ? "—" : score >= 8 ? "STRONG" : score >= 6 ? "ACTIVE" : score >= 4 ? "SOFT" : "NEUTRAL";
+  const hhBand = row.hh == null ? { label: "—", cls: "" }
+    : row.hh >= 45 ? { label: "ELEVATED", cls: "v-strong" }
+    : row.hh >= 38 ? { label: "MODERATE", cls: "v-elev" }
+    : { label: "LOW", cls: "v-weak" };
+
+  const pitcherName = row.pitcher_name || "TBD";
+  const batterName  = row.name || row.player || "—";
+  const batHand = batterSide === "S" ? (pitcherHand === "L" ? "R" : "L") : batterSide;
+  const pLast   = pitcherName.replace("…", "").split(" ").slice(-1)[0];
+  const bLast   = batterName.replace("…", "").split(" ").slice(-1)[0];
+  const pInit   = pitcherName.replace("…","").split(" ").map(w => w[0] || "").join("").slice(0,2).toUpperCase();
+  const bInit   = batterName.replace("…","").split(" ").map(w => w[0] || "").join("").slice(0,2).toUpperCase();
+
+  const hasBvp   = Object.values(bvp).some(b => b && b.pa > 0);
+  const anySmall = hasBvp && Object.values(bvp).some(b => b && b.pa > 0 && b.pa < 10);
+  const arsorted = [...arsenal].sort((a, b) => (b.usage ?? 0) - (a.usage ?? 0));
+
+  const iso = row.iso != null ? row.iso
+    : (row.slg != null && row.avg != null ? +(row.slg - row.avg).toFixed(3) : null);
+
+  return (
+    <div className="fsm-card aei-wrap">
+      <button className="fsm-card__close fsm-card__close--abs" onClick={onClose} aria-label="Close">✕</button>
+
+      <div className="aei-header">
+        <div className="aei-header__title">ARSENAL EDGE INTEL</div>
+        <div className="aei-header__sub">{batterName} VS {pitcherName} — PITCH MIX EXPLOITATION</div>
+      </div>
+
+      <div className="aei-grid">
+
+        {/* ===== LEFT: PITCHER ARSENAL ===== */}
+        <section className="aei-panel aei-panel--pitcher">
+          <div className="aei-panel__hd">
+            <span className="aei-panel__hd-title">PITCHER ARSENAL</span>
+            <span className="aei-panel__hd-tag">THREAT LEVEL</span>
+          </div>
+          <div className="aei-panel__body">
+            <div className="aei-pcard aei-pcard--pitcher">
+              <div className="aei-tile aei-tile--pitcher">{pInit}</div>
+              <div className="aei-pcard__who">
+                <div className="aei-pcard__nm">{pitcherName}</div>
+                <div className="aei-pcard__meta">{pitcherHand ? pitcherHand + "HP" : "—"}</div>
+                <span className="aei-tier">PITCHER TIER <b>{row.tier || "—"}</b></span>
+              </div>
+            </div>
+
+            <div className="aei-chips">
+              {[
+                ["ERA",     row.pitcher_era            != null ? row.pitcher_era.toFixed(2)              : "—"],
+                ["WHIP",    row.pitcher_whip           != null ? row.pitcher_whip.toFixed(2)             : "—"],
+                ["K%",      row.pitcher_k_pct          != null ? row.pitcher_k_pct.toFixed(1)            : "—"],
+                ["BB%",     row.pitcher_bb_pct         != null ? row.pitcher_bb_pct.toFixed(1)           : "—"],
+                ["BARREL%", row.pitcher_barrel_allowed != null ? (row.pitcher_barrel_allowed*100).toFixed(1) : "—"],
+                ["HH%",     row.pitcher_hh_allowed     != null ? (row.pitcher_hh_allowed*100).toFixed(1)    : "—"],
+              ].map(([k, v]) => (
+                <div key={k} className="aei-chip">
+                  <div className="aei-chip__k">{k}</div>
+                  <div className="aei-chip__v">{v}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="aei-tblwrap">
+              <div className="aei-tblwrap__cap">{pLast} ARSENAL VS {batHand || "?"}HB</div>
+              <div className="aei-ars">
+                <div className="aei-ars__hd">
+                  <span>PITCH</span><span>USAGE</span><span>VELO</span><span>WHIFF</span><span>HR/PA</span><span>K%</span><span>HH%</span>
+                </div>
+                {fetchState === "loading" && <div className="aei-empty">Loading arsenal…</div>}
+                {fetchState === "no-pitcher" && <div className="aei-empty">Pitcher TBD — no detail available</div>}
+                {(fetchState === "done" || fetchState === "error") && arsenal.length === 0 && (
+                  <div className="aei-empty">No arsenal data</div>
+                )}
+                {arsorted.map(p => {
+                  const ps    = pitchStats[p.code] || {};
+                  const isKey = p.code === keyPitch;
+                  const velo  = p.velo != null ? Number(p.velo).toFixed(0)
+                    : ps.avg_speed != null ? Number(ps.avg_speed).toFixed(0) : "—";
+                  const whiff = p.whiff != null ? Number(p.whiff).toFixed(0) + "%" : "—";
+                  const hrPa  = ps.hr_rate != null ? (Number(ps.hr_rate)*100).toFixed(1)+"%"
+                    : (ps.hr != null && ps.pa != null && ps.pa > 0) ? (ps.hr/ps.pa*100).toFixed(1)+"%" : "—";
+                  const kPct  = ps.k_pct != null ? (Number(ps.k_pct)*100).toFixed(0)+"%" : "—";
+                  const hhPct = ps.display_hh != null ? Number(ps.display_hh).toFixed(0)+"%" : "—";
+                  const barW  = Math.min(100, (p.usage ?? 0) * 2) + "%";
+                  return (
+                    <div key={p.code} className={"aei-ars__row" + (isKey ? " aei-ars__row--key" : "")}>
+                      <div className="aei-ars__pitch">
+                        <b>{p.code}</b>
+                        <span>{fsmPitchName(p.code)}</span>
+                        {isKey && <span className="aei-hunt">HUNT THIS</span>}
+                      </div>
+                      <div className="aei-usage">
+                        <div className="aei-usage__track">
+                          <div className="aei-usage__fill" style={{width: barW}} />
+                        </div>
+                        <div className="aei-usage__lbl">{p.usage != null ? Number(p.usage).toFixed(0)+"%" : "—"}</div>
+                      </div>
+                      <span className="aei-c">{velo}</span>
+                      <span className="aei-c">{whiff}</span>
+                      <span className={"aei-c" + (hrPa !== "—" && parseFloat(hrPa) >= 3 ? " aei-c--hg" : "")}>{hrPa}</span>
+                      <span className="aei-c">{kPct}</span>
+                      <span className="aei-c">{hhPct}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ===== CENTER: ARSENAL EDGE VERDICT ===== */}
+        <section className="aei-panel aei-panel--verdict">
+          <div className="aei-panel__hd">
+            <span className="aei-panel__hd-title">ARSENAL EDGE VERDICT</span>
+          </div>
+          <div className="aei-panel__body">
+
+            {/* H2H HR Signal — career head-to-head */}
+            <div className="aei-vcard aei-vcard--h2h">
+              <div className="aei-vcard__top">
+                <span className="aei-vcard__lbl">H2H HR SIGNAL</span>
+                <span className="aei-vcard__big">
+                  {h2h ? ((h2h.hr || 0) / h2h.pa * 100).toFixed(1) + "%" : "—"}
+                </span>
+              </div>
+              <div className="aei-vbar">
+                <i style={{width: h2h && h2h.pa > 0 ? Math.min(100, ((h2h.hr||0)/h2h.pa)*300)+"%" : "2%"}} />
+              </div>
+              <div className="aei-vstats">
+                {[["PA", h2h?.pa ?? "—"], ["HR", h2h?.hr ?? "—"], ["BA", h2h?.avg || "—"], ["SLG", h2h?.slg || "—"], ["OPS", h2h?.ops || "—"]].map(([k,v]) => (
+                  <div key={k} className="aei-vs-cell"><span>{k}</span><b>{v}</b></div>
+                ))}
+              </div>
+              <div className="aei-vcard__bot">
+                <span className="aei-vcard__note">
+                  {h2h ? `${h2h.pa} PA${h2h.pa < 10 ? " — NOT PREDICTIVE" : ""}` : "NO CAREER H2H ON RECORD"}
+                </span>
+                <span className="aei-vcard__trust">{h2hTrust}</span>
+              </div>
+            </div>
+
+            {/* RAW PITCH EXPLOIT HR/PA — from pitch_stats[keyPitch] */}
+            <div className="aei-vcard aei-vcard--raw">
+              <div className="aei-vcard__top">
+                <span className="aei-vcard__lbl">RAW PITCH EXPLOIT HR/PA</span>
+                <span className="aei-vcard__big">{rawHrPa}</span>
+              </div>
+              <div className="aei-vbar">
+                <i style={{width: rawHrPa !== "—" ? Math.min(100, parseFloat(rawHrPa)*3)+"%" : "2%"}} />
+              </div>
+              <div className="aei-vcard__bot">
+                <span className="aei-vcard__note">PITCH EXPLOIT: {keyPitchName}</span>
+                <span className="aei-vcard__trust">{rawHrPa !== "—" ? "ACTIVE SIGNAL" : "NO DATA"}</span>
+              </div>
+            </div>
+
+            {/* MODEL HR PROB — row.hrprob as-is; no invented adjustment */}
+            <div className="aei-vcard aei-vcard--model">
+              <div className="aei-vcard__top">
+                <span className="aei-vcard__lbl">MODEL HR PROB</span>
+                <span className="aei-vcard__big aei-vcard__big--model">
+                  {row.hrprob != null ? row.hrprob.toFixed(1) + "%" : "—"}
+                </span>
+              </div>
+              <div className="aei-vbar">
+                <i style={{width: row.hrprob != null ? Math.min(100, row.hrprob*3)+"%" : "2%"}} />
+              </div>
+              <div className="aei-vcard__bot">
+                <span className="aei-vcard__note">KEY PITCH: {keyPitchName}</span>
+                <span className="aei-odds">HR ODDS <b>{row.odds || "—"}</b></span>
+              </div>
+            </div>
+
+            {/* Edge active — score / confidence */}
+            <div className="aei-edge-active">
+              <div className="aei-ea__title">ARSENAL EDGE: {edgeLabel}</div>
+              <div className="aei-ea__row">
+                <span className="aei-ea__lbl">EDGE SCORE</span>
+                <span className="aei-ea__val">{isGap ? "—" : Number(score).toFixed(1)}</span>
+              </div>
+              <div className="aei-ea__row">
+                <span className="aei-ea__lbl">CONFIDENCE</span>
+                <span className="aei-ea__val">{confidence != null ? Number(confidence).toFixed(2) : "—"}</span>
+              </div>
+            </div>
+
+            {/* Edge stack — display reads; BARREL PATH and DEPLOYMENT are qualitative bands */}
+            <div className="aei-stack">
+              <div className="aei-stack__cap">EDGE STACK</div>
+              <div className="aei-stack__row">
+                <div className="aei-stack__item">
+                  <div className="aei-stack__k">H2H</div>
+                  <div className={"aei-stack__v " + h2hSigCls}>{h2hSigLbl}</div>
+                </div>
+                <div className="aei-stack__item">
+                  <div className="aei-stack__k">PITCH EXPLOIT</div>
+                  <div className={"aei-stack__v " + exploitCls}>{exploitLbl}</div>
+                </div>
+                <div className="aei-stack__item">
+                  <div className="aei-stack__k">BARREL PATH</div>
+                  <div className={"aei-stack__v " + barrelBand.cls}>{barrelBand.label}</div>
+                </div>
+                <div className="aei-stack__item">
+                  <div className="aei-stack__k">HH RISK</div>
+                  <div className={"aei-stack__v " + hhBand.cls}>{hhBand.label}</div>
+                </div>
+                <div className="aei-stack__item">
+                  <div className="aei-stack__k">DEPLOYMENT</div>
+                  <div className={"aei-stack__v " + deployBand.cls}>{deployBand.label}</div>
+                </div>
+              </div>
+            </div>
+
+          </div>
+        </section>
+
+        {/* ===== RIGHT: BATTER DAMAGE PROFILE ===== */}
+        <section className="aei-panel aei-panel--batter">
+          <div className="aei-panel__hd">
+            <span className="aei-panel__hd-title">BATTER DAMAGE PROFILE</span>
+            <span className="aei-panel__hd-tag">THREAT LEVEL</span>
+          </div>
+          <div className="aei-panel__body">
+            <div className="aei-pcard aei-pcard--batter">
+              <div className="aei-tile aei-tile--batter">{bInit}</div>
+              <div className="aei-pcard__who">
+                <div className="aei-pcard__nm">{batterName}</div>
+                <div className="aei-pcard__meta">BATS {batterSide || "?"} · {row.teamAbbr || ""}</div>
+                <span className="aei-tier">BATTER TIER <b>{row.tier || "—"}</b></span>
+              </div>
+            </div>
+
+            <div className="aei-chips">
+              {[
+                ["AVG",     fsmS3(row.avg)],
+                ["ISO",     fsmS3(iso)],
+                ["HR",      row.hr     != null ? String(row.hr)        : "—"],
+                ["K%",      row.kpct   != null ? row.kpct.toFixed(1)   : "—"],
+                ["BARREL%", row.barrel != null ? row.barrel.toFixed(1) : "—"],
+                ["EV",      row.ev     != null ? row.ev.toFixed(1)     : "—"],
+                ["xwOBA",   fsmS3(row.xwoba)],
+              ].map(([k, v]) => (
+                <div key={k} className="aei-chip">
+                  <div className="aei-chip__k">{k}</div>
+                  <div className="aei-chip__v">{v}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="aei-tblwrap">
+              <div className="aei-tblwrap__cap">{bLast} VS {pitcherHand || "?"}HP — BY PITCH TYPE</div>
+              <div className="aei-bt">
+                <div className="aei-bt__hd">
+                  <span>PITCH</span><span>PA</span><span>BA</span><span>SLG</span><span>HR</span><span>K%</span>
+                </div>
+                {fetchState === "loading" && <div className="aei-empty">Loading…</div>}
+                {fetchState !== "loading" && !hasBvp && (
+                  <div className="aei-empty">No pitch-type data on record</div>
+                )}
+                {hasBvp && arsorted.map(p => {
+                  const b = bvp[p.code];
+                  if (!b || !b.pa) return null;
+                  const isKey  = p.code === keyPitch;
+                  const small  = b.pa < 10;
+                  const ba     = b.ba  != null ? Number(b.ba).toFixed(3).replace(/^0/, "")  : "—";
+                  const slgVal = b.slg != null ? Number(b.slg) : null;
+                  const slgStr = slgVal != null ? slgVal.toFixed(3).replace(/^0/, "") : "—";
+                  const slgCls = slgVal != null
+                    ? (slgVal >= 0.600 ? "aei-slg--dmg" : slgVal >= 0.450 ? "aei-slg--mid" : "aei-slg--lo")
+                    : "";
+                  const kPct = b.k_pct != null ? (Number(b.k_pct)*100).toFixed(1)+"%" : "—";
+                  return (
+                    <div key={p.code} className={"aei-bt__row" + (isKey ? " aei-bt__row--key" : "")}>
+                      <div className="aei-bt__pitch">
+                        <b>{fsmPitchName(p.code)}</b>
+                        {small && <span className="aei-bt__ss">SMALL · &lt;10 PA</span>}
+                      </div>
+                      <span className={"aei-c" + (small ? " aei-c--warn" : "")}>{b.pa}</span>
+                      <span className="aei-c">{ba}</span>
+                      <span className="aei-c"><span className={"aei-slg " + slgCls}>{slgStr}</span></span>
+                      <span className={"aei-c" + ((b.hr ?? 0) > 0 ? " aei-c--hg" : "")}>{b.hr ?? "—"}</span>
+                      <span className="aei-c">{kPct}</span>
+                    </div>
+                  );
+                }).filter(Boolean)}
+                {anySmall && <div className="aei-pt__note">* &lt;10 PA — small sample, treat with caution</div>}
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </div>
+
+      <div className="fsm-card__foot">
+        <button className="fsm-card__pitchbtn" onClick={onBatter}>← BATTER CARD</button>
+        {!builderMode && (
+          <a className="fsm-card__fd" href={fsmFanDuelUrl(batterName)} target="_blank" rel="noopener"
+             onClick={(e) => fsmOpenFanDuelSearch(e, batterName)}>
+            + ADD {bLast.toUpperCase()} TO FANDUEL
+          </a>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function FsmDetailModal({ modal, onClose, setModal, builderMode = false }) {
   React.useEffect(() => {
     const h = (e) => {if (e.key === "Escape") onClose();};
@@ -1064,7 +1447,7 @@ function FsmDetailModal({ modal, onClose, setModal, builderMode = false }) {
       <div className="fsm-modal__inner" onClick={(e) => e.stopPropagation()}>
         {modal.type === "batter" ?
         <FsmBatterCard row={modal.row} onClose={onClose} onPitch={() => setModal({ type: "pitch", row: modal.row })} builderMode={builderMode} /> :
-        <FsmPitchMix row={modal.row} onClose={onClose} onBatter={() => setModal({ type: "batter", row: modal.row })} builderMode={builderMode} />}
+        <FsmArsenalEdgeIntel row={modal.row} onClose={onClose} onBatter={() => setModal({ type: "batter", row: modal.row })} builderMode={builderMode} />}
       </div>
     </div>);
 
