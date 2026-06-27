@@ -478,6 +478,7 @@ def _build_slate_payload(data: dict) -> dict:
             "pitcher_hh_allowed":     p.get("pitcher_hh_allowed"),
             "pitcher_fb_allowed":     p.get("pitcher_fb_allowed"),
             "pitcher_gb_allowed":     p.get("pitcher_gb_allowed"),
+            "pitcher_hr9":            p.get("pitcher_hr9"),
             "gameStartUtc":      p.get("game_time_utc", ""),
             "gameStatus":        p.get("game_status", "Scheduled"),
             "prime":             role["prime"],
