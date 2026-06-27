@@ -84,7 +84,7 @@ window.FILTER_DEFAULTS = {
   minBarrel: 0, minHH: 0, minEV: 0,
   minISO: 0, minXSLG: 0, minHRFB: 0, minPullAir: 0, minSweet: 0, minFB: 0,
   minHRProb: 0,
-  sortKey: "none", sortDir: "Descending", maxPlayers: 75,
+  sortKey: "none", sortDir: "Descending", maxPlayers: 999,
   excludeStarted: false,
   includeLive: true,
   confirmedLineupsOnly: false,
