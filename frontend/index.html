@@ -5903,6 +5903,128 @@ button.fsm-tier { appearance: none; text-decoration: none; }
   .tcs-m-deploy__btns { display: flex; gap: 9px; }
 }
 </style>
+<style id="fsm-mobile-cards">
+/* ============================================================
+   FSM MOBILE CARD VIEW — portrait ≤ 768px
+   Converts the dense stat table to stacked labeled-tile cards.
+   Desktop (>768px) and landscape are completely unaffected.
+   ============================================================ */
+
+/* Expand button hidden on desktop */
+.fsm-expandcell { display: none; }
+
+@media (max-width: 768px) {
+  /* No horizontal scroll needed — cards fill viewport width */
+  .fsm-tablewrap { overflow-x: hidden !important; }
+
+  /* Break table layout */
+  .fsm-table { display: block; width: 100%; }
+  .fsm-table colgroup, .fsm-table thead { display: none; }
+  .fsm-table tbody { display: flex; flex-direction: column; gap: 8px; padding: 6px; }
+
+  /* Row → card */
+  .fsm-table tr.fsm-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    background: var(--bg-base);
+    border: 1px solid rgba(180,220,200,0.12);
+    border-radius: 8px;
+    overflow: hidden;
+    height: auto !important;
+    cursor: default;
+  }
+  .fsm-table tr.fsm-row:hover { background: var(--bg-base); }
+  .fsm-table tr.fsm-row > td { height: auto !important; border-bottom: none; }
+
+  /* Card header: tier cell | player | matchup gauge */
+  .fsm-table tr.fsm-row > td.fsm-tiercell {
+    display: flex; flex: 0 0 72px;
+    align-items: flex-start; padding: 8px 4px;
+    border-bottom: 1px solid rgba(180,220,200,0.08);
+    border-right: 1px solid rgba(180,220,200,0.06);
+  }
+  .fsm-table tr.fsm-row > td.fsm-player {
+    display: flex; flex: 1 1 0; min-width: 0;
+    align-items: center; padding: 6px 8px;
+    border-bottom: 1px solid rgba(180,220,200,0.08);
+  }
+  .fsm-table tr.fsm-row > td.fsm-matchup {
+    display: flex; flex: 0 0 96px;
+    align-items: center; padding: 4px 6px;
+    border-bottom: 1px solid rgba(180,220,200,0.08);
+    border-left: 1px solid rgba(180,220,200,0.06);
+  }
+  /* AEE summary bar is dense — hide in card header; full intel via gauge tap → AEI */
+  .fsm-table tr.fsm-row > td.fsm-matchup .fsm-aee { display: none; }
+
+  /* Stat tiles — 6-column labeled grid */
+  .fsm-table tr.fsm-row > td.fsm-cell {
+    display: flex !important;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    flex: 0 0 calc(100% / 6);
+    min-width: 0;
+    box-sizing: border-box;
+    padding: 5px 2px 4px;
+    border-right: 1px solid rgba(180,220,200,0.04);
+    border-bottom: 1px solid rgba(180,220,200,0.04);
+    font-size: 11px;
+    height: auto !important;
+    text-align: center;
+  }
+  /* Tile label via data-label attribute */
+  .fsm-table tr.fsm-row > td.fsm-cell::before {
+    content: attr(data-label);
+    display: block;
+    font-family: var(--font-display);
+    font-size: 7px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: var(--fg-4);
+    text-transform: uppercase;
+    margin-bottom: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+
+  /* Extra tiles: hidden until row is expanded */
+  .fsm-table tr.fsm-row > td.fsm-cell--extra { display: none !important; }
+  .fsm-table tr.fsm-row.is-expanded > td.fsm-cell--extra { display: flex !important; }
+
+  /* Slip button: no room on mobile card */
+  .fsm-table tr.fsm-row > td.fsm-cell--slip { display: none !important; }
+
+  /* Expand button — full-width row at card bottom */
+  .fsm-expandcell {
+    display: flex !important;
+    flex: 0 0 100%;
+    padding: 0;
+    border-top: 1px solid rgba(180,220,200,0.06);
+  }
+  .fsm-expandbtn {
+    flex: 1;
+    padding: 8px;
+    background: transparent;
+    border: none;
+    color: var(--fg-3);
+    font-family: var(--font-display);
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    cursor: pointer;
+    text-align: center;
+  }
+  .fsm-expandbtn:hover, .fsm-expandbtn:active {
+    color: var(--fg-1);
+    background: rgba(180,220,200,0.04);
+  }
+}
+</style>
 </head>
 <body>
   <div id="root"></div>

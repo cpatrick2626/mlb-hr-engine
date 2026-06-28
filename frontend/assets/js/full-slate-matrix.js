@@ -201,13 +201,15 @@ function FsmGauge({ fraction, color, size }) {
   );
 }
 
-function FsmCell({ col, row }) {
+function FsmCell({ col, row, extra }) {
   const v = row[col.key];
-  if (col.mode === "odds") return <td className="fsm-cell fsm-cell--odds">{v == null ? "—" : col.fmt(v)}</td>;
-  if (col.mode === "headline") return <td className="fsm-cell fsm-cell--headline">{v == null ? "—" : col.fmt(v)}</td>;
-  if (col.mode === "neutral") return <td className="fsm-cell fsm-cell--neutral">{v == null ? "—" : col.fmt(v)}</td>;
+  const lbl = col.head;
+  const xc = extra ? " fsm-cell--extra" : "";
+  if (col.mode === "odds") return <td className={`fsm-cell fsm-cell--odds${xc}`} data-label={lbl}>{v == null ? "—" : col.fmt(v)}</td>;
+  if (col.mode === "headline") return <td className={`fsm-cell fsm-cell--headline${xc}`} data-label={lbl}>{v == null ? "—" : col.fmt(v)}</td>;
+  if (col.mode === "neutral") return <td className={`fsm-cell fsm-cell--neutral${xc}`} data-label={lbl}>{v == null ? "—" : col.fmt(v)}</td>;
   const b = fsmBucket(col, v);
-  return <td className={`fsm-cell ${FSM_BUCKET_CLASS[b] || ""}`}>{v == null ? "—" : col.fmt(v)}</td>;
+  return <td className={`fsm-cell ${FSM_BUCKET_CLASS[b] || ""}${xc}`} data-label={lbl}>{v == null ? "—" : col.fmt(v)}</td>;
 }
 
 const FSM_FANDUEL_SEARCH_URL = "https://sportsbook.fanduel.com/search";
@@ -332,6 +334,7 @@ function FsmSlipBtn({ status, onClick, label }) {
 }
 
 function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, isJigContext = false, jigLabel = null, jigRank = null, onAddLeg, slipStatus = 'idle' }) {
+  const [expanded, setExpanded] = React.useState(false);
   const displayTier = isJigContext && jigLabel ? jigLabel : row.tier;
   const t = FSM_TIERS[displayTier] || FSM_TIERS.COLD;
   const m = FSM_MATCHUP[row.quality] || FSM_MATCHUP.AVG;
@@ -341,7 +344,7 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, i
   const aeeColor = fsmAeeColor(aeeLabel);
   const aeeKeyPitch = fsmAeeKeyPitch(row);
   return (
-    <tr className="fsm-row">
+    <tr className={"fsm-row" + (expanded ? " is-expanded" : "")}>
       <td className="fsm-tiercell">
         {builderMode ? (
           <span
@@ -420,9 +423,14 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, i
           </div>
         </div>
       </td>
-      {cols.map((c) => <FsmCell key={c.key} col={c} row={row} />)}
+      {cols.map((c, ci) => <FsmCell key={c.key} col={c} row={row} extra={ci >= 12} />)}
       <td className="fsm-cell fsm-cell--slip" style={{ textAlign: 'center', padding: '0 4px' }}>
         <FsmSlipBtn status={slipStatus} onClick={() => onAddLeg && onAddLeg(row)} label={row.name} />
+      </td>
+      <td className="fsm-expandcell">
+        <button type="button" className="fsm-expandbtn" onClick={() => setExpanded(x => !x)}>
+          {expanded ? "SHOW LESS" : `+${Math.max(0, cols.length - 12)} MORE STATS`}
+        </button>
       </td>
     </tr>);
 
