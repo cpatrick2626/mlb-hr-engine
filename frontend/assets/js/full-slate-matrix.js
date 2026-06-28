@@ -1508,6 +1508,8 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
   const [focus, setFocus] = React.useState("all");
   const [selRoles, setSelRoles] = React.useState([]);
   const toggleRole = (id) => setSelRoles((prev) => prev.includes(id) ? prev.filter((r) => r !== id) : [...prev, id]);
+  const [selMetrics, setSelMetrics] = React.useState([]);
+  const toggleMetric = (id) => setSelMetrics((prev) => prev.includes(id) ? prev.filter((m) => m !== id) : [...prev, id]);
   const [modal, setModal] = React.useState(null);
   const [pmOn, setPmOn] = React.useState(true);
   const FSM_PREF_V = 3;
@@ -1556,8 +1558,13 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
   };
 
   const passRole = (r) => selRoles.length === 0 || selRoles.every((id) => r[id] === true);
+  const passMetric = (r) => {
+    if (selMetrics.includes("tm") && (r.true_matchup_score == null || r.true_matchup_score < 60)) return false;
+    if (selMetrics.includes("hrprob") && (r.hrprob == null || r.hrprob < 15)) return false;
+    return true;
+  };
 
-  const pool = sorted.filter((r) => (selGame === "all" || r.gameId === selGame) && passGroup(r) && passFocus(r) && passRole(r));
+  const pool = sorted.filter((r) => (selGame === "all" || r.gameId === selGame) && passGroup(r) && passFocus(r) && passRole(r) && passMetric(r));
   const gamesToShow = selGame === "all" ? getFSMGames() : getFSMGames().filter((g) => g.id === selGame);
   const title = builderMode ? "JIG BUILDER WORKSPACE" : "FULL SLATE INTELLIGENCE MATRIX";
   const subtitle = builderMode ?
@@ -1573,6 +1580,8 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
   if (group !== "all") noteBits.push(group === "qualified" ? "QUALIFIED" : "ELITE TARGETS");
   if (focus !== "all") noteBits.push("FOCUS " + focus.toUpperCase());
   if (selGame !== "all") noteBits.push("1 GAME");
+  if (selMetrics.includes("tm")) noteBits.push("TM ≥60");
+  if (selMetrics.includes("hrprob")) noteBits.push("HR PROB ≥15%");
   const note = noteBits.length ? noteBits.join(" · ") : filterNote || "NO ACTIVE FILTERS";
 
   const openBatter = (row) => setModal({ type: "batter", row });
@@ -1693,6 +1702,13 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
         <span className="fsm-filters__div" />
         <FsmRoleFilter selRoles={selRoles} onToggle={toggleRole} />
       </div>
+      <div className="fsm-sortbar">
+        <span className="fsm-sortbar__lbl">SORT</span>
+        <button className={"fsm-sortbar__btn" + (!sortState ? " is-on" : "")} onClick={() => setSortState(null)} title="Default: canonical model rank order">RANK</button>
+        <span className="fsm-sortbar__lbl" style={{ marginLeft: 6 }}>FILTER</span>
+        <button className={"fsm-sortbar__btn" + (selMetrics.includes("tm") ? " is-on" : "")} onClick={() => toggleMetric("tm")} title="Filter: show only TM ≥ 60 (ELITE matchup threshold)">TM ≥60</button>
+        <button className={"fsm-sortbar__btn" + (selMetrics.includes("hrprob") ? " is-on" : "")} onClick={() => toggleMetric("hrprob")} title="Filter: show only HR PROB ≥ 15%">HR PROB ≥15%</button>
+      </div>
 
       {/* GAME-NAV CHIPS — one-click jump to each game */}
       {view === "game" &&
@@ -1707,7 +1723,12 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
       }
 
       {/* BODY */}
-      {view === "player" ?
+      {pool.length === 0 && selMetrics.length > 0 ?
+      <div className="fsm-metric-empty">
+        <span className="fsm-metric-empty__icon">—</span>
+        <span className="fsm-metric-empty__msg">No players clear {selMetrics.map((m) => m === "tm" ? "TM ≥ 60" : "HR PROB ≥ 15%").join(" + ")} on today's slate.</span>
+      </div> :
+      view === "player" ?
       <div className="fsm-tablewrap fsm-scroll-container"><FsmTable rows={pool} cols={activeCols} showGame={true} onBatter={openBatter} onPitch={openPitch} onReorder={onReorder} onSort={onSort} sortState={sortState} builderMode={builderMode} isJigContext={isJigContext} /></div> :
 
       gamesToShow.map((game) => {
