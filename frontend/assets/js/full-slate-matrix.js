@@ -22,6 +22,20 @@ const FSM_MATCHUP = {
   DANGER: { q: 0, color: "#ef4444" }
 };
 const FSM_MATCHUP_ORDER = ["ELITE", "STRONG", "AVG", "WEAK", "DANGER"];
+
+/* TM (true_matchup_score) band thresholds — operator-approved, honest 0–100, do not rescale */
+const TM_BANDS = [
+  { min: 60, label: "ELITE",  color: "#4ade80" },
+  { min: 50, label: "STRONG", color: "#86efac" },
+  { min: 38, label: "AVG",    color: "#fbbf24" },
+  { min: 25, label: "WEAK",   color: "#f97316" },
+  { min:  0, label: "COLD",   color: "#ef4444" },
+];
+function tmBand(score) {
+  if (score == null) return { label: "—", color: "#6b7872" };
+  for (const b of TM_BANDS) { if (score >= b.min) return b; }
+  return TM_BANDS[TM_BANDS.length - 1];
+}
 const FSM_TIER_DESC = {
   APEX: "greatest HR threat — model HR probability ≥ 18% this game",
   ELITE: "premium danger — model HR probability ≥ 13%",
@@ -197,6 +211,38 @@ function FsmGauge({ fraction, color, size }) {
       <path d={d} stroke="#2a2a3a" strokeWidth={sw} strokeLinecap="round" />
       <path d={d} stroke={color} strokeWidth={sw} strokeLinecap="round" strokeDasharray={`${filled} ${arc.toFixed(2)}`} />
       <text x={cx} y={ty} textAnchor="middle" fill={color} fontSize={fs} fontWeight="500" fontFamily="inherit">{pct}</text>
+    </svg>
+  );
+}
+
+/* TM gauge — arc fill = score/100 (honest), color from TM band, "TM" label inside cup. */
+function FsmTMGauge({ score, size }) {
+  const band = tmBand(score);
+  const f = score != null ? Math.max(0, Math.min(1, score / 100)) : 0;
+  const lg = size === "lg";
+  const r  = lg ? 17 : 13;
+  const sw = lg ? 5  : 4;
+  const w  = lg ? 68 : 56;
+  const h  = lg ? 48 : 38;
+  const cx = w / 2;
+  const cy = lg ? 20 : 16;
+  const arc = Math.PI * r;
+  const filled = (f * arc).toFixed(2);
+  const d = `M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`;
+  const lblY = lg ? 29 : 22;
+  const numY = lg ? 39 : 31;
+  const lblFs = lg ? 7 : 6;
+  const numFs = lg ? 17 : 14;
+  return (
+    <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} fill="none" className="fsm-gauge" style={{ flexShrink: 0, overflow: "visible" }}>
+      <path d={d} stroke="#2a2a3a" strokeWidth={sw} strokeLinecap="round" />
+      <path d={d} stroke={band.color} strokeWidth={sw} strokeLinecap="round" strokeDasharray={`${filled} ${arc.toFixed(2)}`} />
+      <text x={cx} y={lblY} textAnchor="middle" fill={band.color} fontSize={lblFs} fontWeight="800" fontFamily="inherit" opacity="0.8" letterSpacing="1">
+        {score != null ? "TM" : ""}
+      </text>
+      <text x={cx} y={numY} textAnchor="middle" fill={band.color} fontSize={numFs} fontWeight="500" fontFamily="inherit">
+        {score != null ? score : "—"}
+      </text>
     </svg>
   );
 }
@@ -384,7 +430,7 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, i
       </td>
       <td className="fsm-matchup">
         <button type="button" className="fsm-matchup__in" onClick={() => onPitch(row)} title="Open Arsenal Edge Intel">
-          <FsmGauge fraction={fsmThreatFill(row.model_prob)} color={t.color} />
+          <FsmTMGauge score={row.true_matchup_score ?? null} />
           <span className="fsm-matchup__label">
             <span className="fsm-matchup__val fsm-matchup__val--hero" style={{ color: t.color }}>{row.hrprob != null ? row.hrprob.toFixed(1) + "%" : "—"}</span>
             <span className="fsm-matchup__lbl">HR PROB</span>
