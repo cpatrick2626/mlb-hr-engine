@@ -337,12 +337,7 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, i
   const [expanded, setExpanded] = React.useState(false);
   const displayTier = isJigContext && jigLabel ? jigLabel : row.tier;
   const t = FSM_TIERS[displayTier] || FSM_TIERS.COLD;
-  const m = FSM_MATCHUP[row.quality] || FSM_MATCHUP.AVG;
   const game = showGame ? (window.SLATE_GAMES || []).find((g) => g.id === row.gameId) : null;
-  const aeeGap = fsmAeeIsGap(row);
-  const aeeLabel = fsmAeeLabel(row);
-  const aeeColor = fsmAeeColor(aeeLabel);
-  const aeeKeyPitch = fsmAeeKeyPitch(row);
   return (
     <tr className={"fsm-row" + (expanded ? " is-expanded" : "")}>
       <td className="fsm-tiercell">
@@ -388,40 +383,17 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, i
         </button>
       </td>
       <td className="fsm-matchup">
-        <div style={{ display: "flex", flexDirection: "column", gap: "6px", minWidth: 0 }}>
-          <button type="button" className="fsm-matchup__in" onClick={() => onPitch(row)} title="Open Pitch Mix Analysis">
-            <FsmGauge fraction={fsmThreatFill(row.model_prob)} color={t.color} />
-            <span className="fsm-matchup__label" style={{ color: m.color }}>
-              <span>{row.quality}</span><span className="fsm-matchup__sub">MATCHUP</span>
-            </span>
-          </button>
-          <div
-            className="fsm-aee"
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "6px",
-              minWidth: 0,
-              padding: "3px 6px",
-              border: `1px solid ${aeeColor}26`,
-              borderLeft: `3px solid ${aeeColor}`,
-              borderRadius: "4px",
-              background: aeeGap ? "rgba(107,120,114,0.06)" : `${aeeColor}0a`,
-              color: aeeColor,
-              overflow: "hidden"
-            }}>
-            {aeeGap ? (
-              <span style={{ fontFamily: "var(--font-display)", fontSize: "9px", fontWeight: 800, letterSpacing: "0.14em", textTransform: "uppercase", whiteSpace: "nowrap" }}>DATA GAP</span>
-            ) : (
-              <>
-                <span style={{ fontFamily: "var(--font-display)", fontSize: "12px", fontWeight: 900, lineHeight: 1, whiteSpace: "nowrap" }}>{fsmAeeScoreText(row)}</span>
-                <span style={{ fontFamily: "var(--font-display)", fontSize: "9px", fontWeight: 800, letterSpacing: "0.12em", textTransform: "uppercase", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{aeeLabel}</span>
-                {row.arsenal_edge_confidence != null && <span style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "#6b7872", whiteSpace: "nowrap" }}>EXPLOIT CONF {Math.round(Number(row.arsenal_edge_confidence) * 100)}%</span>}
-                {aeeKeyPitch && <code style={{ fontFamily: "var(--font-mono)", fontSize: "9px", color: "#6b7872", whiteSpace: "nowrap" }}>KEY {aeeKeyPitch}</code>}
-              </>
-            )}
-          </div>
-        </div>
+        <button type="button" className="fsm-matchup__in" onClick={() => onPitch(row)} title="Open Arsenal Edge Intel">
+          <FsmGauge fraction={fsmThreatFill(row.model_prob)} color={t.color} />
+          <span className="fsm-matchup__label">
+            <span className="fsm-matchup__val fsm-matchup__val--hero" style={{ color: t.color }}>{row.hrprob != null ? row.hrprob.toFixed(1) + "%" : "—"}</span>
+            <span className="fsm-matchup__lbl">HR PROB</span>
+            <span className="fsm-matchup__val">{row.arsenal_edge_score != null ? Number(row.arsenal_edge_score).toFixed(1) : "—"}</span>
+            <span className="fsm-matchup__lbl">BATTER EDGE</span>
+            <span className="fsm-matchup__val">{row.arsenal_edge_confidence != null ? Math.round(Number(row.arsenal_edge_confidence) * 100) + "%" : "—"}</span>
+            <span className="fsm-matchup__lbl">SIGNAL</span>
+          </span>
+        </button>
       </td>
       {cols.map((c, ci) => <FsmCell key={c.key} col={c} row={row} extra={ci >= 12} />)}
       <td className="fsm-cell fsm-cell--slip" style={{ textAlign: 'center', padding: '0 4px' }}>

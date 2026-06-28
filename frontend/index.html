@@ -3452,11 +3452,18 @@ button.fsm-tier { appearance: none; text-decoration: none; }
 .fsm-matchup__in:focus-visible { outline: 2px solid var(--green-500); outline-offset: 1px; }
 .fsm-gauge { flex-shrink: 0; transition: transform .12s ease, filter .12s ease; }
 .fsm-matchup__label {
-  display: flex; flex-direction: column; line-height: 1.06; font-family: var(--font-display);
-  font-weight: 700; font-size: 9.5px; letter-spacing: 0.08em; text-transform: uppercase;
+  display: grid; grid-template-columns: auto 1fr; column-gap: 5px; row-gap: 1px;
+  align-items: baseline; font-family: var(--font-display); text-transform: uppercase; min-width: 0;
 }
-.fsm-matchup__sub { font-weight: 600; font-size: 8px; opacity: 0.72; }
-.fsm-matchup__label > span { white-space: nowrap; }
+.fsm-matchup__val {
+  font-size: 11px; font-weight: 900; line-height: 1.3; white-space: nowrap;
+  color: var(--fg-1); text-align: right; letter-spacing: 0.04em;
+}
+.fsm-matchup__val--hero { font-size: 15px; line-height: 1.15; }
+.fsm-matchup__lbl {
+  font-size: 7.5px; font-weight: 700; letter-spacing: 0.1em; opacity: 0.55;
+  color: var(--fg-2); white-space: nowrap; align-self: baseline;
+}
 
 /* heatmap data cells */
 .fsm-cell { text-align: center; padding: 5px 4px; font-size: 12px; white-space: nowrap; color: var(--fg-2); vertical-align: middle; }
@@ -5915,114 +5922,116 @@ button.fsm-tier { appearance: none; text-decoration: none; }
 
 @media (max-width: 768px) {
   /* No horizontal scroll needed — cards fill viewport width */
-  .fsm-tablewrap { overflow-x: hidden !important; }
+  .fsm-tablewrap { overflow-x: visible !important; border: 0; background: transparent; }
 
   /* Break table layout */
-  .fsm-table { display: block; width: 100%; }
+  .fsm-table { display: block; width: 100% !important; min-width: 0 !important; }
   .fsm-table colgroup, .fsm-table thead { display: none; }
-  .fsm-table tbody { display: flex; flex-direction: column; gap: 8px; padding: 6px; }
+  .fsm-table tbody { display: block; }
 
-  /* Row → card */
+  /* Row → 6-column grid card */
   .fsm-table tr.fsm-row {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: stretch;
-    background: var(--bg-base);
-    border: 1px solid rgba(180,220,200,0.12);
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    grid-template-rows: min-content;
+    gap: 3px;
+    padding: 5px;
+    margin-bottom: 5px;
+    border: 1px solid rgba(180,220,200,0.1);
     border-radius: 8px;
-    overflow: hidden;
+    background: rgba(12,18,23,0.6);
     height: auto !important;
     cursor: default;
   }
-  .fsm-table tr.fsm-row:hover { background: var(--bg-base); }
-  .fsm-table tr.fsm-row > td { height: auto !important; border-bottom: none; }
+  .fsm-table tr.fsm-row td { border: 0 !important; height: auto !important; }
 
-  /* Card header: tier cell | player | matchup gauge */
-  .fsm-table tr.fsm-row > td.fsm-tiercell {
-    display: flex; flex: 0 0 72px;
-    align-items: flex-start; padding: 8px 4px;
-    border-bottom: 1px solid rgba(180,220,200,0.08);
-    border-right: 1px solid rgba(180,220,200,0.06);
+  /* Header pinned to grid-row 1 */
+  .fsm-row .fsm-tiercell {
+    grid-column: 1 / 3; grid-row: 1;
+    width: auto !important; padding: 0;
+    display: flex; flex-direction: row; align-items: center; gap: 5px;
+    height: 36px; align-self: center;
   }
-  .fsm-table tr.fsm-row > td.fsm-player {
-    display: flex; flex: 1 1 0; min-width: 0;
-    align-items: center; padding: 6px 8px;
-    border-bottom: 1px solid rgba(180,220,200,0.08);
+  .fsm-row .fsm-tiercell .fsm-roles {
+    display: flex; flex-direction: column; align-items: stretch; gap: 3px;
+    width: auto; margin: 0; padding: 0;
   }
-  .fsm-table tr.fsm-row > td.fsm-matchup {
-    display: flex; flex: 0 0 96px;
-    align-items: center; padding: 4px 6px;
-    border-bottom: 1px solid rgba(180,220,200,0.08);
-    border-left: 1px solid rgba(180,220,200,0.06);
-  }
-  /* AEE summary bar is dense — hide in card header; full intel via gauge tap → AEI */
-  .fsm-table tr.fsm-row > td.fsm-matchup .fsm-aee { display: none; }
+  .fsm-row .fsm-rolebadge { font-size: 8px; padding: 2px 6px; letter-spacing: 0.04em; border-radius: 5px; white-space: nowrap; }
+  .fsm-row .fsm-tier { padding: 4px 6px; gap: 1px; border-radius: 8px; flex-shrink: 0; width: auto; }
+  .fsm-row .fsm-tier__icon svg { width: 16px; height: 16px; }
+  .fsm-row .fsm-tier__label { font-size: 8.5px; letter-spacing: 0.06em; }
 
-  /* Stat tiles — 6-column labeled grid */
-  .fsm-table tr.fsm-row > td.fsm-cell {
+  .fsm-row .fsm-player {
+    grid-column: 3 / 6; grid-row: 1;
+    width: auto !important; padding: 0 !important;
+    height: 36px; align-self: center;
+  }
+  .fsm-row .fsm-player__in { padding: 1px 4px; gap: 8px; justify-content: center; max-width: 100%; }
+  .fsm-row .fsm-player__col { align-items: center; text-align: center; min-width: 0; flex: 0 1 auto; }
+  .fsm-row .fsm-player__dot { width: 9px; height: 9px; flex-shrink: 0; }
+  .fsm-row .fsm-player__name { font-size: 15px; font-weight: 800; letter-spacing: 0.01em; line-height: 1.12; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .fsm-row .fsm-player__meta { font-size: 10px; letter-spacing: 0.05em; }
+  .fsm-row .fsm-player__game { font-size: 9px; }
+
+  .fsm-row .fsm-matchup {
+    grid-column: 6; grid-row: 1;
+    width: auto !important; padding: 0 !important;
+    height: 36px; align-self: center; justify-self: end;
+  }
+  .fsm-row .fsm-matchup__in { padding: 1px 4px; flex-direction: row; gap: 4px; }
+  .fsm-row .fsm-matchup__label { display: grid; }
+  .fsm-row .fsm-matchup__val { font-size: 9px; }
+  .fsm-row .fsm-matchup__val--hero { font-size: 11px; }
+  .fsm-row .fsm-matchup__lbl { font-size: 6px; }
+
+  .fsm-row .fsm-gauge { width: 48px; height: 33px; }
+  .fsm-row .fsm-gauge__num { font-size: 14px; bottom: -1px; }
+  .fsm-row .fsm-pie {
+    width: 30px; height: 30px;
+    box-shadow: 0 0 0 1.5px rgba(180,220,200,0.35), inset 0 0 0 1px rgba(0,0,0,0.4), 0 1px 4px rgba(0,0,0,0.5);
+  }
+
+  /* Stat tiles — uniform, auto-flow into 6-column grid beneath the header */
+  .fsm-row .fsm-cell {
     display: flex !important;
-    flex-direction: column;
-    align-items: center;
-    justify-content: flex-end;
-    flex: 0 0 calc(100% / 6);
-    min-width: 0;
+    flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    padding: 3px 1px 4px !important;
+    border-radius: 4px; font-size: 11px; min-height: 27px;
+    white-space: nowrap; line-height: 1.1;
+    height: auto !important; text-align: center;
+    min-width: 0; /* prevent grid blowout from nowrap content */
     box-sizing: border-box;
-    padding: 5px 2px 4px;
-    border-right: 1px solid rgba(180,220,200,0.04);
-    border-bottom: 1px solid rgba(180,220,200,0.04);
-    font-size: 11px;
-    height: auto !important;
-    text-align: center;
   }
   /* Tile label via data-label attribute */
-  .fsm-table tr.fsm-row > td.fsm-cell::before {
+  .fsm-row .fsm-cell::before {
     content: attr(data-label);
     display: block;
     font-family: var(--font-display);
-    font-size: 7px;
-    font-weight: 700;
-    letter-spacing: 0.08em;
-    color: var(--fg-4);
-    text-transform: uppercase;
-    margin-bottom: 2px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    max-width: 100%;
+    font-weight: 700; font-size: 9.5px; letter-spacing: 0.02em;
+    color: rgba(255,255,255,0.7); text-transform: uppercase; line-height: 1;
+    text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
   }
 
   /* Extra tiles: hidden until row is expanded */
-  .fsm-table tr.fsm-row > td.fsm-cell--extra { display: none !important; }
-  .fsm-table tr.fsm-row.is-expanded > td.fsm-cell--extra { display: flex !important; }
+  .fsm-row .fsm-cell--extra { display: none !important; }
+  .fsm-row.is-expanded .fsm-cell--extra { display: flex !important; }
 
   /* Slip button: no room on mobile card */
-  .fsm-table tr.fsm-row > td.fsm-cell--slip { display: none !important; }
+  .fsm-row .fsm-cell--slip { display: none !important; }
 
   /* Expand button — full-width row at card bottom */
   .fsm-expandcell {
-    display: flex !important;
-    flex: 0 0 100%;
-    padding: 0;
-    border-top: 1px solid rgba(180,220,200,0.06);
+    display: block !important;
+    grid-column: 1 / -1;
+    padding: 0; margin-top: 2px;
   }
   .fsm-expandbtn {
-    flex: 1;
-    padding: 8px;
-    background: transparent;
-    border: none;
-    color: var(--fg-3);
-    font-family: var(--font-display);
-    font-size: 9px;
-    font-weight: 700;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    cursor: pointer;
-    text-align: center;
+    width: 100%; display: flex; align-items: center; justify-content: center; gap: 5px;
+    background: rgba(0,217,255,0.07); border: 1px solid rgba(0,217,255,0.18); border-radius: 5px;
+    color: #aef0ff; font-family: var(--font-display); font-weight: 800; font-size: 8.5px;
+    letter-spacing: 0.08em; text-transform: uppercase; padding: 5px 6px; cursor: pointer;
   }
-  .fsm-expandbtn:hover, .fsm-expandbtn:active {
-    color: var(--fg-1);
-    background: rgba(180,220,200,0.04);
-  }
+  .fsm-expandbtn:active { background: rgba(0,217,255,0.14); }
 }
 </style>
 </head>
