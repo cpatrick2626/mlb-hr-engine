@@ -275,6 +275,36 @@ def _rate(val):
         return None
 
 
+def _true_matchup_score(row: dict) -> int | None:
+    """Composite display score (0–100). Serialization-only — never fed back into scoring/ordering."""
+    mp = row.get("model_prob")
+    if mp is None:
+        return None
+
+    def _clamp(v, lo, hi):
+        return max(lo, min(hi, v))
+
+    hr_prob_n = _clamp(float(mp) / 0.25, 0.0, 1.0)
+
+    raw_edge = row.get("arsenal_edge_score")
+    edge_n = _clamp(float(raw_edge) / 10.0, 0.0, 1.0) if raw_edge is not None else 0.0
+
+    raw_conf = row.get("arsenal_edge_confidence")
+    conf = _clamp(float(raw_conf), 0.0, 1.0) if raw_conf is not None else 0.0
+
+    hr9 = row.get("pitcher_hr9")
+    barrel = row.get("pitcher_barrel_allowed")
+    components = []
+    if hr9 is not None:
+        components.append(_clamp(float(hr9) / 2.0, 0.0, 1.0))
+    if barrel is not None:
+        components.append(_clamp(float(barrel) / 0.12, 0.0, 1.0))
+    vuln_n = sum(components) / len(components) if components else 0.5
+
+    score = 100.0 * (0.40 * hr_prob_n + 0.30 * edge_n + 0.20 * conf + 0.10 * vuln_n)
+    return int(round(_clamp(score, 0.0, 100.0)))
+
+
 def _jig_score(player: dict, arsenal_data: dict | None = None) -> float:
     """
     JIG tactical exploit score.
@@ -546,6 +576,12 @@ def _build_slate_payload(data: dict) -> dict:
             r.update(_aee_map.get(r.get("id"), {}))
     except Exception as e:
         log.error("AEE precompute failed: %s", e, exc_info=True)
+
+    # true_matchup_score — additive display field; computed after AEE so arsenal fields are present
+    for r in leaderboard_rows:
+        r["true_matchup_score"] = _true_matchup_score(r)
+    for r in jig_rows:
+        r["true_matchup_score"] = _true_matchup_score(r)
 
     seen_games = {}
     for p in players:
