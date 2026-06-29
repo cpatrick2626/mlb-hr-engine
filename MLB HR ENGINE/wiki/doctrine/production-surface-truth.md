@@ -1,6 +1,6 @@
 # Production Surface Truth
 
-**Last Updated:** 2026-06-22 (correction — see note below)
+**Last Updated:** 2026-06-28
 
 ---
 
@@ -165,6 +165,42 @@ The live slip card displays current ticket legs with real data:
 |------|---------|
 | `frontend/assets/js/auth.js` | Login modal, invite redemption, auth chip |
 | `frontend/assets/js/slip-btn.js` | Auth-aware slip button (requires login to add legs) |
+
+---
+
+## Matchup Cell & TM Surface (2026-06-28)
+
+The production `frontend/` Full Slate matchup cell was reframed and a True Matchup gauge added. Canonical truth for the matchup cell:
+
+| Element | Source field | Notes |
+|---------|--------------|-------|
+| TM gauge | `true_matchup_score` (0–100) | Labeled "TM"; honest 0–100 arc (no rescale); fixed band colors. See `true-matchup-score.md`. |
+| HR PROB | `hrprob` (×100) | Headline number; the real predictive HR %. |
+| BATTER EDGE | `arsenal_edge_score` (0–10) | Displayed raw, unsigned. Renamed display of the arsenal-edge exploit score. |
+| SIGNAL | `arsenal_edge_confidence` (0–1 → %) | Full-arsenal exploit confidence. Same field shown as EXPLOIT CONF in AEI. |
+
+- Removed from the slate cell: "Elite/Strong/Neutral Matchup" text and the key pitch label. Key pitch lives only in the Arsenal Edge Intel modal.
+- The TM gauge reads `row.true_matchup_score` directly — no client-side recomputation (single source of truth).
+
+## Arsenal Edge Intel (AEI) (2026-06-28)
+
+The matchup-gauge detail modal is `FsmArsenalEdgeIntel` (three panels: PITCHER ARSENAL | ARSENAL EDGE VERDICT | BATTER DAMAGE PROFILE). It replaced `FsmPitchMix`, which is preserved unrouted in `frontend/assets/js/full-slate-matrix.js` as a rollback path.
+
+- Verdict headlines the arsenal-edge read (label + score + EXPLOIT CONF from `arsenal_edge_confidence`); raw per-pitch HR/PA is per-pitch context only, not the headline.
+- ~146 `aei-*` references in `full-slate-matrix.js` + AEI CSS in `index.html`. Any future edit to that file must preserve the AEI surface.
+- All displayed values trace to real served fields. No invented numbers. Scoring untouched.
+
+## Full Slate Mobile Card View (2026-06-28)
+
+At ≤768px the Full Slate `.fsm-table` becomes stacked per-player cards via a CSS `@media (max-width: 768px)` block in `index.html` (CSS-grid card: tier+roles | name | TM gauge header, then a 6-column labeled stat-tile grid using `data-label`, with a `+N MORE STATS` expander toggling `is-expanded` / `fsm-cell--extra`). Desktop (>768px) renders the normal table unchanged.
+
+- Follows the established `-desktop` / `-mobile` (or media-query swap) convention used by HR Threat Zone, Pitcher Vulnerability, Escalation Feed, TCS.
+- The matrix JS emits the required hooks (`data-label`, `fsm-cell--extra`, `fsm-expandcell`/`fsm-expandbtn`, `fsm-roles`) — these were added to the live matrix (the prototype handoff matrix had them but lacked the AEI work; the live file is canonical).
+- Open follow-up: role badges render below the tier chip rather than clustered beside it (`.fsm-roles` JSX wrap pending) — cosmetic only.
+
+## Slate Sort & Filter Controls (2026-06-28)
+
+A control bar on the Full Slate: **RANK** (sort/default — restores canonical `model_tier_rank` via existing `onSort`/`setSortState`), and **TM** / **HR PROB** as role-style filter toggles (independent on/off; AND-intersection when both on). Fixed thresholds: TM ≥ 60, `hrprob` ≥ 15. All view-level — MAIN ranking is never altered; filtering and sorting are independent and reversible. See `true-matchup-score.md` for thresholds.
 
 ---
 

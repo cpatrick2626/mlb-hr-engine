@@ -136,3 +136,17 @@ Future batched commits involving vault files should either:
 
 ## [2026-06-23] claude-code | docs(doctrine): clarify two frontend trees — repo-root frontend/ confirmed LIVE Vercel (static React/Babel, no build), mlb_hr_engine_v4/frontend/ confirmed dead prototype; agent warning added to frontend-topology.md, production-surface-truth.md, CLAUDE.md §10; bundle existence-check passed (6 named bundles + CDN pattern verified) | COMMITTED
 ## [2026-06-26] claude-code | Arsenal Edge card parity re-lock | COMPLETE — frontend/assets/js/arsenal-edge-exploit.js now sources score/label/confidence from backend row fields, short-circuits DATA GAP rows before any numeric formatting, and sorts null scores safely to the bottom. Old _aeeEdge() no longer feeds displayed score. Detail panels remain on /api/pitcher-detail. Frontend-only diff; no backend/scoring/config/pipeline/MATCHUP changes.
+
+## 2026-06-28 — TM Score, Arsenal Edge Intel, Mobile Cards, Matchup Reframe
+
+Multi-feature build session. Shipped to `origin/main` (13 commits). Frontend auto-deployed via Vercel; `api/main.py` deployed via `flyctl deploy` + `gh workflow run daily_pipeline.yml` (cache rebuild).
+
+- New: `true_matchup_score` (0–100 composite) in `api/main.py` — serialization-only, inert, operator-authorized. Doctrine: `doctrine/true-matchup-score.md`.
+- New: Arsenal Edge Intel three-panel matchup modal (`FsmArsenalEdgeIntel`), replaces `FsmPitchMix` (preserved unrouted).
+- New: Full Slate mobile portrait card view (≤768px, CSS-grid stacked cards + expander).
+- Reframe: matchup cell → HR PROB / BATTER EDGE / SIGNAL; removed matchup text + key pitch from slate.
+- New: slate sort (RANK) + filter toggles (TM≥60, HR≥15%).
+- Invariants preserved: model/scoring/MAIN/JIG/HVY/tickets unchanged. TM never feeds scoring/ordering.
+- Maintenance: Graphify graph was STALE (06-22) — rebuilt to index the `api/main.py` TM change.
+
+Session detail: `sessions/2026-06-28-tm-aei-mobile-matchup-reframe.md`

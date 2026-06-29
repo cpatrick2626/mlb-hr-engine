@@ -212,6 +212,18 @@ Velocity is NOT available from `pitch-arsenal-stats`, and the alternate `pitch-a
 
 ---
 
+### Open gaps as of 2026-06-28
+
+- **TM band / filter-cutoff tuning** — TM bands (ELITE 60+/STRONG/AVG/WEAK/COLD) and filter cutoffs (TM≥60, HR≥15%) were set from a 374-row tuning slate (range 13–72). Live slates have run higher (max ~81). Watch several live slates; retune if `ELITE 60+` catches too wide a top tier. Display-only, trivial, no formula change. See `true-matchup-score.md`.
+- **Mobile role badges clustering** — role badges (PRIME/EXPLOSIVE/etc.) render below the tier chip rather than clustered beside it on the mobile card. Needs a `.fsm-roles` wrapper in `full-slate-matrix.js` JSX. Cosmetic.
+- **Mobile landscape** — the `@media ... (orientation: landscape)` block still enables horizontal table scroll; wide landscape phones (>768px) hit the table rather than the card view. Portrait + narrow-landscape are handled.
+- **AEI Phase 2 — per-pitch confidence** — `engine/arsenal_edge.py` computes per-pitch confidence (the `c[3]` contribution term) but only emits the aggregate `arsenal_edge_confidence`. Exposing per-pitch CONF + a separate `key_pitch_confidence` to the payload is an additive PROTECTED backend task, authorized-when-ready. Do NOT build a new confidence formula.
+- **Pitcher Card (standalone)** — pitcher profile + opposing-lineup threat matrix needs a backend data contract first (bulk lineup+BvP endpoint, `batting_order`, pitcher profile fields FIP/xFIP/SIERA/command percentiles not currently served).
+- **`engine/arsenal_edge.py` git-tracked confirmation** — confirmed located at `engine/arsenal_edge.py`; verify it is git-tracked (`git ls-files engine/arsenal_edge.py`) since `api/main.py` imports it — an untracked imported file would break a fresh deploy.
+- **Per-browser localStorage caps** — `maxPlayers` default raised to 999, but existing browsers/phones retain their saved value (e.g. stale `maxPlayers:75`); clear via in-app reset.
+
+---
+
 ## Cross-References
 
 - [[deploy-runbook]] — deploy surface truth
