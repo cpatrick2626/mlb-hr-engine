@@ -5960,11 +5960,10 @@ button.fsm-tier { appearance: none; text-decoration: none; }
     display: flex; flex-direction: row; align-items: center; gap: 5px;
     height: 36px; align-self: center;
   }
-  .fsm-row .fsm-tiercell .fsm-roles {
-    display: flex; flex-direction: column; align-items: stretch; gap: 3px;
-    width: auto; margin: 0; padding: 0;
+  .fsm-row .fsm-tiercell .fsm-tiercell__roles {
+    flex-direction: row; flex-wrap: wrap; align-items: center; gap: 2px; margin-top: 0;
   }
-  .fsm-row .fsm-rolebadge { font-size: 8px; padding: 2px 6px; letter-spacing: 0.04em; border-radius: 5px; white-space: nowrap; }
+  .fsm-row .fsm-tiercell__roles [class*="fsm-role-badge"] { font-size: 8px; padding: 2px 5px; margin-top: 0; }
   .fsm-row .fsm-tier { padding: 4px 6px; gap: 1px; border-radius: 8px; flex-shrink: 0; width: auto; }
   .fsm-row .fsm-tier__icon svg { width: 16px; height: 16px; }
   .fsm-row .fsm-tier__label { font-size: 8.5px; letter-spacing: 0.06em; }
