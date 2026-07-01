@@ -1190,7 +1190,7 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false }) {
               <div className="aei-pcard__who">
                 <div className="aei-pcard__nm">{pitcherName}</div>
                 <div className="aei-pcard__meta">{pitcherHand ? pitcherHand + "HP" : "—"}</div>
-                <span className="aei-tier">PITCHER VULNERABILITY <b style={pTierLabel !== "—" ? { color: pTierColor } : {}}>{pTierLabel}</b></span>
+                <span className="aei-tier">PITCHER TIER <b>{row.tier || "—"}</b></span>
               </div>
             </div>
 
@@ -1384,7 +1384,7 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false }) {
               <div className="aei-pcard__who">
                 <div className="aei-pcard__nm">{batterName}</div>
                 <div className="aei-pcard__meta">BATS {batterSide || "?"} · {row.teamAbbr || ""}</div>
-                <span className="aei-tier">BATTER THREAT TIER <b>{row.tier || "—"}</b></span>
+                <span className="aei-tier">BATTER TIER <b>{row.tier || "—"}</b></span>
               </div>
             </div>
 
