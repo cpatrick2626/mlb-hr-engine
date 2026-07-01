@@ -1167,6 +1167,10 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false }) {
   const iso = row.iso != null ? row.iso
     : (row.slg != null && row.avg != null ? +(row.slg - row.avg).toFixed(3) : null);
 
+  const aeiHr9 = row.pitcher_hr9 != null ? row.pitcher_hr9 : null;
+  const aeiPTier = aeiHr9 != null ? (aeiHr9 >= 1.45 ? "HR TARGET" : aeiHr9 >= 1.05 ? "VULNERABLE" : "TOUGH") : "—";
+  const aeiPTierColor = aeiPTier === "HR TARGET" ? "#1aff66" : aeiPTier === "VULNERABLE" ? "#ffb020" : aeiPTier === "TOUGH" ? "#ff3344" : "inherit";
+
   return (
     <div className="fsm-card aei-wrap">
       <button className="fsm-card__close fsm-card__close--abs" onClick={onClose} aria-label="Close">✕</button>
@@ -1190,7 +1194,7 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false }) {
               <div className="aei-pcard__who">
                 <div className="aei-pcard__nm">{pitcherName}</div>
                 <div className="aei-pcard__meta">{pitcherHand ? pitcherHand + "HP" : "—"}</div>
-                <span className="aei-tier">PITCHER TIER <b>{row.tier || "—"}</b></span>
+                <span className="aei-tier">PITCHER VULNERABILITY <b style={aeiPTier !== "—" ? { color: aeiPTierColor } : {}}>{aeiPTier}</b></span>
               </div>
             </div>
 
@@ -1384,7 +1388,7 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false }) {
               <div className="aei-pcard__who">
                 <div className="aei-pcard__nm">{batterName}</div>
                 <div className="aei-pcard__meta">BATS {batterSide || "?"} · {row.teamAbbr || ""}</div>
-                <span className="aei-tier">BATTER TIER <b>{row.tier || "—"}</b></span>
+                <span className="aei-tier">BATTER THREAT TIER <b>{row.tier || "—"}</b></span>
               </div>
             </div>
 
