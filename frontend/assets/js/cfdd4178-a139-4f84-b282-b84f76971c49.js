@@ -187,7 +187,7 @@ const Stage = ({ engine, lens, ccOpen, onCloseCC, appliedFilters, onApplyFilters
   } else if (engine.id === "command") {
     body = <CommandTabPanel />;
   } else if (lens && lens.id === "builder") {
-    body = <JigCommand engine={engine} lens={lens} onOpenPlayer={onOpenPlayer} />;
+    body = <JigCommand engine={engine} lens={lens} appliedFilters={appliedFilters} onOpenPlayer={onOpenPlayer} />;
   } else if (lens && lens.id === "arsenal") {
     const arsenalRows = engine.id === "jig" ? jigRows : mainRows;
     body = (

@@ -56,7 +56,7 @@ function MasterDashboard() {
 
   const engine = ENGINES.find((e) => e.id === active.engineId);
   const lens = engine.subs ? engine.subs.find((s) => s.id === active.lensId) : null;
-  const roomKey = `${active.engineId}/${active.lensId || "_"}`;
+  const roomKey = active.engineId;
   const currentFilters = roomFilters[roomKey] || null;
 
   // Save TCC filters to the room you're in.

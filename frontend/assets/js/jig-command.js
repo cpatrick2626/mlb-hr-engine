@@ -1,7 +1,7 @@
 /* HR Engine — JIG BUILDER lens.
    Shows the Full Slate Intelligence Matrix with a Save / Load builder bar on top. */
 
-function JigCommand({ engine, lens, onOpenPlayer }) {
+function JigCommand({ engine, lens, appliedFilters, onOpenPlayer }) {
   // Phase A stopgap: prefer raw slate rows if exposed; otherwise use JIG-side rows.
   // Do not default JIG Builder to MAIN leaderboard rows.
   const rawRows =
@@ -37,7 +37,7 @@ function JigCommand({ engine, lens, onOpenPlayer }) {
         <div className="jig-banner__title">JIG BUILDER · PHASE A WORKSPACE</div>
         <div className="jig-banner__sub">Current source: JIG scored slate rows. Raw unscored Builder feed is not exposed yet.</div>
       </div>
-      <FullSlateMatrix rows={builderRows} total={builderRows.length} onOpen={onOpenPlayer} builderMode={true} />
+      <FullSlateMatrix rows={applyRoomFilters(builderRows, appliedFilters)} total={builderRows.length} onOpen={onOpenPlayer} builderMode={true} />
     </div>
   );
 }
