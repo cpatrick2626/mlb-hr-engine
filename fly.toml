@@ -18,7 +18,7 @@ primary_region = "iad"   # Washington DC — closest to MLB data centers
 [[vm]]
   cpu_kind  = "shared"
   cpus      = 1
-  memory_mb = 512   # pipeline needs ~300MB; 512 gives headroom
+  memory_mb = 1024  # upgraded from 512 — slate live-load + concurrent Savant CSVs need headroom
 
 [[mounts]]
   source      = "mlb_tracking"
