@@ -34,7 +34,7 @@ from fastapi import FastAPI, Depends, HTTPException, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.auth import require_auth, require_beta
-from api.cache import get_picks, store_picks, list_runs, redeem_invite, add_leg, complete_ticket
+from api.cache import get_picks, get_latest_picks, store_picks, list_runs, redeem_invite, add_leg, complete_ticket
 from clients.arsenal import get_pitcher_arsenal, arsenal_matchup_factor
 from clients.pitch_mix import get_batter_vs_pitches, get_pitcher_pitch_stats
 from config import FS_TIER_THRESHOLDS
@@ -626,7 +626,8 @@ async def get_slate():
     Returns today's Full Slate data in React frontend shape.
     No auth required — public endpoint for the React dashboard.
     Cache-first: serves slate_cache from today's pipeline run if fresh (≤12 h).
-    Falls back to live load_game_data() if cache is missing, stale, or date-mismatched.
+    On miss/stale: serves most-recent stored payload with stale=True (never rebuilds in-request).
+    Empty DB (pipeline never run): returns clean error shape with empty rows.
     """
     import datetime as _dt
     today = date.today().strftime("%Y-%m-%d")
@@ -651,6 +652,7 @@ async def get_slate():
                                 **sc,
                                 "from_cache":        True,
                                 "cache_age_minutes": age_minutes,
+                                "stale":             False,
                             }
                         else:
                             log.info("[/api/slate] cache stale | age=%dm — falling through to live", age_minutes)
@@ -659,25 +661,26 @@ async def get_slate():
     except Exception as e:
         log.warning("[/api/slate] cache lookup error: %s — falling through to live", e)
 
-    # ── Live fallback ───────────────────────────────────────────────────────────
-    try:
-        from pipeline import load_game_data
-        data = load_game_data()
-        payload = _build_slate_payload(data)
+    # ── Last-good fallback (never rebuild in-request) ───────────────────────────
+    latest = get_latest_picks()
+    if latest and "slate_cache" in latest:
+        sc = latest["slate_cache"]
+        log.info("[/api/slate] serving last-good cache | date=%s stale=True", sc.get("date"))
         return {
-            **payload,
-            "from_cache":        False,
-            "cache_age_minutes": 0,
+            **sc,
+            "from_cache":        True,
+            "cache_age_minutes": None,
+            "stale":             True,
         }
-    except Exception as e:
-        log.error(f"[/api/slate] {e}", exc_info=True)
-        return {
-            "error":                str(e),
-            "leaderboard_rows":     [],
-            "leaderboard_rows_jig": [],
-            "slate_games":          [],
-            "from_cache":           False,
-        }
+    log.warning("[/api/slate] no slate data in DB — pipeline has not run yet")
+    return {
+        "error":                "No slate data available. Pipeline has not run yet.",
+        "leaderboard_rows":     [],
+        "leaderboard_rows_jig": [],
+        "slate_games":          [],
+        "from_cache":           False,
+        "stale":                True,
+    }
 
 
 @app.get("/api/pitcher-detail")

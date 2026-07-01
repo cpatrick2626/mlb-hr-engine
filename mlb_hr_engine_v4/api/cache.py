@@ -40,6 +40,19 @@ def get_picks(date_str: str) -> Optional[dict]:
     return result.data[0]["payload"] if result.data else None
 
 
+def get_latest_picks() -> Optional[dict]:
+    """Return cached pipeline payload for the most-recent stored date, or None."""
+    result = (
+        _client()
+        .table("pipeline_runs")
+        .select("payload")
+        .order("date", desc=True)
+        .limit(1)
+        .execute()
+    )
+    return result.data[0]["payload"] if result.data else None
+
+
 def store_picks(date_str: str, payload: dict) -> None:
     """Upsert pipeline payload for date_str."""
     _client().table("pipeline_runs").upsert(
