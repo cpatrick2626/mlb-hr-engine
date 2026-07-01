@@ -1,3 +1,43 @@
+function StaleBanner() {
+  const [info, setInfo] = React.useState(() => ({
+    stale: window.SLATE_STALE === true,
+    generatedAt: window.SLATE_GENERATED_AT || null,
+  }));
+
+  React.useEffect(() => {
+    const handler = (e) => {
+      setInfo({
+        stale: e.detail && e.detail.stale === true,
+        generatedAt: (e.detail && e.detail.generated_at) || null,
+      });
+    };
+    window.addEventListener("hrEngineDataLoaded", handler);
+    return () => window.removeEventListener("hrEngineDataLoaded", handler);
+  }, []);
+
+  if (!info.stale) return null;
+
+  const dateStr = (() => {
+    if (!info.generatedAt) return null;
+    try {
+      return new Date(info.generatedAt)
+        .toLocaleDateString("en-US", { month: "short", day: "numeric" })
+        .toUpperCase();
+    } catch (_) { return null; }
+  })();
+
+  return (
+    <div className="stale-banner">
+      <span className="stale-banner__dot" />
+      <span className="stale-banner__text">
+        SHOWING LAST-GOOD SLATE
+        {dateStr && <span className="stale-banner__date"> · {dateStr}</span>}
+        <span className="stale-banner__note"> — TODAY'S SLATE UPDATES ~10 AM ET</span>
+      </span>
+    </div>
+  );
+}
+
 /* HR Engine — Master Dashboard. Persistent app shell:
    top bar (room/lens breadcrumb + command center), live-targets banner,
    stage (rooms render here), right rail (navigation + rotating quick picks). */
@@ -49,6 +89,7 @@ function MasterDashboard() {
             if (data.leaderboard_rows_jig?.length) window.LEADERBOARD_ROWS_JIG = data.leaderboard_rows_jig;
             if (data.slate_games?.length) window.SLATE_GAMES = data.slate_games;
             if (data.generated_at) window.SLATE_GENERATED_AT = data.generated_at;
+            window.SLATE_STALE = data.stale === true;
             window.dispatchEvent(new CustomEvent("hrEngineDataLoaded", { detail: data }));
             return;
           }
@@ -141,6 +182,7 @@ function MasterDashboard() {
       </div>
 
       <SlateCommandStrip />
+      <StaleBanner />
 
       {/* 2 — SPLIT */}
       <div className="md-split">

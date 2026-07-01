@@ -4646,6 +4646,50 @@ button.fsm-tier { appearance: none; text-decoration: none; }
 }
 
 /* ============================================================
+   STALE BANNER (stale-banner-*)
+   Shown only when /api/slate returns stale:true (last-good cache).
+   ============================================================ */
+.stale-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px;
+  height: 28px;
+  background: rgba(255, 176, 32, 0.05);
+  border-bottom: 1px solid rgba(255, 176, 32, 0.16);
+  flex-shrink: 0;
+}
+.stale-banner__dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--amber-500);
+  box-shadow: 0 0 6px var(--amber-glow);
+  flex-shrink: 0;
+  animation: scs-blink 2s ease-in-out infinite;
+}
+.stale-banner__text {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--amber-500);
+  white-space: nowrap;
+}
+.stale-banner__date {
+  color: var(--amber-500);
+}
+.stale-banner__note {
+  color: var(--fg-3);
+  letter-spacing: 0.14em;
+}
+@media (max-width: 768px) {
+  .stale-banner { height: auto; min-height: 26px; padding: 4px 10px; }
+  .stale-banner__note { display: none; }
+}
+
+/* ============================================================
    HR THREAT ZONE (hrtz-*)
    ============================================================ */
 .hrtz-zone {
