@@ -186,6 +186,28 @@ The following must NOT be changed via ops scripts or Task Scheduler automation:
 
 ---
 
+## GH Actions Pipeline Cron — Cadence (Updated 2026-07-01)
+
+The Fly.io API pipeline is triggered by `.github/workflows/daily_pipeline.yml` via `POST /api/pipeline/run` (requires `X-Cron-Secret`). This is separate from the local `ops_daily.py` Task Scheduler job above.
+
+**As of commit `4c6f8dc` (2026-07-01): 5 runs/day (was 2).**
+
+| UTC cron | EDT (UTC−4, summer) | EST (UTC−5, winter) |
+|----------|---------------------|---------------------|
+| `5 14 * * *` | 10:05 AM | 9:05 AM |
+| `5 16 * * *` | 12:05 PM | 11:05 AM |
+| `5 18 * * *` | 2:05 PM | 1:05 PM |
+| `5 20 * * *` | 4:05 PM | 3:05 PM |
+| `5 22 * * *` | 6:05 PM | 5:05 PM |
+
+**Rationale:** Staggered game times mean probable pitchers post at different times through the day. More frequent refreshes shrink the TBD-pitcher window and keep pitcher data fresh for evening starts.
+
+**DST caveat:** GitHub Actions cron is fixed UTC — no automatic DST adjustment. During winter (EST), all five runs fire 1 hour earlier in Eastern Time than the EDT column shows.
+
+**Architecture note:** As of `8feef78` (2026-07-01), `/api/slate` NEVER rebuilds the pipeline in-request. It is a pure cache-reader. If the pipeline cron has not fired yet today, `/api/slate` will serve the most-recent prior run with `stale: true`. The stale-slate UI banner surfaces this to users. See `doctrine/production-surface-truth.md § /api/slate Contract`.
+
+---
+
 ## Empty Slate Before Lineups Post — Expected Behavior
 
 Added: 2026-06-14

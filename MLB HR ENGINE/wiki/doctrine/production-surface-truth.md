@@ -1,6 +1,6 @@
 # Production Surface Truth
 
-**Last Updated:** 2026-06-28
+**Last Updated:** 2026-07-01
 
 ---
 
@@ -201,6 +201,47 @@ At ≤768px the Full Slate `.fsm-table` becomes stacked per-player cards via a C
 ## Slate Sort & Filter Controls (2026-06-28)
 
 A control bar on the Full Slate: **RANK** (sort/default — restores canonical `model_tier_rank` via existing `onSort`/`setSortState`), and **TM** / **HR PROB** as role-style filter toggles (independent on/off; AND-intersection when both on). Fixed thresholds: TM ≥ 60, `hrprob` ≥ 15. All view-level — MAIN ranking is never altered; filtering and sorting are independent and reversible. See `true-matchup-score.md` for thresholds.
+
+---
+
+## /api/slate Contract — Pure Cache-Reader (2026-07-01)
+
+**Established by commit `8feef78`. This is a permanent architecture invariant.**
+
+`/api/slate` is a **pure cache-reader**. It never runs the pipeline in-request.
+
+### Decision record
+
+Before `8feef78`, `/api/slate` had a live fallback: if the Supabase cache was missing or stale, it called `load_game_data()` inside the request handler. On a 512 MB Fly.io machine this triggered a full Statcast/Savant pipeline build, exhausting memory and causing a daily-morning OOM crash loop. The live-fallback path was removed entirely.
+
+### Current behavior
+
+| Condition | Response |
+|-----------|----------|
+| Supabase cache fresh (today, ≤12 h) | Serve cached payload — `stale: false` |
+| Cache miss or stale | `get_latest_picks()` → serve most-recent stored run — `stale: true, cache_age_minutes: null` |
+| DB empty (pipeline never run) | Empty rows + error message — `stale: true` |
+
+### Payload contract additions (as of 8feef78)
+
+- `"stale": bool` — first-class field on every `/api/slate` response. `false` = data is from today's run. `true` = serving last-good cache from a prior date (or DB empty).
+- `"cache_age_minutes": int | null` — `null` when serving a stale last-good payload.
+
+### `api/cache.py` — `get_latest_picks()`
+
+New function added by `8feef78`. Queries `pipeline_runs` table, `ORDER BY date DESC LIMIT 1`, no date filter. Returns the most-recent stored payload regardless of date. Returns `None` if table is empty.
+
+### Pipeline execution invariant
+
+**Pipeline runs belong exclusively to `POST /api/pipeline/run` (GH Actions cron). No request handler may call `load_game_data()` or any pipeline entrypoint.** Any future `/api/*` endpoint that needs fresh data must read from `pipeline_runs` via `cache.py`.
+
+### Stale-slate UI banner
+
+Commit `4bbc40d`: when `stale: true` is received, the frontend renders **"last-good slate from [date]"**. Implemented in `a6cd8ef6-....js` + `index.html`. Honest state is always surfaced to the user.
+
+### Infra note
+
+Fly.io memory was also bumped 512 MB → 1024 MB (`f711ff3`, `fly.toml`) as a stopgap before the root fix landed. The memory bump remains in place.
 
 ---
 
