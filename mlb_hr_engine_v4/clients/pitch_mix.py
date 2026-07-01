@@ -348,7 +348,9 @@ def _fetch_pitcher_savant(pitcher_id: int) -> dict:
                     "hfGT":              "R|",
                 },
                 timeout=20,
+                stream=True,
             )
+            resp.raw.decode_content = True
             resp.raise_for_status()
 
             hand_totals:          dict[str, dict] = {}
@@ -357,7 +359,7 @@ def _fetch_pitcher_savant(pitcher_id: int) -> dict:
             total_rows = 0
             seen_pa: set = set()  # (game_pk, at_bat_number) — dedup guard
 
-            for row in csv.DictReader(io.StringIO(resp.text.lstrip("﻿"))):
+            for row in csv.DictReader(io.TextIOWrapper(resp.raw, encoding="utf-8-sig")):
                 pt    = (row.get("pitch_type") or "").strip().upper()
                 ev    = (row.get("events") or "").strip().lower()
                 stand = (row.get("stand") or "").strip().upper()
@@ -409,6 +411,7 @@ def _fetch_pitcher_savant(pitcher_id: int) -> dict:
                 # Overall pitch stats — canonicalize (SV→ST, FA→FF) for consistent keys
                 _acc_pitch_row(pitch_totals, _canonical_pt(pt), ev, row)
 
+            resp.close()
             # Skip this season if too sparse; try prior year
             if total_rows < _MIN_PITCHER_PA:
                 print(f"[pitch_mix] pitcher {pitcher_id} season={season}: only {total_rows} rows — trying prior year")
@@ -597,10 +600,12 @@ def _fetch_all_batter_pitch_splits(batter_id: int) -> None:
                 "hfGT":             "R|",
             },
             timeout=15,
+            stream=True,
         )
+        resp.raw.decode_content = True
         resp.raise_for_status()
 
-        for row in csv.DictReader(io.StringIO(resp.text.lstrip("﻿"))):
+        for row in csv.DictReader(io.TextIOWrapper(resp.raw, encoding="utf-8-sig")):
             raw_pt = (row.get("pitch_type") or "").strip().upper()
             ev     = (row.get("events") or "").strip().lower()
             if not raw_pt or not ev:
@@ -634,6 +639,7 @@ def _fetch_all_batter_pitch_splits(batter_id: int) -> None:
             if p_hand in ("R", "L"):
                 _acc(totals_by_hand[p_hand], pt, ev)
 
+        resp.close()
     except Exception as e:
         print(f"[pitch_mix] batter_vs_pitches fetch failed (bid={batter_id}): {e}")
 
@@ -724,7 +730,7 @@ def load_hvy_contexts_batch(players: list[dict], arsenal_data: dict | None = Non
     disp_stats = get_pitch_display_stats(_cfg.CURRENT_SEASON)
 
     contexts: dict[int, dict] = {}
-    with ThreadPoolExecutor(max_workers=6) as ex:
+    with ThreadPoolExecutor(max_workers=3) as ex:
         futures = {
             ex.submit(load_hvy_context, p, arsenal_data, disp_stats): p.get("player_id")
             for p in players
