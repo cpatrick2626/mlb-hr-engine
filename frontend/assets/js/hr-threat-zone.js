@@ -104,7 +104,7 @@ function HRThreatZone({ rows, isJigContext }) {
   const { ticketId, legs, cardStatus } = useSlipState();
 
   const addLeg = (row) => {
-    window.__hrSlip.addLeg({
+    window.__hrSlip.requestAdd({
       player_id:       row.id,
       name:            row.name,
       teamAbbr:        row.teamAbbr,

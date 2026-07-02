@@ -74,7 +74,7 @@ function EscalationFeed({ rows, isJigContext }) {
   const { cardStatus } = useEscSlipState();
 
   const addLeg = (row) => {
-    window.__hrSlip.addLeg({
+    window.__hrSlip.requestAdd({
       player_id:       row.id,
       name:            row.player || row.name,
       team:            row.teamAbbr || row.team,

@@ -176,7 +176,7 @@ const LeaderRow = ({ row, onOpen, onAddLeg, slipStatus = 'idle' }) => (
       if (col.key === "fanduel") {
         return (
           <td key="fanduel" className="hr-lb__cell hr-lb__cell--fd" onClick={(e) => e.stopPropagation()}>
-            <a href={hrLbFanDuelUrl(row.name)} target="_blank" rel="noopener" className="hr-lb__fd-link" onClick={(e) => hrLbOpenFanduel(e, row.name)}>FD</a>
+            <a href="#" className="hr-lb__fd-link" onClick={(e) => { e.stopPropagation(); e.preventDefault(); window.__hrSlip && window.__hrSlip.requestAdd({ player_id: row.id, name: row.name, teamAbbr: row.teamAbbr, team: row.teamAbbr, pitcher: row.pitcher_name, pitcher_name: row.pitcher_name, model_prob: row.model_prob, tier: row.tier, model_tier_rank: row.model_tier_rank, board: 'main', hrprob: row.hrprob, barrel: row.barrel, hh: row.hh }); }}>FD</a>
           </td>
         );
       }
@@ -199,7 +199,7 @@ const Leaderboard = ({ rows, onOpen, tierHeaderLabel = "TIER" }) => {
 
   const handleAddLeg = (row) => {
     if (!window.__hrSlip) return;
-    window.__hrSlip.addLeg({
+    window.__hrSlip.requestAdd({
       player_id:       row.id,
       name:            row.name,
       teamAbbr:        row.teamAbbr,

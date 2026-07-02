@@ -153,12 +153,20 @@
     _notify();
   }
 
+  /* requestAdd — interception point for all surface add handlers.
+     Overridden by destination-picker.js with the real picker; falls back to
+     direct addLeg if destination-picker.js hasn't loaded yet. */
+  function requestAdd(row) {
+    addLeg(row);
+  }
+
   window.__hrSlip = {
     getState:        getState,
     subscribe:       subscribe,
     addLeg:          addLeg,
     removeLeg:       removeLeg,
     resetSlip:       resetSlip,
+    requestAdd:      requestAdd,
     buildLegPayload: buildLegPayload,
     openSlip:        openSlip,
     closeSlip:       closeSlip,

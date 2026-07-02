@@ -223,7 +223,7 @@ function CmtThreatZone({ mainRows, jigRows, games, engine }) {
   const { cardStatus } = useSlipState();
 
   const handleAdd = (row) => {
-    window.__hrSlip.addLeg({
+    window.__hrSlip.requestAdd({
       player_id:       row.id,
       name:            row.name,
       teamAbbr:        row.teamAbbr,

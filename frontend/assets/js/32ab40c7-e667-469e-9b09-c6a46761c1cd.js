@@ -111,7 +111,30 @@ const StratCard = ({ strat, rows, count }) => {
   const players = rows.slice().sort((a, b) => strat.rank(b) - strat.rank(a)).slice(0, count);
   const avg = players.reduce((a, p) => a + p.hrprob, 0) / (players.length || 1);
   const score = Math.min(9.9, 6 + avg * 0.17).toFixed(1);
-  const addFD = (e) => stratOpenFanduel(e, strat, players);
+  const addFD = (e) => {
+    e.stopPropagation();
+    e.preventDefault();
+    if (window.__hrSlip && window.__hrSlip.requestAdd && players.length > 0) {
+      const p = players[0];
+      window.__hrSlip.requestAdd({
+        player_id:       p.id,
+        name:            p.name,
+        teamAbbr:        p.teamAbbr,
+        team:            p.teamAbbr,
+        pitcher:         p.pitcher_name,
+        pitcher_name:    p.pitcher_name,
+        model_prob:      p.model_prob,
+        tier:            p.tier,
+        model_tier_rank: p.model_tier_rank,
+        board:           'main',
+        hrprob:          p.hrprob,
+        barrel:          p.barrel,
+        hh:              p.hh,
+      });
+    } else {
+      stratOpenFanduel(e, strat, players);
+    }
+  };
 
   const [slipState, setSlipState] = React.useState(() => window.__hrSlip ? window.__hrSlip.getState() : { cardStatus: {} });
   React.useEffect(() => {
@@ -122,9 +145,10 @@ const StratCard = ({ strat, rows, count }) => {
 
   const handleAddLeg = (p) => {
     if (!window.__hrSlip) return;
-    window.__hrSlip.addLeg({
+    window.__hrSlip.requestAdd({
       player_id:       p.id,
       name:            p.name,
+      teamAbbr:        p.teamAbbr,
       team:            p.teamAbbr,
       pitcher:         p.pitcher_name,
       pitcher_name:    p.pitcher_name,
@@ -144,7 +168,7 @@ const StratCard = ({ strat, rows, count }) => {
       role="button"
       tabIndex={0}
       onClick={addFD}
-      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); stratOpenFanduel(e, strat, players); } }}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); addFD(e); } }}
       title={`Add ${strat.label} — ${players.map((p) => p.name).join(", ")} — to FanDuel`}
       style={{ "--qp-color": strat.color, "--qp-glow": `${strat.color}26` }}
     >

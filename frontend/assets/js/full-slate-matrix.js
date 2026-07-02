@@ -400,9 +400,9 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, i
             type="button"
             className="fsm-tier fsm-tier--btn"
             style={{ "--tc": t.color, "--tg": t.glow }}
-            onClick={(e) => fsmOpenFD(e, row)}
-            title={fsmTierTip(row, isJigContext, jigLabel, jigRank) + " · Click: FanDuel search"}
-            aria-label={`Add ${row.name} to FanDuel`}>
+            onClick={(e) => { e.stopPropagation(); e.preventDefault(); window.__hrSlip && window.__hrSlip.requestAdd({ player_id: row.id, name: row.name, teamAbbr: row.teamAbbr, team: row.teamAbbr, pitcher: row.pitcher_name, pitcher_name: row.pitcher_name, model_prob: row.model_prob, tier: row.tier, model_tier_rank: row.model_tier_rank, board: isJigContext ? 'jig' : (row._board || 'main'), hrprob: row.hrprob, barrel: row.barrel, hh: row.hh }); }}
+            title={fsmTierTip(row, isJigContext, jigLabel, jigRank) + " · Click: select destination"}
+            aria-label={`Select destination for ${row.name}`}>
 
             <span className="fsm-tier__icon"><FsmTierIcon tier={displayTier} /></span>
             <span className="fsm-tier__label">{isJigContext && jigLabel ? `${jigLabel} #${jigRank}` : row.tier}</span>
@@ -560,7 +560,7 @@ function FsmTable({ rows, cols, showGame, onBatter, onPitch, onReorder, onSort, 
 
   const handleAddLeg = (row) => {
     if (!window.__hrSlip) return;
-    window.__hrSlip.addLeg({
+    window.__hrSlip.requestAdd({
       player_id:       row.id,
       name:            row.name,
       teamAbbr:        row.teamAbbr,
