@@ -6,6 +6,8 @@
 
 > **CORRECTION (2026-07-02 — destination-picker audit):** Earlier versions of this doc stated "Four surfaces" for add-to-slip. A code audit of root `frontend/` confirmed **eight** surfaces call `window.__hrSlip.addLeg()`. The add-to-slip table and Key Points below have been updated to reflect this. Auth section added: `auth.js` (Supabase email/password + invite-code beta gating) IS built and live as of 2026-06-26 — any prior note calling auth a "hard prerequisite not yet met" is stale. Two known integrity bugs added per audit findings.
 
+> **UPDATE (2026-07-02 — destination picker Phase A+B LIVE):** Phase A (`c10a175`, Fly) closed both integrity bugs: `removeLeg` now persists server-side via `POST /api/tickets/leg/remove` (soft-delete, ownership-checked), a server guard rejects legs on non-`building` tickets (409), and the client calls `resetSlip()` after submit. Verified against real Supabase rows. Phase B (`0c167da`, Vercel) added `destination-picker.js`: all 8 add surfaces + 3 FD-only actions now route through `window.__hrSlip.requestAdd()` → a 4-option destination picker (FD Only / Add to Slip / FD+Slip / Option 4 disabled pending Phase C) before `addLeg()` fires. Spec: `wiki/roadmap/destination-picker-spec.md`.
+
 ---
 
 ## Summary
@@ -27,7 +29,7 @@ The Ticket Slip System lets a user build a slip of HR picks from the board, view
 
 ### Add-to-slip
 
-Eight surfaces wire `window.__hrSlip.addLeg()` with no mock blocks (confirmed by 2026-07-02 destination-picker audit):
+Eight surfaces wire `window.__hrSlip.addLeg()` with no mock blocks (confirmed by 2026-07-02 destination-picker audit). As of Phase B (`0c167da`), all eight route through `window.__hrSlip.requestAdd()` → destination picker modal before `addLeg()` fires:
 
 | Surface | File:Line | Board |
 |---|---|---|
@@ -84,13 +86,13 @@ The FD button is an external `<a href>` (`ticket-command.js:53`). `fd_deployed=T
 
 ---
 
-## Known Integrity Bugs (open — 2026-07-02 audit)
+## Known Integrity Bugs (FIXED 2026-07-02 — Phase A, `c10a175`)
 
-These are confirmed bugs in the current live code, being addressed in the destination-picker Phase A work:
+Both bugs found in the 2026-07-02 audit were closed by destination-picker Phase A, deployed to Fly and verified against real Supabase rows (added 2 legs, removed 1, completed → `num_legs=1`, removed leg soft-deleted with `removed=true`):
 
-1. **`removeLeg` is client-only.** `slip-state.js:128` filters the local array but does NOT set `legs.removed=true` server-side. `complete_ticket` counts server-side non-removed legs (`cache.py:227-234`) — a client-removed leg silently re-enters `num_legs` on confirm. Fix: `POST /api/tickets/leg/remove` endpoint + server-side `removeLeg` call.
+1. **`removeLeg` was client-only** — filtered the local array without touching the server, so a client-removed leg silently re-entered `num_legs` on confirm. FIXED: `removeLeg` now calls `POST /api/tickets/leg/remove` (soft-delete `legs.removed=true`, ownership-checked); `complete_ticket` counts only non-removed legs.
 
-2. **No `resetSlip()`.** After submit, `ticketId` + `legs` remain in `_state` indefinitely. The server does NOT reject `add_leg` calls on completed tickets — so a stale `ticketId` keeps receiving legs after submit. Fix: `resetSlip()` in `slip-state.js` (clear ticketId/legs/cardStatus) + a server guard rejecting legs on non-`building` tickets.
+2. **No `resetSlip()`** — after submit, a stale `ticketId` kept receiving legs. FIXED: client `resetSlip()` clears ticketId/legs/cardStatus after submit + server guard rejects `add_leg` on non-`building` tickets (409).
 
 ---
 
