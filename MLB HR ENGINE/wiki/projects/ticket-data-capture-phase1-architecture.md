@@ -1,7 +1,7 @@
 # Ticket/Data Capture Phase 1 Architecture
 **Date:** 2026-06-17  
-**Status:** PLAN ONLY — no Supabase tables created, no frontend code, no API changes  
-**Operator sign-off required before any build**
+**Status (original):** PLAN ONLY — no Supabase tables created, no frontend code, no API changes  
+**Status (corrected 2026-07-02):** IMPLEMENTED — this plan was executed in the 2026-06-26 full build session. `tickets`/`legs` tables exist (migrations 003–005). Auth is live (`auth.js`, `api/auth.py`). Add-to-slip wired on 8 surfaces. See `wiki/sessions/2026-06-26-auth-slip-calibration-full-build.md` and `wiki/doctrine/ticket-slip-system.md` for the current doctrine. This document is retained as the original design record.
 
 > **Naming correction (2026-06-19):** This document was previously titled "Hermes Phase 1 Architecture." The capture-layer subsystem was mislabeled "Hermes" by an earlier session. "Hermes" actually refers to a separate, future NousResearch Hermes LLM plan (not yet specced). The capture layer is now "Ticket/Data Capture." Do not reuse "Hermes" for capture work.
 
@@ -87,7 +87,9 @@ Confirmed tables in `api/cache.py`:
 - `beta_invites` — invite codes
 - `beta_users` — redeemed beta users
 
-**No ticket, legs, or capture-related tables exist.** Supabase is the right home for the new schema: the board already reads from the API which reads from Supabase, adding two new tables (`tickets`, `legs`) is consistent with the existing pattern and requires no new data infrastructure.
+**Correction (2026-07-02):** As of the 2026-06-26 build session, `tickets` and `legs` tables DO exist (migrations 003–005). Auth (`beta_invites`/`beta_users`) also exists. The text below reflects the original pre-build plan and is retained as design history only.
+
+~~No ticket, legs, or capture-related tables exist.~~ Supabase was the right home for the new schema: the board already reads from the API which reads from Supabase, adding two new tables (`tickets`, `legs`) is consistent with the existing pattern and requires no new data infrastructure.
 
 ### 4. Frontend selection state
 

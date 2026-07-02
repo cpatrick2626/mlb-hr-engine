@@ -4,17 +4,19 @@
 > Adding legs, viewing/managing the slip, persistence, and marking a slip deployed all work end-to-end.
 > **NOT BUILT: (1) leg settlement** — `legs.hr_result` / `settlement_status` are never written; the outcome loop does not close. **(2) overlay combined probability / grade / confidence / payout** are **SAMPLE / "Engine Pending" placeholder values, NOT real engine output.** Do not describe these as real.
 
+> **CORRECTION (2026-07-02 — destination-picker audit):** Earlier versions of this doc stated "Four surfaces" for add-to-slip. A code audit of root `frontend/` confirmed **eight** surfaces call `window.__hrSlip.addLeg()`. The add-to-slip table and Key Points below have been updated to reflect this. Auth section added: `auth.js` (Supabase email/password + invite-code beta gating) IS built and live as of 2026-06-26 — any prior note calling auth a "hard prerequisite not yet met" is stale. Two known integrity bugs added per audit findings.
+
 ---
 
 ## Summary
 
-The Ticket Slip System lets a user build a slip of HR picks from the board, view/manage it, and mark it deployed — this is live and used. Two halves are not built: outcome settlement (closing the loop) and the slip overlay's combined-probability/grade engine (currently mock placeholder values).
+The Ticket Slip System lets a user build a slip of HR picks from the board, view/manage it, and mark it deployed — this is live and used. The leg DATA is real: all eight add-to-slip surfaces POST through `window.__hrSlip.addLeg()` to `/api/tickets/leg`, writing real Supabase `tickets`/`legs` rows with a frozen engine snapshot. Two halves are not built: outcome settlement (closing the loop) and the slip overlay's combined-probability/grade engine (currently SAMPLE placeholder values).
 
 ---
 
 ## Key Points
 
-- **Build-slip workflow is DOCTRINE-LIVE.** Four board surfaces wire `window.__hrSlip.addLeg()`, the overlay shows real legs with real data, Supabase persistence is wired, and deploy/complete is functional.
+- **Build-slip workflow is DOCTRINE-LIVE.** Eight surfaces wire `window.__hrSlip.addLeg()`, the overlay shows real legs with real data, Supabase persistence is wired, and deploy/complete is functional.
 - **Settlement is schema-only.** `legs.hr_result`, `settlement_status`, `settled_at` columns exist in migration 005 but no script, cron, or endpoint writes them. The outcome loop does not close.
 - **Overlay analytics are MOCK.** Combined probability, grade, confidence, and payout shown in the overlay are `SAMPLE` / `"Engine Pending"` placeholders — not engine output.
 - **FD "deploy" is intent, not capture.** The FanDuel button is a plain `<a href>` external link. `fd_deployed=True` records that the user clicked Submit — it does not confirm a bet was placed.
@@ -25,15 +27,20 @@ The Ticket Slip System lets a user build a slip of HR picks from the board, view
 
 ### Add-to-slip
 
-Four surfaces wire `window.__hrSlip.addLeg()` with no mock blocks:
+Eight surfaces wire `window.__hrSlip.addLeg()` with no mock blocks (confirmed by 2026-07-02 destination-picker audit):
 
-| Surface | File:Line |
-|---|---|
-| HR Threat Zone | `hr-threat-zone.js:106` |
-| Full Slate Matrix — SLIP column header | `full-slate-matrix.js:561`, `:612` |
-| Full Slate Matrix — per-row `onAddLeg` | `full-slate-matrix.js:625` |
-| Escalation Feed | `escalation-feed.js:76` |
-| Arsenal Edge Exploit | `arsenal-edge-exploit.js:86` |
+| Surface | File:Line | Board |
+|---|---|---|
+| HR Threat Zone | `hr-threat-zone.js:106-122` | MAIN |
+| Full Slate Matrix | `full-slate-matrix.js:561-578` (SLIP column); per-row `:625` | MAIN/JIG |
+| JIG Command | `jig-command.js:40` (inherits FSM SLIP column in `builderMode`) | JIG |
+| All Batters Leaderboard | `c0092a94-d9b6-4c58-946b-1b3ea3b7976b.js:200` | MAIN |
+| Strategy Rail | `32ab40c7-e667-469e-9b09-c6a46761c1cd.js:123` | MAIN |
+| Command Tab | `command-tab.js:226` | MAIN + JIG |
+| Escalation Feed | `escalation-feed.js:76-77` | MAIN |
+| Arsenal Edge Exploit modal | `arsenal-edge-exploit.js:86-100` | MAIN |
+
+All eight funnel through the one shared store (`slip-state.js` `window.__hrSlip.addLeg()`). The LIVE Targets Banner is intentionally NOT wired — hardcoded mock data, no real `player_id`; wiring would corrupt calibration data.
 
 ### Slip view/manage
 
@@ -55,6 +62,10 @@ Four surfaces wire `window.__hrSlip.addLeg()` with no mock blocks:
 - `handleSubmit` posts `{ticket_id, stake}` (`ticket-command.js:335`).
 - `window.SLATE_GENERATED_AT` is captured at tap time.
 
+### Authentication
+
+Auth IS built and live (as of 2026-06-26). `frontend/assets/js/auth.js` provides full Supabase email/password sign-in + invite-code beta gating. `authFetch` attaches the JWT; ticket endpoints use `Depends(require_auth)`; `tickets.user_id` is stamped on all write paths. Any prior note calling auth a "hard prerequisite not yet built" is stale — per-user features are now unblocked.
+
 ---
 
 ## NOT BUILT — Do Not Describe as Real
@@ -69,7 +80,17 @@ Combined probability, grade, confidence, and payout shown in the overlay are **`
 
 ### FanDuel deploy is an intent link, not a capture
 
-The FD button is an external `<a href>` (`ticket-command.js:53`). `fd_deployed=True` records that the user clicked Submit. It does **not** confirm a bet was placed on FanDuel.
+The FD button is an external `<a href>` (`ticket-command.js:53`). `fd_deployed=True` records that the user clicked Submit. It does **not** confirm a bet was placed on FanDuel. The FD "hand-off" in all surfaces is `sportsbook.fanduel.com/search?q=<player name>` + clipboard copy + toast — a search URL, **not a deep-link or pre-filled bet**. FanDuel has no public slip-building API; a true pre-filled-bet link is not feasible.
+
+---
+
+## Known Integrity Bugs (open — 2026-07-02 audit)
+
+These are confirmed bugs in the current live code, being addressed in the destination-picker Phase A work:
+
+1. **`removeLeg` is client-only.** `slip-state.js:128` filters the local array but does NOT set `legs.removed=true` server-side. `complete_ticket` counts server-side non-removed legs (`cache.py:227-234`) — a client-removed leg silently re-enters `num_legs` on confirm. Fix: `POST /api/tickets/leg/remove` endpoint + server-side `removeLeg` call.
+
+2. **No `resetSlip()`.** After submit, `ticketId` + `legs` remain in `_state` indefinitely. The server does NOT reject `add_leg` calls on completed tickets — so a stale `ticketId` keeps receiving legs after submit. Fix: `resetSlip()` in `slip-state.js` (clear ticketId/legs/cardStatus) + a server guard rejecting legs on non-`building` tickets.
 
 ---
 
