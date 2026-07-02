@@ -13,6 +13,7 @@ POST /api/ops/settle              — settle pick_tracker.csv outcomes (X-Cron-S
 POST /api/ops/clv-capture         — fetch closing odds + compute CLV (X-Cron-Secret header)
 POST /api/invite/redeem           — redeem invite code (auth required)
 POST /api/tickets/leg             — add leg to ticket; null ticket_id opens new ticket (JWT required — Phase 1)
+POST /api/tickets/leg/remove      — soft-delete a leg (sets removed=true); ownership-checked (JWT required — Phase A)
 POST /api/tickets/complete        — finalize ticket, set fd_deployed=true (JWT required — Phase 1)
 
 The pipeline is normally triggered by GitHub Actions cron (see api/cron.py).
@@ -34,7 +35,7 @@ from fastapi import FastAPI, Depends, HTTPException, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.auth import require_auth, require_beta
-from api.cache import get_picks, get_latest_picks, store_picks, list_runs, redeem_invite, add_leg, complete_ticket
+from api.cache import get_picks, get_latest_picks, store_picks, list_runs, redeem_invite, add_leg, complete_ticket, remove_leg
 from clients.arsenal import get_pitcher_arsenal, arsenal_matchup_factor
 from clients.pitch_mix import get_batter_vs_pitches, get_pitcher_pitch_stats
 from config import FS_TIER_THRESHOLDS
@@ -203,34 +204,40 @@ async def ticket_add_leg(body: dict, user=Depends(require_auth)):
     missing = required - body.keys()
     if missing:
         raise HTTPException(status_code=400, detail=f"Missing fields: {sorted(missing)}")
-    result = add_leg(
-        ticket_id=body.get("ticket_id") or None,
-        board=body["board"],
-        player_name=body["name"],
-        model_prob=float(body["model_prob"]),
-        tier=body["tier"],
-        model_tier_rank=(
-            int(body["model_tier_rank"])
-            if body.get("model_tier_rank") is not None
-            else None
-        ),
-        engine_generated_at=body.get("generated_at"),
-        user_id=user.get("sub"),
-        player_id=body.get("player_id") or None,
-        team=body.get("team") or None,
-        opponent=body.get("opponent") or None,
-        pitcher=body.get("pitcher") or None,
-        market_odds_american=(
-            int(body["market_odds_american"])
-            if body.get("market_odds_american") is not None
-            else None
-        ),
-        market_prob=(
-            float(body["market_prob"])
-            if body.get("market_prob") is not None
-            else None
-        ),
-    )
+    try:
+        result = add_leg(
+            ticket_id=body.get("ticket_id") or None,
+            board=body["board"],
+            player_name=body["name"],
+            model_prob=float(body["model_prob"]),
+            tier=body["tier"],
+            model_tier_rank=(
+                int(body["model_tier_rank"])
+                if body.get("model_tier_rank") is not None
+                else None
+            ),
+            engine_generated_at=body.get("generated_at"),
+            user_id=user.get("sub"),
+            player_id=body.get("player_id") or None,
+            team=body.get("team") or None,
+            opponent=body.get("opponent") or None,
+            pitcher=body.get("pitcher") or None,
+            market_odds_american=(
+                int(body["market_odds_american"])
+                if body.get("market_odds_american") is not None
+                else None
+            ),
+            market_prob=(
+                float(body["market_prob"])
+                if body.get("market_prob") is not None
+                else None
+            ),
+        )
+    except ValueError as exc:
+        msg = str(exc)
+        if "not building" in msg:
+            raise HTTPException(status_code=409, detail="Ticket is not in building status")
+        raise HTTPException(status_code=404, detail=msg)
     return {"status": "ok", **result}
 
 
@@ -242,6 +249,20 @@ async def ticket_complete(body: dict, user=Depends(require_auth)):
     raw_stake = body.get("stake")
     stake = float(raw_stake) if raw_stake is not None else None
     result = complete_ticket(ticket_id, user_id=user.get("sub"), stake=stake)
+    return {"status": "ok", **result}
+
+
+@app.post("/api/tickets/leg/remove")
+async def ticket_remove_leg(body: dict, user=Depends(require_auth)):
+    leg_id = body.get("leg_id")
+    if not leg_id:
+        raise HTTPException(status_code=400, detail="leg_id is required")
+    try:
+        result = remove_leg(leg_id, user_id=user.get("sub"))
+    except LookupError:
+        raise HTTPException(status_code=404, detail="Leg not found")
+    except PermissionError:
+        raise HTTPException(status_code=403, detail="Not authorized for this leg")
     return {"status": "ok", **result}
 
 

@@ -167,6 +167,7 @@ def add_leg(
     """
     Add one leg to a ticket.
     ticket_id None/empty → opens a new ticket (status='building') first.
+    Raises ValueError("ticket not building") if the ticket exists but is not in 'building' status.
     Returns {ticket_id, leg_id}. WRITE-SEPARATE: touches only tickets/legs.
     """
     client = _client()
@@ -183,8 +184,13 @@ def add_leg(
         res = client.table("tickets").insert(ticket_row).execute()
         ticket_id = res.data[0]["ticket_id"]
     else:
-        t_res = client.table("tickets").select("date").eq("ticket_id", ticket_id).execute()
-        slate_date = t_res.data[0]["date"] if t_res.data else _date.today().isoformat()
+        t_res = client.table("tickets").select("date, status").eq("ticket_id", ticket_id).execute()
+        if not t_res.data:
+            raise ValueError(f"ticket {ticket_id} not found")
+        t_data = t_res.data[0]
+        if t_data.get("status") != "building":
+            raise ValueError("ticket not building")
+        slate_date = t_data["date"] or _date.today().isoformat()
 
     leg_res = client.table("legs").insert({
         "ticket_id":            ticket_id,
@@ -245,3 +251,38 @@ def complete_ticket(ticket_id: str, user_id: Optional[str] = None, stake: Option
     client.table("tickets").update(update_payload).eq("ticket_id", ticket_id).execute()
 
     return {"ticket_id": ticket_id, "num_legs": num_legs, "fd_deployed": True}
+
+
+def remove_leg(leg_id: str, user_id: Optional[str] = None) -> dict:
+    """
+    Soft-delete a leg: sets legs.removed = true.
+    Ownership-checked via the leg's parent ticket. Never hard-deletes.
+    Raises LookupError if leg not found. Raises PermissionError if user doesn't own the ticket.
+    Returns {leg_id, removed: True}.
+    """
+    client = _client()
+
+    leg_res = (
+        client.table("legs")
+        .select("leg_id, ticket_id")
+        .eq("leg_id", leg_id)
+        .execute()
+    )
+    if not leg_res.data:
+        raise LookupError(f"leg {leg_id} not found")
+
+    ticket_id = leg_res.data[0]["ticket_id"]
+
+    if user_id:
+        owns = (
+            client.table("tickets")
+            .select("ticket_id")
+            .eq("ticket_id", ticket_id)
+            .eq("user_id", user_id)
+            .execute()
+        )
+        if not owns.data:
+            raise PermissionError(f"ticket {ticket_id} not found for user")
+
+    client.table("legs").update({"removed": True}).eq("leg_id", leg_id).execute()
+    return {"leg_id": leg_id, "removed": True}

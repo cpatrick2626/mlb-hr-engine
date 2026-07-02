@@ -108,6 +108,7 @@
       var n = _state.legs.length + 1;
       _state.legs = _state.legs.concat([{
         n:            n,
+        leg_id:       data.leg_id,
         name:         row.name,
         teamAbbr:     row.teamAbbr,
         tier:         row.tier,
@@ -125,8 +126,30 @@
     }
   }
 
-  function removeLeg(n) {
+  async function removeLeg(n) {
+    var leg = _state.legs.find(function (l) { return l.n === n; });
+    // Immediate client removal for responsive UI
     _state.legs = _state.legs.filter(function (l) { return l.n !== n; });
+    _notify();
+    // Persist server-side if we have a leg_id and auth
+    if (leg && leg.leg_id && window.__hrAuth && window.__hrAuth.authFetch) {
+      try {
+        await window.__hrAuth.authFetch(
+          'https://mlb-hr-api.fly.dev/api/tickets/leg/remove',
+          { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ leg_id: leg.leg_id }) }
+        );
+      } catch (_e) {
+        // Server removal failed; client already updated. Log silently.
+      }
+    }
+  }
+
+  function resetSlip() {
+    // Client-only reset — clears session state for a new slip.
+    // The previous ticket persists server-side untouched.
+    _state.ticketId  = null;
+    _state.legs      = [];
+    _state.cardStatus = {};
     _notify();
   }
 
@@ -135,6 +158,7 @@
     subscribe:       subscribe,
     addLeg:          addLeg,
     removeLeg:       removeLeg,
+    resetSlip:       resetSlip,
     buildLegPayload: buildLegPayload,
     openSlip:        openSlip,
     closeSlip:       closeSlip,
