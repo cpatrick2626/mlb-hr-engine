@@ -63,7 +63,7 @@
        player_id, name, teamAbbr, team, pitcher, pitcher_name,
        model_prob (decimal), tier, model_tier_rank, board,
        hrprob, barrel, hh  */
-  async function addLeg(row) {
+  async function addLeg(row, _retry) {
     var key = row.player_id || row.name;
     var cur = _state.cardStatus[key] || 'idle';
 
@@ -99,6 +99,11 @@
         return;
       }
       if (!res.ok) {
+        if (res.status === 409 && !_retry) {
+          resetSlip();
+          await addLeg(row, true);
+          return;
+        }
         _state.cardStatus = Object.assign({}, _state.cardStatus, { [key]: 'error' });
         _notify();
         return;
@@ -130,6 +135,7 @@
     var leg = _state.legs.find(function (l) { return l.n === n; });
     // Immediate client removal for responsive UI
     _state.legs = _state.legs.filter(function (l) { return l.n !== n; });
+    if (_state.legs.length === 0) _state.ticketId = null;
     _notify();
     // Persist server-side if we have a leg_id and auth
     if (leg && leg.leg_id && window.__hrAuth && window.__hrAuth.authFetch) {

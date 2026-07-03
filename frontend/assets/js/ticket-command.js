@@ -351,6 +351,10 @@ function TicketCommandSlip({ legs, ticketId, onClose, onRemoveLeg }) {
       if (res._noAuth) { setSubmitState('noauth'); return; }
       if (!res.ok)     { setSubmitState('error');  return; }
       setSubmitState('done');
+      setTimeout(function () {
+        window.__hrSlip.resetSlip();
+        onClose();
+      }, 1200);
     } catch (_) {
       setSubmitState('error');
     }
