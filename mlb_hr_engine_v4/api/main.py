@@ -458,7 +458,7 @@ def _build_slate_payload(data: dict) -> dict:
         )
 
         mq_map = {"ELITE": "ELITE", "STRONG": "STRONG", "AVG": "AVG",
-                  "WEAK": "WEAK", "DANGER": "DANGER"}
+                  "WEAK": "WEAK"}
         quality = mq_map.get(p.get("matchup_quality", "AVG"), "AVG")
 
         fd_raw = p.get("fanduel_american")
@@ -478,6 +478,7 @@ def _build_slate_payload(data: dict) -> dict:
             "teamAbbr": p.get("team"),
             "bats":     p.get("batter_side"),
             "quality":  quality,
+            "pitcherVuln": p.get("pitcher_vuln", "NEUTRAL"),
             "pa":       season_pa,
             "avg":      _rate(p.get("batting_avg")),
             "slg":      _rate(p.get("actual_slg")),

@@ -44,23 +44,23 @@ def _matchup_quality_tier(
 ) -> str:
     """
     Deterministic matchup quality tier for Full Slate display.
-    Uses MAIN factors only: batter power + HR probability + pitcher exposure + park.
-    No JIG/HVY logic.
+    Batter-threat axis only (two-axis model: pitcher vulnerability is the
+    separate pitcher_vuln field — see _pitcher_vulnerability_tier).
+    Uses MAIN factors only. No JIG/HVY logic.
 
     Inputs:
     - model_prob: calibrated game HR probability (0.0-1.0)
     - barrel_pct: Statcast barrel rate (0.0-1.0)
-    - exit_velo: exit velocity (float, mph) or None
-    - pitcher_hr9: pitcher HR/9 ratio
-    - park_factor: park HR factor (0.7-1.3 typical)
+    - exit_velo: exit velocity (float, mph) or None — reserved, currently unused
+    - pitcher_hr9: pitcher HR/9 ratio — reserved, currently unused
+    - park_factor: park HR factor (0.7-1.3 typical) — reserved, currently unused
 
-    Returns: one of {ELITE, STRONG, AVG, WEAK, DANGER}
+    Returns: one of {ELITE, STRONG, AVG, WEAK}
 
     Logic:
     - ELITE: model_prob >= 0.15 (top-tier threat)
     - STRONG: model_prob >= 0.10 (solid threat)
     - WEAK: model_prob < 0.05 OR barrel_pct < 0.04 (low power/low threat)
-    - DANGER: pitcher_hr9 >= 2.2 (extreme pitcher vulnerability, high env risk)
     - AVG: everything else (playable/neutral)
     """
     model_prob = float(model_prob or 0.0)
@@ -68,10 +68,6 @@ def _matchup_quality_tier(
     exit_velo = float(exit_velo or 0.0)
     pitcher_hr9 = float(pitcher_hr9 or 0.0)
     park_factor = float(park_factor or 1.0)
-
-    # DANGER: extreme pitcher vulnerability (gives up 2.2+ HR/9 = top 5% vulnerable)
-    if pitcher_hr9 >= PITCHER_VULNERABILITY_HR9_THRESHOLD:
-        return "DANGER"
 
     # ELITE: top batter threat (15%+ HR probability from model)
     if model_prob >= MATCHUP_QUALITY_ELITE_THRESHOLD:
@@ -87,6 +83,19 @@ def _matchup_quality_tier(
 
     # AVG: everything else
     return "AVG"
+
+
+def _pitcher_vulnerability_tier(pitcher_hr9) -> str:
+    """
+    Pitcher-vulnerability axis (two-axis model, separate from matchup_quality).
+    TARGET: pitcher_hr9 >= 2.2 (top ~5% most hittable — best HR matchup).
+    NEUTRAL: otherwise; missing/null pitcher_hr9 is never TARGET.
+    Display-only — never combined numerically with the batter-threat tier
+    (pitcher_hr9 already feeds model_prob; combining would double-count).
+    """
+    if float(pitcher_hr9 or 0.0) >= PITCHER_VULNERABILITY_HR9_THRESHOLD:
+        return "TARGET"
+    return "NEUTRAL"
 
 
 def _utc_to_local_hour(game_time_utc: str, tz_offset: int) -> int:
@@ -340,6 +349,7 @@ def _build_player_profile(
         "xwoba": xwoba_raw,
         "center_pct": center_pct,
         "matchup_quality": matchup_quality,
+        "pitcher_vuln": _pitcher_vulnerability_tier(pitcher_hr9),
         "batter_bb_pct": round(_bb / season_pa, 3) if season_pa > 0 else None,
         "batter_k_pct":  round(season_k / season_pa, 3) if season_pa > 0 else None,
         **statcast_client.bat_tracking_summary(player_id, bat_tracking_data or {}),

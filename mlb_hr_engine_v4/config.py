@@ -250,12 +250,12 @@ PORTFOLIO_CORRELATION_CROSSGAME:float = 0.04    # estimated cross-game same-day 
 
 # ── Matchup Quality Tier Thresholds ──────────────────────────────────────────
 # Used by pipeline._matchup_quality_tier to classify Full Slate display tiers
-# (ELITE / STRONG / AVG / WEAK / DANGER). MAIN-only signal; no JIG/HVY logic.
+# (ELITE / STRONG / AVG / WEAK — batter-threat axis). MAIN-only signal; no JIG/HVY logic.
 # Migrated from pipeline.py per AUDIT-001 — config.py is single source of truth.
 MATCHUP_QUALITY_ELITE_THRESHOLD:    float = 0.15  # model_prob ≥ this → ELITE
 MATCHUP_QUALITY_STRONG_THRESHOLD:   float = 0.10  # model_prob ≥ this → STRONG
 MATCHUP_QUALITY_AVG_THRESHOLD:      float = 0.05  # model_prob < this (or low barrel) → WEAK
-PITCHER_VULNERABILITY_HR9_THRESHOLD: float = 2.2  # pitcher_hr9 ≥ this → DANGER (top 5% vulnerable)
+PITCHER_VULNERABILITY_HR9_THRESHOLD: float = 2.2  # pitcher_hr9 ≥ this → TARGET (top ~5% most hittable — best HR matchup)
 
 # ── Full Slate Tier Display ───────────────────────────────────────────────────
 # 6-tier classification driven by model_prob. Display-only — does not affect
