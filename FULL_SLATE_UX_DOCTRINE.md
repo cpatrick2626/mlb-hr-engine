@@ -846,3 +846,74 @@ def classify_game_card(game_batters: list[dict]) -> str:
 ---
 
 *Document produced for planning purposes only. No runtime systems modified. No commits made. Codex ownership of runtime stabilization systems fully preserved.*
+
+---
+
+## 11. Palette Collision Rule (added 2026-07-06)
+
+### The Problem
+
+The board uses two independent color palettes that both include red, and they mean opposite things:
+
+| Palette | Red means | Where used |
+|---------|-----------|------------|
+| **Tier palette** | APEX — best HR threat batter | Player tier badges, escalation chips |
+| **Matchup/stat palette** | Bad-for-hitter | Player dot color (matchup quality), legend |
+
+When tier-colored elements and matchup-colored elements sit adjacent (e.g., a dot next to a tier badge), the same color reads as contradictory signals. An APEX-tier batter in a bad matchup, or an AVG-tier batter in a great matchup, produces a confusing visual.
+
+**Canonical incident:** Player dot was colored by tier fallback (red = APEX = good). Matchup legend used red = bad. Fixed in `db70636` — dot now reads matchup quality only.
+
+### Rule
+
+> **Each visual element must belong to exactly one palette. Palette identity must be determined by the signal the element expresses, not by visual proximity.**
+
+- Dots express **matchup quality** → use matchup palette only.
+- Tier badges express **batter tier** → use tier palette only.
+- Never use the tier palette as a fallback for a matchup-scoped element.
+- When palette-bearing elements sit adjacent, add a label or context chip so the encoding is explicit (e.g., "MATCHUP:" prefix, legend callout).
+
+### Palette registry (authoritative)
+
+New palettes must be registered here before implementation. Confirm no color collision with existing palettes before use.
+
+| Palette | Signal scope | Red | Green | Grey |
+|---------|-------------|-----|-------|------|
+| Tier | Batter HR-threat tier | APEX (best) | — | below threshold |
+| Matchup | Pitcher-vs-batter matchup quality | bad-for-hitter | good-for-hitter (TARGET) | neutral/null |
+
+---
+
+## 12. Signal-Scope Labeling Rule (added 2026-07-06)
+
+### The Problem
+
+The board surfaces multiple independent signals that can appear to contradict each other even when each is correct:
+
+- **Batter tier** (ELITE/STRONG/AVG/WEAK) — measures the batter's overall HR-threat profile across the season.
+- **Pitcher season grade** (HR/9 percentile vs avg batter) — measures the pitcher's season-aggregate vulnerability.
+- **Arsenal Edge matchup verdict** (MISMATCH / edge reading) — measures the specific batter-vs-pitcher matchup based on pitch arsenal overlap.
+
+An ELITE batter facing a TOUGH-rated pitcher can still be an excellent matchup pick if the arsenal edge is strongly in the batter's favor. Without scope labels, operators read "TOUGH pitcher" and fade the pick — even though "TOUGH" is a season-aggregate claim and the arsenal edge is saying the opposite for this specific confrontation.
+
+**Canonical incidents:**
+1. AEI header "PITCHER VULNERABILITY" with sub-labels like "TOUGH" caused operators to skip good picks — fixed by relabeling to "SEASON HR/9 GRADE" + caption "SEASON GRADE VS AVG BATTER · ARSENAL EDGE READS THIS MATCHUP."
+2. Two-axis matchup split: batter tier and pitcher vulnerability were merged into a single DANGER/not-DANGER signal, obscuring which axis was firing — fixed by separating into independent batter-tier and pitcherVuln axes.
+
+### Rule
+
+> **Any signal that measures a different scope from adjacent signals must be labeled to its scope. Labels must answer: "season aggregate, or this specific matchup?"**
+
+Guidelines:
+
+- **Season-aggregate signals** (tier, season HR/9 grade): label with "SEASON" or "GRADE" to indicate these are historical averages, not matchup-specific verdicts.
+- **Matchup-specific signals** (arsenal edge verdict, pitcherVuln TARGET): label with "MATCHUP" or "THIS AT-BAT" framing, or use captions that make the scope explicit.
+- **Never let a season-aggregate label serve as the headline** when a matchup-specific verdict is available. The matchup verdict is more actionable; make it the visual anchor.
+- When adding a new signal to the board, state its scope in the design spec before implementation.
+
+### Application to future signals
+
+Before wiring any new signal to the board, answer:
+1. What is its scope? (season / recent / matchup-specific / career)
+2. Is there an adjacent signal with the same visual weight that measures a different scope?
+3. If yes: what label or caption makes the scope difference explicit to the operator at a glance?

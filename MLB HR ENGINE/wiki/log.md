@@ -1,5 +1,25 @@
 ﻿# Wiki Log
 
+## [2026-07-06] claude-code | Player dot fix + AEI relabel + matchup two-axis Phases 1+2 | COMPLETE / SHIPPED
+
+**Player dot** (`db70636`): dot color now reads `row.quality`/`FSM_MATCHUP` (matchup palette), matching legend polarity. Was using tier-color fallback (red=APEX=best) which collided with matchup red=bad-for-hitter. Verified green dots on good-matchup players.
+
+**AEI relabel** (code live; committed under mislabeled `a186b9e` — message says "matchup spec" but diff is the relabel; `git add` failure caused the mismatch; code is correct): "PITCHER VULNERABILITY" → "SEASON HR/9 GRADE" + caption "SEASON GRADE VS AVG BATTER · ARSENAL EDGE READS THIS MATCHUP". Eliminates TOUGH-wording pick-bypass gate.
+
+**Matchup two-axis spec** (`8c7377d`): reconstructed + code-verified design for inverting DANGER polarity and separating batter-tier / pitcher-vuln axes. Ratified: DANGER→TARGET, no tier promotion (double-count prevention).
+
+**Phase 1** (`7cdcb61`, Fly): inverted DANGER removed from pipeline. `pitcher_vuln` axis added (TARGET when `pitcher_hr9>=2.2`; API key `pitcherVuln`). Batter tiers + all scoring math unchanged. Regression clean: 0 changes across 208 baseline rows. Live verification: 208 rows MAIN+JIG, ZERO DANGER, pitcherVuln present.
+
+**Phase 2** (`252bf41`, Vercel): TARGET display — green ring on dot, `·TARGET` card tag, legend entry, focus-filter OR-condition. DANGER removed from all display surfaces. Latent donut ELITE→AVG rendering bug fixed. JIG TARGET pill added. Rank boost NOT changed (pitcher_hr9 already feeds model_prob — double-count rule).
+
+**Phase 3 deferred:** Streamlit `app.py` DANGER pie/tooltip — low priority, React is production surface.
+
+**New doctrine docs:** `wiki/doctrine/operator-pick-workflow.md` (seed for Strategy-section design mission); `FULL_SLATE_UX_DOCTRINE.md §11` (palette collision rule) + `§12` (signal-scope labeling rule).
+
+**Backlog added:** AEI relabel pass (MISMATCH as headline), Fable 5 Strategy-section design mission, flyctl symlink fix (admin shell), existing queue unchanged.
+
+Session: `wiki/sessions/2026-07-06-matchup-two-axis-dot-aei-fixes.md`. DO NOT COMMIT / DO NOT PUSH without operator authorization.
+
 ## [2026-07-02] claude-code | docs(vault): stale auth + slip claims corrected via destination-picker audit | DOCS ONLY — Two vault files carried stale claims proved wrong by the 2026-07-02 destination-picker code audit of root frontend/. (1) wiki/doctrine/ticket-slip-system.md: "Four surfaces" count corrected to eight (JIG Command, All Batters Leaderboard, Strategy Rail, Command Tab were missing from the table); summary corrected from "leg capture is mock" framing to "leg DATA is real, overlay analytics are SAMPLE"; auth section added (auth.js Supabase email/password + invite-code beta gating IS built as of 2026-06-26); known integrity bugs added (removeLeg client-only / no resetSlip); 2026-07-02 correction callout at top. Still-true caveats preserved: overlay analytics are SAMPLE, settlement not built (legs.hr_result never written), FD hand-off is search URL not deep-link. (2) wiki/projects/ticket-data-capture-phase1-architecture.md: STATUS header corrected (was "PLAN ONLY — no tables created"; plan was implemented 2026-06-26); line 90 "No ticket/legs tables exist" struck through with correction note. No code changes. AGENTS.md / CLAUDE.md untouched. DO NOT COMMIT / DO NOT PUSH without operator authorization.
 
 ## [2026-07-01] claude-code | OOM incident + cache architecture fix + cron 5x/day + AEI fixes | COMPLETE / SHIPPED — Production incident: /api/slate OOM-crash-looping on stale-cache days (live load_game_data() fallback exhausted 512 MB Fly.io memory). Two-part fix: (1) f711ff3 — Fly memory 512→1024 MB stopgap; (2) 8feef78 — removed live fallback entirely; /api/slate now pure cache-reader (serves last-good Supabase row with stale:True, never calls load_game_data()). get_latest_picks() added to api/cache.py (ORDER BY date DESC LIMIT 1). stale bool now first-class payload field. Stale-slate UI banner (4bbc40d): frontend shows "last-good slate from [date]" when stale:true. pitch_mix Savant streaming fix (60a78b9): TextIOWrapper utf-8-sig + decode_content; max_workers 6→3; cuts cron memory spike; parse output unchanged. Cron 2x→5x/day (4c6f8dc): 10:05/12:05/14:05/16:05/18:05 EDT (fixed UTC, DST caveat noted). AEI fixes: pitcher tier was reading batter's row.tier (phantom EDGE for TBD); correct fix (e8b4822) derives tier in-component from row.pitcher_hr9 (≥1.45→HR TARGET/≥1.05→VULNERABLE/<1.05→TOUGH/null→—); panels relabeled PITCHER VULNERABILITY / BATTER THREAT TIER. AEI close button anchored to card via .aei-wrap position:relative (fc27578). Vault Phase 1 completion (separate log entries above). Follow-ups: AEI threshold vs config.py misalignment; honest-UI backlog; pitch_mix socket pre-existing. Session: wiki/sessions/2026-07-01-oom-incident-cache-fix-cron-aei.md. DO NOT COMMIT / DO NOT PUSH without operator authorization.
