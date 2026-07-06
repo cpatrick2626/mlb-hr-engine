@@ -1194,7 +1194,8 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false }) {
               <div className="aei-pcard__who">
                 <div className="aei-pcard__nm">{pitcherName}</div>
                 <div className="aei-pcard__meta">{pitcherHand ? pitcherHand + "HP" : "—"}</div>
-                <span className="aei-tier">PITCHER VULNERABILITY <b style={aeiPTier !== "—" ? { color: aeiPTierColor } : {}}>{aeiPTier}</b></span>
+                <span className="aei-tier">SEASON HR/9 GRADE <b style={aeiPTier !== "—" ? { color: aeiPTierColor } : {}}>{aeiPTier}</b></span>
+                <span className="aei-pcard__scope" style={{display:"block",marginTop:"3px",fontFamily:"var(--font-display)",fontWeight:700,fontSize:"8px",letterSpacing:"0.08em",color:"var(--fg-2)",lineHeight:1.3}}>SEASON GRADE VS AVG BATTER · ARSENAL EDGE READS THIS MATCHUP</span>
               </div>
             </div>
 
