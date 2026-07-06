@@ -31,7 +31,7 @@ const TM_BANDS = [
   { min:  0, label: "COLD",   color: "#ef4444" },
 ];
 function tmBand(score) {
-  if (score == null) return { label: "—", color: "#6b7872" };
+  if (score == null) return { label: "—", color: "#8a9691" };
   for (const b of TM_BANDS) { if (score >= b.min) return b; }
   return TM_BANDS[TM_BANDS.length - 1];
 }
@@ -336,7 +336,7 @@ function fsmRoleTip(role, row) {
 
 const FSM_SLIP_COLORS = {
   idle:   { border: 'rgba(59,111,255,0.6)',  color: '#3b6fff' },
-  loading:{ border: 'rgba(107,120,114,0.4)', color: '#6b7872' },
+  loading:{ border: 'rgba(107,120,114,0.4)', color: '#8a9691' },
   added:  { border: 'rgba(26,255,102,0.6)',  color: '#1aff66' },
   error:  { border: 'rgba(255,51,68,0.6)',   color: '#ff3344' },
   noauth: { border: 'rgba(255,176,32,0.5)',  color: '#ffb020' },
@@ -1280,10 +1280,10 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false }) {
                 <span className="aei-ea__val">{confidence != null ? Math.round(Number(confidence) * 100) + "%" : "—"}</span>
               </div>
               {keyPitch && (
-                <div style={{marginTop:"4px",fontFamily:"var(--font-display)",fontWeight:700,fontSize:"9px",letterSpacing:"0.1em",color:"var(--fg-2)"}}>KEY PITCH: {keyPitchName}</div>
+                <div style={{marginTop:"4px",fontFamily:"var(--font-display)",fontWeight:700,fontSize:"10px",letterSpacing:"0.1em",color:"var(--fg-2)"}}>KEY PITCH: {keyPitchName}</div>
               )}
               {(edgeLabel === "VOLATILE" || (confidence != null && Number(confidence) < 0.5)) && (
-                <div style={{marginTop:"6px",fontFamily:"var(--font-display)",fontWeight:700,fontSize:"9px",letterSpacing:"0.1em",color:"var(--fg-2)"}}>LOW CONFIDENCE · SMALL SAMPLE</div>
+                <div style={{marginTop:"6px",fontFamily:"var(--font-display)",fontWeight:700,fontSize:"10px",letterSpacing:"0.1em",color:"var(--fg-2)"}}>LOW CONFIDENCE · SMALL SAMPLE</div>
               )}
             </div>
 

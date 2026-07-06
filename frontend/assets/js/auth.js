@@ -85,7 +85,7 @@
     },
     dropEmail: {
       fontSize: '11px',
-      color: 'var(--fg-3, #6b7872)',
+      color: 'var(--fg-3, #8a9691)',
       letterSpacing: '0.04em',
       marginBottom: '10px',
       wordBreak: 'break-all',
@@ -196,14 +196,14 @@
     },
     confirmText: {
       fontSize: '11px',
-      color: 'var(--fg-3, #6b7872)',
+      color: 'var(--fg-3, #8a9691)',
       lineHeight: 1.5,
       marginBottom: '14px',
     },
     linkBtn: {
       background: 'none',
       border: 'none',
-      color: 'var(--fg-3, #6b7872)',
+      color: 'var(--fg-3, #8a9691)',
       fontFamily: 'var(--font-display, inherit)',
       fontSize: '10px',
       letterSpacing: '0.1em',
