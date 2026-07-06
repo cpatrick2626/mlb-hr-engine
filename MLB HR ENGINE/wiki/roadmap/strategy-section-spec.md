@@ -1,4 +1,6 @@
-Status: SPEC — Strategy section design mission (Fable 5). Scope A orchestration-only. DOCS ONLY, operator-gated before build. 2026-07-06.
+Status: SPEC — Strategy section design mission (Fable 5). Scope A orchestration-only. Operator-gated before build. 2026-07-06.
+
+> **STATUS UPDATE 2026-07-06 — Phase S1-a (snapshot capture) SHIPPED + VALIDATED.** The snapshot-wiring portion of Phase S1 (D1 migration 006, D2 API accept/store, `buildLegPayload` forward, capture on Full Slate / AEI / rail) is live — commit `f9f3aa4`, Fly API v73, Vercel deployed — and validated against real Supabase rows. The Strategy room, StrategyRail remediation, and Phases S2/S3 remain pending. §9 decisions are RESOLVED (recorded inline). See `wiki/log.md` 2026-07-06 entry.
 
 # Strategy Section — Design Spec
 
@@ -222,10 +224,10 @@ Notes:
 ## 6. Phasing
 
 **Phase S1 — buildable now (frontend + one small migration/API change):**
-- Strategy room (funnel + lane switch + role strip), replacing the `RadarScope` placeholder for `engineId === "strategy"`. ⚠ Touches the `Stage` routing branch — routing is a protected zone; this spec's approval must explicitly cover that one branch.
-- StrategyRail remediation (§3.7).
-- Snapshot capture wiring: `legs.signal_snapshot` migration (D1), API accept (D2), `buildLegPayload` extension, Strategy + rail surfaces populating it. **Highest-leverage now-item:** every day this ships earlier, real picks start accruing gradeable history.
-- Ledger tab shipped in its honest empty state (reads nothing until settled data exists).
+- Strategy room (funnel + lane switch + role strip), replacing the `RadarScope` placeholder for `engineId === "strategy"`. ⚠ Touches the `Stage` routing branch — routing is a protected zone; this spec's approval must explicitly cover that one branch. *(Still pending; routing change approved per §9 Q3.)*
+- StrategyRail remediation (§3.7). *(Still pending.)*
+- ✅ **Snapshot capture wiring — SHIPPED + VALIDATED 2026-07-06** (Phase S1-a): `legs.signal_snapshot` migration 006 (D1), API accept/store with 16KB cap, absent=NULL (D2), `buildLegPayload` extension, capture on Full Slate / AEI AeeCard / rail (`fsmBuildSnapshot`). Commit `f9f3aa4`, Fly v73. Validated on real Supabase rows (Caglianone, Schwarber — populated snapshots, `model_prob` decimal intact). Scope note: hr-threat-zone, escalation-feed, command-tab, and the leaderboard FD link do NOT attach snapshots (NULL by design, per packet scope); the FSM AEI modal has no slip button so its richer signals are not yet captured; the rail snapshot records the displayed HR ENV SCORE as-shown pending rail remediation.
+- Ledger tab shipped in its honest empty state (reads nothing until settled data exists). *(Still pending — ships with the Strategy room.)*
 
 **Phase S2 — blocked on backend (Phase D):**
 - Settlement job + outcome ingestion (D3) with void rules (D4).
@@ -267,15 +269,17 @@ This spec deliberately does **not** design its formula, inputs, or weighting. Na
 
 ---
 
-## 9. Open Questions for Operator Review
+## 9. Open Questions — ALL RESOLVED (operator decisions recorded 2026-07-06)
 
-1. **Authorize Phase S1 snapshot wiring now?** (Migration D1/D2 + capture.) This is the single highest-leverage decision — settlement can be built later, but unlogged snapshots are unrecoverable.
-2. **StrategyRail remediation depth:** retire the blend-only archetypes (POWER STACK, VALUE SPOT) or reformulate each onto a single existing signal?
-3. **Routing authorization:** approve the one `Stage` branch change replacing RadarScope for the strategy engine (protected zone)?
-4. **Void/settlement rules (D4):** DNP, postponement, extra-inning/suspended-game handling — what voids vs settles-as-0?
-5. **`alignment` flag definition:** what displayed condition sets `alignment=true` (e.g. top-usage pitch is in the batter's top-2 HR pitch types)? Needs a concrete, labeled rule before capture.
-6. **Cross-ticket all-different rule:** is the neutral "ALSO ON MAIN TICKET" notice (no recommendation either way) the right posture until the ledger has data?
-7. **H2H small-sample threshold:** what PA count triggers the de-emphasis treatment (AEI currently flags at 3 PA)?
+All seven questions were decided by the operator on 2026-07-06. Do not re-litigate; a change to any of these is a new operator decision, not a reopened question.
+
+1. **Phase S1 snapshot wiring — RESOLVED: AUTHORIZED + SHIPPED.** Migration D1/D2 + capture built, deployed, and validated 2026-07-06 (commit `f9f3aa4`, Fly v73). See status update at top and §6.
+2. **StrategyRail remediation depth — RESOLVED: retire the blend-only archetypes** (POWER STACK, VALUE SPOT as currently formulated) rather than reformulate them. Remediation itself is a later packet.
+3. **Routing authorization — RESOLVED: APPROVED** for the one `Stage` branch change (RadarScope → Strategy room) when the room build happens. Approval is scoped to that single branch.
+4. **Void/settlement rules (D4) — RESOLVED: ≥1 PA settles the leg (hr_result 0 or 1); otherwise void.** Covers DNP, postponement, and no-lineup cases uniformly.
+5. **`alignment` flag definition — RESOLVED:** `alignment=true` when the pitcher's top-usage pitch is in the batter's top-2 pitch types by SLG, with ≥10 PA vs that pitch type.
+6. **Cross-ticket all-different rule — RESOLVED: neutral notice.** The "ALSO ON MAIN TICKET" chip with no recommendation either way is the posture until the ledger has data.
+7. **H2H small-sample threshold — RESOLVED: <10 PA** triggers the de-emphasis / "NOT PREDICTIVE" treatment.
 
 ---
 

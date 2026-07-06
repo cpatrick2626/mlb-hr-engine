@@ -917,3 +917,20 @@ Before wiring any new signal to the board, answer:
 1. What is its scope? (season / recent / matchup-specific / career)
 2. Is there an adjacent signal with the same visual weight that measures a different scope?
 3. If yes: what label or caption makes the scope difference explicit to the operator at a glance?
+
+---
+
+### Systemic Pattern — Scope-Unlabeled Values (added 2026-07-06)
+
+Four separate incidents share the same root cause: a value is computationally correct but its scope is unlabeled, causing decision-level misreads.
+
+| # | Incident | Root symptom | Fix |
+|---|----------|-------------|-----|
+| 1 | Player dot color-scope collision | Tier-palette red (APEX = best) sat adjacent to matchup-palette red (bad-for-hitter); same color, opposite meaning | Dot now reads matchup palette only (`db70636`) |
+| 2 | DANGER polarity / scope inversion | High `pitcher_hr9` labeled DANGER (worst matchup); correct read is high HR/9 = vulnerable pitcher = good matchup | DANGER removed; TARGET axis added (`7cdcb61`) |
+| 3 | AEI season-grade verb read as matchup verdict | "TOUGH" is a season-aggregate pitcher grade; operators used it as a skip signal for specific matchups | Relabeled to raw stat + descriptor; ARSENAL EDGE headlined (`4422501`) |
+| 4 | FSM HR season-count in pitch-mix-scoped row | Under pitch-mix toggle the row's rate columns rescope to vs-this-pitcher; HR column stayed season-wide without a label distinguishing it | "HR" → "SZN HR" (`cafed75`) |
+
+**Root cause:** under the pitch-mix toggle the entire FSM row shifts meaning — rate/quality columns rescope to "vs this pitcher" — but season-total columns (HR count) stay season-wide. When columns are not consistently labeled to their scope, operators read the whole row as one scope.
+
+**Backlog:** FSM scope-labeling audit — walk every FSM column under pitch-mix ON and OFF: which rescope to vs-this-pitcher, which stay season-wide, confirm each is labeled to its actual scope. Also confirm hrfb / hrpa / iso scope. Systemic fix for the pattern above.

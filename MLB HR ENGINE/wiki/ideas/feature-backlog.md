@@ -66,6 +66,28 @@ Build only after engine is validated AND sample is healthy:
 
 ---
 
+## Strategy Section (added 2026-07-06)
+
+Strategy spec (`wiki/roadmap/strategy-section-spec.md`) is written and gate-ready. §9 contains seven operator decisions that are currently un-gated. Recommended sequencing:
+
+| Priority | Item | Reason |
+|----------|------|--------|
+| 1st | Authorize snapshot-wiring in isolation | History clock is unrecoverable — delay kills calibration audit trail permanently |
+| 2nd | Rail remediation | Live fabricated POWER STACK / HR ENV SCORE is an honesty violation — active integrity risk |
+| Hold | Strategy-room UI + protected Stage routing branch | Depends on snapshot-wiring + rail remediation shipping first |
+
+Do not proceed on Strategy-room UI or routing branch until the first two are shipped.
+
+---
+
+## UX Integrity Backlog (added 2026-07-06)
+
+| Item | Priority | Notes |
+|------|----------|-------|
+| FSM scope-labeling audit | MEDIUM | Walk every FSM_COLS entry under pitch-mix ON/OFF: which columns rescope to vs-this-pitcher, which stay season-wide, confirm each is labeled to its scope. Confirm hrfb / hrpa / iso / etc. Systemic fix for four-incident scope-collision pattern (see `FULL_SLATE_UX_DOCTRINE.md §12`). |
+
+---
+
 ## Key Data Facts
 
 - **Re-queryable:** raw baseball history (pitch-level, splits, game logs, H2H, bullpen) available from Savant / MLB API back to 2015. **Not use-it-or-lose-it.** No warehouse needed.

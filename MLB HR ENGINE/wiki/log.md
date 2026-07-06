@@ -1,5 +1,28 @@
 ﻿# Wiki Log
 
+## [2026-07-06] claude-code | Phase S1-a — pick-time signal_snapshot capture | COMPLETE / SHIPPED / VALIDATED
+
+**Phase S1-a of the Strategy spec (snapshot-capture sub-phase) shipped and validated end-to-end against real Supabase rows.** Commit `f9f3aa4`, Fly API v73, Vercel frontend deployed.
+
+**Chain:** migration 006 (`legs.signal_snapshot` jsonb, additive) → API accept/store (`api/main.py`, `api/cache.py`; 16KB cap, absent=NULL) → slip payload forward (`slip-state.js` `buildLegPayload`) → capture on Full Slate / AEI (AeeCard) / rail surfaces (`fsmBuildSnapshot`).
+
+**Validation:** 2 real legs (Caglianone, Schwarber) with populated snapshots — `surface=full-slate`, `lane=main`, `model_prob` 0–1 decimal intact, `tm_score`/`tier`/`dot_state` captured. An interim NULL scare was root-caused to a stale browser tab (static no-build page serving old JS), not a code bug — hard refresh produced populated rows.
+
+**Scope boundaries (honest record):**
+- Only Full Slate, AEI AeeCard, and the rail attach snapshots. hr-threat-zone, escalation-feed, command-tab, and the leaderboard FD link do NOT — adds from those legitimately store NULL (matches packet scope).
+- The FSM ARSENAL EDGE INTEL modal (FsmArsenalEdgeIntel) has no slip button — its richer signals (season grade, H2H PA) are not captured yet; small follow-up if wanted.
+- Rail snapshot records the fabricated "HR ENV SCORE" as a displayed value — correct behavior (snapshot records what was shown); rail remediation is a later packet.
+
+**Key outcome:** every logged pick now carries its motivating signal state — the unrecoverable-history problem (spec §9 Q1) is solved. Settlement job S2 can retroactively grade every pick logged from today forward.
+
+Spec updated: `wiki/roadmap/strategy-section-spec.md` (S1 snapshot portion marked SHIPPED+VALIDATED; §9 decisions recorded as RESOLVED). DO NOT COMMIT / DO NOT PUSH without operator authorization.
+
+## [2026-07-06] claude-code | AEI verdict neutralization + FSM SZN HR label | COMPLETE / SHIPPED
+
+**AEI verdict wording neutralized** (`4422501`): "SEASON HR/9 GRADE: TOUGH / VULNERABLE / HR TARGET" replaced with raw stat + descriptor — "SEASON HR/9: X.XX (low / elevated / high)". ARSENAL EDGE verdict promoted to headline. Eliminates the pick-bypass gate where "TOUGH" read as a matchup verdict rather than a season-aggregate grade. Live-verified on Caminero / Wood / Rice. Companion legibility pass: `11b1aea` (enlarged SEASON HR/9 line, dropped tagline).
+
+**FSM HR column labeled SZN HR** (`cafed75`): FSM_COLS "HR" → "SZN HR". No matchup-HR field exists in payload (confirmed: hr / hrfb / hrpa / hrprob / opphr / pitcher_hr9 — all season-wide or rate fields). Under the pitch-mix toggle, rate columns rescope to vs-this-pitcher context; the season HR count stays season-wide. The label is the honest fix — no fabricated matchup-HR exists to display instead. Display-only change, no data/scoring touched.
+
 ## [2026-07-06] claude-code | Player dot fix + AEI relabel + matchup two-axis Phases 1+2 | COMPLETE / SHIPPED
 
 **Player dot** (`db70636`): dot color now reads `row.quality`/`FSM_MATCHUP` (matchup palette), matching legend polarity. Was using tier-color fallback (red=APEX=best) which collided with matchup red=bad-for-hitter. Verified green dots on good-matchup players.
