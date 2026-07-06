@@ -1193,7 +1193,7 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false }) {
               <div className="aei-pcard__who">
                 <div className="aei-pcard__nm">{pitcherName}</div>
                 <div className="aei-pcard__meta">{pitcherHand ? pitcherHand + "HP" : "—"}</div>
-                <span className="aei-pcard__scope" style={{display:"block",marginTop:"4px",fontFamily:"var(--font-display)",fontWeight:700,fontSize:"8px",letterSpacing:"0.08em",color:"var(--fg-3)",lineHeight:1.3,opacity:0.65}}>SEASON HR/9: {aeiHr9 != null ? aeiHr9.toFixed(2) : "—"} <span style={{color: aeiPTierColor}}>({aeiPTier})</span> · ARSENAL EDGE READS THIS MATCHUP</span>
+                <span className="aei-pcard__scope" style={{display:"block",marginTop:"4px",fontFamily:"var(--font-display)",fontWeight:700,fontSize:"11px",letterSpacing:"0.08em",color:"var(--fg-3)",lineHeight:1.3,opacity:0.85}}>SEASON HR/9: {aeiHr9 != null ? aeiHr9.toFixed(2) : "—"} <span style={{color: aeiPTierColor}}>({aeiPTier})</span></span>
               </div>
             </div>
 
