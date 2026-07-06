@@ -98,7 +98,7 @@ const fdeg = (v) => v.toFixed(1) + "°";
 /* column defs — bucketsHi = higher is better (4 cuts), bucketsLo = lower is better */
 const FSM_COLS = [
 { key: "odds", head: "ODDS", title: "HR prop odds (American)", group: "STATS", mode: "odds", fmt: (v) => String(v) },
-{ key: "hr", head: "HR", title: "Home runs — season total", group: "STATS", bucketsHi: [28, 18, 10, 5], fmt: (v) => String(v) },
+{ key: "hr", head: "SZN HR", title: "Home runs — season total", group: "STATS", bucketsHi: [28, 18, 10, 5], fmt: (v) => String(v) },
 { key: "barrel", head: "BARREL%", title: "Barrel rate — optimal EV + launch-angle contact, the best HR predictor", group: "STATCAST", bucketsHi: [8, 6, 4.5, 3], fmt: fp },
 { key: "xslg", head: "xSLG", title: "Expected slugging from quality of contact", group: "STATS", bucketsHi: [0.520, 0.450, 0.400, 0.350], fmt: f3d },
 { key: "iso", head: "ISO", title: "Isolated power (SLG − AVG) — a core HR driver", group: "STATS", bucketsHi: [0.250, 0.180, 0.120, 0.070], fmt: f3d },
