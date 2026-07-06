@@ -23,6 +23,7 @@ const TierBadge = ({ tier }) => {
 /* Donut gauge: fill 0..1, color follows quality. */
 const MatchupGauge = ({ quality }) => {
   const map = {
+    ELITE:  { pct: 1.0,  color: "#4ade80", label: "ELITE MATCHUP" },
     STRONG: { pct: 0.82, color: "#1aff66", label: "STRONG MATCHUP" },
     AVG:    { pct: 0.5,  color: "#ffb020", label: "AVG MATCHUP" },
     WEAK:   { pct: 0.28, color: "#ff7a45", label: "WEAK MATCHUP" },

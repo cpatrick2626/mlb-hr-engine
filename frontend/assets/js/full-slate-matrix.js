@@ -18,10 +18,9 @@ const FSM_MATCHUP = {
   ELITE: { q: 4, color: "#4ade80" },
   STRONG: { q: 3, color: "#86efac" },
   AVG: { q: 2, color: "#fbbf24" },
-  WEAK: { q: 1, color: "#f97316" },
-  DANGER: { q: 0, color: "#ef4444" }
+  WEAK: { q: 1, color: "#f97316" }
 };
-const FSM_MATCHUP_ORDER = ["ELITE", "STRONG", "AVG", "WEAK", "DANGER"];
+const FSM_MATCHUP_ORDER = ["ELITE", "STRONG", "AVG", "WEAK"];
 
 /* TM (true_matchup_score) band thresholds — operator-approved, honest 0–100, do not rescale */
 const TM_BANDS = [
@@ -49,7 +48,7 @@ const FSM_MATCHUP_DESC = {
   STRONG: "clear batter advantage (3/4)",
   AVG: "neutral matchup (2/4)",
   WEAK: "leans to the pitcher (1/4)",
-  DANGER: "pitcher strongly favored (0/4)",
+  TARGET: "pitcher allows 2.2+ HR/9 — most hittable arms on the slate",
 };
 const FSM_BUILDER_TIER_DESC = {
   APEX: "MAIN model probability tier: APEX — inherited by JIG display",
@@ -420,7 +419,7 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, i
       </td>
       <td className="fsm-player">
         <button type="button" className="fsm-player__in" onClick={() => onBatter(row)} title={`Open ${row.name} batter card`}>
-          <span className="fsm-player__dot" style={{ background: (FSM_MATCHUP[row.quality] || { color: "#6b7872" }).color }} />
+          <span className="fsm-player__dot" title={row.pitcherVuln === "TARGET" ? "TARGET — pitcher allows 2.2+ HR/9 (most hittable arm on the slate)" : undefined} style={{ background: (FSM_MATCHUP[row.quality] || { color: "#6b7872" }).color, boxShadow: row.pitcherVuln === "TARGET" ? "0 0 0 2px #1aff66, 0 0 6px rgba(26,255,102,0.85)" : undefined }} />
           <span className="fsm-player__col">
             <span className="fsm-player__name">{row.name}</span>
             <span className="fsm-player__meta">{row.teamAbbr}<i className="fsm-player__bar">|</i>{row.bats}</span>
@@ -772,7 +771,7 @@ function FsmBatterCard({ row, onClose, onPitch, builderMode = false }) {
       <div className="fsm-card__matchup">
         <FsmGauge fraction={fsmThreatFill(row.model_prob)} color={t.color} size="lg" />
         <div className="fsm-card__mtext">
-          <span className="fsm-card__mq" style={{ color: m.color }}>{row.quality} MATCHUP</span>
+          <span className="fsm-card__mq" style={{ color: m.color }}>{row.quality} MATCHUP{row.pitcherVuln === "TARGET" && <span style={{ color: "#1aff66", marginLeft: "6px", fontWeight: 700 }} title="Pitcher allows 2.2+ HR/9 — most hittable arms on the slate">· TARGET</span>}</span>
           <span className="fsm-card__msub">vs <span className="fsm-pitcher-name">{pitcherDisplay}</span>{!pitcherConfirmed && (<span className="fsm-tbd-badge">TBD</span>)} ({oppTeam} · {pitcherHand}HP) · OPP HR/9 {fsmStatVal("opphr", row)}{game ? ` · PARK HR ${game.hrFactor.toFixed(2)}×` : ""}</span>
         </div>
         <button className="fsm-card__pitchbtn" onClick={onPitch}>PITCH MIX ANALYSIS →</button>
@@ -1558,7 +1557,7 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
     if (focus === "all") return true;
     if (focus === "power") return r.barrel != null && r.barrel >= 4.5 || r.slg >= 0.470;
     if (focus === "contact") return r.avg >= 0.255;
-    if (focus === "matchup") return ["ELITE", "STRONG"].includes(r.quality);
+    if (focus === "matchup") return ["ELITE", "STRONG"].includes(r.quality) || r.pitcherVuln === "TARGET";
     return true;
   };
 
@@ -1642,6 +1641,7 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
             {FSM_MATCHUP_ORDER.map((k) =>
             <span className="fsm-mkey" key={k} title={`${k} matchup — ${FSM_MATCHUP_DESC[k]}`}><i style={{ background: FSM_MATCHUP[k].color }} />{k}</span>
             )}
+            <span className="fsm-mkey" key="TARGET" title={`TARGET — ${FSM_MATCHUP_DESC.TARGET}`}><i style={{ background: "#1aff66" }} />TARGET</span>
           </div>
         </div>
         {/* GAMES — jump straight to any game */}

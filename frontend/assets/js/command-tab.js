@@ -184,6 +184,7 @@ function CmtThreatCard({ row, rank, engine, games, isTop, onAdd, addStatus }) {
             <React.Fragment>
               <CmtPill label="JIG IDX" val={row.jigScore != null ? Number(row.jigScore).toFixed(0) : "—"} color={accentC} />
               {row.quality && <CmtPill label="MATCHUP" val={row.quality} color={accentC} />}
+              {row.pitcherVuln === "TARGET" && <CmtPill label="TARGET" val="HR/9 2.2+" color="#1aff66" />}
               {hvyFlag && <span className="cmt-pill cmt-pill--hvy">HVY</span>}
             </React.Fragment>
           )}
