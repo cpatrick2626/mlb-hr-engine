@@ -111,6 +111,17 @@ const StratCard = ({ strat, rows, count }) => {
   const players = rows.slice().sort((a, b) => strat.rank(b) - strat.rank(a)).slice(0, count);
   const avg = players.reduce((a, p) => a + p.hrprob, 0) / (players.length || 1);
   const score = Math.min(9.9, 6 + avg * 0.17).toFixed(1);
+
+  /* Pick-time signal snapshot (Strategy spec §5, snapshot_version 1).
+     Records what this card displays: archetype + its HR ENV SCORE. Display record only. */
+  const railSnapshot = () => ({
+    snapshot_version: 1,
+    surface: "strategy-rail",
+    lane: "main",
+    rank_signal_used: strat.id,
+    rail: { archetype: strat.label, hr_env_score: Number(score) },
+    generated_at: window.SLATE_GENERATED_AT || null,
+  });
   const addFD = (e) => {
     e.stopPropagation();
     e.preventDefault();
@@ -130,6 +141,7 @@ const StratCard = ({ strat, rows, count }) => {
         hrprob:          p.hrprob,
         barrel:          p.barrel,
         hh:              p.hh,
+        signal_snapshot: railSnapshot(),
       });
     } else {
       stratOpenFanduel(e, strat, players);
@@ -159,6 +171,7 @@ const StratCard = ({ strat, rows, count }) => {
       hrprob:          p.hrprob,
       barrel:          p.barrel,
       hh:              p.hh,
+      signal_snapshot: railSnapshot(),
     });
   };
 

@@ -34,7 +34,7 @@ Supabase issues ES256 JWTs signed with a per-project EC private key.
 | `beta_users` | Redeemed-code users | `001_initial.sql` | `user_id` PK |
 | `picks` | Per-batter qualified picks from cron | `002_picks_table.sql` | UNIQUE `(date, player_id, source_tab)`; written by `insert_picks()` in `api/cache.py` |
 | `tickets` | User-created bet slips (legs collection) | `001_initial.sql` + `004_tickets_user_id.sql` | `id` PK (uuid), `user_id` FK, `stake` numeric, `created_at` |
-| `legs` | Individual legs within a ticket | `005_legs_calibration.sql` | `id` PK, `ticket_id` FK, `player_id`, `model_prob` (decimal — calibration key), `board`, calibration fields (see below) |
+| `legs` | Individual legs within a ticket | `005_legs_calibration.sql` + `006_add_legs_signal_snapshot.sql` | `id` PK, `ticket_id` FK, `player_id`, `model_prob` (decimal — calibration key), `board`, calibration fields, `signal_snapshot` jsonb (see below) |
 
 ### `picks` Table Columns
 
@@ -93,10 +93,13 @@ Supabase issues ES256 JWTs signed with a per-project EC private key.
 | `settled_at` | timestamptz | NULL until settled |
 | `market_odds_american` | numeric | NULL — no market source on leg-add path yet |
 | `market_prob` | numeric | NULL — same; stored for future market sourcing |
+| `signal_snapshot` | jsonb | Migration 006 — pick-time signal state displayed on the adding surface (snapshot_version 1, all fields nullable). NULL for legs added without a snapshot (old callers). See roadmap/strategy-section-spec.md §5. |
 
 **Calibration doctrine:** `player_id` + `model_prob` + `hr_result` are the calibration triad. `market_odds_american` / `market_prob` are NULL at write time. Do NOT compute calibration stats until settlement data accumulates (operator threshold: n≥200 settled picks).
 
-**Leg payload integrity rule:** `model_prob` is ALWAYS a decimal from `row.model_prob` (API field). NEVER `row.hrprob × 100`, NEVER `jigScore`, NEVER `hrpa`. Enforced in `window.__hrSlip.buildLegPayload()`.
+**Leg payload integrity rule:** `model_prob` is ALWAYS a decimal from `row.model_prob` (API field). NEVER `row.hrprob × 100`, NEVER `jigScore`, NEVER `hrpa`. Enforced in `window.__hrSlip.buildLegPayload()`. The `signal_snapshot` never substitutes for or alters `model_prob` — it is a display record only.
+
+**Snapshot capture (Phase S1-a, 2026-07-06):** `POST /api/tickets/leg` accepts an optional `signal_snapshot` JSON object (422 if not an object or >16KB). Absent snapshot → NULL, never an error. Populating surfaces: `full-slate` (both add paths), `aei` (AeeCard), `strategy-rail`. Each surface records only what it displays; alignment rule and H2H threshold are canonical per strategy-section-spec operator decisions.
 
 ### Environment Variables Required
 - `SUPABASE_URL` — Supabase project URL

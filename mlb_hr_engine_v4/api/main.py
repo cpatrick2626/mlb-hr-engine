@@ -25,6 +25,7 @@ For reliability, always prefer the GH Actions cron path.
 
 import os
 import copy
+import json
 import logging
 from datetime import date
 
@@ -204,6 +205,12 @@ async def ticket_add_leg(body: dict, user=Depends(require_auth)):
     missing = required - body.keys()
     if missing:
         raise HTTPException(status_code=400, detail=f"Missing fields: {sorted(missing)}")
+    signal_snapshot = body.get("signal_snapshot")
+    if signal_snapshot is not None:
+        if not isinstance(signal_snapshot, dict):
+            raise HTTPException(status_code=422, detail="signal_snapshot must be a JSON object")
+        if len(json.dumps(signal_snapshot)) > 16384:
+            raise HTTPException(status_code=422, detail="signal_snapshot too large (>16KB)")
     try:
         result = add_leg(
             ticket_id=body.get("ticket_id") or None,
@@ -232,6 +239,7 @@ async def ticket_add_leg(body: dict, user=Depends(require_auth)):
                 if body.get("market_prob") is not None
                 else None
             ),
+            signal_snapshot=signal_snapshot,
         )
     except ValueError as exc:
         msg = str(exc)

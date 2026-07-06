@@ -163,6 +163,7 @@ def add_leg(
     pitcher: Optional[str] = None,
     market_odds_american: Optional[int] = None,
     market_prob: Optional[float] = None,
+    signal_snapshot: Optional[dict] = None,
 ) -> dict:
     """
     Add one leg to a ticket.
@@ -192,7 +193,7 @@ def add_leg(
             raise ValueError("ticket not building")
         slate_date = t_data["date"] or _date.today().isoformat()
 
-    leg_res = client.table("legs").insert({
+    leg_row: dict = {
         "ticket_id":            ticket_id,
         "player_name":          player_name,
         "player_id":            player_id,
@@ -206,7 +207,12 @@ def add_leg(
         "market_odds_american": market_odds_american,
         "market_prob":          market_prob,
         "leg_date":             slate_date,
-    }).execute()
+    }
+    # Key included only when present so snapshot-less inserts keep working
+    # even before migration 006 has run.
+    if signal_snapshot is not None:
+        leg_row["signal_snapshot"] = signal_snapshot
+    leg_res = client.table("legs").insert(leg_row).execute()
     leg_id = leg_res.data[0]["leg_id"]
 
     return {"ticket_id": ticket_id, "leg_id": leg_id}

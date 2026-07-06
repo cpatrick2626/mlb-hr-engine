@@ -334,6 +334,29 @@ function fsmRoleTip(role, row) {
   return role.toUpperCase();
 }
 
+/* Pick-time signal snapshot (Strategy spec §5, snapshot_version 1).
+   Records ONLY what this surface displays — never fabricates or computes.
+   Forwarded via buildLegPayload → legs.signal_snapshot (display record; not scoring). */
+function fsmBuildSnapshot(row, lane, sortState) {
+  const game = (window.SLATE_GAMES || []).find((g) => g.id === row.gameId);
+  return {
+    snapshot_version: 1,
+    surface: "full-slate",
+    lane: lane,
+    rank_signal_used: sortState && sortState.key ? sortState.key : "rank",
+    tm_score: row.true_matchup_score != null ? row.true_matchup_score : null,
+    hrprob: row.hrprob != null ? row.hrprob : null,
+    tier: row.tier || null,
+    dot_state: row.quality || null,
+    environment: game ? {
+      park_hr_factor: game.hrFactor != null ? game.hrFactor : null,
+      weather: game.weather || null,
+      wind: game.wind || null,
+    } : null,
+    generated_at: window.SLATE_GENERATED_AT || null,
+  };
+}
+
 const FSM_SLIP_COLORS = {
   idle:   { border: 'rgba(59,111,255,0.6)',  color: '#3b6fff' },
   loading:{ border: 'rgba(107,120,114,0.4)', color: '#8a9691' },
@@ -378,7 +401,7 @@ function FsmSlipBtn({ status, onClick, label }) {
   );
 }
 
-function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, isJigContext = false, jigLabel = null, jigRank = null, onAddLeg, slipStatus = 'idle' }) {
+function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, isJigContext = false, jigLabel = null, jigRank = null, onAddLeg, slipStatus = 'idle', sortState = null }) {
   const [expanded, setExpanded] = React.useState(false);
   const displayTier = isJigContext && jigLabel ? jigLabel : row.tier;
   const t = FSM_TIERS[displayTier] || FSM_TIERS.COLD;
@@ -399,7 +422,7 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, i
             type="button"
             className="fsm-tier fsm-tier--btn"
             style={{ "--tc": t.color, "--tg": t.glow }}
-            onClick={(e) => { e.stopPropagation(); e.preventDefault(); window.__hrSlip && window.__hrSlip.requestAdd({ player_id: row.id, name: row.name, teamAbbr: row.teamAbbr, team: row.teamAbbr, pitcher: row.pitcher_name, pitcher_name: row.pitcher_name, model_prob: row.model_prob, tier: row.tier, model_tier_rank: row.model_tier_rank, board: isJigContext ? 'jig' : (row._board || 'main'), hrprob: row.hrprob, barrel: row.barrel, hh: row.hh }); }}
+            onClick={(e) => { e.stopPropagation(); e.preventDefault(); const board = isJigContext ? 'jig' : (row._board || 'main'); window.__hrSlip && window.__hrSlip.requestAdd({ player_id: row.id, name: row.name, teamAbbr: row.teamAbbr, team: row.teamAbbr, pitcher: row.pitcher_name, pitcher_name: row.pitcher_name, model_prob: row.model_prob, tier: row.tier, model_tier_rank: row.model_tier_rank, board: board, hrprob: row.hrprob, barrel: row.barrel, hh: row.hh, signal_snapshot: fsmBuildSnapshot(row, board, sortState) }); }}
             title={fsmTierTip(row, isJigContext, jigLabel, jigRank) + " · Click: select destination"}
             aria-label={`Select destination for ${row.name}`}>
 
@@ -559,6 +582,7 @@ function FsmTable({ rows, cols, showGame, onBatter, onPitch, onReorder, onSort, 
 
   const handleAddLeg = (row) => {
     if (!window.__hrSlip) return;
+    const board = isJigContext || builderMode ? 'jig' : (row._board || 'main');
     window.__hrSlip.requestAdd({
       player_id:       row.id,
       name:            row.name,
@@ -569,10 +593,11 @@ function FsmTable({ rows, cols, showGame, onBatter, onPitch, onReorder, onSort, 
       model_prob:      row.model_prob,
       tier:            row.tier,
       model_tier_rank: row.model_tier_rank,
-      board:           isJigContext || builderMode ? 'jig' : (row._board || 'main'),
+      board:           board,
       hrprob:          row.hrprob,
       barrel:          row.barrel,
       hh:              row.hh,
+      signal_snapshot: fsmBuildSnapshot(row, board, sortState),
     });
   };
 
@@ -621,7 +646,7 @@ function FsmTable({ rows, cols, showGame, onBatter, onPitch, onReorder, onSort, 
               tierCounts[jigLabel] = (tierCounts[jigLabel] || 0) + 1;
               jigRank = tierCounts[jigLabel];
             }
-            return <FsmRow key={r.id} row={r} cols={cols} showGame={showGame} onBatter={onBatter} onPitch={onPitch} builderMode={builderMode} isJigContext={isJigContext} jigLabel={jigLabel} jigRank={jigRank} onAddLeg={handleAddLeg} slipStatus={cardStatus[r.id || r.name] || 'idle'} />;
+            return <FsmRow key={r.id} row={r} cols={cols} showGame={showGame} onBatter={onBatter} onPitch={onPitch} builderMode={builderMode} isJigContext={isJigContext} jigLabel={jigLabel} jigRank={jigRank} onAddLeg={handleAddLeg} slipStatus={cardStatus[r.id || r.name] || 'idle'} sortState={sortState} />;
           });
         })()}
       </tbody>

@@ -52,6 +52,7 @@
       generated_at: window.SLATE_GENERATED_AT || null,
     };
     if (row.model_tier_rank != null) body.model_tier_rank = row.model_tier_rank;
+    if (row.signal_snapshot) body.signal_snapshot = row.signal_snapshot;
     if (ticketId)      body.ticket_id = ticketId;
     if (row.player_id) body.player_id = row.player_id;
     if (row.team)      body.team      = row.team;
