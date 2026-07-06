@@ -1167,8 +1167,8 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false }) {
     : (row.slg != null && row.avg != null ? +(row.slg - row.avg).toFixed(3) : null);
 
   const aeiHr9 = row.pitcher_hr9 != null ? row.pitcher_hr9 : null;
-  const aeiPTier = aeiHr9 != null ? (aeiHr9 >= 1.45 ? "HR TARGET" : aeiHr9 >= 1.05 ? "VULNERABLE" : "TOUGH") : "—";
-  const aeiPTierColor = aeiPTier === "HR TARGET" ? "#1aff66" : aeiPTier === "VULNERABLE" ? "#ffb020" : aeiPTier === "TOUGH" ? "#ff3344" : "inherit";
+  const aeiPTier = aeiHr9 != null ? (aeiHr9 >= 1.45 ? "high" : aeiHr9 >= 1.05 ? "elevated" : "low") : "—";
+  const aeiPTierColor = aeiPTier === "high" ? "#1aff66" : aeiPTier === "elevated" ? "#ffb020" : aeiPTier === "low" ? "#ff3344" : "inherit";
 
   return (
     <div className="fsm-card aei-wrap">
@@ -1193,8 +1193,7 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false }) {
               <div className="aei-pcard__who">
                 <div className="aei-pcard__nm">{pitcherName}</div>
                 <div className="aei-pcard__meta">{pitcherHand ? pitcherHand + "HP" : "—"}</div>
-                <span className="aei-tier">SEASON HR/9 GRADE <b style={aeiPTier !== "—" ? { color: aeiPTierColor } : {}}>{aeiPTier}</b></span>
-                <span className="aei-pcard__scope" style={{display:"block",marginTop:"3px",fontFamily:"var(--font-display)",fontWeight:700,fontSize:"8px",letterSpacing:"0.08em",color:"var(--fg-2)",lineHeight:1.3}}>SEASON GRADE VS AVG BATTER · ARSENAL EDGE READS THIS MATCHUP</span>
+                <span className="aei-pcard__scope" style={{display:"block",marginTop:"4px",fontFamily:"var(--font-display)",fontWeight:700,fontSize:"8px",letterSpacing:"0.08em",color:"var(--fg-3)",lineHeight:1.3,opacity:0.65}}>SEASON HR/9: {aeiHr9 != null ? aeiHr9.toFixed(2) : "—"} <span style={{color: aeiPTierColor}}>({aeiPTier})</span> · ARSENAL EDGE READS THIS MATCHUP</span>
               </div>
             </div>
 
