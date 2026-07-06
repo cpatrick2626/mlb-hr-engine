@@ -420,7 +420,7 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, i
       </td>
       <td className="fsm-player">
         <button type="button" className="fsm-player__in" onClick={() => onBatter(row)} title={`Open ${row.name} batter card`}>
-          <span className="fsm-player__dot" style={{ background: TEAM_COLOR[row.teamAbbr] || t.color, color: TEAM_COLOR[row.teamAbbr] || t.color }} />
+          <span className="fsm-player__dot" style={{ background: (FSM_MATCHUP[row.quality] || { color: "#6b7872" }).color }} />
           <span className="fsm-player__col">
             <span className="fsm-player__name">{row.name}</span>
             <span className="fsm-player__meta">{row.teamAbbr}<i className="fsm-player__bar">|</i>{row.bats}</span>
