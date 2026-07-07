@@ -11,6 +11,9 @@ legs           — one row per player per ticket (frozen engine snapshot)
 import os
 from datetime import date as _date, datetime as _dt
 from typing import Optional
+from zoneinfo import ZoneInfo
+
+_ET = ZoneInfo("America/New_York")
 
 _supa = None
 
@@ -174,7 +177,7 @@ def add_leg(
     client = _client()
 
     if not ticket_id:
-        slate_date = _date.today().isoformat()
+        slate_date = _dt.now(_ET).date().isoformat()
         ticket_row: dict = {
             "date":   slate_date,
             "board":  board,
@@ -191,7 +194,7 @@ def add_leg(
         t_data = t_res.data[0]
         if t_data.get("status") != "building":
             raise ValueError("ticket not building")
-        slate_date = t_data["date"] or _date.today().isoformat()
+        slate_date = t_data["date"] or _dt.now(_ET).date().isoformat()
 
     leg_row: dict = {
         "ticket_id":            ticket_id,
