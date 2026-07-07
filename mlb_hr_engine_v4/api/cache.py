@@ -221,6 +221,68 @@ def add_leg(
     return {"ticket_id": ticket_id, "leg_id": leg_id}
 
 
+def ledger_legs(
+    user_id: str,
+    lane: str,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+) -> list:
+    """
+    SELECT-only ledger query (D5). Settled + void legs for one user's tickets
+    on one lane, newest first. `board` lives on tickets, not legs — the inner
+    join both scopes the rows and supplies the flattened `board` field.
+    Case-insensitive board match ('main'/'MAIN' both stored historically).
+    Read-only: no writes anywhere in this path.
+    """
+    q = (
+        _client()
+        .table("legs")
+        .select(
+            "leg_id, leg_date, player_name, model_prob, tier, hr_result, "
+            "settlement_status, settled_at, signal_snapshot, "
+            "tickets!inner(board, user_id)"
+        )
+        .eq("tickets.user_id", user_id)
+        .ilike("tickets.board", lane)
+        .eq("removed", False)
+        .in_("settlement_status", ["settled", "void"])
+        .order("leg_date", desc=True)
+    )
+    if date_from:
+        q = q.gte("leg_date", date_from)
+    if date_to:
+        q = q.lte("leg_date", date_to)
+    rows = q.execute().data or []
+    for r in rows:
+        ticket = r.pop("tickets", None) or {}
+        r["board"] = ticket.get("board")
+    return rows
+
+
+def ledger_pending_count(
+    user_id: str,
+    lane: str,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+) -> int:
+    """Count of still-pending legs in the same ledger scope. Read-only."""
+    q = (
+        _client()
+        .table("legs")
+        .select("leg_id, tickets!inner(user_id)", count="exact")
+        .eq("tickets.user_id", user_id)
+        .ilike("tickets.board", lane)
+        .eq("removed", False)
+        .eq("settlement_status", "pending")
+    )
+    if date_from:
+        q = q.gte("leg_date", date_from)
+    if date_to:
+        q = q.lte("leg_date", date_to)
+    res = q.execute()
+    return res.count if res.count is not None else 0
+
+
 def complete_ticket(ticket_id: str, user_id: Optional[str] = None, stake: Optional[float] = None) -> dict:
     """
     Finalize ticket: fd_deployed=True, status='pending', completed_at=now(), num_legs=count.

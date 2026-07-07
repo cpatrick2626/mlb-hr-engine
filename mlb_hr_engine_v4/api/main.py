@@ -15,6 +15,7 @@ POST /api/invite/redeem           — redeem invite code (auth required)
 POST /api/tickets/leg             — add leg to ticket; null ticket_id opens new ticket (JWT required — Phase 1)
 POST /api/tickets/leg/remove      — soft-delete a leg (sets removed=true); ownership-checked (JWT required — Phase A)
 POST /api/tickets/complete        — finalize ticket, set fd_deployed=true (JWT required — Phase 1)
+GET  /api/ledger?lane=main|jig    — settled/void legs + hit-rate buckets, per user per lane (JWT required — Phase S2/D5)
 
 The pipeline is normally triggered by GitHub Actions cron (see api/cron.py).
 The /api/pipeline/run endpoint is a manual fallback; it runs in a background
@@ -32,11 +33,11 @@ from datetime import date
 from dotenv import load_dotenv
 load_dotenv()
 
-from fastapi import FastAPI, Depends, HTTPException, Request, BackgroundTasks
+from fastapi import FastAPI, Depends, HTTPException, Query, Request, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.auth import require_auth, require_beta
-from api.cache import get_picks, get_latest_picks, store_picks, list_runs, redeem_invite, add_leg, complete_ticket, remove_leg
+from api.cache import get_picks, get_latest_picks, store_picks, list_runs, redeem_invite, add_leg, complete_ticket, remove_leg, ledger_legs, ledger_pending_count
 from clients.arsenal import get_pitcher_arsenal, arsenal_matchup_factor
 from clients.pitch_mix import get_batter_vs_pitches, get_pitcher_pitch_stats
 from config import FS_TIER_THRESHOLDS
@@ -258,6 +259,96 @@ async def ticket_complete(body: dict, user=Depends(require_auth)):
     stake = float(raw_stake) if raw_stake is not None else None
     result = complete_ticket(ticket_id, user_id=user.get("sub"), stake=stake)
     return {"status": "ok", **result}
+
+
+# ── Ledger (Phase S2 / D5 — read-only) ────────────────────────────────────────
+
+_LEDGER_SNAPSHOT_DIMS = ("aei_verdict", "alignment", "rank_signal_used")
+
+
+def _ledger_buckets(settled_rows: list) -> dict:
+    """
+    Hit-rate rollups over settled-only legs (voids already excluded by caller).
+    v1 bucket set: aei_verdict, alignment, rank_signal_used (from signal_snapshot)
+    + tier (from the legs.tier column). Legs without a snapshot land in an
+    explicit 'no_snapshot' bucket under each snapshot dimension — never dropped.
+    """
+    def bump(dim: dict, key: str, hit: int) -> None:
+        b = dim.setdefault(key, {"n": 0, "hits": 0})
+        b["n"] += 1
+        b["hits"] += hit
+
+    dims: dict = {d: {} for d in _LEDGER_SNAPSHOT_DIMS}
+    dims["tier"] = {}
+
+    for r in settled_rows:
+        hit = 1 if r.get("hr_result") == 1 else 0
+        snap = r.get("signal_snapshot")
+        if snap is None:
+            for d in _LEDGER_SNAPSHOT_DIMS:
+                bump(dims[d], "no_snapshot", hit)
+        else:
+            aei = snap.get("aei") or {}
+            verdict = aei.get("verdict")
+            bump(dims["aei_verdict"], str(verdict) if verdict is not None else "null", hit)
+            alignment = aei.get("alignment")
+            bump(dims["alignment"], "null" if alignment is None else str(bool(alignment)).lower(), hit)
+            rank_signal = snap.get("rank_signal_used")
+            bump(dims["rank_signal_used"], str(rank_signal) if rank_signal is not None else "null", hit)
+        tier = r.get("tier")
+        bump(dims["tier"], str(tier) if tier is not None else "null", hit)
+
+    for dim in dims.values():
+        for b in dim.values():
+            b["hit_rate"] = round(b["hits"] / b["n"], 4) if b["n"] else None
+    return dims
+
+
+@app.get("/api/ledger")
+async def ledger(
+    lane: str = Query(None),
+    from_date: str = Query(None, alias="from"),
+    to_date: str = Query(None, alias="to"),
+    user=Depends(require_auth),
+):
+    """
+    Settled/void legs + per-lane hit-rate buckets for the authenticated user.
+    lane is REQUIRED (main|jig) — no merged view; per-lane grading is doctrine.
+    user_id comes from the JWT sub, never from the query string.
+    Voids appear in `legs` and meta.total_void but are excluded from bucket rates.
+    Reports only, never tunes: figures cover LOGGED picks; the fd_deployed
+    distinction is future work (D6).
+    """
+    if lane not in ("main", "jig"):
+        raise HTTPException(
+            status_code=422,
+            detail="lane is required and must be 'main' or 'jig' (no merged view — per-lane doctrine)",
+        )
+    for label, val in (("from", from_date), ("to", to_date)):
+        if val is not None:
+            try:
+                date.fromisoformat(val)
+            except ValueError:
+                raise HTTPException(status_code=422, detail=f"'{label}' must be YYYY-MM-DD")
+
+    user_id = user.get("sub")
+    legs = ledger_legs(user_id, lane, date_from=from_date, date_to=to_date)
+
+    settled = [r for r in legs if r.get("settlement_status") == "settled" and r.get("hr_result") is not None]
+    total_void = sum(1 for r in legs if r.get("settlement_status") == "void")
+
+    return {
+        "legs": legs,
+        "buckets": _ledger_buckets(settled),
+        "meta": {
+            "lane": lane,
+            "total_settled": len(settled),
+            "total_void": total_void,
+            "total_pending": ledger_pending_count(user_id, lane, date_from=from_date, date_to=to_date),
+            "small_sample": len(settled) < 200,
+            "note": "logged picks; fd_deployed distinction is future work (D6).",
+        },
+    }
 
 
 @app.post("/api/tickets/leg/remove")
