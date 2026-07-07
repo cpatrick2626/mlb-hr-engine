@@ -1,4 +1,11 @@
-Status: SPEC — Phase S2 settlement job design (Fable 5). DOCS-ONLY; operator-gated before any build. 2026-07-06.
+Status: SHIPPED — Phase S2 settlement resolver built + deployed; §6 dry-run gate passed; backlog settled; ledger live. Spec retained as design record. 2026-07-07.
+
+> **SHIPPED 2026-07-07.** `api/settle_legs.py` resolver (dry-run + gated `--commit`) — commit `705fd6a`. `GET /api/ledger` (D5) — commit `f530567`. Durable capture-date fix (`leg_date`/`tickets.date` derived from `engine_generated_at` in ET) — commit `761105c`. All deployed to Fly; API healthy.
+> - **§6 gate passed:** dry-run hand-checked against real box scores before the write path was built; first `--commit` was single-date (2026-07-06), verified row-by-row in Supabase, idempotency proven (re-run wrote 0 rows).
+> - **Backlog settled** across 7 dates: 89 settled + 1 void ≈ 90 outcomes (ledger meta: MAIN 72 settled / 1 void, JIG 17 settled / 0 void).
+> - **Decided rules held up in practice:** void keeps `hr_result = NULL` (§3), date-aggregate doubleheader handling, `removed=true` never settled, unresolvable IDs report-only — no rule needed revision after live runs.
+> - **Still deferred:** the cron/ops automation (`POST /api/ops/settle-legs` + GH Actions wiring, §4 trigger 1) is NOT wired — settlement runs are manual `--commit` only so far.
+> - See also: [[settlement-truth]] (doctrine earned during this build).
 
 # Settlement Job — Design Spec (Phase S2 / D3–D5)
 

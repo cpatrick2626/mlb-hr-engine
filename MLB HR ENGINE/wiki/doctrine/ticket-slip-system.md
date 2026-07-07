@@ -1,8 +1,10 @@
 # Ticket Slip System — Doctrine
 
-> **STATUS: LIVE (build-slip workflow) — with two NOT-BUILT gaps.**
-> Adding legs, viewing/managing the slip, persistence, and marking a slip deployed all work end-to-end.
-> **NOT BUILT: (1) leg settlement** — `legs.hr_result` / `settlement_status` are never written; the outcome loop does not close. **(2) overlay combined probability / grade / confidence / payout** are **SAMPLE / "Engine Pending" placeholder values, NOT real engine output.** Do not describe these as real.
+> **STATUS: LIVE (build-slip workflow + leg settlement) — one NOT-BUILT gap.**
+> Adding legs, viewing/managing the slip, persistence, marking a slip deployed, AND leg settlement all work end-to-end.
+> **NOT BUILT: overlay combined probability / grade / confidence / payout** are **SAMPLE / "Engine Pending" placeholder values, NOT real engine output.** Do not describe these as real.
+
+> **CORRECTION (2026-07-07 — settlement is now BUILT; do not regress this claim):** Earlier versions of this doc (and any agent memory derived from them) said leg settlement was "schema-only / never written." That is FALSE as of 2026-07-07: `api/settle_legs.py` (commit `705fd6a`) resolves outcomes from MLB Stats API box scores by MLBAM person ID and writes `legs.hr_result` / `settlement_status` / `settled_at` (gated `--commit`, write-once on `pending` rows). ~90 legs settled across 7 dates. `GET /api/ledger` (commit `f530567`) serves per-lane settled hit-rate buckets. This doc was already corrected once (2026-07-02) for stale not-built claims — verify against `wiki/log.md` before reasserting a gap.
 
 > **CORRECTION (2026-07-02 — destination-picker audit):** Earlier versions of this doc stated "Four surfaces" for add-to-slip. A code audit of root `frontend/` confirmed **eight** surfaces call `window.__hrSlip.addLeg()`. The add-to-slip table and Key Points below have been updated to reflect this. Auth section added: `auth.js` (Supabase email/password + invite-code beta gating) IS built and live as of 2026-06-26 — any prior note calling auth a "hard prerequisite not yet met" is stale. Two known integrity bugs added per audit findings.
 
@@ -12,14 +14,14 @@
 
 ## Summary
 
-The Ticket Slip System lets a user build a slip of HR picks from the board, view/manage it, and mark it deployed — this is live and used. The leg DATA is real: all eight add-to-slip surfaces POST through `window.__hrSlip.addLeg()` to `/api/tickets/leg`, writing real Supabase `tickets`/`legs` rows with a frozen engine snapshot. Two halves are not built: outcome settlement (closing the loop) and the slip overlay's combined-probability/grade engine (currently SAMPLE placeholder values).
+The Ticket Slip System lets a user build a slip of HR picks from the board, view/manage it, and mark it deployed — this is live and used. The leg DATA is real: all eight add-to-slip surfaces POST through `window.__hrSlip.addLeg()` to `/api/tickets/leg`, writing real Supabase `tickets`/`legs` rows with a frozen engine snapshot. Outcome settlement is BUILT and running (2026-07-07): the settlement resolver closes the loop by writing real box-score outcomes to each leg, and the ledger endpoint reports per-lane hit rates over settled legs. One half remains unbuilt: the slip overlay's combined-probability/grade engine (currently SAMPLE placeholder values).
 
 ---
 
 ## Key Points
 
 - **Build-slip workflow is DOCTRINE-LIVE.** Eight surfaces wire `window.__hrSlip.addLeg()`, the overlay shows real legs with real data, Supabase persistence is wired, and deploy/complete is functional.
-- **Settlement is schema-only.** `legs.hr_result`, `settlement_status`, `settled_at` columns exist in migration 005 but no script, cron, or endpoint writes them. The outcome loop does not close.
+- **Settlement is BUILT (2026-07-07).** `api/settle_legs.py` writes `legs.hr_result`, `settlement_status`, `settled_at` from real MLB Stats API box scores (MLBAM-ID resolution, dry-run default, gated `--commit`, write-once on `pending`). ~90 legs settled across 7 dates; `GET /api/ledger` serves per-lane settled hit-rate buckets. Cron automation not yet wired — runs are manual `--commit`.
 - **Overlay analytics are MOCK.** Combined probability, grade, confidence, and payout shown in the overlay are `SAMPLE` / `"Engine Pending"` placeholders — not engine output.
 - **FD "deploy" is intent, not capture.** The FanDuel button is a plain `<a href>` external link. `fd_deployed=True` records that the user clicked Submit — it does not confirm a bet was placed.
 
@@ -68,13 +70,13 @@ All eight funnel through the one shared store (`slip-state.js` `window.__hrSlip.
 
 Auth IS built and live (as of 2026-06-26). `frontend/assets/js/auth.js` provides full Supabase email/password sign-in + invite-code beta gating. `authFetch` attaches the JWT; ticket endpoints use `Depends(require_auth)`; `tickets.user_id` is stamped on all write paths. Any prior note calling auth a "hard prerequisite not yet built" is stale — per-user features are now unblocked.
 
+### Leg settlement (BUILT 2026-07-07)
+
+`api/settle_legs.py` (commit `705fd6a`) settles pending legs against MLB Stats API box scores: resolution by MLBAM person ID with a name cross-check safeguard, ≥1 PA settles (`hr_result` 0/1), DNP/postponed = void (`hr_result` stays NULL). Writes are gated: dry-run default, explicit `--commit`, single-date first run, idempotent write-once (`WHERE settlement_status='pending'`), three columns only. ~90 outcomes settled across 7 dates. `GET /api/ledger` (commit `f530567`) reports per-lane settled hit-rate buckets. Note: `POST /api/ops/settle` remains the SEPARATE path for the engine's own `pick_tracker.csv` (`tracking/pnl`) — it does not touch `legs`. Doctrine: [[settlement-truth]]; design record: `wiki/roadmap/settlement-job-spec.md`.
+
 ---
 
 ## NOT BUILT — Do Not Describe as Real
-
-### Leg settlement — schema only
-
-`legs.hr_result`, `settlement_status`, and `settled_at` columns exist (migration 005) but **no script, cron, or endpoint writes them.** `POST /api/ops/settle` settles the engine's own `pick_tracker.csv` (`tracking/pnl`) — it does **not** write to the `legs` table. The slip outcome loop does not close.
 
 ### Overlay analytics are MOCK
 
@@ -98,7 +100,7 @@ Both bugs found in the 2026-07-02 audit were closed by destination-picker Phase 
 
 ## To Close the Gaps (Future Work)
 
-1. **Leg settlement job** — reuse `backtest/outcomes.py` `get_game_results()` to write `legs.hr_result` / `settlement_status` so deployed picks settle against real HR outcomes.
+1. ~~Leg settlement job~~ — ✅ BUILT 2026-07-07 (`api/settle_legs.py`, boxscore-based — did NOT reuse `backtest/outcomes.py`). Remaining: cron/ops automation of the settlement run (currently manual `--commit`).
 2. **Real combined-probability/grade engine** — replace `SAMPLE` overlay values with actual parlay probability and slip-grade computation.
 3. **(Optional) Verified FD capture** — replace the intent link with confirmed placement capture.
 
@@ -106,8 +108,10 @@ Both bugs found in the 2026-07-02 audit were closed by destination-picker Phase 
 
 ## Cross-References
 
-- Supabase schema: `tickets`, `legs` tables (migrations 003–005)
+- [[settlement-truth]] — settlement/verification doctrine (external anchors, dry-run gate, write-once)
+- `wiki/roadmap/settlement-job-spec.md` — settlement resolver design record (SHIPPED 2026-07-07)
+- Supabase schema: `tickets`, `legs` tables (migrations 003–006)
 - Historical Replay roadmap (shares the outcomes/settlement need)
-- Calibration / feedback loop (deferred until N threshold; requires settled legs to proceed)
+- Calibration / feedback loop (deferred until N threshold; settled legs now accumulating — n≥200 gate stands)
 - `ROOM_06_DEPLOYMENT_FD_SLIP_TRACKING_DOCTRINE.md` — governing deployment and FD slip tracking
 - `tracking/pnl` / `pick_tracker.csv` — the existing settlement target for the engine's own picks (separate from leg settlement)

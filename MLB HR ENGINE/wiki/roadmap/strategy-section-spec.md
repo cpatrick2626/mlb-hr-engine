@@ -1,6 +1,8 @@
 Status: SPEC — Strategy section design mission (Fable 5). Scope A orchestration-only. Operator-gated before build. 2026-07-06.
 
-> **STATUS UPDATE 2026-07-06 — Phase S1-a (snapshot capture) SHIPPED + VALIDATED.** The snapshot-wiring portion of Phase S1 (D1 migration 006, D2 API accept/store, `buildLegPayload` forward, capture on Full Slate / AEI / rail) is live — commit `f9f3aa4`, Fly API v73, Vercel deployed — and validated against real Supabase rows. The Strategy room, StrategyRail remediation, and Phases S2/S3 remain pending. §9 decisions are RESOLVED (recorded inline). See `wiki/log.md` 2026-07-06 entry.
+> **STATUS UPDATE 2026-07-06 — Phase S1-a (snapshot capture) SHIPPED + VALIDATED.** The snapshot-wiring portion of Phase S1 (D1 migration 006, D2 API accept/store, `buildLegPayload` forward, capture on Full Slate / AEI / rail) is live — commit `f9f3aa4`, Fly API v73, Vercel deployed — and validated against real Supabase rows. §9 decisions are RESOLVED (recorded inline). See `wiki/log.md` 2026-07-06 entry.
+>
+> **STATUS UPDATE 2026-07-07 — Phase S2 SHIPPED.** Settlement resolver (D3, commit `705fd6a`) + ledger endpoint (D5, commit `f530567`) built, deployed, and run against real data — ~90 outcomes settled across 7 dates. See [[settlement-job-spec]] for the shipped record. The Strategy room, StrategyRail remediation, and Phase S3 (validated weighting / Strategy Score) remain pending.
 
 # Strategy Section — Design Spec
 
@@ -166,11 +168,11 @@ A `LEDGER` view inside the Strategy room: `[ FUNNEL ]  [ LEDGER ]`.
 
 | # | Dependency | Layer | Status |
 |---|---|---|---|
-| D1 | `legs.signal_snapshot` column (jsonb) — migration 006 | Supabase | not built (small; see §6 phasing) |
-| D2 | API accepts + stores snapshot on `POST /api/tickets/leg` | FastAPI | not built (small) |
-| D3 | Settlement job (outcome ingestion → hr_result) | cron/ops | **not built — the Phase D blocker** |
-| D4 | Void/DNP settlement rules | doctrine | operator decision needed |
-| D5 | Ledger read endpoint (settled legs + snapshots, per user) | FastAPI | not built |
+| D1 | `legs.signal_snapshot` column (jsonb) — migration 006 | Supabase | ✅ SHIPPED 2026-07-06 (`f9f3aa4`) |
+| D2 | API accepts + stores snapshot on `POST /api/tickets/leg` | FastAPI | ✅ SHIPPED 2026-07-06 (`f9f3aa4`) |
+| D3 | Settlement job (outcome ingestion → hr_result) | cron/ops | ✅ SHIPPED 2026-07-07 (`705fd6a`) — `api/settle_legs.py`; ~90 outcomes settled. Cron automation still deferred (manual `--commit` only) |
+| D4 | Void/DNP settlement rules | doctrine | ✅ RESOLVED (§9 Q4) — ≥1 PA settles; else void, `hr_result` stays NULL |
+| D5 | Ledger read endpoint (settled legs + snapshots, per user) | FastAPI | ✅ SHIPPED 2026-07-07 (`f530567`) — `GET /api/ledger`, per-lane, v1 buckets |
 | D6 | `fd_deployed` flag (logged vs actually-bet distinction) | schema | separate future work (per schema doc) |
 | D7 | Market odds on legs (`market_odds_american`/`market_prob` currently NULL) — needed for EV-grading, not for hit-rate grading | API | future |
 
@@ -229,10 +231,10 @@ Notes:
 - ✅ **Snapshot capture wiring — SHIPPED + VALIDATED 2026-07-06** (Phase S1-a): `legs.signal_snapshot` migration 006 (D1), API accept/store with 16KB cap, absent=NULL (D2), `buildLegPayload` extension, capture on Full Slate / AEI AeeCard / rail (`fsmBuildSnapshot`). Commit `f9f3aa4`, Fly v73. Validated on real Supabase rows (Caglianone, Schwarber — populated snapshots, `model_prob` decimal intact). Scope note: hr-threat-zone, escalation-feed, command-tab, and the leaderboard FD link do NOT attach snapshots (NULL by design, per packet scope); the FSM AEI modal has no slip button so its richer signals are not yet captured; the rail snapshot records the displayed HR ENV SCORE as-shown pending rail remediation.
 - Ledger tab shipped in its honest empty state (reads nothing until settled data exists). *(Still pending — ships with the Strategy room.)*
 
-**Phase S2 — blocked on backend (Phase D):**
-- Settlement job + outcome ingestion (D3) with void rules (D4).
-- Ledger read endpoint (D5) and live ledger buckets.
-- `fd_deployed` (D6) and market-odds sourcing (D7) — later refinements.
+**Phase S2 — ✅ SHIPPED 2026-07-07:**
+- ✅ Settlement job + outcome ingestion (D3) with void rules (D4) — `api/settle_legs.py`, commit `705fd6a`; backlog settled (~90 outcomes / 7 dates). Cron automation deferred (manual `--commit` only).
+- ✅ Ledger read endpoint (D5) and live ledger buckets — `GET /api/ledger`, commit `f530567`, validated on real settled data.
+- `fd_deployed` (D6) and market-odds sourcing (D7) — still future refinements.
 
 **Phase S3 — earned, operator-gated, out of scope:** validated weighting / Strategy Score doctrine (§8).
 
