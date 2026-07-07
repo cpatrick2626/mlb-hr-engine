@@ -1,4 +1,15 @@
 """
+!! DO NOT RE-RUN — RETIRED ONE-OFF !!
+
+This script belongs to the pre-generated_at-derivation era (through commit
+7088c5d). Since add_leg began deriving leg_date/tickets.date from
+engine_generated_at (ET), this script's core heuristic — ET-of-created_at
+!= leg_date implies a mislabeled leg — is NO LONGER VALID: a legitimate
+after-midnight capture of a stale board now correctly has leg_date = the
+board's slate date while created_at falls on the next day. Re-running
+--commit would FALSELY "fix" correct legs. Kept only as ops record of the
+original backfill; do not run against post-fix data.
+
 One-off leg_date correction — dry-run by default.
 
 Fixes the 23 legs mislabeled by the UTC off-by-one capture bug (api/cache.py

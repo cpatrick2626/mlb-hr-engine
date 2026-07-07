@@ -33,8 +33,8 @@ Supabase issues ES256 JWTs signed with a per-project EC private key.
 | `beta_invites` | Manual invite codes | `001_initial.sql` | `code` PK |
 | `beta_users` | Redeemed-code users | `001_initial.sql` | `user_id` PK |
 | `picks` | Per-batter qualified picks from cron | `002_picks_table.sql` | UNIQUE `(date, player_id, source_tab)`; written by `insert_picks()` in `api/cache.py` |
-| `tickets` | User-created bet slips (legs collection) | `001_initial.sql` + `004_tickets_user_id.sql` | `id` PK (uuid), `user_id` FK, `stake` numeric, `created_at` |
-| `legs` | Individual legs within a ticket | `005_legs_calibration.sql` + `006_add_legs_signal_snapshot.sql` | `id` PK, `ticket_id` FK, `player_id`, `model_prob` (decimal — calibration key), `board`, calibration fields, `signal_snapshot` jsonb (see below) |
+| `tickets` | User-created bet slips (legs collection) | `003_tickets_legs.sql` + `004_add_tickets_user_id.sql` | `ticket_id` PK (uuid), `user_id` FK, `date`, `board`, `status`, `stake` numeric, `created_at` |
+| `legs` | Individual legs within a ticket | `003_tickets_legs.sql` + `005_add_leg_calibration_fields.sql` + `006_add_legs_signal_snapshot.sql` | `leg_id` PK (uuid), `ticket_id` FK, `player_id`, `model_prob` (decimal — calibration key), calibration fields, `signal_snapshot` jsonb (see below) |
 
 ### `picks` Table Columns
 
@@ -71,29 +71,45 @@ Supabase issues ES256 JWTs signed with a per-project EC private key.
 
 | Column | Type | Notes |
 |--------|------|-------|
-| `id` | uuid PK | |
+| `ticket_id` | uuid PK | |
 | `user_id` | uuid NOT NULL | FK to auth.users — per-user ownership (added migration 004) |
+| `date` | date | Slate date; derived from the slate's `engine_generated_at` converted to ET, ET-clock fallback when absent (see `leg_date` note below) |
+| `board` | text | `'MAIN'` or `'JIG'` — frontend board state at tap time |
+| `status` | text | DEFAULT `'pending'`; `add_leg` opens tickets as `'building'` |
 | `stake` | numeric | Operator-entered stake amount; written by `complete_ticket` |
 | `created_at` | timestamptz | |
+
+(Migration 003 also declares `ticket_type`, `num_legs`, `odds_american`, `sportsbook`, `fd_deployed`, `notes`, `settled_at`, `completed_at`.)
 
 ### `legs` Table Columns (calibration-ready — migration 005)
 
 | Column | Type | Notes |
 |--------|------|-------|
-| `id` | bigserial PK | |
-| `ticket_id` | uuid NOT NULL FK | Parent ticket |
-| `player_id` | text NOT NULL | `row.id` from API slate — calibration key |
+| `leg_id` | uuid PK | |
+| `ticket_id` | uuid FK | Parent ticket (cascade delete) |
+| `removed` | boolean | DEFAULT false — leg pulled from slip before completion |
+| `player_id` | text | `row.id` from API slate — calibration key |
+| `player_name` | text | |
 | `team` | text | |
+| `opponent` | text | |
 | `pitcher` | text | Opponent starter at leg-add time |
-| `leg_date` | date | Mirrors ticket's slate date (NOT server UTC) |
-| `model_prob` | numeric NOT NULL | Decimal (e.g. 0.187) — NOT ×100; calibration key |
-| `board` | text | `'main'` or `'jig'` — source board identity |
+| `leg_date` | date | Derived from `engine_generated_at` converted to ET (the slate the operator was viewing), falling back to the current ET clock only when `engine_generated_at` is absent/unparseable. Kept consistent with `tickets.date`. NOT server UTC. |
+| `model_prob` | numeric | Decimal (e.g. 0.187) — NOT ×100; calibration key |
+| `tier` | text | APEX/ELITE/EDGE/SIGNAL/WATCH/COLD at tap time (frozen) |
+| `model_tier_rank` | int | Client-derived rank within tier at tap time (frozen) |
+| `engine_generated_at` | timestamptz | Top-level `/api/slate` `generated_at` captured at tap time; source of `leg_date` derivation |
 | `hr_result` | smallint | NULL until settled; 0 = miss, 1 = hit |
 | `settlement_status` | text | DEFAULT `'pending'`; values: `'pending'`, `'settled'`, `'void'` |
 | `settled_at` | timestamptz | NULL until settled |
 | `market_odds_american` | numeric | NULL — no market source on leg-add path yet |
 | `market_prob` | numeric | NULL — same; stored for future market sourcing |
 | `signal_snapshot` | jsonb | Migration 006 — pick-time signal state displayed on the adding surface (snapshot_version 1, all fields nullable). NULL for legs added without a snapshot (old callers). See roadmap/strategy-section-spec.md §5. |
+
+(Migration 003 also declares `deployed_at` timestamptz.)
+
+Note: `board` lives on `tickets`, not `legs` — leg queries needing board identity join through the ticket.
+
+**Settlement status convention (actual, as written by the settlement resolver):** `hr_result` ∈ {NULL, 0, 1} and `settlement_status` ∈ {`pending`, `settled`, `void`}; a void leg keeps `hr_result` NULL. Migration 005's inline COMMENTs (`-1=void`, `won/lost` lifecycle) are stale artifacts of the original design — no code writes those values; the schema itself needs no change.
 
 **Calibration doctrine:** `player_id` + `model_prob` + `hr_result` are the calibration triad. `market_odds_american` / `market_prob` are NULL at write time. Do NOT compute calibration stats until settlement data accumulates (operator threshold: n≥200 settled picks).
 

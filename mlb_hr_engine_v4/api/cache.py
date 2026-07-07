@@ -9,7 +9,7 @@ legs           — one row per player per ticket (frozen engine snapshot)
 """
 
 import os
-from datetime import date as _date, datetime as _dt
+from datetime import date as _date, datetime as _dt, timezone as _timezone
 from typing import Optional
 from zoneinfo import ZoneInfo
 
@@ -151,6 +151,25 @@ def redeem_invite(code: str, user_id: str) -> bool:
 
 # ── Ticket / Data Capture ─────────────────────────────────────────────────────
 
+def _slate_date_from_generated_at(engine_generated_at: Optional[str]) -> str:
+    """
+    ET date of the slate the operator was viewing, derived from the slate
+    payload's generated_at. Handles '...Z' and '+00:00' ISO forms; a naive
+    timestamp is treated as UTC. Falls back to the current ET clock when
+    absent/unparseable — an after-midnight capture of a stale board keeps
+    the board's date, not the clock's.
+    """
+    if engine_generated_at:
+        try:
+            ts = _dt.fromisoformat(engine_generated_at.replace("Z", "+00:00"))
+            if ts.tzinfo is None:
+                ts = ts.replace(tzinfo=_timezone.utc)
+            return ts.astimezone(_ET).date().isoformat()
+        except ValueError:
+            pass
+    return _dt.now(_ET).date().isoformat()
+
+
 def add_leg(
     ticket_id: Optional[str],
     board: str,
@@ -177,7 +196,7 @@ def add_leg(
     client = _client()
 
     if not ticket_id:
-        slate_date = _dt.now(_ET).date().isoformat()
+        slate_date = _slate_date_from_generated_at(engine_generated_at)
         ticket_row: dict = {
             "date":   slate_date,
             "board":  board,

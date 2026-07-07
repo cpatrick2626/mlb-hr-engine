@@ -24,7 +24,7 @@ import csv
 import argparse
 import unicodedata
 import requests
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 
 # sys.path so imports resolve when run as `python -m api.settle_legs`
@@ -435,7 +435,9 @@ def commit_results(results: list[dict]) -> tuple[list[dict], int]:
     from api.cache import _client
 
     client = _client()
-    now_iso = datetime.utcnow().isoformat() + "Z"
+    # Aware UTC, then strip tzinfo so the stored string keeps the exact
+    # pre-existing "<naive-iso>Z" shape (no "+00:00" suffix drift).
+    now_iso = datetime.now(timezone.utc).replace(tzinfo=None).isoformat() + "Z"
 
     report: list[dict] = []
     total_written = 0
