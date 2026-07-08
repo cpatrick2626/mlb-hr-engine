@@ -1,4 +1,4 @@
-/* HR Engine — FULL SLATE INTELLIGENCE MATRIX
+﻿/* HR Engine — FULL SLATE INTELLIGENCE MATRIX
    Dense battlefield-style threat scan: 6-tier system, conic matchup pies,
    5-bucket Statcast heatmap, GAME / PLAYER views. Replaces the legacy
    leaderboard inside the MAIN/JIG "Full Slate" lens. */
@@ -316,8 +316,17 @@ function FsmCell({ col, row, extra }) {
 
 const FSM_FANDUEL_SEARCH_URL = "https://sportsbook.fanduel.com/search";
 
+/* Normalize a display name for FD search URL only — strips generational suffixes
+   (Jr./Sr./II/III/IV) and accent-folds to ASCII. Display name is never mutated. */
+function fdSearchName(displayName) {
+  return (displayName || "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/,?\s*(Jr\.?|Sr\.?|II|III|IV)\s*$/i, "")
+    .trim();
+}
+
 function fsmFanDuelUrl(term) {
-  const q = (term || "").trim();
+  const q = fdSearchName(term);
   return q
     ? `${FSM_FANDUEL_SEARCH_URL}?q=${encodeURIComponent(q)}`
     : "https://sportsbook.fanduel.com/baseball/mlb?tab=player-home-runs";

@@ -1,4 +1,4 @@
-/* HR Engine — "All Batters" leaderboard / matchup table.
+﻿/* HR Engine — "All Batters" leaderboard / matchup table.
    Reveals: 4-tier system (SIGNAL/ELITE/EDGE/WATCH), matchup-quality donut gauge,
    and conditional-format heatmap cells (solid fills + tinted text). */
 
@@ -70,8 +70,17 @@ const COLS = [
 
 const HR_LB_FD_URL = "https://sportsbook.fanduel.com/search";
 
+/* Normalize a display name for FD search URL only — strips generational suffixes
+   (Jr./Sr./II/III/IV) and accent-folds to ASCII. Display name is never mutated. */
+function fdSearchName(displayName) {
+  return (displayName || "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/,?\s*(Jr\.?|Sr\.?|II|III|IV)\s*$/i, "")
+    .trim();
+}
+
 function hrLbFanDuelUrl(term) {
-  const q = (term || "").trim();
+  const q = fdSearchName(term);
   return q
     ? `${HR_LB_FD_URL}?q=${encodeURIComponent(q)}`
     : "https://sportsbook.fanduel.com/baseball/mlb?tab=player-home-runs";

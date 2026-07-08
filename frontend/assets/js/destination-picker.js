@@ -1,4 +1,4 @@
-/* HR Engine — Destination Picker
+﻿/* HR Engine — Destination Picker
    Body-level portal for routing a pick: FD search, slip only, or both.
    Opened via window.__hrSlip.requestAdd(normalizedRow).
    Option 4 (FD + Confirm + New Slip) is rendered disabled — Phase C only. */
@@ -10,8 +10,17 @@
 
   const DP_FONT = { fontFamily: 'var(--font-display, "Barlow Condensed", sans-serif)' };
 
+/* Normalize a display name for FD search URL only — strips generational suffixes
+   (Jr./Sr./II/III/IV) and accent-folds to ASCII. Display name is never mutated. */
+function fdSearchName(displayName) {
+  return (displayName || "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/,?\s*(Jr\.?|Sr\.?|II|III|IV)\s*$/i, "")
+    .trim();
+}
+
   function dpFdUrl(name) {
-    const q = (name || "").trim();
+    const q = fdSearchName(name);
     return q
       ? `https://sportsbook.fanduel.com/search?q=${encodeURIComponent(q)}`
       : "https://sportsbook.fanduel.com/baseball/mlb?tab=player-home-runs";

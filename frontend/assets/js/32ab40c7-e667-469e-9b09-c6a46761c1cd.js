@@ -1,4 +1,4 @@
-/* HR Engine — STRATEGY rail. Auto-cycles through a pool of ready-to-deploy
+﻿/* HR Engine — STRATEGY rail. Auto-cycles through a pool of ready-to-deploy
    player groups from the live slate (paused on hover). Player count (1-4) is
    user-selectable; headshots are real-photo drop slots keyed per player.
    Clicking a card sends that strategy's players to FanDuel. */
@@ -20,8 +20,17 @@ const STRATEGIES = [
 
 const STRAT_FD_SEARCH_URL = "https://sportsbook.fanduel.com/search";
 
+/* Normalize a display name for FD search URL only — strips generational suffixes
+   (Jr./Sr./II/III/IV) and accent-folds to ASCII. Display name is never mutated. */
+function fdSearchName(displayName) {
+  return (displayName || "")
+    .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/,?\s*(Jr\.?|Sr\.?|II|III|IV)\s*$/i, "")
+    .trim();
+}
+
 function stratFanDuelUrl(term) {
-  const q = (term || "").trim();
+  const q = fdSearchName(term);
   return q
     ? `${STRAT_FD_SEARCH_URL}?q=${encodeURIComponent(q)}`
     : "https://sportsbook.fanduel.com/baseball/mlb?tab=player-home-runs";
