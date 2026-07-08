@@ -44,10 +44,10 @@ const FSM_TIER_DESC = {
   COLD: "do not deploy — model HR probability < 3%",
 };
 const FSM_MATCHUP_DESC = {
-  ELITE: "every edge favors the batter (4/4 quadrants)",
-  STRONG: "clear batter advantage (3/4)",
-  AVG: "neutral matchup (2/4)",
-  WEAK: "leans to the pitcher (1/4)",
+  ELITE: "top batter HR-threat tier — model probability + barrel quality",
+  STRONG: "strong batter HR-threat — high model probability + barrel quality",
+  AVG: "average batter HR-threat — mid-range model probability + barrel quality",
+  WEAK: "below-average batter HR-threat — lower model probability + barrel quality",
   TARGET: "pitcher allows 2.2+ HR/9 — most hittable arms on the slate",
 };
 const FSM_BUILDER_TIER_DESC = {
@@ -519,7 +519,7 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, i
       </td>
       <td className="fsm-player">
         <button type="button" className="fsm-player__in" onClick={() => onBatter(row)} title={`Open ${row.name} batter card`}>
-          <span className="fsm-player__dot" title={row.pitcherVuln === "TARGET" ? "TARGET — pitcher allows 2.2+ HR/9 (most hittable arm on the slate)" : undefined} style={{ background: (FSM_MATCHUP[row.quality] || { color: "#6b7872" }).color, boxShadow: row.pitcherVuln === "TARGET" ? "0 0 0 2px #1aff66, 0 0 6px rgba(26,255,102,0.85)" : undefined }} />
+          <span className="fsm-player__dot" title={row.pitcherVuln === "TARGET" ? `BATTER THREAT: ${row.quality || "—"} — batter HR-threat tier (model probability + barrel quality) · GLOW: TARGET pitcher allows 2.2+ HR/9 (separate pitcher-vulnerability signal)` : `BATTER THREAT: ${row.quality || "—"} — batter HR-threat tier based on model probability + barrel quality`} style={{ background: (FSM_MATCHUP[row.quality] || { color: "#6b7872" }).color, boxShadow: row.pitcherVuln === "TARGET" ? "0 0 0 2px #1aff66, 0 0 6px rgba(26,255,102,0.85)" : undefined }} />
           <span className="fsm-player__col">
             <span className="fsm-player__name">{row.name}</span>
             <span className="fsm-player__meta">{row.teamAbbr}<i className="fsm-player__bar">|</i>{row.bats}</span>
@@ -879,7 +879,7 @@ function FsmBatterCard({ row, onClose, onPitch, builderMode = false }) {
       <div className="fsm-card__matchup">
         <FsmGauge fraction={fsmThreatFill(row.model_prob)} color={t.color} size="lg" />
         <div className="fsm-card__mtext">
-          <span className="fsm-card__mq" style={{ color: m.color }}>{row.quality} MATCHUP{row.pitcherVuln === "TARGET" && <span style={{ color: "#1aff66", marginLeft: "6px", fontWeight: 700 }} title="Pitcher allows 2.2+ HR/9 — most hittable arms on the slate">· TARGET</span>}</span>
+          <span className="fsm-card__mq" style={{ color: m.color }}>{row.quality} THREAT{row.pitcherVuln === "TARGET" && <span style={{ color: "#1aff66", marginLeft: "6px", fontWeight: 700 }} title="Pitcher allows 2.2+ HR/9 — most hittable arms on the slate">· TARGET</span>}</span>
           <span className="fsm-card__msub">vs <span className="fsm-pitcher-name">{pitcherDisplay}</span>{!pitcherConfirmed && (<span className="fsm-tbd-badge">TBD</span>)} ({oppTeam} · {pitcherHand}HP) · OPP HR/9 {fsmStatVal("opphr", row)}{game ? ` · PARK HR ${game.hrFactor.toFixed(2)}×` : ""}</span>
         </div>
         <button className="fsm-card__pitchbtn" onClick={onPitch}>PITCH MIX ANALYSIS →</button>
@@ -1787,9 +1787,9 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
             )}
           </div>
           <div className="fsm-legend">
-            <span className="fsm-legend__title" title="Matchup quality: the batter's projected edge vs today's starting pitcher & park, shown as a radial gauge (100 = best).">MATCHUP</span>
+            <span className="fsm-legend__title" title="Batter HR-threat tier: dot color shows how dangerous this hitter is for a HR (model probability + barrel quality). Green glow = TARGET pitcher (HR/9 ≥ 2.2) — a separate pitcher-vulnerability signal layered on top.">BATTER THREAT</span>
             {FSM_MATCHUP_ORDER.map((k) =>
-            <span className="fsm-mkey" key={k} title={`${k} matchup — ${FSM_MATCHUP_DESC[k]}`}><i style={{ background: FSM_MATCHUP[k].color }} />{k}</span>
+            <span className="fsm-mkey" key={k} title={`${k} batter threat — ${FSM_MATCHUP_DESC[k]}`}><i style={{ background: FSM_MATCHUP[k].color }} />{k}</span>
             )}
             <span className="fsm-mkey" key="TARGET" title={`TARGET — ${FSM_MATCHUP_DESC.TARGET}`}><i style={{ background: "#1aff66" }} />TARGET</span>
           </div>
