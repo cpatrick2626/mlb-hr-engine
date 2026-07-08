@@ -598,6 +598,9 @@ def _build_slate_payload(data: dict) -> dict:
             "tier":     tier,
             "gameId":   derived_game_id,
             "odds":     odds,
+            # FanDuel deep links (display/handoff only — additive passthrough)
+            "fd_event_link": p.get("fd_event_link"),
+            "fd_bet_link":   p.get("fd_bet_link"),
             "hr":       season_hr,
             "iso":      _rate(p.get("xiso")),
             "xslg":     _rate(p.get("xslg")),

@@ -487,6 +487,61 @@ def _match_odds(player, odds_lookup, unique_names):
     return player
 
 
+def _build_fd_link_map() -> dict[tuple[str, str], list[dict]]:
+    """Map (away_abbr, home_abbr) → FanDuel deep-link entries from the odds fetch.
+    Display/handoff only — never read by scoring. Unmapped team names are skipped
+    so unmatched games simply keep null links."""
+    fd_map: dict[tuple[str, str], list[dict]] = {}
+    try:
+        for entry in odds_api.get_fd_links():
+            home = odds_api.TEAM_NAME_TO_ABBR.get(entry.get("home_team", ""))
+            away = odds_api.TEAM_NAME_TO_ABBR.get(entry.get("away_team", ""))
+            if not home or not away:
+                continue
+            fd_map.setdefault((away, home), []).append(entry)
+    except Exception as e:
+        print(f"[pipeline] fd link map skipped: {e}")
+    return fd_map
+
+
+def _attach_fd_links(player, fd_link_map):
+    """Attach fd_event_link / fd_event_sid / fd_bet_link to a player row.
+    Pure display passthrough for the FanDuel handoff — not read by scoring.
+    Absent links stay None; the frontend falls back to name search."""
+    player.setdefault("fd_event_link", None)
+    player.setdefault("fd_event_sid", None)
+    player.setdefault("fd_bet_link", None)
+    if not fd_link_map:
+        return
+    home = player.get("home_team")
+    away = player.get("team") if player.get("team") != home else player.get("opponent")
+    entries = fd_link_map.get((away, home))
+    if not entries:
+        return
+    entry = entries[0]
+    if len(entries) > 1:
+        # Doubleheader: same matchup twice today — pick the event whose
+        # commence_time is closest to this player's game start.
+        def _dist(e):
+            try:
+                a = datetime.fromisoformat((player.get("game_time_utc") or "").replace("Z", "+00:00"))
+                b = datetime.fromisoformat((e.get("commence_time") or "").replace("Z", "+00:00"))
+                return abs((a - b).total_seconds())
+            except Exception:
+                return float("inf")
+        entry = min(entries, key=_dist)
+    player["fd_event_link"] = entry.get("event_link")
+    player["fd_event_sid"]  = entry.get("event_sid")
+    # Opportunistic outcome-level bet link (FD rarely posts these — absence is normal)
+    bet_links = entry.get("bet_links") or {}
+    if bet_links:
+        folded = _ascii_fold(player.get("player_name", ""))
+        for nm, link in bet_links.items():
+            if _ascii_fold(nm) == folded:
+                player["fd_bet_link"] = link
+                break
+
+
 def _enrich_with_ev(player):
     if not player.get("best_american"):
         return player
@@ -735,10 +790,14 @@ def load_game_data(
     odds_lookup, unique_names = _build_odds_lookup(all_props)
     print(f"[pipeline] odds props: {len(all_props)} lines | {len(unique_names)} unique players")
 
+    # FanDuel deep links keyed by team matchup (display/handoff only)
+    fd_link_map = _build_fd_link_map()
+
     # Now match each player using the pre-built structure (O(1) per player)
     for p in all_players:
         _match_odds(p, odds_lookup, unique_names)
         _enrich_with_ev(p)
+        _attach_fd_links(p, fd_link_map)
 
     n_with_odds = sum(1 for p in all_players if p.get("best_american"))
     print(f"[pipeline] {n_with_odds}/{len(all_players)} players matched to odds")

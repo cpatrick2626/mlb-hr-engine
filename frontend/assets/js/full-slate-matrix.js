@@ -294,9 +294,20 @@ function fsmOpenFanDuelSearch(e, term) {
   fsmShowFanDuelToast(term);
 }
 
-/* FD tier-icon click: use Streamlit parity search URL, keep clipboard fallback. */
+/* FD tier-icon click: prefer captured deep link (bet-level, then event-level —
+   lands on the specific game), else Streamlit parity search URL. Links are often
+   absent (FD rarely posts outcome links); name search + clipboard stays the fallback. */
 function fsmOpenFD(e, row) {
-  fsmOpenFanDuelSearch(e, row.name);
+  const deepLink = row.fd_bet_link || row.fd_event_link;
+  if (deepLink) {
+    e.stopPropagation();
+    e.preventDefault();
+    fsmCopyFanDuelSearch(row.name);   // keep name on clipboard for manual fallback
+    window.open(deepLink, "_blank", "noopener");
+    fsmShowFanDuelToast(row.name);
+  } else {
+    fsmOpenFanDuelSearch(e, row.name);
+  }
 }
 
 /* Tier badge tooltip — tier name + doctrine description + this row's real model_prob. */
@@ -422,7 +433,7 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, i
             type="button"
             className="fsm-tier fsm-tier--btn"
             style={{ "--tc": t.color, "--tg": t.glow }}
-            onClick={(e) => { e.stopPropagation(); e.preventDefault(); const board = isJigContext ? 'jig' : (row._board || 'main'); const raw = row._raw || row; window.__hrSlip && window.__hrSlip.requestAdd({ player_id: raw.id, name: raw.name, teamAbbr: raw.teamAbbr, team: raw.teamAbbr, pitcher: raw.pitcher_name, pitcher_name: raw.pitcher_name, model_prob: raw.model_prob, tier: raw.tier, model_tier_rank: raw.model_tier_rank, board: board, hrprob: raw.hrprob, barrel: raw.barrel, hh: raw.hh, signal_snapshot: fsmBuildSnapshot(raw, board, sortState) }); }}
+            onClick={(e) => { e.stopPropagation(); e.preventDefault(); const board = isJigContext ? 'jig' : (row._board || 'main'); const raw = row._raw || row; window.__hrSlip && window.__hrSlip.requestAdd({ player_id: raw.id, name: raw.name, teamAbbr: raw.teamAbbr, team: raw.teamAbbr, pitcher: raw.pitcher_name, pitcher_name: raw.pitcher_name, model_prob: raw.model_prob, tier: raw.tier, model_tier_rank: raw.model_tier_rank, board: board, hrprob: raw.hrprob, barrel: raw.barrel, hh: raw.hh, fd_bet_link: raw.fd_bet_link, fd_event_link: raw.fd_event_link, signal_snapshot: fsmBuildSnapshot(raw, board, sortState) }); }}
             title={fsmTierTip(row, isJigContext, jigLabel, jigRank) + " · Click: select destination"}
             aria-label={`Select destination for ${row.name}`}>
 
@@ -599,6 +610,8 @@ function FsmTable({ rows, cols, showGame, onBatter, onPitch, onReorder, onSort, 
       hrprob:          raw.hrprob,
       barrel:          raw.barrel,
       hh:              raw.hh,
+      fd_bet_link:     raw.fd_bet_link,
+      fd_event_link:   raw.fd_event_link,
       signal_snapshot: fsmBuildSnapshot(raw, board, sortState),
     });
   };

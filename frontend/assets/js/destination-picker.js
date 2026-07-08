@@ -18,11 +18,13 @@
   }
 
   /* CRITICAL: window.open must be called synchronously inside the click handler,
-     before any await, to avoid popup-blocker. Never await before this call. */
-  function dpOpenFD(name) {
-    window.open(dpFdUrl(name), "_blank", "noopener");
+     before any await, to avoid popup-blocker. Never await before this call.
+     deepLink (bet-level, then event-level, resolved by caller) lands on the specific
+     game; often absent — name search stays the fallback, clipboard copy always. */
+  function dpOpenFD(name, deepLink) {
+    window.open(deepLink || dpFdUrl(name), "_blank", "noopener");
     if (navigator.clipboard) navigator.clipboard.writeText(name).catch(() => {});
-    dpToast("Opened FanDuel search: " + name);
+    dpToast(deepLink ? "Opened FanDuel event: " + name : "Opened FanDuel search: " + name);
   }
 
   function dpToast(msg) {
@@ -93,10 +95,12 @@
         ? (Number(row.model_prob) * 100).toFixed(1) + "%"
         : "—";
     const authed = dpIsAuthed();
+    // Deep-link priority: bet link → event link → null (dpOpenFD falls back to search)
+    const fdLink = row.fd_bet_link || row.fd_event_link || null;
 
     // Option 1: FD only — no auth required
     const handleFDOnly = () => {
-      dpOpenFD(name);   // SYNC — popup-safe
+      dpOpenFD(name, fdLink);   // SYNC — popup-safe
       onClose();
     };
 
@@ -109,7 +113,7 @@
 
     // Option 3: FD + Slip — FD MUST open synchronously before any async op
     const handleFDAndSlip = () => {
-      dpOpenFD(name);           // SYNC — must be first; kept inside user gesture
+      dpOpenFD(name, fdLink);   // SYNC — must be first; kept inside user gesture
       if (!authed) { onClose(); dpOpenAuth(); return; }
       window.__hrSlip.addLeg(row);   // async internally; fires, _notify updates surfaces
       onClose();

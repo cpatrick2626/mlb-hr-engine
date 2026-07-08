@@ -23,6 +23,53 @@ _CACHE_PATH = Path(__file__).parent.parent / "data" / "odds_cache.json"
 CACHE_TTL_MINUTES = 45
 _SESSION = configure_session(requests.Session())
 
+# The Odds API team name → MLB Stats API abbreviation (source: statsapi /v1/teams).
+# Used by the pipeline to map Odds API events (full names) to slate games (abbrs).
+TEAM_NAME_TO_ABBR = {
+    "Arizona Diamondbacks": "AZ",
+    "Athletics": "ATH",
+    "Oakland Athletics": "ATH",   # legacy name variant
+    "Atlanta Braves": "ATL",
+    "Baltimore Orioles": "BAL",
+    "Boston Red Sox": "BOS",
+    "Chicago Cubs": "CHC",
+    "Chicago White Sox": "CWS",
+    "Cincinnati Reds": "CIN",
+    "Cleveland Guardians": "CLE",
+    "Colorado Rockies": "COL",
+    "Detroit Tigers": "DET",
+    "Houston Astros": "HOU",
+    "Kansas City Royals": "KC",
+    "Los Angeles Angels": "LAA",
+    "Los Angeles Dodgers": "LAD",
+    "Miami Marlins": "MIA",
+    "Milwaukee Brewers": "MIL",
+    "Minnesota Twins": "MIN",
+    "New York Mets": "NYM",
+    "New York Yankees": "NYY",
+    "Philadelphia Phillies": "PHI",
+    "Pittsburgh Pirates": "PIT",
+    "San Diego Padres": "SD",
+    "San Francisco Giants": "SF",
+    "Seattle Mariners": "SEA",
+    "St. Louis Cardinals": "STL",
+    "St Louis Cardinals": "STL",  # no-period variant
+    "Tampa Bay Rays": "TB",
+    "Texas Rangers": "TEX",
+    "Toronto Blue Jays": "TOR",
+    "Washington Nationals": "WSH",
+}
+
+# FanDuel deep links captured from the most recent fetch (live or cached).
+# Display/handoff only — never feeds scoring. One entry per Odds API event:
+# {home_team, away_team, commence_time, event_link, event_sid, bet_links}
+_last_fd_links: list[dict] = []
+
+
+def get_fd_links() -> list[dict]:
+    """FanDuel event/bet deep links from the last get_hr_odds_all_games() call."""
+    return list(_last_fd_links)
+
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Public interface
@@ -79,6 +126,7 @@ def get_last_error() -> str:
 # ──────────────────────────────────────────────────────────────────────────────
 
 def _load_cache() -> tuple[list[dict], dict] | None:
+    global _last_fd_links
     try:
         if not _CACHE_PATH.exists():
             return None
@@ -87,6 +135,7 @@ def _load_cache() -> tuple[list[dict], dict] | None:
         age_minutes = (time.time() - data["timestamp"]) / 60
         if age_minutes > CACHE_TTL_MINUTES:
             return None
+        _last_fd_links = data.get("fd_links", [])
         return data["props"], data["quota"]
     except Exception:
         return None
@@ -94,6 +143,7 @@ def _load_cache() -> tuple[list[dict], dict] | None:
 
 def _load_cache_stale() -> tuple[list[dict], dict] | None:
     """Load cache regardless of age — used as last-resort fallback when live fetch fails."""
+    global _last_fd_links
     try:
         if not _CACHE_PATH.exists():
             return None
@@ -102,6 +152,7 @@ def _load_cache_stale() -> tuple[list[dict], dict] | None:
         props = data.get("props")
         if not props:
             return None
+        _last_fd_links = data.get("fd_links", [])
         return props, data.get("quota", {"used": None, "remaining": None})
     except Exception:
         return None
@@ -111,7 +162,8 @@ def _save_cache(props: list[dict], quota: dict) -> None:
     try:
         _CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
         with open(_CACHE_PATH, "w", encoding="utf-8") as f:
-            json.dump({"timestamp": time.time(), "props": props, "quota": quota}, f)
+            json.dump({"timestamp": time.time(), "props": props, "quota": quota,
+                       "fd_links": _last_fd_links}, f)
     except Exception as e:
         print(f"[odds_api] cache write failed: {e}")
 
@@ -129,16 +181,28 @@ def _parse_quota(resp) -> None:
 
 
 def _try_api() -> tuple[list[dict], dict]:
+    global _last_fd_links
     events = _get_events()
     if not events:
         return [], dict(_last_quota)
     all_props: list[dict] = []
+    fd_links: list[dict] = []
     for event in events:
-        props = _get_event_props(event["id"])
+        props, fd_info = _get_event_props(event["id"])
         for p in props:
             p["home_team"] = event.get("home_team", "")
             p["away_team"] = event.get("away_team", "")
         all_props.extend(props)
+        if fd_info.get("event_link"):
+            fd_links.append({
+                "home_team":     event.get("home_team", ""),
+                "away_team":     event.get("away_team", ""),
+                "commence_time": event.get("commence_time", ""),
+                "event_link":    fd_info["event_link"],
+                "event_sid":     fd_info.get("event_sid"),
+                "bet_links":     fd_info.get("bet_links", {}),
+            })
+    _last_fd_links = fd_links
     return all_props, dict(_last_quota)
 
 
@@ -183,7 +247,11 @@ def _get_events() -> list[dict]:
         return []
 
 
-def _get_event_props(event_id: str) -> list[dict]:
+def _get_event_props(event_id: str) -> tuple[list[dict], dict]:
+    """Returns (props, fd_info). fd_info holds FanDuel deep links for the event:
+    event_link/event_sid (event-level, usually present when FD lists the game) and
+    bet_links {player_name: link} (outcome-level, RARELY present — absence is normal)."""
+    fd_info: dict = {"event_link": None, "event_sid": None, "bet_links": {}}
     try:
         resp = _SESSION.get(
             f"{BASE}/sports/baseball_mlb/events/{event_id}/odds",
@@ -192,13 +260,37 @@ def _get_event_props(event_id: str) -> list[dict]:
                 "regions": "us",
                 "markets": "batter_home_runs",
                 "oddsFormat": "american",
+                # Params only — no extra request; asks the same call to embed sportsbook deep links
+                "includeLinks": "true",
+                "includeSids": "true",
             },
             timeout=12,
         )
         _parse_quota(resp)
         if resp.status_code != 200:
-            return []
+            return [], fd_info
         data = resp.json()
+
+        # Capture FanDuel deep links (display/handoff only). Never blocks prop parsing.
+        try:
+            for bookmaker in data.get("bookmakers", []):
+                if bookmaker.get("key") != "fanduel":
+                    continue
+                fd_info["event_link"] = bookmaker.get("link")
+                fd_info["event_sid"]  = bookmaker.get("sid")
+                for market in bookmaker.get("markets", []):
+                    if market.get("key") != "batter_home_runs":
+                        continue
+                    for outcome in market.get("outcomes", []):
+                        if outcome.get("name") == "Under":
+                            continue
+                        o_name = outcome.get("description", "")
+                        o_link = outcome.get("link")
+                        if o_name and o_link:
+                            fd_info["bet_links"][o_name] = o_link
+        except Exception:
+            pass  # link capture is best-effort; props still parse below
+
         props: list[dict] = []
         # Track Under prices per (bookmaker, player) so we can compute overround
         # when both sides are available — used by engine/vig.py for empirical measurement.
@@ -248,7 +340,7 @@ def _get_event_props(event_id: str) -> list[dict]:
                 under_imp  = 100.0 / (under_p + 100.0) if under_p > 0 else abs(under_p) / (abs(under_p) + 100.0)
                 overround  = round(over_imp + under_imp - 1.0, 4)
                 prop["measured_overround"] = overround  # empirical two-sided vig for this book/player
-        return props
+        return props, fd_info
     except Exception as e:
         print(f"[odds_api] props fetch failed for event {event_id}: {e}")
-        return []
+        return [], fd_info

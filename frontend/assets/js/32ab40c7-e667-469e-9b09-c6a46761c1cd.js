@@ -35,7 +35,9 @@ function stratOpenFanduel(e, strat, players) {
   if (navigator.clipboard) {
     navigator.clipboard.writeText(q).catch(() => {});
   }
-  window.open(stratFanDuelUrl(primary), "_blank", "noopener");
+  /* Deep-link priority: bet → event → name search (links often absent; search stays fallback) */
+  const deepLink = players[0]?.fd_bet_link || players[0]?.fd_event_link || null;
+  window.open(deepLink || stratFanDuelUrl(primary), "_blank", "noopener");
   let el = document.getElementById("md-qp-fd-toast");
   if (!el) {
     el = document.createElement("div");
@@ -141,6 +143,8 @@ const StratCard = ({ strat, rows, count }) => {
         hrprob:          p.hrprob,
         barrel:          p.barrel,
         hh:              p.hh,
+        fd_bet_link:     p.fd_bet_link,
+        fd_event_link:   p.fd_event_link,
         signal_snapshot: railSnapshot(),
       });
     } else {
@@ -171,6 +175,8 @@ const StratCard = ({ strat, rows, count }) => {
       hrprob:          p.hrprob,
       barrel:          p.barrel,
       hh:              p.hh,
+      fd_bet_link:     p.fd_bet_link,
+      fd_event_link:   p.fd_event_link,
       signal_snapshot: railSnapshot(),
     });
   };
