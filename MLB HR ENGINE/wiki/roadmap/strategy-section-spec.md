@@ -285,6 +285,52 @@ All seven questions were decided by the operator on 2026-07-06. Do not re-litiga
 
 ---
 
+## 10. Pre-Migration History — Streamlit STRATEGY Room
+
+Recovered 2026-07-08. Source: `git show 8d6843c:mlb_hr_engine_v4/strategies_ui.py` (fullest historical version, before commit `6be9d45` stripped ~1,552 lines).
+
+### 10.1 What it was
+
+STRATEGY was a real, working Streamlit feature — an "Advanced Strategies" workspace with **21 strategy modes**:
+
+Stars Aligned, Multi-Edge Confirmation, Player Rankings, Confidence Rankings, Power Profile Parlays, Pitcher Target Parlays, xStats Regression, Short Rest Pitcher Target, Platoon Advantage, Hot Streak, Park Monster, Weather Boost, Correlation Parlays, Team Stacks, Lineup Heart, Value Bomb, Parlays, Long Shot Value, Same-Game Builder, Hedge Calculator, Progressive Staking.
+
+### 10.2 Key features
+
+- **Parlay builders:** 2–3 leg construction; EV = model_prob × combined American odds; diversity rule (team stacks, same-pitcher, same-game, park/weather/platoon/streak groupings).
+- **Controls:** Min Edge% slider, Min Confidence slider, strategy-mode selectbox, expander detail panels.
+- **Strategy cards:** EV / model_prob / odds / correlation / confidence displayed per pick; FD slip actions wired.
+- **Per-strategy P&L tracking:** win/loss/ROI logged per strategy mode — this ledger ties directly into the current settlement/calibration loop (the same signal attribution problem Half 2 of this spec solves via `legs.signal_snapshot` → settlement → ledger buckets).
+
+### 10.3 Code locations
+
+| Surface | Location |
+|---------|---------|
+| Fullest historical version | `git show 8d6843c:mlb_hr_engine_v4/strategies_ui.py` (pre-strip) |
+| Surviving UI stub | `mlb_hr_engine_v4/strategies_ui.py` (post-`6be9d45`, ~1,552 lines removed) |
+| Strategy definitions | `mlb_hr_engine_v4/strategies/` |
+| P&L tracker | `mlb_hr_engine_v4/tracking/strategy_log.py` |
+
+### 10.4 Reuse map
+
+The Python analyzers (EV math, odds conversion, parlay probability, tactical groupings) and `strategy_log.py` P&L tracking are **largely portable as backend** — they compute over real model outputs and have no Streamlit dependency. The surface to rebuild is the UI layer only (selectbox/slider/expander/dataframe → React components matching current visual doctrine).
+
+### 10.5 Rebuild approach (recommended phasing)
+
+**Phase 1:** Rebuild the core STRATEGY room UI (funnel + lane switch per §3–§3.5) and wire it to the surviving Python analyzers for EV/parlay math. Replace the `RadarScope` placeholder (routing authorization already granted per §9 Q3).
+
+**Phase 2:** Quarantine and fix the fabricated "HR ENV SCORE" composites in the current StrategyRail (§3.7). Make the rail a teaser using single real signals only — no hidden blends.
+
+**Phase 3:** Fold in Betting Analyst Agents + slate export, kept NON-AUTHORITATIVE until the settled-ledger volume (n≥200 operator rule) validates any weighting claim.
+
+### 10.6 Durable architecture decisions
+
+- **STRATEGY stays separate from COMMAND.** COMMAND = overview/orchestration (read-only operator situational awareness). STRATEGY = build/structure/ledger room (pick construction + outcome attribution). Do not merge these rooms.
+- **Do NOT 1:1 port the old Streamlit UI.** The 21-mode selectbox pattern worked for Streamlit; the React rebuild should reimagine the UX around the funnel + lane doctrine (§3), not replicate the old tabs and expanders.
+- **Old per-strategy P&L connects to the current ledger.** The per-strategy win/loss tracking from the pre-migration Streamlit surface is the same attribution problem Half 2 (§4) is solving. Recovering historical `strategy_log` data is a potential backfill input once the settlement loop has real settled volume.
+
+---
+
 ## Cross-refs
 
 - [[strategy-section-seed]] — reasoning framework + honesty caveat (source of the anchoring principle)
