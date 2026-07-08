@@ -296,6 +296,19 @@ def _build_player_profile(
     else:
         center_pct = None
 
+    # Real per-hand batter splits (display only — never feeds model_prob/scoring).
+    # Faced hand: RHP -> vr split, LHP -> vl split. Emitted at any PA count;
+    # the consumer applies the 30-PA reliability rule using the pa field.
+    _ss = splits.get("split_stats") or {}
+    _vs_l = _ss.get("vl") or {}
+    _vs_r = _ss.get("vr") or {}
+    if pitcher_hand.upper().startswith("L"):
+        _faced, _faced_hand = _vs_l, "L"
+    elif pitcher_hand.upper().startswith("R"):
+        _faced, _faced_hand = _vs_r, "R"
+    else:
+        _faced, _faced_hand = {}, None
+
     matchup_quality = _matchup_quality_tier(
         model_prob=model_prob,
         barrel_pct=sc_barrel,
@@ -330,6 +343,26 @@ def _build_player_profile(
         "h2h_factor": round(h2h_mult, 4),
         "batter_side": batter_side,
         "pitcher_hand": pitcher_hand,
+        # Real hand-specific batter splits (display only — not read by scoring)
+        "vs_hand":       _faced_hand,
+        "vs_hand_avg":   _faced.get("avg"),
+        "vs_hand_slg":   _faced.get("slg"),
+        "vs_hand_iso":   _faced.get("iso"),
+        "vs_hand_hr":    _faced.get("hr"),
+        "vs_hand_hr_pa": _faced.get("hr_pa"),
+        "vs_hand_pa":    _faced.get("pa"),
+        "vs_lhp_avg":    _vs_l.get("avg"),
+        "vs_lhp_slg":    _vs_l.get("slg"),
+        "vs_lhp_iso":    _vs_l.get("iso"),
+        "vs_lhp_hr":     _vs_l.get("hr"),
+        "vs_lhp_hr_pa":  _vs_l.get("hr_pa"),
+        "vs_lhp_pa":     _vs_l.get("pa"),
+        "vs_rhp_avg":    _vs_r.get("avg"),
+        "vs_rhp_slg":    _vs_r.get("slg"),
+        "vs_rhp_iso":    _vs_r.get("iso"),
+        "vs_rhp_hr":     _vs_r.get("hr"),
+        "vs_rhp_hr_pa":  _vs_r.get("hr_pa"),
+        "vs_rhp_pa":     _vs_r.get("pa"),
         "model_prob": round(model_prob, 4), "weather": weather,
         "pitcher_hr9": pitcher_hr9,
         "short_form_pa": int(short_form.get("plateAppearances", 0)),

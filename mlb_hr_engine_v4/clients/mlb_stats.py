@@ -402,10 +402,24 @@ def get_player_short_form(player_id: int, days: int = 14) -> dict:
     return totals
 
 
+def _split_stat_float(val):
+    """Parse a rate stat from the statSplits payload (e.g. '.280'); None when absent."""
+    try:
+        return float(val) if val not in (None, "", "-.--", "--", ".---") else None
+    except (ValueError, TypeError):
+        return None
+
+
 def get_player_platoon_splits(player_id: int) -> dict:
     """
     L/R platoon HR splits for a batter.
-    Returns: {"vl": hr_rate, "vr": hr_rate, "vl_pa": int, "vr_pa": int}
+    Returns: {"vl": hr_rate, "vr": hr_rate, "vl_pa": int, "vr_pa": int,
+              "split_stats": {"vl": {...}, "vr": {...}}}
+    vl/vr/vl_pa/vr_pa are the model keys consumed by platoon_factor — gated at
+    PA>=30, unchanged. split_stats is additive display-only data (real per-hand
+    AVG/SLG/ISO/HR/HR-PA + PA), emitted at any PA count so the consumer can
+    apply its own small-sample rule; nested under one new key so the existing
+    cache-entry shape and model keys stay untouched.
     Uses MLB Stats API statSplits endpoint.
     """
     if player_id in _platoon_splits_cache:
@@ -420,6 +434,7 @@ def get_player_platoon_splits(player_id: int) -> dict:
         stats_list = data.get("stats", [])
         splits_raw = stats_list[0].get("splits", []) if stats_list else []
         result = {}
+        split_stats = {}
         for split in splits_raw:
             code = split.get("split", {}).get("code", "")
             st   = split.get("stat", {})
@@ -428,6 +443,21 @@ def get_player_platoon_splits(player_id: int) -> dict:
             if pa >= 30:
                 result[code]           = hr / pa
                 result[f"{code}_pa"]   = pa
+            if code in ("vl", "vr"):
+                avg = _split_stat_float(st.get("avg"))
+                slg = _split_stat_float(st.get("slg"))
+                obp = _split_stat_float(st.get("obp"))
+                split_stats[code] = {
+                    "avg": avg,
+                    "slg": slg,
+                    "obp": obp,
+                    "iso": round(slg - avg, 3) if (slg is not None and avg is not None) else None,
+                    "hr":  hr,
+                    "hr_pa": round(hr / pa, 4) if pa > 0 else None,
+                    "pa":  pa,
+                }
+        if split_stats:
+            result["split_stats"] = split_stats
         # Cache even when empty — player has no PA vs each hand yet this season.
         # Network failures still skip caching (caught below) so they stay retryable.
         _platoon_splits_cache[player_id] = result
