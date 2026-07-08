@@ -98,24 +98,24 @@ const fdeg = (v) => v.toFixed(1) + "°";
 /* column defs — bucketsHi = higher is better (4 cuts), bucketsLo = lower is better */
 const FSM_COLS = [
 { key: "odds", head: "ODDS", title: "HR prop odds (American)", group: "STATS", mode: "odds", fmt: (v) => String(v) },
-{ key: "hr", head: "SZN HR", title: "Home runs — season total", group: "STATS", bucketsHi: [28, 18, 10, 5], fmt: (v) => String(v) },
+{ key: "hr", head: "HR", title: "Home runs — REAL vs-hand split count in VS HAND mode (PA always shown; thin <30 PA tagged amber); season total in SEASON mode", group: "STATS", bucketsHi: [28, 18, 10, 5], fmt: (v) => String(v) },
 { key: "barrel", head: "BARREL%", title: "Barrel rate — optimal EV + launch-angle contact, the best HR predictor", group: "STATCAST", bucketsHi: [8, 6, 4.5, 3], fmt: fp },
 { key: "xslg", head: "xSLG", title: "Expected slugging from quality of contact", group: "STATS", bucketsHi: [0.520, 0.450, 0.400, 0.350], fmt: f3d },
-{ key: "iso", head: "ISO", title: "Isolated power (SLG − AVG) — a core HR driver", group: "STATS", bucketsHi: [0.250, 0.180, 0.120, 0.070], fmt: f3d },
+{ key: "iso", head: "ISO", title: "Isolated power (SLG − AVG) — REAL vs-hand split when available (thin samples tagged with PA); SZN = season-blended fallback", group: "STATS", bucketsHi: [0.250, 0.180, 0.120, 0.070], fmt: f3d },
 { key: "hh", head: "HH%", title: "Hard-hit rate (95+ mph exit velo)", group: "STATCAST", bucketsHi: [45, 40, 34, 28], fmt: fp },
 { key: "pullair", head: "PULLAIR%", title: "Pulled-air rate — fly balls/liners to the pull side, prime HR contact", group: "STATCAST", bucketsHi: [26, 21, 16, 12], fmt: fp },
 { key: "blast", head: "BLAST%", title: "Blast rate — fast swing + squared-up contact", group: "STATCAST", bucketsHi: [16, 11, 7, 4], fmt: fp },
 { key: "maxev", head: "MAX EV", title: "Max exit velocity (mph) — peak raw power", group: "STATCAST", bucketsHi: [112, 109, 106, 103], fmt: f1 },
 { key: "squp", head: "SQUP%", title: "Squared-up rate — efficiency of contact vs max EV", group: "STATCAST", bucketsHi: [30, 25, 20, 15], fmt: fp },
 { key: "ev", head: "EV", title: "Average exit velocity (mph)", group: "STATCAST", bucketsHi: [92, 90, 88, 86], fmt: f1 },
-{ key: "hrpa", head: "HR/PA", title: "Home runs per plate appearance (model output)", group: "STATS", mode: "headline", fmt: (v) => v.toFixed(3) },
+{ key: "hrpa", head: "HR/PA", title: "Home runs per plate appearance — REAL vs-hand split when available (thin samples tagged with PA); SZN = season rate fallback", group: "STATS", mode: "headline", fmt: (v) => v.toFixed(3) },
 { key: "sweet", head: "Sweet Spot%", title: "Launch-angle sweet-spot rate — batted balls at 8–32°", group: "STATCAST", bucketsHi: [38, 34, 30, 26], fmt: fp },
 { key: "la", head: "LA°", title: "Launch angle — HR sweet spot ≈ 15°", group: "STATCAST", special: "la", fmt: fdeg },
-{ key: "slg", head: "SLG", title: "Slugging percentage", group: "STATS", bucketsHi: [0.520, 0.460, 0.410, 0.370], fmt: f3d },
+{ key: "slg", head: "SLG", title: "Slugging percentage — REAL vs-hand split when available (thin samples tagged with PA); SZN = season-blended fallback", group: "STATS", bucketsHi: [0.520, 0.460, 0.410, 0.370], fmt: f3d },
 { key: "fast", head: "FAST%", title: "Fast-swing rate — swings at 75+ mph bat speed", group: "STATCAST", bucketsHi: [40, 28, 18, 10], fmt: fp },
 { key: "xwoba", head: "xwOBA", title: "Expected weighted on-base average", group: "STATS", bucketsHi: [0.350, 0.330, 0.310, 0.290], fmt: f3d },
 { key: "obp", head: "OBP", title: "On-base percentage", group: "STATS", bucketsHi: [0.360, 0.335, 0.310, 0.290], fmt: f3d },
-{ key: "avg", head: "AVG", title: "Batting average", group: "STATS", bucketsHi: [0.290, 0.265, 0.240, 0.215], fmt: f3d },
+{ key: "avg", head: "AVG", title: "Batting average — REAL vs-hand split when available (thin samples tagged with PA); SZN = season-blended fallback", group: "STATS", bucketsHi: [0.290, 0.265, 0.240, 0.215], fmt: f3d },
 { key: "babip", head: "BABIP", title: "Batting average on balls in play", group: "STATS", bucketsHi: [0.330, 0.300, 0.270, 0.240], fmt: f3d },
 { key: "bbpct", head: "BB%", title: "Walk rate", group: "STATS", bucketsHi: [12, 9, 7, 5], fmt: fp },
 { key: "kpct", head: "K%", title: "Strikeout rate — LOWER is better", group: "STRIKES", bucketsLo: [15, 20, 25, 30], fmt: fp },
@@ -133,6 +133,56 @@ const FSM_COLS = [
 { key: "opphr", head: "OPP HR/9", title: "Opposing pitcher HR allowed per 9 — HIGHER favors the batter", group: "MATCHUP", danger: true, bucketsHi: [1.5, 1.3, 1.0, 0.7], fmt: f2 }];
 
 const FSM_COLSPAN = 3 + FSM_COLS.length; // tier + player + matchup + stats
+
+/* Split scope per column: 'hand' columns display the batter's REAL split vs the
+   pitcher hand faced tonight when the payload carries one; every other stat
+   column is season-blended (the payload has no hand splits for Statcast quality
+   metrics — never fabricate them). ODDS is market-scoped, not season. */
+const FSM_SCOPE_HAND_KEYS = ["avg", "slg", "iso", "hrpa", "hr"];
+FSM_COLS.forEach((c) => { c.scope = FSM_SCOPE_HAND_KEYS.includes(c.key) ? "hand" : c.key === "odds" ? null : "season"; });
+
+/* vs-hand display keys → payload split fields */
+const FSM_VS_HAND_SRC = { avg: "vs_hand_avg", slg: "vs_hand_slg", iso: "vs_hand_iso", hrpa: "vs_hand_hr_pa" };
+const FSM_VS_HAND_MIN_PA = 30; // matches the backend's reliable-sample gate
+
+/* Overlay REAL vs-hand splits onto the AVG/SLG/ISO/HR-PA display keys.
+   Display-only: `_raw` keeps the untouched row for the batter-card hero and
+   slip capture. `_vsScope[key]` records, per column, whether the shown number
+   is a real faced-hand split (with PA + thin flag) or the season fallback. */
+function fsmSplitRow(row) {
+  const hand = row.vs_hand || null;
+  const pa = row.vs_hand_pa;
+  const o = { ...row, _raw: row, _vsScope: {} };
+  Object.keys(FSM_VS_HAND_SRC).forEach((key) => {
+    const v = row[FSM_VS_HAND_SRC[key]];
+    if (hand && pa > 0 && v != null) {
+      o[key] = v;
+      o._vsScope[key] = { scope: "hand", hand, pa, thin: pa < FSM_VS_HAND_MIN_PA };
+    } else {
+      o._vsScope[key] = { scope: "season" };
+    }
+  });
+  /* HR count split — derives from vs_lhp_hr / vs_rhp_hr based on faced hand */
+  const vsHr = hand === "L" ? row.vs_lhp_hr : hand === "R" ? row.vs_rhp_hr : null;
+  if (hand && pa > 0 && vsHr != null) {
+    o.hr = vsHr;
+    o._vsScope["hr"] = { scope: "hand", hand, pa, thin: pa < FSM_VS_HAND_MIN_PA };
+  } else {
+    o._vsScope["hr"] = { scope: "season" };
+  }
+  return o;
+}
+
+/* Honest scope tag under a split-column cell value. Never lets a vs-hand number
+   appear without its scope, and never lets a thin sample masquerade as reliable. */
+function FsmScopeTag({ scope }) {
+  if (!scope) return null;
+  if (scope.scope === "season")
+    return <span className="fsm-scope fsm-scope--szn" title="Season-blended stat — no reliable vs-hand split for this matchup (no/empty split sample, or pitcher TBD)">SZN</span>;
+  if (scope.thin)
+    return <span className="fsm-scope fsm-scope--thin" title={`REAL split vs ${scope.hand}HP but THIN sample — only ${scope.pa} PA; not reliable`}>vs {scope.hand} · {scope.pa} PA</span>;
+  return <span className="fsm-scope fsm-scope--hand" title={`REAL split vs ${scope.hand}HP — ${scope.pa} PA`}>vs {scope.hand} · {scope.pa} PA</span>;
+}
 
 function fsmBucket(col, v) {
   if (v == null) return "NA";
@@ -250,11 +300,18 @@ function FsmCell({ col, row, extra }) {
   const v = row[col.key];
   const lbl = col.head;
   const xc = extra ? " fsm-cell--extra" : "";
+  const scope = col.scope === "hand" && row._vsScope ? row._vsScope[col.key] : null;
+  const tag = scope ? <FsmScopeTag scope={scope} /> : null;
   if (col.mode === "odds") return <td className={`fsm-cell fsm-cell--odds${xc}`} data-label={lbl}>{v == null ? "—" : col.fmt(v)}</td>;
-  if (col.mode === "headline") return <td className={`fsm-cell fsm-cell--headline${xc}`} data-label={lbl}>{v == null ? "—" : col.fmt(v)}</td>;
+  if (col.mode === "headline") return <td className={`fsm-cell fsm-cell--headline${xc}`} data-label={lbl}>{v == null ? "—" : col.fmt(v)}{tag}</td>;
   if (col.mode === "neutral") return <td className={`fsm-cell fsm-cell--neutral${xc}`} data-label={lbl}>{v == null ? "—" : col.fmt(v)}</td>;
+  /* HR column in VS HAND mode: show "N HR" as value for clarity (PA in scope tag) */
+  if (col.key === "hr" && scope && scope.scope === "hand") {
+    const b = fsmBucket(col, v);
+    return <td className={`fsm-cell ${FSM_BUCKET_CLASS[b] || ""}${xc}`} data-label={lbl}>{v == null ? "—" : v + " HR"}{tag}</td>;
+  }
   const b = fsmBucket(col, v);
-  return <td className={`fsm-cell ${FSM_BUCKET_CLASS[b] || ""}${xc}`} data-label={lbl}>{v == null ? "—" : col.fmt(v)}</td>;
+  return <td className={`fsm-cell ${FSM_BUCKET_CLASS[b] || ""}${xc}`} data-label={lbl}>{v == null ? "—" : col.fmt(v)}{tag}</td>;
 }
 
 const FSM_FANDUEL_SEARCH_URL = "https://sportsbook.fanduel.com/search";
@@ -583,7 +640,7 @@ function FsmRadioGroup({ label, value, onChange, options }) {
 
 let fsmDragKey = null;
 
-function FsmTable({ rows, cols, showGame, onBatter, onPitch, onReorder, onSort, sortState, builderMode = false, isJigContext = false }) {
+function FsmTable({ rows, cols, showGame, onBatter, onPitch, onReorder, onSort, sortState, builderMode = false, isJigContext = false, splitScope = 'vs_hand' }) {
   const [slipState, setSlipState] = React.useState(() => window.__hrSlip ? window.__hrSlip.getState() : { cardStatus: {} });
   React.useEffect(() => {
     if (!window.__hrSlip) return;
@@ -646,7 +703,7 @@ function FsmTable({ rows, cols, showGame, onBatter, onPitch, onReorder, onSort, 
           <th className="fsm-th-player">PLAYER</th>
           <th className="fsm-th-matchup">MATCHUP</th>
           {cols.map((c) =>
-          <th key={c.key} className={"fsm-th-stat" + (c.danger ? " fsm-th-danger" : "") + (sortState && sortState.key === c.key ? " is-sorted" : "")} {...thProps(c)}>{c.head}{arrow(c)}</th>
+          <th key={c.key} className={"fsm-th-stat" + (c.danger ? " fsm-th-danger" : "") + (sortState && sortState.key === c.key ? " is-sorted" : "")} {...thProps(c)}>{c.head}{arrow(c)}{c.scope === "hand" ? (splitScope === 'vs_hand' ? <span className="fsm-th-scope fsm-th-scope--hand">VS HAND</span> : <span className="fsm-th-scope">SZN</span>) : c.scope === "season" ? <span className="fsm-th-scope">SZN</span> : null}</th>
           )}
           <th className="fsm-th-stat" style={{ width: "36px", textAlign: "center", cursor: "default" }} title="Add to slip">SLIP</th>
         </tr>
@@ -790,8 +847,8 @@ function FsmBatterCard({ row, onClose, onPitch, builderMode = false }) {
   const pitcherHand = row.pitcher_hand || "?";
   const pitcherConfirmed = row.pitcher_confirmed === true;
   const groups = [
-  { title: "POWER & CONTACT", keys: ["avg", "slg", "babip", "xwoba", "barrel", "hrpa"] },
-  { title: "BATTED-BALL PROFILE", keys: ["ev", "la", "hh", "gb", "ld", "pull", "center"] }];
+  { title: "POWER & CONTACT — SEASON", keys: ["avg", "slg", "babip", "xwoba", "barrel", "hrpa"] },
+  { title: "BATTED-BALL PROFILE — SEASON", keys: ["ev", "la", "hh", "gb", "ld", "pull", "center"] }];
 
   return (
     <div className="fsm-card">
@@ -818,11 +875,63 @@ function FsmBatterCard({ row, onClose, onPitch, builderMode = false }) {
         </div>
         <button className="fsm-card__pitchbtn" onClick={onPitch}>PITCH MIX ANALYSIS →</button>
       </div>
+      <div className="fsm-card__sec">
+        <div className="fsm-card__sectitle">HAND BREAKDOWN — SEASON · vs LHP · vs RHP</div>
+        <div className="fsm-hb">
+          {/* SEASON column */}
+          <div className="fsm-hb__col">
+            <div className="fsm-hb__label">SEASON</div>
+            <div className="fsm-hb__hr">{rawRow.hr != null ? rawRow.hr + " HR" : "—"}</div>
+            <div className="fsm-hb__pa">{rawRow.pa != null ? rawRow.pa + " PA" : "—"}</div>
+            <div className="fsm-hb__rates">
+              <div><span className="fsm-hb__rval">{fsmS3(rawRow.avg)}</span><span className="fsm-hb__rlbl">AVG</span></div>
+              <div><span className="fsm-hb__rval">{fsmS3(rawRow.slg)}</span><span className="fsm-hb__rlbl">SLG</span></div>
+              <div><span className="fsm-hb__rval">{rawRow.iso != null ? fsmS3(rawRow.iso) : (rawRow.slg != null && rawRow.avg != null ? fsmS3(+(rawRow.slg - rawRow.avg).toFixed(3)) : "—")}</span><span className="fsm-hb__rlbl">ISO</span></div>
+            </div>
+          </div>
+          {/* vs LHP / vs RHP columns */}
+          {["L", "R"].map((h) => {
+            const pre = h === "L" ? "vs_lhp" : "vs_rhp";
+            const faced = rawRow.vs_hand === h;
+            const pa = rawRow[pre + "_pa"];
+            const hr = rawRow[pre + "_hr"];
+            const avg = rawRow[pre + "_avg"];
+            const slg = rawRow[pre + "_slg"];
+            const iso = rawRow[pre + "_iso"] != null ? rawRow[pre + "_iso"]
+              : (slg != null && avg != null ? +(slg - avg).toFixed(3) : null);
+            const has = pa != null && pa > 0;
+            const thin = has && pa < FSM_VS_HAND_MIN_PA;
+            return (
+              <div key={h} className={"fsm-hb__col" + (faced ? " fsm-hb__col--faced" : "")}>
+                <div className="fsm-hb__label">
+                  vs {h}HP
+                  {faced && <span className="fsm-hb__tonight">TONIGHT</span>}
+                  {thin && <span className="fsm-scope fsm-scope--thin" style={{ display: "inline", fontSize: "7px" }}>THIN</span>}
+                </div>
+                {has ? (
+                  <>
+                    <div className="fsm-hb__hr">{hr != null ? hr + " HR" : "—"}</div>
+                    <div className="fsm-hb__pa">{pa} PA</div>
+                    <div className="fsm-hb__rates">
+                      <div><span className="fsm-hb__rval">{fsmS3(avg)}</span><span className="fsm-hb__rlbl">AVG</span></div>
+                      <div><span className="fsm-hb__rval">{fsmS3(slg)}</span><span className="fsm-hb__rlbl">SLG</span></div>
+                      <div><span className="fsm-hb__rval">{fsmS3(iso)}</span><span className="fsm-hb__rlbl">ISO</span></div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="fsm-split__line fsm-split__line--na">no split data</div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+        {!rawRow.vs_hand && <div className="fsm-split__tbd" style={{ marginTop: 6 }}>Pitcher TBD / unconfirmed — no faced hand; board shows SZN numbers</div>}
+      </div>
       {groups.map((g) =>
       <div className="fsm-card__sec" key={g.title}>
           <div className="fsm-card__sectitle">{g.title}</div>
           <div className="fsm-card__stats">
-            {g.keys.map((k) => <FsmStat key={k} label={fsmColFor(k).head} value={fsmStatVal(k, row)} color={fsmStatColor(k, row)} />)}
+            {g.keys.map((k) => <FsmStat key={k} label={fsmColFor(k).head} value={fsmStatVal(k, rawRow)} color={fsmStatColor(k, rawRow)} />)}
           </div>
         </div>
       )}
@@ -930,6 +1039,7 @@ function FsmBatterVsPitchTable({ title, bvp, arsenal }) {
 }
 
 function FsmPitchMix({ row, onClose, onBatter, builderMode = false }) {
+  row = row._raw || row; // untagged stat reads here stay season/raw-scoped
   const [detail, setDetail] = React.useState(null);
   const [fetchState, setFetchState] = React.useState("loading");
 
@@ -1125,6 +1235,7 @@ function FsmPitchMix({ row, onClose, onBatter, builderMode = false }) {
    FsmPitchMix is left below (unrouted) for easy rollback.
    ============================================================ */
 function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false }) {
+  row = row._raw || row; // untagged stat reads here stay season/raw-scoped
   const [detail, setDetail] = React.useState(null);
   const [fetchState, setFetchState] = React.useState("loading");
 
@@ -1525,26 +1636,8 @@ function FsmDetailModal({ modal, onClose, setModal, builderMode = false }) {
 
 }
 
-/* Recompute a batter's stats vs their opposing starter's hand using platoon factor.
-   Uses real pitcher_hand from row (already fetched by pipeline). */
-function fsmAdjustRow(row, on) {
-  if (!on) return row;
-  const opp = row.pitcher_hand || "", bats = row.bats;
-  const platoon = bats === "S" ? 1.0 : (bats === "L" && opp === "R") || (bats === "R" && opp === "L") ? 1.06 : 0.93;
-  const factor = platoon;
-  const o = { ...row, adjFactor: factor, _raw: row };
-  const up = (k, min, max, d) => { if (o[k] != null) o[k] = +Math.max(min, Math.min(max, o[k] * factor)).toFixed(d); };
-  ["avg", "obp", "slg", "iso", "xslg", "woba", "xwoba", "babip"].forEach((k) => up(k, 0.08, 0.86, 3));
-  ["barrel", "hh", "hrfb", "pullbrl", "pullair", "sweet", "blast", "squp", "fast", "ld"].forEach((k) => up(k, 0, 100, 1));
-  if (o.hrpa != null) o.hrpa = +Math.max(0, Math.min(0.09, o.hrpa * factor)).toFixed(3);
-  o.hrprob = +Math.max(1, Math.min(35, o.hrprob * factor)).toFixed(1);
-  const inv = (k) => { if (o[k] != null) o[k] = +Math.max(0, Math.min(100, o[k] / factor)).toFixed(1); };
-  ["whiff", "kpct", "swstr", "gb"].forEach(inv);
-  if (o.ev != null) o.ev = +Math.max(80, Math.min(96, o.ev * (1 + (factor - 1) * 0.3))).toFixed(1);
-  if (o.maxev != null) o.maxev = +Math.max(98, Math.min(122, o.maxev * (1 + (factor - 1) * 0.2))).toFixed(1);
-  o.odds = "+" + Math.round(Math.max(150, Math.min(1200, 980 - o.hrprob * 31)));
-  return o;
-}
+/* The fabricated platoon-hand multiplier lens (fsmAdjustRow, 1.06/0.93) was
+   retired 2026-07-08 — superseded by REAL vs-hand splits via fsmSplitRow. */
 
 function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMode = false, isJigContext = false }) {
   const [view, setView] = React.useState("game");
@@ -1556,7 +1649,6 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
   const [selMetrics, setSelMetrics] = React.useState([]);
   const toggleMetric = (id) => setSelMetrics((prev) => prev.includes(id) ? prev.filter((m) => m !== id) : [...prev, id]);
   const [modal, setModal] = React.useState(null);
-  const [pmOn, setPmOn] = React.useState(false);
   const FSM_PREF_V = 3;
   const FSM_DATA_GAP = ["woba", "whiff", "swstr", "pullbrl"];
   const [colPref, setColPref] = React.useState(() => {
@@ -1566,6 +1658,7 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
   const [colOpen, setColOpen] = React.useState(false);
   const [colInfo, setColInfo] = React.useState(null);
   const [sortState, setSortState] = React.useState(null);
+  const [splitScope, setSplitScope] = React.useState('vs_hand');
   const [dataVersion, setDataVersion] = React.useState(0);
   React.useEffect(() => {
     const handler = () => setDataVersion(v => v + 1);
@@ -1584,8 +1677,15 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
   React.useEffect(() => {const id = setInterval(() => setSecs((s) => (s + 1) % 600), 1000);return () => clearInterval(id);}, []);
   const timer = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
 
-  const adjusted = React.useMemo(() => rows.map((r) => fsmAdjustRow(r, pmOn)), [rows, pmOn]);
-  const sorted0 = [...adjusted];
+  /* Overlay REAL vs-hand splits (display keys only; _raw preserved for capture/hero).
+     In 'season' mode skip the overlay — season values already live on the row. */
+  const splitRows = React.useMemo(() => {
+    if (splitScope === 'season') {
+      return rows.map((r) => ({ ...r, _raw: r, _vsScope: Object.fromEntries(FSM_SCOPE_HAND_KEYS.map((k) => [k, { scope: 'season' }])) }));
+    }
+    return rows.map(fsmSplitRow);
+  }, [rows, splitScope]);
+  const sorted0 = [...splitRows];
   const sorted = sortState ? [...sorted0].sort((a, b) => {
     const av = a[sortState.key], bv = b[sortState.key];
     const an = av == null ? -Infinity : av, bn = bv == null ? -Infinity : bv;
@@ -1734,13 +1834,18 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
         </div>
       </div>
       <div className="fsm-pitchbar">
-        <span className="fsm-pitchbar__lbl" title="Platoon View: when ON, table stats are scaled by a rough platoon-hand heuristic (favorable/unfavorable handedness vs today's starter). This is NOT pitch-mix analysis and NOT validated model output — a display lens only. Batter-card MODEL HR PROB and slip capture always use raw model values.">PLATOON VIEW</span>
-        <button className={"fsm-pmtoggle" + (pmOn ? " is-on" : "")} role="switch" aria-checked={pmOn} title="Toggle the platoon-hand heuristic lens. ON = table stats scaled by a rough favorable/unfavorable handedness factor. OFF = raw model/season stats. Never affects the batter-card hero number, slip capture, model prob, tier, or rank." onClick={() => setPmOn((v) => !v)}>
-          <span className="fsm-pmtoggle__track"><span className="fsm-pmtoggle__knob" /></span>
-          <span className="fsm-pmtoggle__state">{pmOn ? "ON" : "OFF"}</span>
-        </button>
-        <span className="tcs-pv-tag" title="Heuristic lens — rough platoon-hand adjustment, not validated model output">HEURISTIC</span>
-        <span className="fsm-pitchbar__note">{pmOn ? "Platoon-hand heuristic lens ON — table stats scaled by a rough handedness factor (not model output)" : "Showing raw model/season stats"}</span>
+        <span className="fsm-pitchbar__lbl">SPLIT SCOPE</span>
+        <div className="fsm-rg__opts" role="radiogroup" aria-label="Split scope" style={{ display: 'inline-flex', padding: '3px', borderRadius: '8px' }}>
+          <button className={"fsm-rg__opt" + (splitScope === 'vs_hand' ? " is-on" : "")} role="radio" aria-checked={splitScope === 'vs_hand'} title="Show REAL vs-hand splits for AVG/SLG/ISO/HR-PA/HR-count — PA always shown; thin <30 PA tagged amber; Statcast stays SZN" style={{ padding: '4px 10px', gap: 0 }} onClick={() => setSplitScope('vs_hand')}>VS HAND</button>
+          <button className={"fsm-rg__opt" + (splitScope === 'season' ? " is-on" : "")} role="radio" aria-checked={splitScope === 'season'} title="Show season-blended values for AVG/SLG/ISO/HR-PA/HR-count — compare vs-hand vs season by toggling" style={{ padding: '4px 10px', gap: 0 }} onClick={() => setSplitScope('season')}>SEASON</button>
+        </div>
+        {splitScope === 'vs_hand' && <>
+          <span className="fsm-scope fsm-scope--hand fsm-scope--pill" title="Real faced-hand split — reliable sample (30+ PA); PA shown">VS R / VS L · REAL · PA</span>
+          <span className="fsm-scope fsm-scope--thin fsm-scope--pill" title="Real faced-hand split — thin sample (<30 PA); treat with caution">THIN &lt;30 PA</span>
+          <span className="fsm-scope fsm-scope--szn fsm-scope--pill" title="Season-blended fallback — no hand split or pitcher TBD">SZN FALLBACK</span>
+        </>}
+        {splitScope === 'season' && <span className="fsm-scope fsm-scope--szn fsm-scope--pill" title="All stat columns showing season-blended values">ALL SZN · AVG / SLG / ISO / HR-PA / HR</span>}
+        <span className="fsm-pitchbar__note">{splitScope === 'vs_hand' ? 'AVG · SLG · ISO · HR/PA · HR = real vs-hand when tagged (PA always shown)' : 'AVG · SLG · ISO · HR/PA · HR = season-blended'} · Statcast = season always</span>
       </div>
       <div className="fsm-filters">
         <FsmRadioGroup label="PLAYER GROUP" value={group} onChange={setGroup} options={groupOpts} />
@@ -1776,7 +1881,7 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
         <span className="fsm-metric-empty__msg">No players clear {selMetrics.map((m) => m === "tm" ? "TM ≥ 60" : "HR PROB ≥ 15%").join(" + ")} on today's slate.</span>
       </div> :
       view === "player" ?
-      <div className="fsm-tablewrap fsm-scroll-container"><FsmTable rows={pool} cols={activeCols} showGame={true} onBatter={openBatter} onPitch={openPitch} onReorder={onReorder} onSort={onSort} sortState={sortState} builderMode={builderMode} isJigContext={isJigContext} /></div> :
+      <div className="fsm-tablewrap fsm-scroll-container"><FsmTable rows={pool} cols={activeCols} showGame={true} onBatter={openBatter} onPitch={openPitch} onReorder={onReorder} onSort={onSort} sortState={sortState} builderMode={builderMode} isJigContext={isJigContext} splitScope={splitScope} /></div> :
 
       gamesToShow.map((game) => {
         const gameRows = pool.filter((r) => r.gameId === game.id);
@@ -1784,7 +1889,7 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
         return (
           <div className="fsm-gameblock" key={game.id} id={`fsm-game-${game.id}`}>
               <FsmGameHeader game={game} n={gameRows.length} />
-              <div className="fsm-tablewrap fsm-scroll-container"><FsmTable rows={gameRows} cols={activeCols} onBatter={openBatter} onPitch={openPitch} onReorder={onReorder} onSort={onSort} sortState={sortState} builderMode={builderMode} isJigContext={isJigContext} /></div>
+              <div className="fsm-tablewrap fsm-scroll-container"><FsmTable rows={gameRows} cols={activeCols} onBatter={openBatter} onPitch={openPitch} onReorder={onReorder} onSort={onSort} sortState={sortState} builderMode={builderMode} isJigContext={isJigContext} splitScope={splitScope} /></div>
             </div>);
 
       })
