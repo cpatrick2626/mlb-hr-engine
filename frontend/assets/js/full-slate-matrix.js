@@ -422,7 +422,7 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, i
             type="button"
             className="fsm-tier fsm-tier--btn"
             style={{ "--tc": t.color, "--tg": t.glow }}
-            onClick={(e) => { e.stopPropagation(); e.preventDefault(); const board = isJigContext ? 'jig' : (row._board || 'main'); window.__hrSlip && window.__hrSlip.requestAdd({ player_id: row.id, name: row.name, teamAbbr: row.teamAbbr, team: row.teamAbbr, pitcher: row.pitcher_name, pitcher_name: row.pitcher_name, model_prob: row.model_prob, tier: row.tier, model_tier_rank: row.model_tier_rank, board: board, hrprob: row.hrprob, barrel: row.barrel, hh: row.hh, signal_snapshot: fsmBuildSnapshot(row, board, sortState) }); }}
+            onClick={(e) => { e.stopPropagation(); e.preventDefault(); const board = isJigContext ? 'jig' : (row._board || 'main'); const raw = row._raw || row; window.__hrSlip && window.__hrSlip.requestAdd({ player_id: raw.id, name: raw.name, teamAbbr: raw.teamAbbr, team: raw.teamAbbr, pitcher: raw.pitcher_name, pitcher_name: raw.pitcher_name, model_prob: raw.model_prob, tier: raw.tier, model_tier_rank: raw.model_tier_rank, board: board, hrprob: raw.hrprob, barrel: raw.barrel, hh: raw.hh, signal_snapshot: fsmBuildSnapshot(raw, board, sortState) }); }}
             title={fsmTierTip(row, isJigContext, jigLabel, jigRank) + " · Click: select destination"}
             aria-label={`Select destination for ${row.name}`}>
 
@@ -583,21 +583,23 @@ function FsmTable({ rows, cols, showGame, onBatter, onPitch, onReorder, onSort, 
   const handleAddLeg = (row) => {
     if (!window.__hrSlip) return;
     const board = isJigContext || builderMode ? 'jig' : (row._board || 'main');
+    /* Capture always records RAW model values — never the platoon-lens-adjusted row. */
+    const raw = row._raw || row;
     window.__hrSlip.requestAdd({
-      player_id:       row.id,
-      name:            row.name,
-      teamAbbr:        row.teamAbbr,
-      team:            row.teamAbbr,
-      pitcher:         row.pitcher_name,
-      pitcher_name:    row.pitcher_name,
-      model_prob:      row.model_prob,
-      tier:            row.tier,
-      model_tier_rank: row.model_tier_rank,
+      player_id:       raw.id,
+      name:            raw.name,
+      teamAbbr:        raw.teamAbbr,
+      team:            raw.teamAbbr,
+      pitcher:         raw.pitcher_name,
+      pitcher_name:    raw.pitcher_name,
+      model_prob:      raw.model_prob,
+      tier:            raw.tier,
+      model_tier_rank: raw.model_tier_rank,
       board:           board,
-      hrprob:          row.hrprob,
-      barrel:          row.barrel,
-      hh:              row.hh,
-      signal_snapshot: fsmBuildSnapshot(row, board, sortState),
+      hrprob:          raw.hrprob,
+      barrel:          raw.barrel,
+      hh:              raw.hh,
+      signal_snapshot: fsmBuildSnapshot(raw, board, sortState),
     });
   };
 
@@ -765,6 +767,8 @@ function FsmStat({ label, value, color }) {
 }
 
 function FsmBatterCard({ row, onClose, onPitch, builderMode = false }) {
+  /* Hero MODEL HR PROB is always the raw model value, never the platoon-lens-adjusted row. */
+  const rawRow = row._raw || row;
   const t = FSM_TIERS[row.tier] || FSM_TIERS.COLD;
   const m = FSM_MATCHUP[row.quality] || FSM_MATCHUP.AVG;
   const game = getFSMGames().find((g) => g.id === row.gameId);
@@ -788,7 +792,7 @@ function FsmBatterCard({ row, onClose, onPitch, builderMode = false }) {
           <div className="fsm-card__meta">{row.teamAbbr} · BATS {row.bats}{game ? ` · ${game.away} @ ${game.home}` : ""}</div>
         </div>
         <div className="fsm-card__prob">
-          <span className="fsm-card__probval" style={{ color: t.color }}>{row.hrprob.toFixed(1)}%</span>
+          <span className="fsm-card__probval" style={{ color: t.color }}>{rawRow.hrprob.toFixed(1)}%</span>
           <span className="fsm-card__problbl">{builderMode ? "INHERITED SCORE FEED" : "MODEL HR PROB"}</span>
         </div>
         <button className="fsm-card__close" onClick={onClose} aria-label="Close">✕</button>
@@ -1515,7 +1519,7 @@ function fsmAdjustRow(row, on) {
   const opp = row.pitcher_hand || "", bats = row.bats;
   const platoon = bats === "S" ? 1.0 : (bats === "L" && opp === "R") || (bats === "R" && opp === "L") ? 1.06 : 0.93;
   const factor = platoon;
-  const o = { ...row, adjFactor: factor };
+  const o = { ...row, adjFactor: factor, _raw: row };
   const up = (k, min, max, d) => { if (o[k] != null) o[k] = +Math.max(min, Math.min(max, o[k] * factor)).toFixed(d); };
   ["avg", "obp", "slg", "iso", "xslg", "woba", "xwoba", "babip"].forEach((k) => up(k, 0.08, 0.86, 3));
   ["barrel", "hh", "hrfb", "pullbrl", "pullair", "sweet", "blast", "squp", "fast", "ld"].forEach((k) => up(k, 0, 100, 1));
@@ -1539,7 +1543,7 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
   const [selMetrics, setSelMetrics] = React.useState([]);
   const toggleMetric = (id) => setSelMetrics((prev) => prev.includes(id) ? prev.filter((m) => m !== id) : [...prev, id]);
   const [modal, setModal] = React.useState(null);
-  const [pmOn, setPmOn] = React.useState(true);
+  const [pmOn, setPmOn] = React.useState(false);
   const FSM_PREF_V = 3;
   const FSM_DATA_GAP = ["woba", "whiff", "swstr", "pullbrl"];
   const [colPref, setColPref] = React.useState(() => {
@@ -1717,12 +1721,13 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
         </div>
       </div>
       <div className="fsm-pitchbar">
-        <span className="fsm-pitchbar__lbl" title="Pitch Mix: when ON, each batter's rate & projection stats are recomputed against the specific pitcher they face today — that pitcher's pitch-type mix and throwing hand (platoon split). When OFF, you see full-season stats vs all pitchers.">PITCH MIX</span>
-        <button className={"fsm-pmtoggle" + (pmOn ? " is-on" : "")} role="switch" aria-checked={pmOn} title="Toggle matchup-adjusted stats. ON = vs the pitcher faced (mix + hand). OFF = season stats vs all pitchers. Season totals like HR & PA never change." onClick={() => setPmOn((v) => !v)}>
+        <span className="fsm-pitchbar__lbl" title="Platoon View: when ON, table stats are scaled by a rough platoon-hand heuristic (favorable/unfavorable handedness vs today's starter). This is NOT pitch-mix analysis and NOT validated model output — a display lens only. Batter-card MODEL HR PROB and slip capture always use raw model values.">PLATOON VIEW</span>
+        <button className={"fsm-pmtoggle" + (pmOn ? " is-on" : "")} role="switch" aria-checked={pmOn} title="Toggle the platoon-hand heuristic lens. ON = table stats scaled by a rough favorable/unfavorable handedness factor. OFF = raw model/season stats. Never affects the batter-card hero number, slip capture, model prob, tier, or rank." onClick={() => setPmOn((v) => !v)}>
           <span className="fsm-pmtoggle__track"><span className="fsm-pmtoggle__knob" /></span>
           <span className="fsm-pmtoggle__state">{pmOn ? "ON" : "OFF"}</span>
         </button>
-        <span className="fsm-pitchbar__note">{pmOn ? "Stats reflect each batter vs the pitcher they're facing — pitch mix + throwing hand" : "Showing season stats vs all pitchers"}</span>
+        <span className="tcs-pv-tag" title="Heuristic lens — rough platoon-hand adjustment, not validated model output">HEURISTIC</span>
+        <span className="fsm-pitchbar__note">{pmOn ? "Platoon-hand heuristic lens ON — table stats scaled by a rough handedness factor (not model output)" : "Showing raw model/season stats"}</span>
       </div>
       <div className="fsm-filters">
         <FsmRadioGroup label="PLAYER GROUP" value={group} onChange={setGroup} options={groupOpts} />
