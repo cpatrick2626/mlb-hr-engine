@@ -1,55 +1,79 @@
 # Session Status & Prioritized Backlog (as of 2026-07-09)
 
-Purpose: one-page next-session handoff. This document consolidates what shipped, what is highest leverage next, and what was corrected or de-scoped during the session.
+Purpose: one-page next-session handoff. Backlog grouped by shared infrastructure so builds are efficient — do one cluster at a time.
 
 ---
 
-## Shipped this session (committed + deployed)
+## Shipped this session (committed + deployed) — RESOLVED
 
-- Splits display + full SPLIT SCOPE toggle (VS HAND/SEASON) + three-way batter card (season/vs-LHP/vs-RHP, HR+PA+rates, thin-sample amber tags). Retired fabricated platoon multiplier.
-- FanDuel event deep-links (`fd_event_link`; efficacy pending FD appearing on odds feed).
-- FanDuel search name-normalization (strip Jr./Sr./II-IV + accent-fold; display name stays full).
-- Player-name dot §12 relabel: MATCHUP -> BATTER THREAT + two-axis tooltip (base = batter threat, glow = pitcher TARGET). Legitimate MATCHUP features left intact.
-- Strategy Rail honesty remediation (`77f8354`): removed fabricated HR ENV SCORE; ELITE SPOT shows real MODEL HR %; PARK BOOST shows real PARK HR factor; POWER STACK / HOT STREAK / MODEL QUALITY / BAT-HAND LENS are marked HEURISTIC; stopped writing fabricated `signal_snapshot.rail.hr_env_score`. Display-only/no scoring impact confirmed.
-- Graded May 17-31 whole-slate rows: `pick_tracker` now ~3,828 settled rows (was 737).
-- Tooling: read-only doctrine-aware code-reviewer subagent (`.claude/agents/`); Supabase read-only MCP connected (`.mcp.json`, gitignored).
+- **prob_scale calibration 0.88 → 1.12** — validated on 3,828 rows, live on Fly volume. AUTO_LEARN_FROZEN=True set.
+- **MIN_EV_PCT 3.0 → 14.0** (commit `865f66d`) — normalizes ~8-9 picks/slate at lifted probabilities.
+- **picks RLS** — `alter table public.picks enable row level security;` on prod. Anon gap closed on 4,590 rows.
+- **Strategy rail honesty** (commit `77f8354`) — fabricated HR ENV SCORE removed; honest labels + HEURISTIC tags; hr_env_score write stopped.
+- **CRON_SECRET realignment** — settle + CLV crons were 401ing since ~June 16. Secret realigned on Fly + GitHub Actions.
+- **July 8 legs settle backfill** — 30 legs (6 HR / 24 no) settled manually via `settle_legs.py --commit --date 2026-07-08`.
+- **Auto-settlement workflow** (commit `c7805e2`) — `settle_legs.yml` runs daily at 10:00 UTC; old `daily_settle.yml` disabled.
+- Splits display + SPLIT SCOPE toggle + three-way batter card + fabricated platoon multiplier retired (prior session).
+- FanDuel event deep-links + name normalization (prior session).
+- Player-name dot §12 relabel MATCHUP → BATTER THREAT (prior session).
+- Tooling: code-reviewer subagent + Supabase read-only MCP (prior session).
 
-## Highest-priority next builds (by direct impact on live betting decisions)
+---
 
-1. **CALIBRATION FIX (`prob_scale`) — HIGHEST VALUE.**
-   On 3,828 settled rows, board probabilities under-predict ~17.5% (`0.88` too aggressive). Model sound; issue is concentrated in 5-15% bands; high bands are well-calibrated. Fix = offline replay through the real scale -> Platt path + regression, **not** a blind scalar edit. Fable-tier, scoring surface. Raw-proxy best-fit ~1.067, but Platt-downstream means that is not a literal config value. FLAG: grading May rows armed `auto_apply_safe` (`pipeline.py:623`) — a pipeline run could auto-move `prob_scale`; decide whether to freeze it first.
+## Backlog — grouped by shared foundation
 
-2. **`picks` RLS security fix — READY, low-risk.**
-   One line: `alter table public.picks enable row level security;` No policies needed if all app access remains service-role, which bypasses RLS; frontend never reads `picks` directly; no anon writes. Optional `beta_users_read_picks` SELECT policy only if an external anon-key reader exists. Operator runs SQL manually + tests: cron insert, `/api/slate`, `/api/picks/today`, `/api/strategies` still work; anon REST blocked. Instant revert available.
+### Cluster 2 — Calibration & learning loop
+*Fable-tier, scoring surface. Shares calibration machinery + settled data. Do as ONE focused session.*
 
-3. **STRATEGY room rebuild.**
-   Scoped in `strategy-section-spec.md` §11 port map: lift odds/EV/parlay math, adapt builders, rebuild composites as transparent filters, ledger-based per-strategy tracking, phased P1-P5, reimagine not 1:1. Separate from COMMAND.
+- **Auto-learner remainder-bucket bug fix** — merge final sub-size bucket into penultimate one. Unblocks self-correcting prob_scale. (Root cause: 3,828 / 5 = 3-row poison bucket dragged scale to 0.734, clamped to 0.88 floor for weeks.)
+- **Raise adaptive min_ev_pct clamp** (currently 8.0) before unfreezing auto-learn — else EV floor drops below 14 automatically.
+- **Phase 2 calibration: Platt B refit or isotonic recalibration** — band-aware shape fix a flat scalar cannot do (0–5% band still under-predicts). Needs fresh post-May settled data (now flowing via auto-settlement).
+- **Prerequisite:** keep AUTO_LEARN_FROZEN until bucket bug + clamp both fixed.
 
-4. **LIVE TARGETS banner rebuild.**
-   Currently 100% hardcoded mock, intentionally unwired (`ticket-slip-system.md`). Needs new JWT-gated endpoint `GET /api/tickets/live-targets` returning user's committed legs (`completed_at IS NOT NULL`, `removed = false`, today's `leg_date`) + join to `slate_games` for game status. v1 = game-level status (honest). v2 = live inning/HR detail needs new live-linescore source (`/api/slate` lacks it — do not fake it). Frontend reuses `LiveTargets` / `TargetCard` / marquee. Backend endpoint = Fly deploy.
+### Cluster 4 — Ops hardening & data pipeline reliability
+*Shares settlement / cron infra.*
 
-## Lower-priority / later
+- **pick_tracker auto-settlement** — fix hardcoded-path bug (`TRACKING_DATA_DIR` ignored, hardcodes `ROOT/tracking/pick_tracker.csv`; prod uses `/data` volume). Investigate prod `/data/pick_tracker.csv` state, backfill May 31→present, then auto-wire (mirror `settle_legs.yml`). This refreshes the CALIBRATION dataset — feeds Cluster 2.
+- **CLV going-forward** — verify capture runs now that auth is fixed; accept June–July gap as unrecoverable.
+- **Workflow diagnostic hardening** — switch settle / CLV curls to `-Ssf` (show HTTP status). The June outage went unnoticed 3 weeks partly because `-sf` hid 401 status.
+- **FanDuel deep-link efficacy verification** — once FD appears on odds feed.
 
-- Multi-season splits (small-sample fix; Fable-tier weighting design; revisit after living with this-season toggle).
-- FanDuel deep-link efficacy verification once FD appears on odds feed.
-- AEI pitcher-arsenal dashes -> optional "thin sample" tag (cosmetic; data verified honest / no integrity risk — sample gates working).
-- Analyst agents (`design-expert-agent-layer.md`); fold into STRATEGY P5, consume typed outputs, non-authoritative until ledger-validated.
+### Cluster 1 — "Show the user their own picks"
+*Shares tickets / legs data + auth + settlement.*
 
-## Corrections to prior backlog (verified this session)
+**SPLIT A — uses EXISTING data, buildable now:**
+- LIVE TARGETS banner rebuild (today's committed picks + game-level status).
+- "My Slips" history view (today + past submitted slips, grouped by ticket, with settlement results — meaningful now that settlement works).
 
-- Slip-integrity bugs (`removeLeg` client-only, no `resetSlip`) are already fixed (server soft-delete + `resetSlip` present) — remove from backlog.
-- Dot polarity is correct; it was only mislabeled and is now fixed.
-- AEI dashes are cosmetic, not integrity; sample gates work as designed.
+**SPLIT B — needs NEW live-data infra, separate prereq:**
+- HR-hit notification toggle.
+- Batter-coming-up notification + live pitch/batter tracker.
+- Requires a live in-game data source + polling/push layer the pregame-only architecture lacks. Do NOT scope as a banner add-on — it is a separate infra tier.
+
+### Cluster 3 — STRATEGY room + honest signals
+*Shares real-data-grounded display. Scoped in `strategy-section-spec.md` §11.*
+
+- **STRATEGY room rebuild** — phased P1-P5 port: lift odds/EV/parlay math, adapt builders, rebuild composites as transparent filters, ledger-based per-strategy tracking.
+- **Analyst agents** — fold into STRATEGY P5, consume typed outputs, non-authoritative until ledger-validated (n≥200).
+- **Arsenal Edge Exploit surface / Batter Card** — shares Phase B backend prereq: expose stranded arsenal data.
+
+### Cross-cutting / lower priority
+
+- Multi-season splits (display-only lens; MODERATE feasibility; cache is make-or-break; needs one `statSplits` historical probe). Lower priority.
+- AEI thin-sample tag (cosmetic).
+
+---
 
 ## Standing awareness
 
-- Auto-learn (`auto_apply_safe`) runs every pipeline run, learns from `pick_tracker`, and currently has `prob_scale = 0.88`. Grading May rows may let it re-derive on next run — freeze before deliberate calibration if you want `0.88` held.
-- `legs.player_id` is TEXT, `picks.player_id` is INTEGER — cast needed if joining.
+- **prob_scale = 1.12** on Fly volume (`/data/learned_adjustments.json`). AUTO_LEARN_FROZEN=True in `pipeline.py`. Do not unfreeze until Cluster 2 bucket bug + clamp are fixed.
+- `legs.player_id` is TEXT, `picks.player_id` is INTEGER — cast needed when joining.
+- `pick_tracker.csv` is stale after May 31 (calibration dataset, not the legs ledger). Prod CSV lives on `/data` volume.
 - Tooling: use `@code-reviewer` before protected-surface commits; Supabase MCP is read-only for direct ledger queries.
 
 ## Source anchors
 
-- Recent shipped commits: `git log --oneline -15` through `dd5b61a`.
-- Calibration finding: `wiki/log.md` 2026-07-08 `prob_scale=0.88 calibration re-audit`.
-- Strategy port reference: `wiki/roadmap/strategy-section-spec.md` §11.
-- Current sync check before writing: `HEAD == origin/main == dd5b61a55c93d8d5b48625697ee728862dfe54a7`.
+- Session detail: `wiki/sessions/2026-07-09-calibration-rollout-settlement-repair.md`
+- Calibration finding: `wiki/log.md` 2026-07-08 `prob_scale=0.88 calibration re-audit`
+- Strategy port reference: `wiki/roadmap/strategy-section-spec.md` §11
+- Recent commits: `git log --oneline -10` from `c7805e2`
