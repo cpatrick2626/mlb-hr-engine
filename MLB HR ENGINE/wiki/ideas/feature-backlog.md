@@ -27,6 +27,7 @@ See [[2026-06-15-validation-and-capture-loop]] for calibration audit findings an
 | Pitch Mix — real data | LIVE | De-fabricated 2026-06-15; see [[design-pitch-mix-analysis]] |
 | HR Threat Gauge — radial (0.29 ceiling) | LIVE | Pie replaced; see [[2026-06-15-roles-pitchmix-gauge-session]] |
 | "All means all" | VERIFIED | Full Slate shows ~all players; only incidental profile-error drops (minor observability cleanup possible, not urgent) |
+| Strategy Rail honesty remediation | LIVE | `77f8354`: removed fabricated HR ENV SCORE, relabeled heuristics, stopped fabricated rail score capture |
 
 ---
 
@@ -73,10 +74,10 @@ Strategy spec (`wiki/roadmap/strategy-section-spec.md`) is written and gate-read
 | Priority | Item | Reason |
 |----------|------|--------|
 | 1st | Authorize snapshot-wiring in isolation | History clock is unrecoverable — delay kills calibration audit trail permanently |
-| 2nd | Rail remediation | Live fabricated POWER STACK / HR ENV SCORE is an honesty violation — active integrity risk |
-| Hold | Strategy-room UI + protected Stage routing branch | Depends on snapshot-wiring + rail remediation shipping first |
+| Done | Rail remediation | Shipped in `77f8354`; HR ENV SCORE removed and remaining non-authoritative rail groupings tagged HEURISTIC |
+| Next gate | Strategy-room UI + protected Stage routing branch | Snapshot-wiring + rail remediation have shipped; still requires separate protected Stage routing authorization |
 
-Do not proceed on Strategy-room UI or routing branch until the first two are shipped.
+Strategy-room UI or routing branch still requires separate protected authorization before implementation.
 
 ---
 

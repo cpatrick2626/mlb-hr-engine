@@ -899,6 +899,7 @@ An ELITE batter facing a TOUGH-rated pitcher can still be an excellent matchup p
 **Canonical incidents:**
 1. AEI header "PITCHER VULNERABILITY" with sub-labels like "TOUGH" caused operators to skip good picks — fixed by relabeling to "SEASON HR/9 GRADE" + caption "SEASON GRADE VS AVG BATTER · ARSENAL EDGE READS THIS MATCHUP."
 2. Two-axis matchup split: batter tier and pitcher vulnerability were merged into a single DANGER/not-DANGER signal, obscuring which axis was firing — fixed by separating into independent batter-tier and pitcherVuln axes.
+3. Strategy Rail "HR ENV SCORE" displayed a fabricated 9.x value (`6 + avg(selected hrprob) * 0.17`, capped 9.9) as if it were an environmental signal. Fixed in `77f8354`: removed the label/value, surfaced real MODEL HR % and PARK HR factor where available, and marked remaining rule-of-thumb groupings as HEURISTIC.
 
 ### Rule
 
@@ -922,7 +923,7 @@ Before wiring any new signal to the board, answer:
 
 ### Systemic Pattern — Scope-Unlabeled Values (added 2026-07-06)
 
-Four separate incidents share the same root cause: a value is computationally correct but its scope is unlabeled, causing decision-level misreads.
+Five separate incidents share the same root cause: a value is computationally correct, fabricated, or heuristic but its scope is unlabeled, causing decision-level misreads.
 
 | # | Incident | Root symptom | Fix |
 |---|----------|-------------|-----|
@@ -930,6 +931,7 @@ Four separate incidents share the same root cause: a value is computationally co
 | 2 | DANGER polarity / scope inversion | High `pitcher_hr9` labeled DANGER (worst matchup); correct read is high HR/9 = vulnerable pitcher = good matchup | DANGER removed; TARGET axis added (`7cdcb61`) |
 | 3 | AEI season-grade verb read as matchup verdict | "TOUGH" is a season-aggregate pitcher grade; operators used it as a skip signal for specific matchups | Relabeled to raw stat + descriptor; ARSENAL EDGE headlined (`4422501`) |
 | 4 | FSM HR season-count in pitch-mix-scoped row | Under pitch-mix toggle the row's rate columns rescope to vs-this-pitcher; HR column stayed season-wide without a label distinguishing it | "HR" → "SZN HR" (`cafed75`) |
+| 5 | Strategy Rail fabricated authority signal | "HR ENV SCORE" was not environment; it was a capped transform of selected model probabilities, and VALUE / PLATOON labels implied EV or split intelligence that was not present | HR ENV SCORE removed; ELITE SPOT shows real MODEL HR %; PARK BOOST shows real `game.hrFactor`; POWER STACK / HOT STREAK / MODEL QUALITY / BAT-HAND LENS are HEURISTIC (`77f8354`) |
 
 **Root cause:** under the pitch-mix toggle the entire FSM row shifts meaning — rate/quality columns rescope to "vs this pitcher" — but season-total columns (HR count) stay season-wide. When columns are not consistently labeled to their scope, operators read the whole row as one scope.
 

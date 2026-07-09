@@ -10,6 +10,7 @@ Purpose: one-page next-session handoff. This document consolidates what shipped,
 - FanDuel event deep-links (`fd_event_link`; efficacy pending FD appearing on odds feed).
 - FanDuel search name-normalization (strip Jr./Sr./II-IV + accent-fold; display name stays full).
 - Player-name dot §12 relabel: MATCHUP -> BATTER THREAT + two-axis tooltip (base = batter threat, glow = pitcher TARGET). Legitimate MATCHUP features left intact.
+- Strategy Rail honesty remediation (`77f8354`): removed fabricated HR ENV SCORE; ELITE SPOT shows real MODEL HR %; PARK BOOST shows real PARK HR factor; POWER STACK / HOT STREAK / MODEL QUALITY / BAT-HAND LENS are marked HEURISTIC; stopped writing fabricated `signal_snapshot.rail.hr_env_score`. Display-only/no scoring impact confirmed.
 - Graded May 17-31 whole-slate rows: `pick_tracker` now ~3,828 settled rows (was 737).
 - Tooling: read-only doctrine-aware code-reviewer subagent (`.claude/agents/`); Supabase read-only MCP connected (`.mcp.json`, gitignored).
 
@@ -24,10 +25,7 @@ Purpose: one-page next-session handoff. This document consolidates what shipped,
 3. **STRATEGY room rebuild.**
    Scoped in `strategy-section-spec.md` §11 port map: lift odds/EV/parlay math, adapt builders, rebuild composites as transparent filters, ledger-based per-strategy tracking, phased P1-P5, reimagine not 1:1. Separate from COMMAND.
 
-4. **Strategy Rail honesty remediation.**
-   `"HR ENV SCORE"` is fabricated (`6 + avg(hrprob) * 0.17`, not environmental). Groupings are mostly invented composites with misleading labels: PLATOON EDGE ignores real splits; VALUE SPOT has no EV; HOT STREAK has no recent window. Keep ELITE SPOT (real `hrprob`) + honest PARK BOOST; relabel POWER STACK / HOT STREAK as heuristic; remove HR ENV SCORE label + VALUE / PLATOON mislabels. Also stop writing fabricated `hr_env_score` into `signal_snapshot` capture. Display-only; no scoring leak confirmed. Frontend bundle: `32ab40c7`. Connects to STRATEGY (rail -> honest single-source teaser).
-
-5. **LIVE TARGETS banner rebuild.**
+4. **LIVE TARGETS banner rebuild.**
    Currently 100% hardcoded mock, intentionally unwired (`ticket-slip-system.md`). Needs new JWT-gated endpoint `GET /api/tickets/live-targets` returning user's committed legs (`completed_at IS NOT NULL`, `removed = false`, today's `leg_date`) + join to `slate_games` for game status. v1 = game-level status (honest). v2 = live inning/HR detail needs new live-linescore source (`/api/slate` lacks it — do not fake it). Frontend reuses `LiveTargets` / `TargetCard` / marquee. Backend endpoint = Fly deploy.
 
 ## Lower-priority / later

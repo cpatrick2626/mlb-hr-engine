@@ -148,6 +148,20 @@ The live slip card displays current ticket legs with real data:
 
 **LIVE Targets Banner block:** Hardcoded mock data, no real `player_id`. Wiring would corrupt calibration data. Must not be wired until banner is connected to real API rows.
 
+## Strategy Rail Signal Honesty (Live — 2026-07-09)
+
+Commit `77f8354` resolved a production honesty violation in `frontend/assets/js/32ab40c7-e667-469e-9b09-c6a46761c1cd.js`.
+
+- Removed fabricated `HR ENV SCORE` from rail cards. It was `6 + avg(selected hrprob) * 0.17`, capped at 9.9, not an environmental metric.
+- `ELITE SPOT` now displays real `MODEL HR %` from `model_prob`.
+- `PARK BOOST` now displays real `PARK HR` factor from `game.hrFactor`.
+- `POWER STACK` and `HOT STREAK` remain display heuristics using real barrel / SLG / EV / hard-hit fields, and are explicitly tagged `HEURISTIC`.
+- `VALUE SPOT` was relabeled `MODEL QUALITY` + `HEURISTIC`; it is not EV or market leverage.
+- `PLATOON EDGE` was relabeled `BAT-HAND LENS` + `HEURISTIC`; it uses batter handedness only, not pitcher hand or real vs-hand splits.
+- Ticket capture no longer writes fabricated `signal_snapshot.rail.hr_env_score`; it keeps `rank_signal_used` and `rail.archetype`.
+
+Confirmed scope: display-only and analytics metadata only. No impact to `model_prob`, `jigScore`, tiers, MAIN ranking, JIG ranking, ledger scoring, or calibration math. Code-reviewer subagent reported no findings; live board visual verification completed.
+
 ---
 
 ## Authentication (Live — 2026-06-26)
