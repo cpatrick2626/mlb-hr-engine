@@ -32,6 +32,11 @@ try:
 except ImportError:
     _aw = None
 
+# Frozen 2026-07-09 pending deliberate calibration replay — prevents
+# auto-mutation of prob_scale (and min_ev_pct/recent_weight) during analysis.
+# Flip to False to re-enable auto-learning once calibration is ready.
+AUTO_LEARN_FROZEN = True
+
 
 # ── Core helpers (same logic as v3 main.py, extracted here) ──────────────────
 
@@ -618,15 +623,18 @@ def load_game_data(
     _NAME_MATCH_CACHE.clear()
 
     # Run adaptive learning if new settled picks are available since last run
-    try:
-        from tracking import auto_learn as _al
-        result = _al.auto_apply_safe()
-        if result.get("applied"):
-            if _aw is not None:
-                _aw.invalidate_cache()
-            _cb(f"Adaptive weights updated: {', '.join(result['applied'])}")
-    except Exception as _e:
-        print(f"[pipeline] auto_apply_safe skipped: {_e}")
+    if AUTO_LEARN_FROZEN:
+        print("[pipeline] auto_apply_safe skipped: AUTO_LEARN_FROZEN=True")
+    else:
+        try:
+            from tracking import auto_learn as _al
+            result = _al.auto_apply_safe()
+            if result.get("applied"):
+                if _aw is not None:
+                    _aw.invalidate_cache()
+                _cb(f"Adaptive weights updated: {', '.join(result['applied'])}")
+        except Exception as _e:
+            print(f"[pipeline] auto_apply_safe skipped: {_e}")
 
     # Fetch schedule and odds in parallel for improved performance
     _cb("Fetching schedule and odds concurrently...")
