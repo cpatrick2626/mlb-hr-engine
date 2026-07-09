@@ -29,7 +29,7 @@ MIN_BET_DOLLARS: float = 5.0
 
 # ── Filter Thresholds ─────────────────────────────────────────────────────────
 MIN_QUAL_PROB: float = 0.08  # Primary HR threat floor (~2.5× league avg per-game rate); market-independent
-MIN_EV_PCT: float = 3.0    # Bread-and-butter floor; anything below is noise
+MIN_EV_PCT: float = 14.0   # Volume-normalized floor for prob_scale=1.12 (calibrated to ~8.9 picks/slate; was 3.0 under prob_scale=0.88)
 MIN_EDGE_PCT: float = 2.0  # Minimum model-vs-market edge to surface a play
 MIN_PA_THRESHOLD: float = 3.3      # Blocks 9-hole batters (3.2 PA); 3.1 was dead (never fired)
 MAX_PARK_PENALTY: float = 0.87     # Skip if park_factor < this; catches SF (0.83) + SD (0.89)
