@@ -331,6 +331,73 @@ The Python analyzers (EV math, odds conversion, parlay probability, tactical gro
 
 ---
 
+## 11. STRATEGY Port Reference — Recovered Logic Map
+
+Recovered 2026-07-09. Source: `mlb_hr_engine_v4/strategies_ui.py` current remnant; `git show 8d6843c:mlb_hr_engine_v4/strategies_ui.py` fullest pre-strip version before commit `6be9d45` removed ~1,126 lines from that file; `mlb_hr_engine_v4/strategies/`; `mlb_hr_engine_v4/tracking/strategy_log.py`.
+
+### 11.1 Reusable math core — lift as pure logic
+
+- American ↔ decimal conversion: `+150 -> 2.50`; `-120 -> 1 + 100/120`; zero/fallback path returns `1.01`.
+- Parlay decimal odds = product of each leg's decimal odds.
+- Independent parlay probability = product of each leg's `model_prob`.
+- EV = `decimal_odds * probability - 1`; `ev_pct = EV * 100`.
+- Diversity rule (`_diverse_top`): each player can appear in at most one returned slip.
+- Hedge math (`calculate_hedge_bet`): stake sizing and guaranteed-outcome math; pure, liftable.
+
+### 11.2 Port verdicts by function family
+
+- **LIFT — pure and real:** odds helpers (`_ato_d` / `_dta`; consolidate duplicates), `_diverse_top`, `calculate_hedge_bet`.
+- **ADAPT — logic useful, strip Streamlit/cache/session state:** power, park, and pitcher-target parlay builders; `find_correlated_parlays`; `build_team_stacks` / `evaluate_stack`. Their boost and adjusted-probability paths must be quarantined until ledger/calibration validation.
+- **REBUILD as transparent filters, not composite scores:** `stars_aligned` becomes a checklist; `multi_edge` becomes boolean factor confirmation.
+- **OPTIONAL modules:** staking systems (Kelly/Fibonacci/D'Alembert/Oscar/streak-adjusted bankroll logic), `value_decay` / CLV logic (requires line history), arbitrage logic (requires multi-book Yes/No data; keep dormant until sourced).
+- **DROP / REBUILD:** `tab_advanced_strategies`, all Streamlit widgets, `st.session_state` FD slip behavior, and local CSV tracking.
+
+### 11.3 Data availability
+
+The current pipeline still emits most old STRATEGY inputs from canonical backend rows: `model_prob`, `best_american`, `fanduel_american`, `ev_pct`, `edge_pct`, `barrel_pct`, `exit_velo`, `gb_pct`, `park_factor`, `pitcher_factor`, `pitcher_hr9`, `pitcher_days_rest`, `weather_factor`, `platoon_factor`, `streak_factor`, `short_form_hr`, `short_form_pa`, `xslg`, `actual_slg`, `xslg_diff`, and `lineup_spot`.
+
+Risk is **API exposure**, not backend availability. The rebuild should expose a typed STRATEGY payload from canonical pipeline rows. Do not recompute STRATEGY analysis in React from partial frontend fields.
+
+### 11.4 Honesty audit — signal-honesty doctrine
+
+**Real and safe to show as filters/checklists:** `xslg_diff`, `xslg`, `actual_slg`, `park_factor`, `pitcher_factor`, `pitcher_hr9`, `pitcher_days_rest`, `weather_factor`, `platoon_factor`, `streak_factor`, `short_form_hr`, `short_form_pa`, `model_prob`, `ev_pct`, `edge_pct`, and odds.
+
+**Composite / quarantine unless calibration- or ledger-validated:** `power_score`, `alignment_score`, `_edge_product`, correlation multipliers, `team_explosion_factor`, lineup-heart boost, short-rest `rest_boost`, park/weather/platoon/streak adjusted probabilities, market `efficiency_score`, and the current StrategyRail `HR ENV SCORE` fabricated blend.
+
+Rule: show factor evidence and explain qualification. Never present blended scores as model truth unless validated. This subsumes the fabricated-blend remediation backlog item.
+
+### 11.5 Tracking — use the ledger, not CSV
+
+Old `strategy_log.py` schema: `date`, `strategy`, `player_name`, `team`, `american_odds`, `model_prob_pct`, `ev_pct`, `bet_dollars`, `hr_result`, `profit_loss`.
+
+Old behavior: dedupe by date + strategy + player; settle by HR outcome; aggregate per-strategy picks, wins, losses, P&L, ROI, pending count, and last pick date.
+
+Verdict: do **not** revive CSV storage. Add `strategy_key` / `source_strategy` to leg metadata or `signal_snapshot`, then compute per-strategy P&L/ROI from the current tickets/legs ledger. The old tracker is a reporting spec, not storage architecture.
+
+### 11.6 What `6be9d45` removed and what to recover
+
+**Recover:** xStats Regression, Long Shot Value, single-factor filters (Platoon / Weather / Hot / Park), Same-Game Builder structure, Hedge and Staking calculators.
+
+**Recover with caution — quarantine boosts:** Short Rest, Team Stacks, Lineup Heart, Same-Game correlation boosts, adjusted parlay probabilities.
+
+**Drop:** Streamlit widgets, session-state FD slip behavior, CSV tracking, decorative parlay UI.
+
+### 11.7 Recommended phased rebuild
+
+**P1 backend utilities:** canonical strategy-math module for odds, EV, parlay probability, and diversity; typed outputs carrying `strategy_key`, `legs`, `source_fields`, `base_prob`, `decimal_odds`, `ev_pct`, and `honesty_level`.
+
+**P2 safe analyzers:** xStats Regression, Long Shot Value, Player Edge, Confidence, and Multi-Edge as transparent filters using raw factors and thresholds only. No adjusted probabilities.
+
+**P3 parlay builders:** Power, Pitcher Target, Park, Correlation, and Team Stack. Keep `base_prob` + raw EV; put boosted probabilities behind explicit `heuristic_adjusted_prob` naming or quarantine them.
+
+**P4 ledger integration:** strategy attribution in leg metadata; per-strategy P&L/ROI from settled legs.
+
+**P5 agents + export:** Betting Analyst Agents consume typed strategy outputs, not hidden recomputed scores. Slate export includes each strategy's qualifying rows, source fields, formulas, and honesty status.
+
+Direction: **reimagine, not 1:1 port.** Old backend logic is useful; old Streamlit UI and silent composites do not meet signal-honesty doctrine. Keep STRATEGY separate from COMMAND.
+
+---
+
 ## Cross-refs
 
 - [[strategy-section-seed]] — reasoning framework + honesty caveat (source of the anchoring principle)
