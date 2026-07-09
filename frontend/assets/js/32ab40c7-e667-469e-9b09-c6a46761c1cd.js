@@ -4,17 +4,17 @@
    Clicking a card sends that strategy's players to FanDuel. */
 
 const STRATEGIES = [
-  { id: "elite",  label: "ELITE SPOT",   icon: "crosshair", color: "#1aff66", tag: "Top HR Prop Edge",
+  { id: "elite",  label: "ELITE SPOT",   icon: "crosshair", color: "#1aff66", tag: "Top Model HR Probability",
     rank: (r) => r.hrprob },
-  { id: "power",  label: "POWER STACK",  icon: "target", color: "#ffb020", tag: "Stack for Maximum Power",
+  { id: "power",  label: "POWER STACK",  icon: "target", color: "#ffb020", tag: "HEURISTIC - Barrel, SLG, Exit Velo",
     rank: (r) => (r.barrel || 0) * 1.6 + r.slg * 8 + (r.ev - 86) * 0.6 },
-  { id: "value",  label: "VALUE SPOT",   icon: "star", color: "#3b6fff", tag: "High Value + Leverage Spot",
+  { id: "value",  label: "MODEL QUALITY", icon: "star", color: "#3b6fff", tag: "HEURISTIC - HR Prob + Quality Tier",
     rank: (r) => (["EDGE", "SIGNAL"].includes(r.tier) ? 100 : 0) + r.hrprob + (r.quality === "ELITE" || r.quality === "STRONG" ? 6 : 0) },
-  { id: "park",   label: "PARK BOOST",   icon: "diamond", color: "#00d9ff", tag: "Hitter-Friendly Air Density",
+  { id: "park",   label: "PARK BOOST",   icon: "diamond", color: "#00d9ff", tag: "Real Park HR Factor",
     rank: (r) => { const g = (window.SLATE_GAMES || []).find((x) => x.teams.includes(r.teamAbbr)); return (g ? g.hrFactor : 1) * 12 + r.hrprob * 0.3; } },
-  { id: "streak", label: "HOT STREAK",   icon: "trend", color: "#1aff66", tag: "Live Barrel + Exit-Velo Surge",
+  { id: "streak", label: "HOT STREAK",   icon: "trend", color: "#1aff66", tag: "HEURISTIC - Barrel, EV, Hard-Hit",
     rank: (r) => (r.barrel || 0) * 2 + (r.ev - 85) * 1.2 + (r.hh || 0) * 0.15 },
-  { id: "lefty",  label: "PLATOON EDGE", icon: "bolt", color: "#ffb020", tag: "Platoon Split Advantage",
+  { id: "lefty",  label: "BAT-HAND LENS", icon: "bolt", color: "#ffb020", tag: "HEURISTIC - Batter Hand Only",
     rank: (r) => (r.bats === "L" ? 60 : r.bats === "S" ? 30 : 0) + r.hrprob } ,
 ];
 
@@ -118,19 +118,36 @@ const StratHead = ({ stratId, player, slipStatus, onAddLeg }) => {
   );
 };
 
+function stratGame(player) {
+  return (window.SLATE_GAMES || []).find((x) => x.teams.includes(player.teamAbbr));
+}
+
+function stratMetric(strat, players) {
+  if (strat.id === "elite") {
+    const avgHrProb = players.reduce((a, p) => a + (p.hrprob || 0), 0) / (players.length || 1);
+    return { label: "MODEL HR", value: `${avgHrProb.toFixed(1)}%` };
+  }
+  if (strat.id === "park") {
+    const game = players[0] ? stratGame(players[0]) : null;
+    const rawHrFactor = game ? Number(game.hrFactor) : 1;
+    const hrFactor = Number.isFinite(rawHrFactor) ? rawHrFactor : 1;
+    return { label: "PARK HR", value: hrFactor.toFixed(2) };
+  }
+  return { label: "HEURISTIC", value: null };
+}
+
 const StratCard = ({ strat, rows, count }) => {
   const players = rows.slice().sort((a, b) => strat.rank(b) - strat.rank(a)).slice(0, count);
-  const avg = players.reduce((a, p) => a + p.hrprob, 0) / (players.length || 1);
-  const score = Math.min(9.9, 6 + avg * 0.17).toFixed(1);
+  const metric = stratMetric(strat, players);
 
   /* Pick-time signal snapshot (Strategy spec §5, snapshot_version 1).
-     Records what this card displays: archetype + its HR ENV SCORE. Display record only. */
+     Records the displayed rail archetype only; rank_signal_used records the selected lane. */
   const railSnapshot = () => ({
     snapshot_version: 1,
     surface: "strategy-rail",
     lane: "main",
     rank_signal_used: strat.id,
-    rail: { archetype: strat.label, hr_env_score: Number(score) },
+    rail: { archetype: strat.label },
     generated_at: window.SLATE_GENERATED_AT || null,
   });
   const addFD = (e) => {
@@ -203,7 +220,7 @@ const StratCard = ({ strat, rows, count }) => {
       <span className="md-qp__add" aria-hidden="true">+ FD</span>
       <div className="md-qp__row">
         <span className="md-qp__label"><Icon name={strat.icon} size={13} color="currentColor" strokeWidth={1.9} /> {strat.label}</span>
-        <span className="md-qp__score">HR ENV SCORE <b>{score}</b></span>
+        <span className="md-qp__score">{metric.label}{metric.value ? <b>{metric.value}</b> : null}</span>
       </div>
       <div className="md-qp__heads" style={{ gridTemplateColumns: `repeat(${count}, 1fr)` }} onClick={(e) => e.stopPropagation()}>
         {players.map((p) => (
