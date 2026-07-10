@@ -25,10 +25,10 @@ Purpose: one-page next-session handoff. Backlog grouped by shared infrastructure
 ### Cluster 2 — Calibration & learning loop
 *Fable-tier, scoring surface. Shares calibration machinery + settled data. Do as ONE focused session.*
 
-- **Auto-learner remainder-bucket bug fix** — merge final sub-size bucket into penultimate one. Unblocks self-correcting prob_scale. (Root cause: 3,828 / 5 = 3-row poison bucket dragged scale to 0.734, clamped to 0.88 floor for weeks.)
-- **Raise adaptive min_ev_pct clamp** (currently 8.0) before unfreezing auto-learn — else EV floor drops below 14 automatically.
-- **Phase 2 calibration: Platt B refit or isotonic recalibration** — band-aware shape fix a flat scalar cannot do (0–5% band still under-predicts). Needs fresh post-May settled data (now flowing via auto-settlement).
-- **Prerequisite:** keep AUTO_LEARN_FROZEN until bucket bug + clamp both fixed.
+- **Auto-learner remainder-bucket bug fix** — DONE (commit `e36ee4a`, 2026-07-10). Count-weighting fix; computes correct 1.21→1.12. Dormant behind AUTO_LEARN_FROZEN.
+- **Raise adaptive min_ev_pct clamp** (currently 8.0) before unfreezing auto-learn — else EV floor drops below 14 automatically. OPEN.
+- **Phase 2 calibration: Platt refit (two-tier A+B, CV-validated)** — SCOPED + twice-confirmed (Fable + Codex, 2026-07-10), WAITING for post-1.12 real data. See `wiki/roadmap/PHASE2_PLATT_REFIT_PLAN.md` for full scoping doc, candidate coefficients, pass criteria, and rollout coupling notes.
+- **Prerequisite:** keep AUTO_LEARN_FROZEN until min_ev_pct clamp fixed AND Phase 2 refit executed (or explicitly skipped). OPEN.
 
 ### Cluster 4 — Ops hardening & data pipeline reliability
 *Shares settlement / cron infra.*
