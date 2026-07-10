@@ -15,6 +15,14 @@ from zoneinfo import ZoneInfo
 
 _ET = ZoneInfo("America/New_York")
 
+
+def today_et() -> _date:
+    """Current calendar date in Eastern Time. Anchors all default 'which day'
+    slate-date resolution — server/runner clocks are UTC, where the date rolls
+    over at 8pm ET and would otherwise point at tomorrow's slate."""
+    return _dt.now(_ET).date()
+
+
 _supa = None
 
 

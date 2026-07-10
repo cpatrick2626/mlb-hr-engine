@@ -37,7 +37,7 @@ from fastapi import FastAPI, Depends, HTTPException, Query, Request, BackgroundT
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.auth import require_auth, require_beta
-from api.cache import get_picks, get_latest_picks, store_picks, list_runs, redeem_invite, add_leg, complete_ticket, remove_leg, ledger_legs, ledger_pending_count
+from api.cache import get_picks, get_latest_picks, store_picks, list_runs, redeem_invite, add_leg, complete_ticket, remove_leg, ledger_legs, ledger_pending_count, today_et
 from clients.arsenal import get_pitcher_arsenal, arsenal_matchup_factor
 from clients.pitch_mix import get_batter_vs_pitches, get_pitcher_pitch_stats
 from config import FS_TIER_THRESHOLDS
@@ -69,7 +69,7 @@ async def health():
 
 @app.get("/api/picks/today")
 async def picks_today(user=Depends(require_beta)):
-    return _picks_or_404(date.today().strftime("%Y-%m-%d"))
+    return _picks_or_404(today_et().strftime("%Y-%m-%d"))
 
 
 @app.get("/api/picks/{date_str}")
@@ -83,7 +83,7 @@ async def picks_by_date(date_str: str, user=Depends(require_beta)):
 
 @app.get("/api/strategies")
 async def strategies(date_str: str = None, user=Depends(require_beta)):
-    d = date_str or date.today().strftime("%Y-%m-%d")
+    d = date_str or today_et().strftime("%Y-%m-%d")
     cached = get_picks(d)
     if not cached:
         raise HTTPException(status_code=404, detail=f"No data for {d}.")
@@ -111,7 +111,7 @@ async def trigger_pipeline(request: Request, background_tasks: BackgroundTasks):
     secret = request.headers.get("X-Cron-Secret", "")
     if not CRON_SECRET or secret != CRON_SECRET:
         raise HTTPException(status_code=401, detail="Unauthorized")
-    target = date.today().strftime("%Y-%m-%d")
+    target = today_et().strftime("%Y-%m-%d")
     background_tasks.add_task(_run_pipeline, target)
     return {"status": "queued", "date": target}
 
@@ -644,6 +644,8 @@ def _build_slate_payload(data: dict) -> dict:
             "vs_rhp_hr":     p.get("vs_rhp_hr"),
             "vs_rhp_hr_pa":  p.get("vs_rhp_hr_pa"),
             "vs_rhp_pa":     p.get("vs_rhp_pa"),
+            # Multi-season vs-hand splits (display only — additive passthrough)
+            "multi_season_vs_hand": p.get("multi_season_vs_hand"),
             "pitcher_era":       p.get("pitcher_era"),
             "pitcher_whip":      p.get("pitcher_whip"),
             "pitcher_k_pct":     p.get("pitcher_k_pct"),
@@ -758,7 +760,7 @@ def _build_slate_payload(data: dict) -> dict:
         "leaderboard_rows_jig": jig_rows,
         "slate_games":          list(seen_games.values()),
         "generated_at":         _dt.datetime.utcnow().isoformat(),
-        "date":                 date.today().strftime("%Y-%m-%d"),
+        "date":                 today_et().strftime("%Y-%m-%d"),
         "fs_tier_thresholds":   dict(FS_TIER_THRESHOLDS),
         "jig_build_error":      jig_build_error,
     }
@@ -774,7 +776,7 @@ async def get_slate():
     Empty DB (pipeline never run): returns clean error shape with empty rows.
     """
     import datetime as _dt
-    today = date.today().strftime("%Y-%m-%d")
+    today = today_et().strftime("%Y-%m-%d")
 
     # ── Cache-first path ────────────────────────────────────────────────────────
     try:

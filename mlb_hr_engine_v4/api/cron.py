@@ -14,7 +14,7 @@ import sys
 import os
 import logging
 import traceback
-from datetime import date, datetime
+from datetime import datetime
 
 logging.basicConfig(
     level=logging.INFO,
@@ -29,13 +29,13 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from pipeline import load_game_data, serializable
-from api.cache import store_picks, insert_picks
+from api.cache import store_picks, insert_picks, today_et
 
 MODEL_VERSION = "v4"
 
 
 def run(target_date: str = None) -> dict:
-    target_date = target_date or date.today().strftime("%Y-%m-%d")
+    target_date = target_date or today_et().strftime("%Y-%m-%d")
     print(f"[cron] Running pipeline for {target_date}...")
 
     data = load_game_data(target_date)

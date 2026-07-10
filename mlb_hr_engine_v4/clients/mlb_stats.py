@@ -3,10 +3,12 @@ MLB Stats API client â€" free, no API key required.
 Docs: https://statsapi.mlb.com/docs/
 """
 
+import json
 import sys
 import time
 import requests
 from datetime import date, timedelta
+from pathlib import Path
 from typing import Optional
 
 import config
@@ -35,6 +37,48 @@ _player_season_cache:  dict[int, dict] = {}
 _pitcher_season_cache: dict[int, dict] = {}
 _platoon_splits_cache: dict[int, dict] = {}
 _player_info_cache:    dict[int, dict] = {}
+
+# Durable multi-season splits cache (prior seasons only — immutable once the season ends).
+# Persisted to disk so prior-season data is fetched once per player, ever.
+# Current season is NEVER stored here — always re-fetched fresh.
+_MULTISEASON_CACHE_PATH = Path(__file__).parent.parent / "data" / "multiseason_splits_cache.json"
+_multiseason_splits_cache: dict[int, dict] = {}  # {player_id: {season: {vl: {...}, vr: {...}}}}
+_multiseason_cache_loaded: bool = False
+
+
+def _load_multiseason_cache() -> None:
+    global _multiseason_cache_loaded
+    if _multiseason_cache_loaded:
+        return
+    _multiseason_cache_loaded = True
+    if not _MULTISEASON_CACHE_PATH.exists():
+        return
+    try:
+        with open(_MULTISEASON_CACHE_PATH) as f:
+            raw = json.load(f)
+        for pid_str, seasons_data in raw.items():
+            _multiseason_splits_cache[int(pid_str)] = {
+                int(s): v for s, v in seasons_data.items()
+            }
+    except Exception as e:
+        print(f"[mlb_stats] multiseason cache load failed: {e}")
+
+
+def _save_multiseason_cache() -> None:
+    # Atomic write: dump to a temp file then rename so a kill mid-write never
+    # corrupts the cache file (os.replace is atomic on both POSIX and Windows NTFS).
+    try:
+        serializable = {
+            str(pid): {str(s): v for s, v in seasons_data.items()}
+            for pid, seasons_data in _multiseason_splits_cache.items()
+        }
+        tmp_path = _MULTISEASON_CACHE_PATH.with_suffix(".tmp")
+        with open(tmp_path, "w") as f:
+            json.dump(serializable, f)
+        import os
+        os.replace(tmp_path, _MULTISEASON_CACHE_PATH)
+    except Exception as e:
+        print(f"[mlb_stats] multiseason cache save failed: {e}")
 
 
 def _pitcher_game_log_splits(pitcher_id: int) -> list:
@@ -467,6 +511,94 @@ def get_player_platoon_splits(player_id: int) -> dict:
         return {}
 
 
+def get_player_multiseason_splits(
+    player_id: int,
+    seasons: "tuple | None" = None,
+) -> dict:
+    """
+    Multi-season vs-hand splits for a batter. DISPLAY-ONLY — never read by scoring.
+    Returns: {season: {"vl": {hr, pa, avg, slg, obp, ab_per_hr}, "vr": {...}}}
+    Prior seasons are durably cached on disk (immutable once ended).
+    Current season is always re-fetched fresh and never persisted here.
+    Default seasons window is derived from config.CURRENT_SEASON at call time so it
+    rolls forward automatically when the calendar year changes.
+    """
+    _load_multiseason_cache()
+    current_season = config.CURRENT_SEASON
+    if seasons is None:
+        seasons = (current_season - 2, current_season - 1, current_season)
+    prior_seasons = [s for s in seasons if s < current_season]
+    needs_current = current_season in seasons
+
+    # Copy so in-place updates below don't mutate the live in-memory dict
+    # (pipeline runs _build_player_profile across 16 threads).
+    cached = dict(_multiseason_splits_cache.get(player_id, {}))
+    missing_prior = [s for s in prior_seasons if s not in cached]
+
+    fetch_seasons = list(missing_prior)
+    if needs_current:
+        fetch_seasons.append(current_season)
+
+    if not fetch_seasons:
+        return dict(cached)
+
+    seasons_param = ",".join(str(s) for s in sorted(fetch_seasons))
+    try:
+        data = _get(f"/people/{player_id}/stats", {
+            "stats": "statSplits",
+            "group": "hitting",
+            "seasons": seasons_param,
+            "sitCodes": "vl,vr",
+        })
+        stats_list = data.get("stats", [])
+        splits_raw = stats_list[0].get("splits", []) if stats_list else []
+
+        fetched: dict[int, dict] = {}
+        for split in splits_raw:
+            raw_season = split.get("season")
+            if raw_season is None:
+                continue
+            season = int(raw_season)
+            code = split.get("split", {}).get("code", "")
+            if code not in ("vl", "vr"):
+                continue
+            if season not in fetched:
+                fetched[season] = {}
+            if code in fetched[season]:
+                continue  # dedupe: keep first occurrence per (season, hand)
+            st = split.get("stat", {})
+            pa = int(st.get("plateAppearances", 0))
+            hr = int(st.get("homeRuns", 0))
+            ab = int(st.get("atBats", 0))
+            fetched[season][code] = {
+                "hr":       hr,
+                "pa":       pa,
+                "avg":      _split_stat_float(st.get("avg")),
+                "slg":      _split_stat_float(st.get("slg")),
+                "obp":      _split_stat_float(st.get("obp")),
+                "ab_per_hr": round(ab / hr, 1) if hr > 0 else None,
+            }
+
+        # Persist new prior-season data durably; never persist current season
+        changed = False
+        for s in missing_prior:
+            if s in fetched:
+                cached[s] = fetched[s]
+                changed = True
+        if changed:
+            _multiseason_splits_cache[player_id] = cached
+            _save_multiseason_cache()
+
+        result = dict(cached)
+        if needs_current and current_season in fetched:
+            result[current_season] = fetched[current_season]
+        return result
+
+    except Exception as e:
+        print(f"[mlb_stats] multiseason splits failed (id={player_id}): {e}")
+        return dict(cached)
+
+
 def get_pitcher_recent_stats(pitcher_id: int, days: int = 30) -> dict:
     """
     Aggregate pitching stats over last PITCHER_RECENT_GAMES starts.
@@ -868,3 +1000,6 @@ def clear_all_caches() -> None:
     _pitcher_season_cache.clear()
     _platoon_splits_cache.clear()
     _player_info_cache.clear()
+    # _multiseason_splits_cache intentionally excluded — prior seasons are immutable
+    # and durably cached on disk. To force a full re-fetch, delete
+    # data/multiseason_splits_cache.json directly.

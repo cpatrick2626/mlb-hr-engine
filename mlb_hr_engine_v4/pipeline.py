@@ -181,7 +181,8 @@ def _build_player_profile(
     # Batter handedness needed for park factor — fetch before pk_factor computation
     batter_info = mlb_stats.get_player_info(player_id)
     batter_side = batter_info.get("batSide", {}).get("code", "")
-    splits      = mlb_stats.get_player_platoon_splits(player_id)
+    splits            = mlb_stats.get_player_platoon_splits(player_id)
+    multiseason_splits = mlb_stats.get_player_multiseason_splits(player_id)
 
     exp_pa    = prob.expected_pa(lineup_spot)
     pk_factor = prob.park_factor(home_team, batter_side)
@@ -368,6 +369,8 @@ def _build_player_profile(
         "vs_rhp_hr":     _vs_r.get("hr"),
         "vs_rhp_hr_pa":  _vs_r.get("hr_pa"),
         "vs_rhp_pa":     _vs_r.get("pa"),
+        # Multi-season vs-hand splits (display only — never read by scoring)
+        "multi_season_vs_hand": multiseason_splits,
         "model_prob": round(model_prob, 4), "weather": weather,
         "pitcher_hr9": pitcher_hr9,
         "short_form_pa": int(short_form.get("plateAppearances", 0)),
