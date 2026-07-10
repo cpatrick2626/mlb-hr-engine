@@ -185,7 +185,8 @@ def auto_apply_safe() -> dict:
 
     # 1. Probability calibration scale
     if n >= 20 and calib:
-        total_bias = sum(b["bias_pct"] for b in calib) / len(calib)
+        total_n    = sum(b["n"] for b in calib)
+        total_bias = sum(b["bias_pct"] * b["n"] for b in calib) / total_n
         if abs(total_bias) >= 2.0:
             scale = _compute_prob_scale(calib)
             scale = round(max(0.88, min(1.12, scale)), 3)  # tighter auto-apply bounds
@@ -285,11 +286,17 @@ def _calibration(rows: list[dict], outcomes: list[int]) -> list[dict]:
     n = len(paired)
     bucket_size = max(5, n // 5)
 
+    chunks = [paired[i: i + bucket_size] for i in range(0, n, bucket_size)]
+    chunks = [c for c in chunks if c]
+    # Fold an undersized tail chunk into the previous one so the calibration
+    # table doesn't show a misleading tiny-bucket bias row. Compute-neutral:
+    # downstream aggregation is count-weighted, so merging preserves the sums.
+    if len(chunks) > 1 and len(chunks[-1]) < bucket_size // 2:
+        chunks[-2] = chunks[-2] + chunks[-1]
+        chunks.pop()
+
     buckets = []
-    for i in range(0, n, bucket_size):
-        chunk = paired[i: i + bucket_size]
-        if not chunk:
-            continue
+    for chunk in chunks:
         probs   = [x[0] for x in chunk]
         actuals = [x[1] for x in chunk]
         avg_pred   = statistics.mean(probs)
@@ -325,7 +332,8 @@ def _generate_suggestions(
 
     # ── 1. Model probability calibration ──────────────────────────────────
     if calibration:
-        total_bias = sum(b["bias_pct"] for b in calibration) / len(calibration)
+        total_n    = sum(b["n"] for b in calibration)
+        total_bias = sum(b["bias_pct"] * b["n"] for b in calibration) / total_n
         if abs(total_bias) >= 2.0:
             sid += 1
             direction = "overestimates" if total_bias < 0 else "underestimates"
@@ -467,8 +475,9 @@ def _compute_prob_scale(calibration: list[dict]) -> float:
     """Compute a multiplicative scale for model_prob to reduce bias."""
     if not calibration:
         return 1.0
-    total_pred   = sum(b["avg_predicted"] for b in calibration)
-    total_actual = sum(b["avg_actual"]    for b in calibration)
+    # Count-weight buckets so an undersized tail bucket can't dominate the scale
+    total_pred   = sum(b["avg_predicted"] * b["n"] for b in calibration)
+    total_actual = sum(b["avg_actual"]    * b["n"] for b in calibration)
     if total_pred <= 0:
         return 1.0
     scale = total_actual / total_pred
