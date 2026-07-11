@@ -747,6 +747,10 @@ function FsmTable({ rows, cols, showGame, onBatter, onPitch, onReorder, onSort, 
       <tbody>
         {(() => {
           const tierCounts = {};
+          /* Payload can carry the same player id twice (confirmed + projected
+             variants). Duplicate React keys silently break row reordering on
+             sort changes, so de-dupe keys with a per-render counter. */
+          const keySeen = {};
           return rows.map((r) => {
             let jigLabel = null, jigRank = null;
             if (isJigContext) {
@@ -754,7 +758,9 @@ function FsmTable({ rows, cols, showGame, onBatter, onPitch, onReorder, onSort, 
               tierCounts[jigLabel] = (tierCounts[jigLabel] || 0) + 1;
               jigRank = tierCounts[jigLabel];
             }
-            return <FsmRow key={r.id} row={r} cols={cols} showGame={showGame} onBatter={onBatter} onPitch={onPitch} builderMode={builderMode} isJigContext={isJigContext} jigLabel={jigLabel} jigRank={jigRank} onAddLeg={handleAddLeg} slipStatus={cardStatus[r.id || r.name] || 'idle'} sortState={sortState} />;
+            const kBase = r.id != null ? r.id : r.name;
+            const kN = keySeen[kBase] = (keySeen[kBase] || 0) + 1;
+            return <FsmRow key={kN > 1 ? `${kBase}__dup${kN}` : kBase} row={r} cols={cols} showGame={showGame} onBatter={onBatter} onPitch={onPitch} builderMode={builderMode} isJigContext={isJigContext} jigLabel={jigLabel} jigRank={jigRank} onAddLeg={handleAddLeg} slipStatus={cardStatus[r.id || r.name] || 'idle'} sortState={sortState} />;
           });
         })()}
       </tbody>
@@ -1727,15 +1733,15 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
     }
     return rows.map(fsmSplitRow);
   }, [rows, splitScope]);
-  const sorted0 = [...splitRows];
-  const sorted = (() => {
-    if (!sortState) return sorted0;
+  const sorted = React.useMemo(() => {
+    const s0 = [...splitRows];
+    if (!sortState) return s0;
     if (sortState.key === '_board_metric') {
       const pick = (row, curKey, projKey) => {
         if (row.lineup_confirmed === true) return row[curKey] ?? -Infinity;
         return (projSortOn ? (row[projKey] ?? row[curKey]) : row[curKey]) ?? -Infinity;
       };
-      return [...sorted0].sort((a, b) => {
+      return [...s0].sort((a, b) => {
         if (!isJigContext && !builderMode) {
           const at = pick(a, 'true_matchup_score', 'tm_projected'), bt = pick(b, 'true_matchup_score', 'tm_projected');
           if (bt !== at) return bt - at;
@@ -1744,12 +1750,12 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
         return pick(b, 'jigScore', 'jigscore_projected') - pick(a, 'jigScore', 'jigscore_projected');
       });
     }
-    return [...sorted0].sort((a, b) => {
+    return [...s0].sort((a, b) => {
       const av = a[sortState.key], bv = b[sortState.key];
       const an = av == null ? -Infinity : av, bn = bv == null ? -Infinity : bv;
       return sortState.dir === "desc" ? bn - an : an - bn;
     });
-  })();
+  }, [splitRows, sortState, projSortOn, isJigContext, builderMode]);
 
   const passGroup = (r) =>
   group === "all" ? true : group === "qualified" ? r.pa >= 100 : ["APEX", "ELITE", "EDGE"].includes(r.tier);
