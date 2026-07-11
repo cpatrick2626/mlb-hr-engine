@@ -4,12 +4,19 @@ on:
   schedule:
     # All times UTC. During EDT (summer, UTC-4): exact ET shown. During EST (winter, UTC-5): runs fire 1 hr earlier in ET.
     # GitHub Actions cron is fixed UTC — no DST adjustment possible.
+    # Off-:00/:05 minutes used throughout to reduce GitHub queue delays.
     - cron: '37 7 * * *'    #  3:37 AM EDT — early slate build; GitHub delay (~1-2hr) targets ~5am ET arrival
     - cron: '5 14 * * *'    # 10:05 AM EDT — morning run (lineups settled)
+    - cron: '17 15 * * *'   # 11:17 AM EDT — hourly fill
     - cron: '5 16 * * *'    # 12:05 PM EDT — midday pitcher refresh
+    - cron: '23 17 * * *'   #  1:23 PM EDT — hourly fill
     - cron: '5 18 * * *'    #  2:05 PM EDT — afternoon refresh
+    - cron: '34 19 * * *'   #  3:34 PM EDT — hourly fill
     - cron: '5 20 * * *'    #  4:05 PM EDT — pre-evening refresh
+    - cron: '41 21 * * *'   #  5:41 PM EDT — hourly fill
     - cron: '5 22 * * *'    #  6:05 PM EDT — evening game refresh
+    - cron: '17 23 * * *'   #  7:17 PM EDT — hourly fill
+    - cron: '23 0 * * *'    #  8:23 PM EDT — end-of-window refresh
   workflow_dispatch:
     inputs:
       date:
