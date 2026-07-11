@@ -39,7 +39,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from api.auth import require_auth, require_beta
 from api.cache import get_picks, get_latest_picks, store_picks, list_runs, redeem_invite, add_leg, complete_ticket, remove_leg, ledger_legs, ledger_pending_count, today_et
 from clients.arsenal import get_pitcher_arsenal, arsenal_matchup_factor
-from clients.pitch_mix import get_batter_vs_pitches, get_pitcher_pitch_stats
+from clients.pitch_mix import canonical_pitch_type, get_batter_vs_pitches, get_pitcher_pitch_stats
 from config import FS_TIER_THRESHOLDS
 from roles import classify_role
 
@@ -874,17 +874,23 @@ async def get_pitcher_detail(pitcher_id: int, batter_id: int = 0,
         year = _dt.datetime.now().year
         all_arsenal = get_pitcher_arsenal(year)
         raw_list = all_arsenal.get(pitcher_id, [])
-        result["arsenal"] = [
-            {
-                "code":  p.get("pitch_type", ""),
+        arsenal_by_code = {}
+        for p in raw_list:
+            usage = float(p.get("pitch_pct") or p.get("pitch_usage_pct") or 0)
+            if usage <= 0.01:
+                continue
+            code = canonical_pitch_type(p.get("pitch_type", ""))
+            row = {
+                "code":  code,
                 "name":  p.get("pitch_name", p.get("pitch_type", "")),
-                "usage": round(float(p.get("pitch_pct") or p.get("pitch_usage_pct") or 0) * 100, 1),
+                "usage": round(usage * 100, 1),
                 "velo":  round(float(p.get("avg_speed") or 0), 1) or None,
                 "whiff": round(float(p.get("whiff_pct") or 0) * 100, 1) if p.get("whiff_pct") is not None else None,
             }
-            for p in raw_list
-            if (p.get("pitch_pct") or p.get("pitch_usage_pct") or 0) > 0.01
-        ]
+            current = arsenal_by_code.get(code)
+            if code and (current is None or row["usage"] > current["usage"]):
+                arsenal_by_code[code] = row
+        result["arsenal"] = list(arsenal_by_code.values())
         result["arsenal"].sort(key=lambda x: x["usage"], reverse=True)
     except Exception as e:
         log.warning("pitcher-detail arsenal failed pid=%s: %s", pitcher_id, e)
@@ -892,8 +898,14 @@ async def get_pitcher_detail(pitcher_id: int, batter_id: int = 0,
 
     # Pitcher pitch stats vs effective batter side
     try:
-        pitch_stats = get_pitcher_pitch_stats(pitcher_id, effective_batter_side)
-        result["pitch_stats"] = pitch_stats
+        pitch_stats = get_pitcher_pitch_stats(
+            pitcher_id, effective_batter_side, display_only=True,
+        )
+        result["pitch_stats"] = {
+            canonical_pitch_type(code): stats
+            for code, stats in pitch_stats.items()
+            if canonical_pitch_type(code)
+        }
     except Exception as e:
         log.warning("pitcher-detail pitch_stats failed pid=%s: %s", pitcher_id, e)
         result["pitch_stats"] = {}

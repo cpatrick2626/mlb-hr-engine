@@ -37,6 +37,7 @@ HVY_CACHE_VERSION = "12"
 
 # {pitcher_id: {"hand_splits": {...}, "pitch_stats": {...}, "data_year": int}}
 _PITCHER_SAVANT_CACHE: dict[int, dict] = {}
+_PITCHER_DISPLAY_SAVANT_CACHE: dict[int, dict] = {}
 _H2H_CACHE:            dict[tuple, dict] = {}
 _BATTER_PT_CACHE:      dict[tuple, dict] = {}  # keyed (batter_id, pitcher_hand)
 
@@ -48,6 +49,7 @@ def clear_caches() -> None:
     """Clear all module-level caches. Call this when the user forces a data refresh
     so stale empty-result entries (e.g. from a failed initial load) are evicted."""
     _PITCHER_SAVANT_CACHE.clear()
+    _PITCHER_DISPLAY_SAVANT_CACHE.clear()
     _H2H_CACHE.clear()
     _BATTER_PT_CACHE.clear()
 
@@ -148,6 +150,11 @@ for _alias, _canon in _PITCH_CANONICAL.items():
 def _canonical_pt(pt: str) -> str:
     """Return canonical pitch type code, resolving known Savant naming changes."""
     return _PITCH_CANONICAL.get(pt, pt)
+
+
+def canonical_pitch_type(pt: str) -> str:
+    """Public canonical pitch code for API/display joins."""
+    return _canonical_pt((pt or "").strip().upper())
 
 
 def _pitch_keys(pt: str) -> list[str]:
@@ -307,13 +314,16 @@ def _build_canonical_pitch_mix(
 
 # ── Pitcher data (single Savant query) ────────────────────────────────────────
 
-def _fetch_pitcher_savant(pitcher_id: int) -> dict:
+def _fetch_pitcher_savant(pitcher_id: int, *, display_only: bool = False) -> dict:
     """
     One Savant statcast_search query for a pitcher's PA-ending events.
     Populates both hand splits (vs L/R) and per-pitch stats.
     Falls back to the prior season when the current season has < _MIN_PITCHER_PA rows
     (handles IL stints, early-season returns, openers with few starts).
     Returns 'data_year' so the UI can label prior-year data.
+
+    display_only=True uses a separate cache and buffered response reader for the
+    on-demand detail API; scoring callers keep the default path and cache.
 
     Data integrity:
       - hfGT=R| restricts to regular-season games only (prevents Spring Training /
@@ -323,8 +333,9 @@ def _fetch_pitcher_savant(pitcher_id: int) -> dict:
       - game_year validation skips any row whose year does not match the queried
         season (defensive layer for Savant pagination edge cases).
     """
-    if pitcher_id in _PITCHER_SAVANT_CACHE:
-        return _PITCHER_SAVANT_CACHE[pitcher_id]
+    cache = _PITCHER_DISPLAY_SAVANT_CACHE if display_only else _PITCHER_SAVANT_CACHE
+    if pitcher_id in cache:
+        return cache[pitcher_id]
 
     empty = {"hand_splits": {"R": {}, "L": {}}, "pitch_stats": {}, "data_year": config.CURRENT_SEASON}
     if not pitcher_id:
@@ -350,8 +361,14 @@ def _fetch_pitcher_savant(pitcher_id: int) -> dict:
                 timeout=20,
                 stream=True,
             )
-            resp.raw.decode_content = True
             resp.raise_for_status()
+            if display_only:
+                csv_body = resp.content
+                resp.close()
+                csv_rows = csv.DictReader(io.StringIO(csv_body.decode("utf-8-sig")))
+            else:
+                resp.raw.decode_content = True
+                csv_rows = csv.DictReader(io.TextIOWrapper(resp.raw, encoding="utf-8-sig"))
 
             hand_totals:          dict[str, dict] = {}
             pitch_totals:         dict[str, dict] = {}           # overall (all batters)
@@ -359,7 +376,7 @@ def _fetch_pitcher_savant(pitcher_id: int) -> dict:
             total_rows = 0
             seen_pa: set = set()  # (game_pk, at_bat_number) — dedup guard
 
-            for row in csv.DictReader(io.TextIOWrapper(resp.raw, encoding="utf-8-sig")):
+            for row in csv_rows:
                 pt    = (row.get("pitch_type") or "").strip().upper()
                 ev    = (row.get("events") or "").strip().lower()
                 stand = (row.get("stand") or "").strip().upper()
@@ -411,7 +428,8 @@ def _fetch_pitcher_savant(pitcher_id: int) -> dict:
                 # Overall pitch stats — canonicalize (SV→ST, FA→FF) for consistent keys
                 _acc_pitch_row(pitch_totals, _canonical_pt(pt), ev, row)
 
-            resp.close()
+            if not display_only:
+                resp.close()
             # Skip this season if too sparse; try prior year
             if total_rows < _MIN_PITCHER_PA:
                 print(f"[pitch_mix] pitcher {pitcher_id} season={season}: only {total_rows} rows — trying prior year")
@@ -450,7 +468,7 @@ def _fetch_pitcher_savant(pitcher_id: int) -> dict:
 
     # Only cache successful fetches — exceptions leave _got_data=False so we retry next call
     if _got_data:
-        _PITCHER_SAVANT_CACHE[pitcher_id] = result
+        cache[pitcher_id] = result
     return result
 
 
@@ -462,13 +480,14 @@ def get_pitcher_hand_splits(pitcher_id: int) -> dict:
     return _fetch_pitcher_savant(pitcher_id).get("hand_splits", {"R": {}, "L": {}})
 
 
-def get_pitcher_pitch_stats(pitcher_id: int, batter_side: str = "") -> dict:
+def get_pitcher_pitch_stats(pitcher_id: int, batter_side: str = "", *, display_only: bool = False) -> dict:
     """
     Pitcher's per-pitch-type stats split by batter handedness when batter_side is given.
     batter_side: "R" → stats vs RHB, "L" → stats vs LHB, "" → overall.
+    display_only: isolate endpoint hydration from caches used by scoring callers.
     → {"FF": {pa, pitch_pct, hr, k, k_pct, hr_rate, avg_speed, display_hh}, ...}
     """
-    savant = _fetch_pitcher_savant(pitcher_id)
+    savant = _fetch_pitcher_savant(pitcher_id, display_only=display_only)
     if batter_side == "R":
         return savant.get("pitch_stats_vs_r") or savant.get("pitch_stats", {})
     if batter_side == "L":

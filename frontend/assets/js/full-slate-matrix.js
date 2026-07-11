@@ -1425,9 +1425,9 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false, isJi
                     : ps.avg_speed != null ? Number(ps.avg_speed).toFixed(0) : "—";
                   const whiff = p.whiff != null ? Number(p.whiff).toFixed(0) + "%" : "—";
                   const hrPa  = ps.hr_rate != null ? (Number(ps.hr_rate)*100).toFixed(1)+"%"
-                    : (ps.hr != null && ps.pa != null && ps.pa > 0) ? (ps.hr/ps.pa*100).toFixed(1)+"%" : "—";
+                    : (ps.hr != null && ps.pa != null && ps.pa >= 10) ? (ps.hr/ps.pa*100).toFixed(1)+"%" : "—";
                   const kPct  = ps.k_pct != null ? (Number(ps.k_pct)*100).toFixed(0)+"%" : "—";
-                  const hhPct = ps.display_hh != null ? Number(ps.display_hh).toFixed(0)+"%" : "—";
+                  const hhPct = ps.display_hh != null ? (Number(ps.display_hh)*100).toFixed(0)+"%" : "—";
                   const barW  = Math.min(100, (p.usage ?? 0) * 2) + "%";
                   return (
                     <div key={p.code} className={"aei-ars__row" + (isKey ? " aei-ars__row--key" : "")}>
