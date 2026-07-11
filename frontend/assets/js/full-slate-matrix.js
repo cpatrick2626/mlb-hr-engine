@@ -266,6 +266,8 @@ function FsmGauge({ fraction, color, size }) {
 
 /* TM gauge — arc fill = score/100 (honest), color from TM band, "TM" label inside cup.
    scoreProjected/confirmed: when provisional (projected ≠ current, not confirmed) shows ▸proj below. */
+const SHOW_TM_GAUGE = false; // Intentionally hidden for the stacked MATCHUP layout; set true to restore the arc gauge.
+
 function FsmTMGauge({ score, scoreProjected, confirmed, size }) {
   const band = tmBand(score);
   const f = score != null ? Math.max(0, Math.min(1, score / 100)) : 0;
@@ -494,6 +496,7 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, i
   const confirmed = row.lineup_confirmed === true;
   const tmProj = row.tm_projected ?? null;
   const hrProj = row.hrprob_projected ?? null;
+  const isDualTM = !confirmed && tmProj != null && Number.isFinite(tmProj) && tmProj !== row.true_matchup_score;
   const isDualHR = !confirmed && hrProj != null && Number.isFinite(hrProj) && hrProj !== row.hrprob;
   return (
     <tr className={"fsm-row" + (expanded ? " is-expanded" : "")}>
@@ -541,14 +544,26 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, i
       </td>
       <td className="fsm-matchup">
         <button type="button" className="fsm-matchup__in" onClick={() => onPitch(row)} title="Open Arsenal Edge Intel">
-          <FsmTMGauge score={row.true_matchup_score ?? null} scoreProjected={tmProj} confirmed={confirmed} />
-          <span className="fsm-matchup__label">
-            <span className="fsm-matchup__val fsm-matchup__val--hero" style={{ color: t.color }}>{row.hrprob != null ? row.hrprob.toFixed(1) + "%" : "—"}{isDualHR && <span className="fsm-matchup__proj">▸{hrProj.toFixed(1)}%</span>}</span>
-            <span className="fsm-matchup__lbl">HR PROB</span>
-            <span className="fsm-matchup__val">{row.arsenal_edge_score != null ? Number(row.arsenal_edge_score).toFixed(1) : "—"}</span>
-            <span className="fsm-matchup__lbl">BATTER EDGE</span>
-            <span className="fsm-matchup__val">{row.arsenal_edge_confidence != null ? Math.round(Number(row.arsenal_edge_confidence) * 100) + "%" : "—"}</span>
-            <span className="fsm-matchup__lbl">SIGNAL</span>
+          {SHOW_TM_GAUGE && <FsmTMGauge score={row.true_matchup_score ?? null} scoreProjected={tmProj} confirmed={confirmed} />}
+          <span className="fsm-matchup__metrics">
+            <span className="fsm-matchup__metric fsm-matchup__metric--tm">
+              <span className="fsm-matchup__lbl">TM</span>
+              <span className="fsm-matchup__val fsm-matchup__val--hero">{row.true_matchup_score != null ? row.true_matchup_score : "—"}</span>
+              {isDualTM && <span className="fsm-matchup__proj">▸{Math.round(tmProj)}</span>}
+            </span>
+            <span className="fsm-matchup__metric fsm-matchup__metric--hr">
+              <span className="fsm-matchup__lbl">HR PROB</span>
+              <span className="fsm-matchup__val fsm-matchup__val--hero">{row.hrprob != null ? row.hrprob.toFixed(1) + "%" : "—"}</span>
+              {isDualHR && <span className="fsm-matchup__proj">▸{hrProj.toFixed(1)}%</span>}
+            </span>
+            <span className="fsm-matchup__metric fsm-matchup__metric--single">
+              <span className="fsm-matchup__lbl">BATTER EDGE</span>
+              <span className="fsm-matchup__val">{row.arsenal_edge_score != null ? Number(row.arsenal_edge_score).toFixed(1) : "—"}</span>
+            </span>
+            <span className="fsm-matchup__metric fsm-matchup__metric--single">
+              <span className="fsm-matchup__lbl">SIGNAL</span>
+              <span className="fsm-matchup__val">{row.arsenal_edge_confidence != null ? Math.round(Number(row.arsenal_edge_confidence) * 100) + "%" : "—"}</span>
+            </span>
           </span>
         </button>
       </td>
@@ -709,7 +724,7 @@ function FsmTable({ rows, cols, showGame, onBatter, onPitch, onReorder, onSort, 
   return (
     <table className="fsm-table">
       <colgroup>
-        <col style={{ width: "72px" }} /><col style={{ width: "128px" }} /><col style={{ width: "98px" }} />
+        <col style={{ width: "72px" }} /><col style={{ width: "128px" }} /><col style={{ width: "220px" }} />
         {cols.map((c) => <col key={c.key} style={{ width: c.key === "pa" ? "46px" : "60px" }} />)}
         <col style={{ width: "36px" }} />
       </colgroup>
