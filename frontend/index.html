@@ -3299,6 +3299,8 @@ html, body { height: 100%; overflow: hidden; }
 .fsm-sortbar__btn { font-family: var(--font-display); font-weight: 700; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; padding: 5px 10px; border-radius: 6px; border: 1px solid rgba(180,220,200,0.18); background: transparent; color: var(--fg-3); cursor: pointer; transition: all .14s ease; }
 .fsm-sortbar__btn:hover { color: var(--fg-1); border-color: rgba(180,220,200,0.3); background: var(--bg-elevated); }
 .fsm-sortbar__btn.is-on { color: #04140a; background: var(--green-500); border-color: transparent; box-shadow: 0 0 10px rgba(26,255,102,0.3); }
+.fsm-sortbar__sep { width: 1px; height: 18px; background: var(--border-2); margin: 0 4px; flex-shrink: 0; }
+.fsm-sortbar__toggle.is-on { color: #00101f; background: #3b9eff; border-color: transparent; box-shadow: 0 0 10px rgba(59,158,255,0.3); }
 .fsm-metric-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 48px 24px; text-align: center; }
 .fsm-metric-empty__icon { font-family: var(--font-display); font-size: 28px; color: var(--fg-4); letter-spacing: 0.1em; }
 .fsm-metric-empty__msg { font-family: var(--font-display); font-size: 11px; letter-spacing: 0.12em; color: var(--fg-3); text-transform: uppercase; max-width: 340px; line-height: 1.6; }
@@ -3499,6 +3501,7 @@ button.fsm-tier { appearance: none; text-decoration: none; }
   font-size: 8.5px; font-weight: 700; letter-spacing: 0.1em; opacity: 1;
   color: var(--fg-3); white-space: nowrap; align-self: baseline;
 }
+.fsm-matchup__proj { font-size: 9px; font-weight: 700; margin-left: 3px; opacity: 0.65; letter-spacing: 0.02em; }
 
 /* heatmap data cells */
 .fsm-cell { text-align: center; padding: 5px 4px; font-size: 12px; white-space: nowrap; color: var(--fg-2); vertical-align: middle; }
@@ -3996,6 +3999,9 @@ button.fsm-tier { appearance: none; text-decoration: none; }
   color: var(--fg-2);
   margin-top: 4px;
 }
+.aei-header__state { display: inline-block; margin-top: 8px; padding: 3px 10px; border-radius: 4px; font-family: var(--font-display); font-weight: 800; font-size: 10px; letter-spacing: 0.16em; }
+.aei-header__state--projection { background: rgba(255,51,68,0.12); border: 1px solid rgba(255,51,68,0.35); color: #ff3344; }
+.aei-header__state--confirmed { background: rgba(26,255,102,0.10); border: 1px solid rgba(26,255,102,0.30); color: #1aff66; }
 .aei-grid {
   display: grid;
   grid-template-columns: 1fr 1.06fr 1fr;

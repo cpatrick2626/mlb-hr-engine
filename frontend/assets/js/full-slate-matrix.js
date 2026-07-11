@@ -264,8 +264,9 @@ function FsmGauge({ fraction, color, size }) {
   );
 }
 
-/* TM gauge — arc fill = score/100 (honest), color from TM band, "TM" label inside cup. */
-function FsmTMGauge({ score, size }) {
+/* TM gauge — arc fill = score/100 (honest), color from TM band, "TM" label inside cup.
+   scoreProjected/confirmed: when provisional (projected ≠ current, not confirmed) shows ▸proj below. */
+function FsmTMGauge({ score, scoreProjected, confirmed, size }) {
   const band = tmBand(score);
   const f = score != null ? Math.max(0, Math.min(1, score / 100)) : 0;
   const lg = size === "lg";
@@ -282,6 +283,8 @@ function FsmTMGauge({ score, size }) {
   const numY = lg ? 39 : 31;
   const lblFs = lg ? 7 : 6;
   const numFs = lg ? 17 : 14;
+  const isDual = !confirmed && scoreProjected != null && Number.isFinite(scoreProjected) && scoreProjected !== score;
+  const projBand = isDual ? tmBand(scoreProjected) : null;
   return (
     <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} fill="none" className="fsm-gauge" style={{ flexShrink: 0, overflow: "visible" }}>
       <path d={d} stroke="#2a2a3a" strokeWidth={sw} strokeLinecap="round" />
@@ -292,6 +295,11 @@ function FsmTMGauge({ score, size }) {
       <text x={cx} y={numY} textAnchor="middle" fill={band.color} fontSize={numFs} fontWeight="500" fontFamily="inherit">
         {score != null ? score : "—"}
       </text>
+      {isDual && (
+        <text x={cx} y={numY + 12} textAnchor="middle" fill={projBand.color} fontSize={9} fontWeight="600" fontFamily="inherit" opacity="0.75">
+          {"▸" + Math.round(scoreProjected)}
+        </text>
+      )}
     </svg>
   );
 }
@@ -483,6 +491,10 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, i
   const displayTier = isJigContext && jigLabel ? jigLabel : row.tier;
   const t = FSM_TIERS[displayTier] || FSM_TIERS.COLD;
   const game = showGame ? (window.SLATE_GAMES || []).find((g) => g.id === row.gameId) : null;
+  const confirmed = row.lineup_confirmed === true;
+  const tmProj = row.tm_projected ?? null;
+  const hrProj = row.hrprob_projected ?? null;
+  const isDualHR = !confirmed && hrProj != null && Number.isFinite(hrProj) && hrProj !== row.hrprob;
   return (
     <tr className={"fsm-row" + (expanded ? " is-expanded" : "")}>
       <td className="fsm-tiercell">
@@ -529,9 +541,9 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, i
       </td>
       <td className="fsm-matchup">
         <button type="button" className="fsm-matchup__in" onClick={() => onPitch(row)} title="Open Arsenal Edge Intel">
-          <FsmTMGauge score={row.true_matchup_score ?? null} />
+          <FsmTMGauge score={row.true_matchup_score ?? null} scoreProjected={tmProj} confirmed={confirmed} />
           <span className="fsm-matchup__label">
-            <span className="fsm-matchup__val fsm-matchup__val--hero" style={{ color: t.color }}>{row.hrprob != null ? row.hrprob.toFixed(1) + "%" : "—"}</span>
+            <span className="fsm-matchup__val fsm-matchup__val--hero" style={{ color: t.color }}>{row.hrprob != null ? row.hrprob.toFixed(1) + "%" : "—"}{isDualHR && <span className="fsm-matchup__proj">▸{hrProj.toFixed(1)}%</span>}</span>
             <span className="fsm-matchup__lbl">HR PROB</span>
             <span className="fsm-matchup__val">{row.arsenal_edge_score != null ? Number(row.arsenal_edge_score).toFixed(1) : "—"}</span>
             <span className="fsm-matchup__lbl">BATTER EDGE</span>
@@ -1243,7 +1255,7 @@ function FsmPitchMix({ row, onClose, onBatter, builderMode = false }) {
    Replaces FsmPitchMix as the modal.type==="pitch" destination.
    FsmPitchMix is left below (unrouted) for easy rollback.
    ============================================================ */
-function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false }) {
+function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false, isJigContext = false }) {
   row = row._raw || row; // untagged stat reads here stay season/raw-scoped
   const [detail, setDetail] = React.useState(null);
   const [fetchState, setFetchState] = React.useState("loading");
@@ -1332,12 +1344,17 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false }) {
   const aeiPTier = aeiHr9 != null ? (aeiHr9 >= 1.45 ? "high" : aeiHr9 >= 1.05 ? "elevated" : "low") : "—";
   const aeiPTierColor = aeiPTier === "high" ? "#1aff66" : aeiPTier === "elevated" ? "#ffb020" : aeiPTier === "low" ? "#ff3344" : "inherit";
 
+  const isConfirmed = row.lineup_confirmed === true;
+  const pitcherConfirmed = row.pitcher_confirmed === true;
+  const aeiState = isConfirmed ? "CONFIRMED" : (pitcherConfirmed ? "PROJECTION" : null);
+
   return (
     <div className="fsm-card aei-wrap">
       <button className="fsm-card__close fsm-card__close--abs" onClick={onClose} aria-label="Close">✕</button>
 
       <div className="aei-header">
         <div className="aei-header__title">ARSENAL EDGE INTEL</div>
+        {aeiState && <div className={`aei-header__state aei-header__state--${aeiState.toLowerCase()}`}>{aeiState}</div>}
         <div className="aei-header__sub">{batterName} VS {pitcherName} — PITCH MIX EXPLOITATION</div>
       </div>
 
@@ -1627,7 +1644,7 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false }) {
   );
 }
 
-function FsmDetailModal({ modal, onClose, setModal, builderMode = false }) {
+function FsmDetailModal({ modal, onClose, setModal, builderMode = false, isJigContext = false }) {
   React.useEffect(() => {
     const h = (e) => {if (e.key === "Escape") onClose();};
     window.addEventListener("keydown", h);
@@ -1639,7 +1656,7 @@ function FsmDetailModal({ modal, onClose, setModal, builderMode = false }) {
       <div className="fsm-modal__inner" onClick={(e) => e.stopPropagation()}>
         {modal.type === "batter" ?
         <FsmBatterCard row={modal.row} onClose={onClose} onPitch={() => setModal({ type: "pitch", row: modal.row })} builderMode={builderMode} /> :
-        <FsmArsenalEdgeIntel row={modal.row} onClose={onClose} onBatter={() => setModal({ type: "batter", row: modal.row })} builderMode={builderMode} />}
+        <FsmArsenalEdgeIntel row={modal.row} onClose={onClose} onBatter={() => setModal({ type: "batter", row: modal.row })} builderMode={builderMode} isJigContext={isJigContext} />}
       </div>
     </div>);
 
@@ -1666,7 +1683,8 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
   });
   const [colOpen, setColOpen] = React.useState(false);
   const [colInfo, setColInfo] = React.useState(null);
-  const [sortState, setSortState] = React.useState(null);
+  const [projSortOn, setProjSortOn] = React.useState(false);
+  const [sortState, setSortState] = React.useState({ key: '_board_metric', dir: 'desc' });
   const [splitScope, setSplitScope] = React.useState('vs_hand');
   const [dataVersion, setDataVersion] = React.useState(0);
   React.useEffect(() => {
@@ -1695,11 +1713,28 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
     return rows.map(fsmSplitRow);
   }, [rows, splitScope]);
   const sorted0 = [...splitRows];
-  const sorted = sortState ? [...sorted0].sort((a, b) => {
-    const av = a[sortState.key], bv = b[sortState.key];
-    const an = av == null ? -Infinity : av, bn = bv == null ? -Infinity : bv;
-    return sortState.dir === "desc" ? bn - an : an - bn;
-  }) : sorted0;
+  const sorted = (() => {
+    if (!sortState) return sorted0;
+    if (sortState.key === '_board_metric') {
+      const pick = (row, curKey, projKey) => {
+        if (row.lineup_confirmed === true) return row[curKey] ?? -Infinity;
+        return (projSortOn ? (row[projKey] ?? row[curKey]) : row[curKey]) ?? -Infinity;
+      };
+      return [...sorted0].sort((a, b) => {
+        if (!isJigContext && !builderMode) {
+          const at = pick(a, 'true_matchup_score', 'tm_projected'), bt = pick(b, 'true_matchup_score', 'tm_projected');
+          if (bt !== at) return bt - at;
+          return pick(b, 'hrprob', 'hrprob_projected') - pick(a, 'hrprob', 'hrprob_projected');
+        }
+        return pick(b, 'jigScore', 'jigscore_projected') - pick(a, 'jigScore', 'jigscore_projected');
+      });
+    }
+    return [...sorted0].sort((a, b) => {
+      const av = a[sortState.key], bv = b[sortState.key];
+      const an = av == null ? -Infinity : av, bn = bv == null ? -Infinity : bv;
+      return sortState.dir === "desc" ? bn - an : an - bn;
+    });
+  })();
 
   const passGroup = (r) =>
   group === "all" ? true : group === "qualified" ? r.pa >= 100 : ["APEX", "ELITE", "EDGE"].includes(r.tier);
@@ -1712,11 +1747,7 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
   };
 
   const passRole = (r) => selRoles.length === 0 || selRoles.every((id) => r[id] === true);
-  const passMetric = (r) => {
-    if (selMetrics.includes("tm") && (r.true_matchup_score == null || r.true_matchup_score < 60)) return false;
-    if (selMetrics.includes("hrprob") && (r.hrprob == null || r.hrprob < 15)) return false;
-    return true;
-  };
+  const passMetric = (_r) => true;
 
   const pool = sorted.filter((r) => (selGame === "all" || r.gameId === selGame) && passGroup(r) && passFocus(r) && passRole(r) && passMetric(r));
   const gamesToShow = selGame === "all" ? getFSMGames() : getFSMGames().filter((g) => g.id === selGame);
@@ -1734,8 +1765,7 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
   if (group !== "all") noteBits.push(group === "qualified" ? "QUALIFIED" : "ELITE TARGETS");
   if (focus !== "all") noteBits.push("FOCUS " + focus.toUpperCase());
   if (selGame !== "all") noteBits.push("1 GAME");
-  if (selMetrics.includes("tm")) noteBits.push("TM ≥60");
-  if (selMetrics.includes("hrprob")) noteBits.push("HR PROB ≥15%");
+  if (projSortOn && sortState && sortState.key === '_board_metric') noteBits.push((!isJigContext && !builderMode) ? "SORT: TM PROJECTED" : "SORT: JIG PROJECTED");
   const note = noteBits.length ? noteBits.join(" · ") : filterNote || "NO ACTIVE FILTERS";
 
   const openBatter = (row) => setModal({ type: "batter", row });
@@ -1866,9 +1896,13 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
       <div className="fsm-sortbar">
         <span className="fsm-sortbar__lbl">SORT</span>
         <button className={"fsm-sortbar__btn" + (!sortState ? " is-on" : "")} onClick={() => setSortState(null)} title="Default: canonical model rank order">RANK</button>
-        <span className="fsm-sortbar__lbl" style={{ marginLeft: 6 }}>FILTER</span>
-        <button className={"fsm-sortbar__btn" + (selMetrics.includes("tm") ? " is-on" : "")} onClick={() => toggleMetric("tm")} title="Filter: show only TM ≥ 60 (ELITE matchup threshold)">TM ≥60</button>
-        <button className={"fsm-sortbar__btn" + (selMetrics.includes("hrprob") ? " is-on" : "")} onClick={() => toggleMetric("hrprob")} title="Filter: show only HR PROB ≥ 15%">HR PROB ≥15%</button>
+        {!isJigContext && !builderMode ? (
+          <button className={"fsm-sortbar__btn" + (sortState && sortState.key === '_board_metric' ? " is-on" : "")} onClick={() => setSortState({ key: '_board_metric', dir: 'desc' })} title="Sort MAIN board by TM (True Matchup score) descending — HR PROB tiebreak. All players shown.">TM</button>
+        ) : (
+          <button className={"fsm-sortbar__btn" + (sortState && sortState.key === '_board_metric' ? " is-on" : "")} onClick={() => setSortState({ key: '_board_metric', dir: 'desc' })} title="Sort JIG board by jigScore descending — JIG formula, never TM. All players shown.">JIG SCORE</button>
+        )}
+        <span className="fsm-sortbar__sep" />
+        <button className={"fsm-sortbar__btn fsm-sortbar__toggle" + (projSortOn ? " is-on" : "")} onClick={() => setProjSortOn(v => !v)} title={projSortOn ? "Sorting by projected values — click for current values" : "Sorting by current values — click for projected values"}>{projSortOn ? "PROJECTION" : "CURRENT"}</button>
       </div>
 
       {/* GAME-NAV CHIPS — one-click jump to each game */}
@@ -1884,10 +1918,10 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
       }
 
       {/* BODY */}
-      {pool.length === 0 && selMetrics.length > 0 ?
+      {pool.length === 0 ?
       <div className="fsm-metric-empty">
         <span className="fsm-metric-empty__icon">—</span>
-        <span className="fsm-metric-empty__msg">No players clear {selMetrics.map((m) => m === "tm" ? "TM ≥ 60" : "HR PROB ≥ 15%").join(" + ")} on today's slate.</span>
+        <span className="fsm-metric-empty__msg">No players on today's slate.</span>
       </div> :
       view === "player" ?
       <div className="fsm-tablewrap fsm-scroll-container"><FsmTable rows={pool} cols={activeCols} showGame={true} onBatter={openBatter} onPitch={openPitch} onReorder={onReorder} onSort={onSort} sortState={sortState} builderMode={builderMode} isJigContext={isJigContext} splitScope={splitScope} /></div> :
@@ -1918,7 +1952,7 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
       </div>
       )}
 
-      <FsmDetailModal modal={modal} onClose={() => setModal(null)} setModal={setModal} builderMode={builderMode} />
+      <FsmDetailModal modal={modal} onClose={() => setModal(null)} setModal={setModal} builderMode={builderMode} isJigContext={isJigContext} />
     </div>);
 
 }
