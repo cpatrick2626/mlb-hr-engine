@@ -37,8 +37,47 @@ except ImportError:
 # Flip to False to re-enable auto-learning once calibration is ready.
 AUTO_LEARN_FROZEN = True
 
+# Typical batting-slot cache — populated once per slate run by _fetch_typical_slots()
+# before the parallel profile phase. Read-only during threading. {player_id: mode_slot}
+_TYPICAL_SLOT_CACHE: dict[int, int] = {}
+
 
 # ── Core helpers (same logic as v3 main.py, extracted here) ──────────────────
+
+def _fetch_typical_slots(
+    player_ids: set,
+    trailing_days: int = 7,
+    reference_date: "date | None" = None,
+) -> dict[int, int]:
+    """
+    For each player_id, compute their mode batting slot over the past trailing_days days.
+    Calls the MLB schedule API directly (bypassing get_today_schedule's Final-game filter)
+    so completed games' confirmed lineups are included.
+    reference_date: ET-anchored date from the caller (avoids UTC off-by-one on Fly.io).
+    Returns {player_id: mode_slot}. Used for MAIN projected PA — display-only.
+    """
+    from collections import Counter
+    from datetime import date as _date, timedelta
+
+    slots: dict[int, list[int]] = {}
+    today = reference_date or _date.today()
+    for i in range(1, trailing_days + 1):
+        d = (today - timedelta(days=i)).strftime("%Y-%m-%d")
+        try:
+            data = mlb_stats._get("/schedule", {"sportId": 1, "date": d, "hydrate": "lineups,team"})
+            for date_entry in data.get("dates", []):
+                for game in date_entry.get("games", []):
+                    lineups = game.get("lineups", {})
+                    for side in ("homePlayers", "awayPlayers"):
+                        for pos, batter in enumerate(lineups.get(side, []), 1):
+                            pid = batter.get("id")
+                            if pid and pid in player_ids:
+                                slots.setdefault(pid, []).append(pos)
+        except Exception as e:
+            print(f"[pipeline] typical-slot fetch for {d} failed: {e}")
+
+    return {pid: Counter(lst).most_common(1)[0][0] for pid, lst in slots.items()}
+
 
 def _matchup_quality_tier(
     model_prob: float,
@@ -280,6 +319,33 @@ def _build_player_profile(
     # barrel_rate passed for elite tier Platt (ELITE_PLATT_ENABLED in config.py)
     model_prob = round(_cal.apply_calibration(model_prob, barrel_rate=sc_barrel), 4)
 
+    # ── MAIN projected values (display-only; never fed into scoring/EV/filters) ──
+    # Projection: same calc sequence without ×0.82 lineup penalty, using typical slot PA.
+    # pitcher_id must be known (probable announced) or we emit null — no pitcher = no projection.
+    # When lineup is already posted: projected == current (confirmed single value).
+    _proj_model_prob: "float | None" = None
+    _proj_pa_src: "str | None" = None
+    if pitcher_id is not None:
+        if lineup_spot:
+            # Lineup confirmed: projection collapses to the real scored value
+            _proj_model_prob = model_prob
+            _proj_pa_src = "confirmed"
+        else:
+            _typ_slot = _TYPICAL_SLOT_CACHE.get(player_id)
+            _proj_exp_pa = prob.expected_pa(_typ_slot) if _typ_slot else config.DEFAULT_PA
+            _proj_pa_src = "typical-slot" if _typ_slot else "default"
+            # Identical calc as real model_prob: game_hr_probability → prob_scale → calibration
+            # adjusted_rate is already finalized above; omit ×0.82 (projection assumes player starts)
+            _proj_raw = prob.game_hr_probability(
+                adjusted_rate, _proj_exp_pa,
+                pk_factor=pk_factor, pitcher_fac=pit_factor,
+                w_factor=w_factor, plat_factor=plat_factor,
+                power_mult=power_mult,
+            )
+            if _aw is not None:
+                _proj_raw = round(_aw.apply_prob_scale(_proj_raw), 4)
+            _proj_model_prob = round(_cal.apply_calibration(_proj_raw, barrel_rate=sc_barrel), 4)
+
     # Additional fields for Full Slate table display
     season_hits = int(season_stats.get("hits", 0))
     season_ab = int(season_stats.get("atBats", 0))
@@ -329,6 +395,11 @@ def _build_player_profile(
         "pitcher_name": pitcher_name, "pitcher_id": pitcher_id,
         "pitcher_confirmed": pitcher_id is not None,
         "lineup_spot": lineup_spot, "expected_pa": round(exp_pa, 1),
+        "lineup_confirmed": lineup_spot is not None,
+        # MAIN projected display fields (display-only; never read by scoring/EV/filters)
+        "model_prob_projected": _proj_model_prob,
+        "hrprob_projected": round(_proj_model_prob * 100, 1) if _proj_model_prob is not None else None,
+        "projected_pa_source": _proj_pa_src,
         "season_pa": season_pa, "season_hr": int(season_stats.get("homeRuns", 0)),
         "recent_pa": recent_pa, "hr_rate": round(hr_rate, 5),
         "raw_hr_rate": round(raw_rate, 5), "statcast_power_mult": power_mult,
@@ -754,6 +825,22 @@ def load_game_data(
                     continue
                 tasks.append((pid, name, batter.get("lineup_spot"), team, opp, home, opp_pitcher,
                               game_time_utc, game.get("game_pk"), game.get("status", "Scheduled")))
+
+    # Typical-slot fetch for MAIN projected values (display-only)
+    # Runs after tasks are collected so we know which player_ids to look up.
+    # Populated before the profile thread pool so reads are safe across threads.
+    global _TYPICAL_SLOT_CACHE
+    _TYPICAL_SLOT_CACHE.clear()
+    _cb("Fetching typical batting slots for MAIN projection...")
+    try:
+        _task_pids = {t[0] for t in tasks}
+        _TYPICAL_SLOT_CACHE.update(_fetch_typical_slots(
+            _task_pids,
+            reference_date=datetime.now(_ET).date(),
+        ))
+        print(f"[pipeline] typical-slot cache: {len(_TYPICAL_SLOT_CACHE)}/{len(_task_pids)} players resolved")
+    except Exception as _ts_err:
+        print(f"[pipeline] typical-slot fetch failed (projection disabled): {_ts_err}")
 
     # Pre-warm weather cache: fetch each unique (lat, lon, hour) combo in parallel
     # before the 16-thread profile pool starts, so threads never race on the same park.

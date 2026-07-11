@@ -624,6 +624,12 @@ def _build_slate_payload(data: dict) -> dict:
             "pitcher_confirmed": p.get("pitcher_confirmed", False),
             "pitcher_id":        p.get("pitcher_id", None),
             "pitcher_hand":      p.get("pitcher_hand", None),
+            # MAIN projected display fields (display-only; never read by scoring)
+            "lineup_confirmed":    p.get("lineup_confirmed", False),
+            "lineup_spot":         p.get("lineup_spot"),
+            "model_prob_projected": p.get("model_prob_projected"),
+            "hrprob_projected":    p.get("hrprob_projected"),
+            "projected_pa_source": p.get("projected_pa_source"),
             # Real hand-specific batter splits (display only — additive passthrough)
             "vs_hand":       p.get("vs_hand"),
             "vs_hand_avg":   p.get("vs_hand_avg"),
@@ -689,6 +695,10 @@ def _build_slate_payload(data: dict) -> dict:
         for r in jig_rows:
             p = players_by_id.get(r.get("id"), {})
             r["jigScore"] = _jig_score(p, arsenal_data=_arsenal_data)
+            # JIG projected: same _jig_score with announced pitcher fed in (already the case
+            # when pitcher_confirmed=True). Null when no pitcher announced — tactical signals
+            # would be 0/neutral; don't fabricate a projected value without pitcher identity.
+            r["jigscore_projected"] = r["jigScore"] if p.get("pitcher_confirmed") else None
             jig_role = classify_role(p, r.get("tier", ""))
             r["advantage"] = jig_role["advantage"]
             r["wildcard"]  = jig_role["wildcard"]
@@ -723,11 +733,22 @@ def _build_slate_payload(data: dict) -> dict:
     except Exception as e:
         log.error("AEE precompute failed: %s", e, exc_info=True)
 
-    # true_matchup_score — additive display field; computed after AEE so arsenal fields are present
+    # true_matchup_score and tm_projected — additive display fields; computed after AEE
+    # so arsenal_edge_score/confidence are already on the row.
+    # tm_projected substitutes model_prob_projected into the same formula; all other
+    # fields (arsenal, vuln) remain real. Null when no pitcher announced.
     for r in leaderboard_rows:
         r["true_matchup_score"] = _true_matchup_score(r)
+        _pmp = r.get("model_prob_projected")
+        r["tm_projected"] = (
+            _true_matchup_score({**r, "model_prob": _pmp}) if _pmp is not None else None
+        )
     for r in jig_rows:
         r["true_matchup_score"] = _true_matchup_score(r)
+        _pmp = r.get("model_prob_projected")
+        r["tm_projected"] = (
+            _true_matchup_score({**r, "model_prob": _pmp}) if _pmp is not None else None
+        )
 
     seen_games = {}
     for p in players:
