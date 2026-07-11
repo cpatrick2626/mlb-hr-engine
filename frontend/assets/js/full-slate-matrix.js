@@ -496,8 +496,15 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, i
   const confirmed = row.lineup_confirmed === true;
   const tmProj = row.tm_projected ?? null;
   const hrProj = row.hrprob_projected ?? null;
+  const jigScore = row.jigScore ?? null;
+  const jigProj = row.jigscore_projected ?? null;
+  const hasJigScore = jigScore != null && Number.isFinite(Number(jigScore));
+  const hasJigProjection = jigProj != null && Number.isFinite(Number(jigProj));
+  const jigConfirmed = row.pitcher_confirmed === true || (hasJigScore && hasJigProjection && Number(jigProj) === Number(jigScore));
   const isDualTM = !confirmed && tmProj != null && Number.isFinite(tmProj) && tmProj !== row.true_matchup_score;
   const isDualHR = !confirmed && hrProj != null && Number.isFinite(hrProj) && hrProj !== row.hrprob;
+  const isDualJig = !jigConfirmed && hasJigProjection && (!hasJigScore || Number(jigProj) !== Number(jigScore));
+  const jigProjectionPending = !jigConfirmed && !hasJigProjection;
   return (
     <tr className={"fsm-row" + (expanded ? " is-expanded" : "")}>
       <td className="fsm-tiercell">
@@ -544,12 +551,17 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, i
       </td>
       <td className="fsm-matchup">
         <button type="button" className="fsm-matchup__in" onClick={() => onPitch(row)} title="Open Arsenal Edge Intel">
-          {SHOW_TM_GAUGE && <FsmTMGauge score={row.true_matchup_score ?? null} scoreProjected={tmProj} confirmed={confirmed} />}
+          {SHOW_TM_GAUGE && !isJigContext && <FsmTMGauge score={row.true_matchup_score ?? null} scoreProjected={tmProj} confirmed={confirmed} />}
           <span className="fsm-matchup__metrics">
             <span className="fsm-matchup__metric fsm-matchup__metric--tm">
-              <span className="fsm-matchup__lbl">TM</span>
-              <span className="fsm-matchup__val fsm-matchup__val--hero">{row.true_matchup_score != null ? row.true_matchup_score : "—"}</span>
-              {isDualTM && <span className="fsm-matchup__proj">▸{Math.round(tmProj)}</span>}
+              <span className="fsm-matchup__lbl">{isJigContext ? "JIG" : "TM"}</span>
+              <span className="fsm-matchup__val fsm-matchup__val--hero">
+                {isJigContext ? (hasJigScore ? Number(jigScore).toFixed(2) : "—") : (row.true_matchup_score != null ? row.true_matchup_score : "—")}
+              </span>
+              {isJigContext ? (
+                isDualJig ? <span className="fsm-matchup__proj">▸{Number(jigProj).toFixed(2)}</span> :
+                jigProjectionPending ? <span className="fsm-matchup__proj" title="Projected JIG score unavailable until a pitcher is known">▸N/A</span> : null
+              ) : (isDualTM && <span className="fsm-matchup__proj">▸{Math.round(tmProj)}</span>)}
             </span>
             <span className="fsm-matchup__metric fsm-matchup__metric--hr">
               <span className="fsm-matchup__lbl">HR PROB</span>
