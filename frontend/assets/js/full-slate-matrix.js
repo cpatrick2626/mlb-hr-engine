@@ -1001,6 +1001,19 @@ function FsmBatterCard({ row, onClose, onPitch, builderMode = false }) {
 const fsmS3 = (v) => v == null ? "—" : v.toFixed(3).replace(/^0/, "");
 const fsmP1 = (v) => v == null ? "—" : v.toFixed(1) + "%";
 
+/* Display-only stat valence. Thresholds are [green, amber]; lower direction is
+   for contact-positive stats such as K%. No scoring or source data is changed. */
+function hrStatValence(value, thresholds, direction = "higher") {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return undefined;
+  const [green, amber] = thresholds;
+  if (direction === "binary") return numeric >= green ? "var(--green-500)" : "var(--fg-3)";
+  if (direction === "lower") {
+    return numeric <= green ? "var(--green-500)" : numeric <= amber ? "var(--amber-500)" : "var(--red-500)";
+  }
+  return numeric >= green ? "var(--green-500)" : numeric >= amber ? "var(--amber-500)" : "var(--red-500)";
+}
+
 function fsmHeatClass(v, hi) {
   if (v == null) return "is-na";
   return v >= hi[0] ? "is-elite" : v >= hi[1] ? "is-strong" : v >= hi[2] ? "is-avg" : v >= hi[3] ? "is-weak" : "is-danger";
@@ -1316,6 +1329,10 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false, isJi
   const [fetchState, setFetchState] = React.useState("loading");
   const [activeBvpCols, setActiveBvpCols] = React.useState(() => new Set(readBvpColumns()));
   const visibleBvpCols = bvpCols.filter(col => activeBvpCols.has(col.key));
+  const bvpGridTemplate = `minmax(96px, 1.25fr) repeat(${visibleBvpCols.length}, minmax(52px, 0.7fr))`;
+  const bvpGridMinWidth = 96 + (visibleBvpCols.length * 52);
+  const recentGridTemplate = "minmax(84px, 1.4fr) repeat(4, minmax(46px, 0.7fr))";
+  const recentGridMinWidth = 268;
   const toggleBvpCol = key => setActiveBvpCols(prev => { const next = new Set(prev); next.has(key) ? next.delete(key) : next.add(key); try { window.localStorage.setItem(bvpColsStorageKey, JSON.stringify([...next])); } catch {} return next; });
 
   const pitcherId  = row.pitcher_id;
@@ -1657,8 +1674,8 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false, isJi
                   </div>
                 </details>
               </div>
-              <div className="aei-bt">
-                <div className="aei-bt__hd" style={{ gridTemplateColumns: `minmax(64px,1.2fr) repeat(${visibleBvpCols.length}, minmax(0,1fr))` }}>
+              <div className="aei-bt aei-bt--scroll">
+                <div className="aei-bt__hd" style={{ gridTemplateColumns: bvpGridTemplate, minWidth: bvpGridMinWidth }}>
                   <span>PITCH</span>
                   {visibleBvpCols.map(col => <span key={col.key}>{col.head}</span>)}
                 </div>
@@ -1672,7 +1689,7 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false, isJi
                   const isKey = p.code === keyPitch;
                   const small = b.pa < 10;
                   return (
-                    <div key={p.code} className={"aei-bt__row" + (isKey ? " aei-bt__row--key" : "")} style={{ gridTemplateColumns: `minmax(64px,1.2fr) repeat(${visibleBvpCols.length}, minmax(0,1fr))` }}>
+                    <div key={p.code} className={"aei-bt__row" + (isKey ? " aei-bt__row--key" : "")} style={{ gridTemplateColumns: bvpGridTemplate, minWidth: bvpGridMinWidth }}>
                       <div className="aei-bt__pitch">
                         <b>{fsmPitchName(p.code)}</b>
                         {small && <span className="aei-bt__ss">SMALL · &lt;10 PA</span>}
@@ -1680,15 +1697,14 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false, isJi
                       {visibleBvpCols.map(col => {
                         const hasValue = col.key === 'hr' ? b && b.hr != null : col.gate(b);
                         const value = hasValue ? col.fmt(b) : '—';
-                        if (col.key === 'slg' && hasValue) {
-                          const slgVal = Number(b.slg);
-                          const slgCls = slgVal >= 0.600 ? 'aei-slg--dmg' : slgVal >= 0.450 ? 'aei-slg--mid' : 'aei-slg--lo';
-                          return <span key={col.key} className="aei-c"><span className={"aei-slg " + slgCls}>{value}</span></span>;
-                        }
-                        const extraCls = col.key === 'pa' && small ? ' aei-c--warn'
-                          : col.key === 'hr_pct' && value !== '—' && parseFloat(value) >= 5 ? ' aei-c--hg'
-                          : '';
-                        return <span key={col.key} className={"aei-c" + extraCls}>{value}{col.key === 'pa' && small ? '*' : ''}</span>;
+                        const valence = col.key === 'ba' ? hrStatValence(b.ba, [0.280, 0.240])
+                          : col.key === 'slg' ? hrStatValence(b.slg, [0.450, 0.380])
+                          : col.key === 'iso' ? hrStatValence(Number(b.slg) - Number(b.ba), [0.200, 0.140])
+                          : col.key === 'hr_pct' ? hrStatValence(Number(b.hr || 0) / Number(b.pa) * 100, [8, 5])
+                          : col.key === 'k_pct' ? hrStatValence(Number(b.k_pct) * 100, [18, 27], 'lower')
+                          : col.key === 'hh_pct' ? hrStatValence(Number(b.display_hh) * 100, [45, 38])
+                          : undefined;
+                        return <span key={col.key} className="aei-c" style={{ color: valence }}>{value}{col.key === 'pa' && small ? '*' : ''}</span>;
                       })}
                     </div>
                   );
@@ -1704,19 +1720,20 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false, isJi
           <div className="aei-panel__hd">
             <span className="aei-panel__hd-title">RECENT FORM</span>
           </div>
-          <div className="aei-panel__body" style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>
+          <div className="aei-panel__body aei-recent-form" style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>
             <div className="aei-tblwrap">
               <div className="aei-tblwrap__cap">LAST 5 STARTS</div>
-              <div className="aei-bt">
-                <div className="aei-bt__hd" style={{ gridTemplateColumns: "minmax(64px, 1.4fr) repeat(4, minmax(0, 1fr))" }}>
+              <div className="aei-bt aei-bt--scroll">
+                <div className="aei-bt__hd" style={{ gridTemplateColumns: recentGridTemplate, minWidth: recentGridMinWidth }}>
                   <span>DATE</span><span>HR</span><span>K</span><span>IP</span><span>BB</span>
                 </div>
                 {fetchState === "loading" && <div className="aei-empty">Loading…</div>}
                 {fetchState !== "loading" && pitcherRecent.length === 0 && <div className="aei-empty">No recent data</div>}
                 {pitcherRecent.map((start, index) => (
-                  <div key={`${start.date || "start"}-${index}`} className="aei-bt__row" style={{ gridTemplateColumns: "minmax(64px, 1.4fr) repeat(4, minmax(0, 1fr))" }}>
+                  <div key={`${start.date || "start"}-${index}`} className="aei-bt__row" style={{ gridTemplateColumns: recentGridTemplate, minWidth: recentGridMinWidth }}>
                     <span>{start.date || "—"}</span>
-                    <span className="aei-c">{start.hr ?? "—"}</span>
+                    {/* Pitcher HR allowed is inverted from the pitcher perspective: more allowed is favorable for this hitter. */}
+                    <span className="aei-c" style={{ color: hrStatValence(start.hr, [2, 1]) }}>{start.hr ?? "—"}</span>
                     <span className="aei-c">{start.k ?? "—"}</span>
                     <span className="aei-c">{start.ip != null && Number.isFinite(Number(start.ip)) ? Number(start.ip).toFixed(1) : "—"}</span>
                     <span className="aei-c">{start.bb ?? "—"}</span>
@@ -1727,18 +1744,18 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false, isJi
 
             <div className="aei-tblwrap">
               <div className="aei-tblwrap__cap">LAST 5 GAMES</div>
-              <div className="aei-bt">
-                <div className="aei-bt__hd" style={{ gridTemplateColumns: "minmax(64px, 1.4fr) repeat(4, minmax(0, 1fr))" }}>
+              <div className="aei-bt aei-bt--scroll">
+                <div className="aei-bt__hd" style={{ gridTemplateColumns: recentGridTemplate, minWidth: recentGridMinWidth }}>
                   <span>DATE</span><span>HR</span><span>AVG</span><span>SLG</span><span>PA</span>
                 </div>
                 {fetchState === "loading" && <div className="aei-empty">Loading…</div>}
                 {fetchState !== "loading" && batterRecent.length === 0 && <div className="aei-empty">No recent data</div>}
                 {batterRecent.map((game, index) => (
-                  <div key={`${game.date || "game"}-${index}`} className="aei-bt__row" style={{ gridTemplateColumns: "minmax(64px, 1.4fr) repeat(4, minmax(0, 1fr))" }}>
+                  <div key={`${game.date || "game"}-${index}`} className="aei-bt__row" style={{ gridTemplateColumns: recentGridTemplate, minWidth: recentGridMinWidth }}>
                     <span>{game.date || "—"}</span>
-                    <span className="aei-c">{game.hr ?? "—"}</span>
-                    <span className="aei-c">{game.avg == null ? "—" : Number(game.avg).toFixed(3)}</span>
-                    <span className="aei-c">{game.slg == null ? "—" : Number(game.slg).toFixed(3)}</span>
+                    <span className="aei-c" style={{ color: hrStatValence(game.hr, [1], 'binary') }}>{game.hr ?? "—"}</span>
+                    <span className="aei-c" style={{ color: hrStatValence(game.avg, [0.280, 0.240]) }}>{game.avg == null ? "—" : Number(game.avg).toFixed(3)}</span>
+                    <span className="aei-c" style={{ color: hrStatValence(game.slg, [0.450, 0.380]) }}>{game.slg == null ? "—" : Number(game.slg).toFixed(3)}</span>
                     <span className="aei-c">{game.pa ?? "—"}</span>
                   </div>
                 ))}
