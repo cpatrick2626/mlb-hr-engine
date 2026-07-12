@@ -1364,16 +1364,9 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false, isJi
     return               { label: "FLAT",  cls: "v-flat" };
   })();
 
-  /* DEPLOYMENT — display band derived from row.tier; NOT a model output */
-  const deployBand = (() => {
-    const t = row.tier;
-    if (t === "APEX")   return { label: "ELITE",      cls: "v-prime" };
-    if (t === "ELITE")  return { label: "STRONG",     cls: "v-plus" };
-    if (t === "EDGE")   return { label: "ACTIVE",     cls: "v-even" };
-    if (t === "SIGNAL") return { label: "STANDARD",   cls: "v-thin" };
-    if (t === "WATCH")  return { label: "MONITORING", cls: "v-flat" };
-    return                     { label: "COLD",       cls: "v-flat" };
-  })();
+  /* MODEL TIER — inherited MAIN probability tier, displayed verbatim. */
+  const modelTier = row.tier || "—";
+  const modelTierColor = (FSM_TIERS[row.tier] || FSM_TIERS.COLD).color;
 
   const h2hTrust  = !h2h ? "NO DATA" : h2h.pa < 10 ? "VERY LOW" : h2h.pa < 30 ? "LOW" : "MODERATE";
   const h2hSigCls = !h2h ? "v-flat" : h2h.pa < 10 ? "v-thin" : (h2h.hr > 0 ? "v-plus" : "v-thin");
@@ -1584,7 +1577,7 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false, isJi
               </div>
             </div>
 
-            {/* Edge stack — display reads; BARREL PATH and DEPLOYMENT are qualitative bands */}
+            {/* Edge stack — display reads; BARREL PATH is a qualitative band. */}
             <div className="aei-stack">
               <div className="aei-stack__cap">EDGE STACK</div>
               <div className="aei-stack__row">
@@ -1605,8 +1598,8 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false, isJi
                   <div className={"aei-stack__v " + hhBand.cls}>{hhBand.label}</div>
                 </div>
                 <div className="aei-stack__item">
-                  <div className="aei-stack__k">DEPLOYMENT</div>
-                  <div className={"aei-stack__v " + deployBand.cls}>{deployBand.label}</div>
+                  <div className="aei-stack__k">MODEL TIER</div>
+                  <div className="aei-stack__v" style={{ color: modelTierColor }}>{modelTier}</div>
                 </div>
               </div>
             </div>
