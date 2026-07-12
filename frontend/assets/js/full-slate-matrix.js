@@ -4,11 +4,11 @@
    leaderboard inside the MAIN/JIG "Full Slate" lens. */
 
 const FSM_TIERS = {
-  APEX: { color: "#ff3344", glow: "rgba(255,51,68,0.75)", min: 18 },
-  ELITE: { color: "#ff8a93", glow: "rgba(255,138,147,0.55)", min: 13 },
-  EDGE: { color: "#1aff66", glow: "rgba(26,255,102,0.6)", min: 9 },
-  SIGNAL: { color: "#3b6fff", glow: "rgba(59,111,255,0.5)", min: 6 },
-  WATCH: { color: "#ffb020", glow: "rgba(255,176,32,0.45)", min: 3 },
+  APEX: { color: "#ff3344", glow: "rgba(255,51,68,0.75)", min: 20 },
+  ELITE: { color: "#ff8a93", glow: "rgba(255,138,147,0.55)", min: 16 },
+  EDGE: { color: "#1aff66", glow: "rgba(26,255,102,0.6)", min: 11 },
+  SIGNAL: { color: "#3b6fff", glow: "rgba(59,111,255,0.5)", min: 7 },
+  WATCH: { color: "#ffb020", glow: "rgba(255,176,32,0.45)", min: 4 },
   COLD: { color: "#6b7872", glow: "rgba(107,120,114,0.35)", min: 0 }
 };
 const FSM_TIER_ORDER = ["APEX", "ELITE", "EDGE", "SIGNAL", "WATCH", "COLD"];
@@ -36,12 +36,12 @@ function tmBand(score) {
   return TM_BANDS[TM_BANDS.length - 1];
 }
 const FSM_TIER_DESC = {
-  APEX: "greatest HR threat — model HR probability ≥ 18% this game",
-  ELITE: "premium danger — model HR probability ≥ 13%",
-  EDGE: "strong advantage — model HR probability ≥ 9%",
-  SIGNAL: "positive signal — model HR probability ≥ 6%",
-  WATCH: "marginal — model HR probability ≥ 3%",
-  COLD: "do not deploy — model HR probability < 3%",
+  APEX: "greatest HR threat — model HR probability ≥ 20% this game",
+  ELITE: "premium danger — model HR probability ≥ 16%",
+  EDGE: "strong advantage — model HR probability ≥ 11%",
+  SIGNAL: "positive signal — model HR probability ≥ 7%",
+  WATCH: "marginal — model HR probability ≥ 4%",
+  COLD: "do not deploy — model HR probability < 4%",
 };
 const FSM_MATCHUP_DESC = {
   ELITE: "top batter HR-threat tier — model probability + barrel quality",

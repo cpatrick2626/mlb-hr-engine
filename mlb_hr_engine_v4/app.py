@@ -4795,12 +4795,12 @@ def _fs_tier_html(tier: str) -> str:
     g = t["glow"]
     label = t["label"]
     _tooltips = {
-        "APEX":   "APEX: Model probability ≥18%. Greatest HR threat. Must deploy.",
-        "ELITE":  "ELITE: Model probability ≥13%. Premium HR danger.",
-        "EDGE":   "EDGE: Model probability ≥9%. Strong matchup advantage.",
-        "SIGNAL": "SIGNAL: Model probability ≥6%. Positive indicators.",
-        "WATCH":  "WATCH: Model probability ≥3%. Marginal. Situational.",
-        "COLD":   "COLD: Model probability <3%. Do not deploy.",
+        "APEX":   "APEX: Model probability ≥20%. Greatest HR threat. Must deploy.",
+        "ELITE":  "ELITE: Model probability ≥16%. Premium HR danger.",
+        "EDGE":   "EDGE: Model probability ≥11%. Strong matchup advantage.",
+        "SIGNAL": "SIGNAL: Model probability ≥7%. Positive indicators.",
+        "WATCH":  "WATCH: Model probability ≥4%. Marginal. Situational.",
+        "COLD":   "COLD: Model probability <4%. Do not deploy.",
     }
     tooltip = _tooltips.get(tier, "")
     return (
