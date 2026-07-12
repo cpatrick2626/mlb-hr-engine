@@ -566,8 +566,8 @@ def _fetch_all_batter_pitch_splits(batter_id: int) -> None:
     totals_by_hand: dict[str, dict[str, dict]] = {"R": {}, "L": {}}
     season = config.CURRENT_SEASON
 
-    def _acc(totals: dict, pt: str, ev: str) -> None:
-        t = totals.setdefault(pt, {"pa": 0, "hr": 0, "h": 0, "k": 0, "tb": 0.0, "ab": 0})
+    def _acc(totals: dict, pt: str, ev: str, ls=None) -> None:
+        t = totals.setdefault(pt, {"pa": 0, "hr": 0, "h": 0, "k": 0, "tb": 0.0, "ab": 0, "contact": 0, "hard_hit": 0})
         t["pa"] += 1
         if "strikeout" in ev:
             t["k"] += 1;  t["ab"] += 1
@@ -581,6 +581,14 @@ def _fetch_all_batter_pitch_splits(batter_id: int) -> None:
             t["h"] += 1;  t["tb"] += 1; t["ab"] += 1
         elif ev not in ("walk", "hit_by_pitch", "catcher_interf"):
             t["ab"] += 1
+        try:
+            ls_val = float(ls or 0)
+            if ls_val > 0:
+                t["contact"] += 1
+                if ls_val >= 95:
+                    t["hard_hit"] += 1
+        except (ValueError, TypeError):
+            pass
 
     def _finalize(totals: dict) -> dict:
         out = {}
@@ -593,13 +601,14 @@ def _fetch_all_batter_pitch_splits(batter_id: int) -> None:
             # Require ≥10 PA for HR rate — prevents extreme small-sample values (e.g. 1 HR / 1 PA)
             _hr_rate = round(t["hr"] / _pa, 3) if _pa >= 10 else None
             out[pt] = {
-                "pa":      _pa,
-                "hr":      t["hr"],
-                "k":       t["k"],
-                "ba":      _ba,
-                "slg":     _slg,
-                "k_pct":   round(t["k"] / _pa, 3) if _pa >= 5 else None,
-                "hr_rate": _hr_rate,
+                "pa":         _pa,
+                "hr":         t["hr"],
+                "k":          t["k"],
+                "ba":         _ba,
+                "slg":        _slg,
+                "k_pct":      round(t["k"] / _pa, 3) if _pa >= 5 else None,
+                "hr_rate":    _hr_rate,
+                "display_hh": round(t["hard_hit"] / t["contact"], 3) if t.get("contact", 0) >= 5 else None,
             }
         return out
 
@@ -657,9 +666,9 @@ def _fetch_all_batter_pitch_splits(batter_id: int) -> None:
             pt = _canonical_pt(raw_pt)
             p_hand = (row.get("p_throws") or "").strip().upper()
 
-            _acc(totals_all, pt, ev)
+            _acc(totals_all, pt, ev, row.get("launch_speed"))
             if p_hand in ("R", "L"):
-                _acc(totals_by_hand[p_hand], pt, ev)
+                _acc(totals_by_hand[p_hand], pt, ev, row.get("launch_speed"))
 
         _got_data = True
         resp.close()
