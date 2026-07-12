@@ -556,7 +556,7 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, i
             <span className="fsm-matchup__metric fsm-matchup__metric--tm">
               <span className="fsm-matchup__lbl">{isJigContext ? "JIG" : "TM"}</span>
               <span className="fsm-matchup__val fsm-matchup__val--hero">
-                {isJigContext ? (hasJigScore ? Number(jigScore).toFixed(2) : "—") : (row.true_matchup_score != null ? row.true_matchup_score : "—")}
+                {isJigContext ? (hasJigScore ? Number(jigScore).toFixed(0) : "—") : (row.true_matchup_score != null ? row.true_matchup_score : "—")}
               </span>
               {isJigContext ? (
                 isDualJig ? <span className="fsm-matchup__proj">▸{Number(jigProj).toFixed(2)}</span> :
