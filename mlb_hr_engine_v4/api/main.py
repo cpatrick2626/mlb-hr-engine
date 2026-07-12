@@ -490,7 +490,7 @@ def _jig_score(player: dict, arsenal_data: dict | None = None) -> float:
             # Batter damage vs pitch types: weighted avg hr_rate
             # across pitcher's pitch mix, batter-side filtered
             pitcher_pitches = get_pitcher_pitch_stats(pitcher_id, batter_side)
-            batter_vs       = get_batter_vs_pitches(batter_id, batter_side)
+            batter_vs       = get_batter_vs_pitches(batter_id, player.get("pitcher_hand", ""))
             dmg = 0.0
             total_pct = 0.0
             for pitch_type, pdata in pitcher_pitches.items():
