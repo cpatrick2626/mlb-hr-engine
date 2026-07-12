@@ -948,11 +948,18 @@ def load_game_data(
     all_by_model = ranker.rank_all_by_model(all_players)
 
     # Stamp tier + score on every player so strategies_ui can sort by confidence
-    _ranked_map = {p.get("player_name"): p for p in ranked}
+    # Keyed on (player_name, game_pk) so doubleheader siblings resolve to
+    # their own game's ranked entry instead of colliding on name alone.
+    _ranked_map = {(p.get("player_name"), p.get("game_pk")): p for p in ranked}
+    _ranked_by_name = {p.get("player_name"): p for p in ranked}
     for p in all_players:
-        if p.get("player_name") in _ranked_map:
+        _key = (p.get("player_name"), p.get("game_pk"))
+        _rp = _ranked_map.get(_key)
+        if _rp is None and p.get("game_pk") is None:
+            # Missing game_pk: degrade to name-only match rather than drop the tier
+            _rp = _ranked_by_name.get(p.get("player_name"))
+        if _rp is not None:
             # Qualified picks already have tier/score from rank_picks
-            _rp = _ranked_map[p["player_name"]]
             p["confidence_tier"] = _rp.get("confidence_tier", "C")
             p["score"]           = _rp.get("score", 0)
         else:
