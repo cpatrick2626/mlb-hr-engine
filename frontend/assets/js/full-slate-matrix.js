@@ -1319,6 +1319,8 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false, isJi
   const arsenal    = detail ? (detail.arsenal || []) : [];
   const pitchStats = detail ? (detail.pitch_stats || {}) : {};
   const bvp        = detail ? (detail.batter_vs_pitches || {}) : {};
+  const pitcherRecent = detail && Array.isArray(detail.pitcher_recent) ? detail.pitcher_recent : [];
+  const batterRecent  = detail && Array.isArray(detail.batter_recent) ? detail.batter_recent : [];
   const h2h        = detail && detail.h2h && detail.h2h.pa ? detail.h2h : null;
 
   const keyPitch     = row.arsenal_edge_key_pitch || null;
@@ -1675,6 +1677,54 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false, isJi
                   );
                 }).filter(Boolean)}
                 {anySmall && <div className="aei-pt__note">* &lt;10 PA — small sample, treat with caution</div>}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ===== RECENT FORM ===== */}
+        <section className="aei-panel" style={{ gridColumn: "1 / -1" }}>
+          <div className="aei-panel__hd">
+            <span className="aei-panel__hd-title">RECENT FORM</span>
+          </div>
+          <div className="aei-panel__body" style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 12 }}>
+            <div className="aei-tblwrap">
+              <div className="aei-tblwrap__cap">LAST 5 STARTS</div>
+              <div className="aei-bt">
+                <div className="aei-bt__hd" style={{ gridTemplateColumns: "minmax(64px, 1.4fr) repeat(4, minmax(0, 1fr))" }}>
+                  <span>DATE</span><span>HR</span><span>K</span><span>IP</span><span>BB</span>
+                </div>
+                {fetchState === "loading" && <div className="aei-empty">Loading…</div>}
+                {fetchState !== "loading" && pitcherRecent.length === 0 && <div className="aei-empty">No recent data</div>}
+                {pitcherRecent.map((start, index) => (
+                  <div key={`${start.date || "start"}-${index}`} className="aei-bt__row" style={{ gridTemplateColumns: "minmax(64px, 1.4fr) repeat(4, minmax(0, 1fr))" }}>
+                    <span>{start.date || "—"}</span>
+                    <span className="aei-c">{start.hr ?? "—"}</span>
+                    <span className="aei-c">{start.k ?? "—"}</span>
+                    <span className="aei-c">{start.ip != null && Number.isFinite(Number(start.ip)) ? Number(start.ip).toFixed(1) : "—"}</span>
+                    <span className="aei-c">{start.bb ?? "—"}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="aei-tblwrap">
+              <div className="aei-tblwrap__cap">LAST 5 GAMES</div>
+              <div className="aei-bt">
+                <div className="aei-bt__hd" style={{ gridTemplateColumns: "minmax(64px, 1.4fr) repeat(4, minmax(0, 1fr))" }}>
+                  <span>DATE</span><span>HR</span><span>AVG</span><span>SLG</span><span>PA</span>
+                </div>
+                {fetchState === "loading" && <div className="aei-empty">Loading…</div>}
+                {fetchState !== "loading" && batterRecent.length === 0 && <div className="aei-empty">No recent data</div>}
+                {batterRecent.map((game, index) => (
+                  <div key={`${game.date || "game"}-${index}`} className="aei-bt__row" style={{ gridTemplateColumns: "minmax(64px, 1.4fr) repeat(4, minmax(0, 1fr))" }}>
+                    <span>{game.date || "—"}</span>
+                    <span className="aei-c">{game.hr ?? "—"}</span>
+                    <span className="aei-c">{game.avg == null ? "—" : Number(game.avg).toFixed(3)}</span>
+                    <span className="aei-c">{game.slg == null ? "—" : Number(game.slg).toFixed(3)}</span>
+                    <span className="aei-c">{game.pa ?? "—"}</span>
+                  </div>
+                ))}
               </div>
             </div>
           </div>
