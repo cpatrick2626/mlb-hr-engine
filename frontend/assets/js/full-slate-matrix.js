@@ -1357,33 +1357,33 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false, isJi
   const barrelBand = (() => {
     const b = row.barrel;
     if (b == null) return { label: "—",        cls: "" };
-    if (b >= 10)   return { label: "ELITE",    cls: "v-elite" };
-    if (b >= 7)    return { label: "ACTIVE",   cls: "v-active" };
-    if (b >= 4)    return { label: "MODERATE", cls: "v-elev" };
-    if (b >= 2)    return { label: "LIMITED",  cls: "v-weak" };
-    return               { label: "LOW",       cls: "v-weak" };
+    if (b >= 10)   return { label: "PRIME", cls: "v-prime" };
+    if (b >= 7)    return { label: "PLUS",  cls: "v-plus" };
+    if (b >= 4)    return { label: "EVEN",  cls: "v-even" };
+    if (b >= 2)    return { label: "THIN",  cls: "v-thin" };
+    return               { label: "FLAT",  cls: "v-flat" };
   })();
 
   /* DEPLOYMENT — display band derived from row.tier; NOT a model output */
   const deployBand = (() => {
     const t = row.tier;
-    if (t === "APEX")   return { label: "ELITE",      cls: "v-elite" };
-    if (t === "ELITE")  return { label: "STRONG",     cls: "v-strong" };
-    if (t === "EDGE")   return { label: "ACTIVE",     cls: "v-active" };
-    if (t === "SIGNAL") return { label: "STANDARD",   cls: "v-elev" };
-    if (t === "WATCH")  return { label: "MONITORING", cls: "v-weak" };
-    return                     { label: "COLD",       cls: "v-weak" };
+    if (t === "APEX")   return { label: "ELITE",      cls: "v-prime" };
+    if (t === "ELITE")  return { label: "STRONG",     cls: "v-plus" };
+    if (t === "EDGE")   return { label: "ACTIVE",     cls: "v-even" };
+    if (t === "SIGNAL") return { label: "STANDARD",   cls: "v-thin" };
+    if (t === "WATCH")  return { label: "MONITORING", cls: "v-flat" };
+    return                     { label: "COLD",       cls: "v-flat" };
   })();
 
   const h2hTrust  = !h2h ? "NO DATA" : h2h.pa < 10 ? "VERY LOW" : h2h.pa < 30 ? "LOW" : "MODERATE";
-  const h2hSigCls = !h2h || h2h.pa < 10 ? "v-weak" : (h2h.hr > 0 ? "v-strong" : "v-weak");
-  const h2hSigLbl = !h2h ? "NO DATA" : h2h.pa < 10 ? "WEAK" : (h2h.hr > 0 ? "SIGNAL" : "WEAK");
-  const exploitCls = isGap ? "v-weak" : score >= 8 ? "v-elite" : score >= 6 ? "v-strong" : score >= 4 ? "v-elev" : "v-weak";
-  const exploitLbl = isGap ? "—" : score >= 8 ? "STRONG" : score >= 6 ? "ACTIVE" : score >= 4 ? "SOFT" : "NEUTRAL";
+  const h2hSigCls = !h2h ? "v-flat" : h2h.pa < 10 ? "v-thin" : (h2h.hr > 0 ? "v-plus" : "v-thin");
+  const h2hSigLbl = !h2h ? "NO DATA" : h2h.pa < 10 ? "THIN" : (h2h.hr > 0 ? "PLUS" : "THIN");
+  const exploitCls = isGap ? "v-flat" : score >= 8 ? "v-prime" : score >= 6 ? "v-plus" : score >= 4 ? "v-even" : "v-flat";
+  const exploitLbl = isGap ? "—" : score >= 8 ? "PRIME" : score >= 6 ? "PLUS" : score >= 4 ? "EVEN" : "FLAT";
   const hhBand = row.hh == null ? { label: "—", cls: "" }
-    : row.hh >= 45 ? { label: "ELEVATED", cls: "v-strong" }
-    : row.hh >= 38 ? { label: "MODERATE", cls: "v-elev" }
-    : { label: "LOW", cls: "v-weak" };
+    : row.hh >= 45 ? { label: "PLUS", cls: "v-plus" }
+    : row.hh >= 38 ? { label: "EVEN", cls: "v-even" }
+    : { label: "THIN", cls: "v-thin" };
 
   const pitcherName = row.pitcher_name || "TBD";
   const batterName  = row.name || row.player || "—";
