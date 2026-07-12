@@ -1401,8 +1401,8 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false, isJi
     : (row.slg != null && row.avg != null ? +(row.slg - row.avg).toFixed(3) : null);
 
   const aeiHr9 = row.pitcher_hr9 != null ? row.pitcher_hr9 : null;
-  const aeiPTier = aeiHr9 != null ? (aeiHr9 >= 1.45 ? "high" : aeiHr9 >= 1.05 ? "elevated" : "low") : "—";
-  const aeiPTierColor = aeiPTier === "high" ? "#1aff66" : aeiPTier === "elevated" ? "#ffb020" : aeiPTier === "low" ? "#ff3344" : "inherit";
+  const aeiPTier = aeiHr9 != null ? (aeiHr9 >= 1.45 ? "HITTABLE" : aeiHr9 >= 1.05 ? "AVERAGE" : "STINGY") : "—";
+  const aeiPTierColor = aeiPTier === "HITTABLE" ? "#1aff66" : aeiPTier === "AVERAGE" ? "#ffb020" : aeiPTier === "STINGY" ? "#ff3344" : "inherit";
 
   const isConfirmed = row.lineup_confirmed === true;
   const pitcherConfirmed = row.pitcher_confirmed === true;
@@ -1601,7 +1601,7 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false, isJi
                   <div className={"aei-stack__v " + barrelBand.cls}>{barrelBand.label}</div>
                 </div>
                 <div className="aei-stack__item">
-                  <div className="aei-stack__k">HH RISK</div>
+                  <div className="aei-stack__k">HH POWER</div>
                   <div className={"aei-stack__v " + hhBand.cls}>{hhBand.label}</div>
                 </div>
                 <div className="aei-stack__item">
