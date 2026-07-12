@@ -1350,6 +1350,7 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false, isJi
   const isGap        = row.arsenal_edge_score == null || row.arsenal_edge_label === "DATA GAP";
   const score        = row.arsenal_edge_score;
   const edgeLabel    = row.arsenal_edge_label || (isGap ? "DATA GAP" : "—");
+  const edgeDisplayLabel = ({ WATCH: "LEAN", "LIVE EDGE": "FAVORABLE" })[edgeLabel] || edgeLabel;
   const confidence   = row.arsenal_edge_confidence;
 
 
@@ -1502,7 +1503,7 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false, isJi
 
             {/* ARSENAL EDGE VERDICT — primary signal: edge score + label + confidence */}
             <div className="aei-edge-active">
-              <div className="aei-ea__title">ARSENAL EDGE: {edgeLabel}</div>
+              <div className="aei-ea__title">ARSENAL EDGE: {edgeDisplayLabel}</div>
               <div className="aei-ea__row">
                 <span className="aei-ea__lbl">EDGE SCORE</span>
                 <span className="aei-ea__val">{isGap ? "—" : Number(score).toFixed(1)}</span>
