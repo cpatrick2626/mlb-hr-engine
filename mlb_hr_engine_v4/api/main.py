@@ -597,6 +597,8 @@ def _build_slate_payload(data: dict) -> dict:
             "model_prob": round(model_prob, 4),
             "tier":     tier,
             "gameId":   derived_game_id,
+            # MLB game_pk pass-through (display/identity only — additive, not yet keyed on)
+            "game_pk":  p.get("game_pk"),
             "odds":     odds,
             # FanDuel deep links (display/handoff only — additive passthrough)
             "fd_event_link": p.get("fd_event_link"),
@@ -774,6 +776,8 @@ def _build_slate_payload(data: dict) -> dict:
                 "wind":     p.get("wind", ""),
                 "hrFactor": round(float(p.get("park_factor") or 1.0), 3),
                 "teams":    [_away, _home],
+                # MLB game_pk pass-through (additive — cards still keyed by team slug)
+                "game_pk":  p.get("game_pk"),
             }
 
     return {
