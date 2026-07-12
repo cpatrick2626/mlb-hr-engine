@@ -1,12 +1,12 @@
 # Tier Vocabulary Doctrine
 
-**Last Updated:** 2026-06-10
+**Last Updated:** 2026-07-12
 
 ---
 
 ## Summary
 
-Three distinct tier vocabularies exist in MLB HR ENGINE. They apply to different surfaces and must not be merged or cross-applied without explicit operator authorization.
+Four distinct tier/rating vocabularies exist in MLB HR ENGINE. They apply to different surfaces and must not be merged or cross-applied without explicit operator authorization.
 
 ---
 
@@ -72,6 +72,43 @@ These tiers exist in **prototype mock data only**. They are not production scori
 
 ---
 
+## Vocabulary 4 — AEI Display-Band Ladder
+
+**Used by:** Graded EDGE STACK chips in the Arsenal Edge Intel modal (PITCH EXPLOIT, BARREL PATH, H2H, HH POWER)
+
+**Added:** 2026-07-12
+
+A single ordered 5-rung ladder, reused by every graded EDGE STACK chip so one word means exactly one rung across the modal.
+
+| Rung | Word  | Meaning |
+|------|-------|---------|
+| 5    | PRIME | Top band of this signal — strongest bullish read |
+| 4    | PLUS  | Clearly above average — favorable |
+| 3    | EVEN  | League-average / neutral — no lean |
+| 2    | THIN  | Below average — limited support |
+| 1    | FLAT  | No edge — bottom band |
+
+**Direction:** PRIME is always the most bullish for the HR bet; FLAT the least. Every chip using this ladder is bullish-up.
+
+**Off-ladder qualifiers** (data-state, not quality — exempt from the ladder): VOLATILE (low-confidence override), DATA GAP (no source), NO DATA (empty H2H), — (null).
+
+**Orthogonal axis** (not a quality rating): H2H trust (NO DATA / VERY LOW / LOW / MODERATE) measures sample confidence only, never matchup quality, and keeps its own scale.
+
+### Arsenal Edge Verdict — Named Scale
+
+Registered as its own domain scale: EXPLOSIVE / MISMATCH / FAVORABLE / LEAN / SUPPRESSED (plus off-ladder VOLATILE, DATA GAP). The frontend displays these remapped labels (WATCH→LEAN, LIVE EDGE→FAVORABLE); `arsenal_edge.py` emissions and pick-time snapshots are unchanged.
+
+### Inversions Resolved
+
+- **HH RISK renamed HH POWER** — the value measures the batter's hard-hit production; high is bullish. Reads PLUS/EVEN/THIN bullish-up.
+- **SEASON HR/9 tag** reworded high/elevated/low → HITTABLE/AVERAGE/STINGY so the green (batter-favorable) direction reads correctly. Thresholds unchanged.
+
+### MODEL TIER Chip
+
+The AEI EDGE STACK's former DEPLOYMENT chip is renamed **MODEL TIER** and shows `row.tier` verbatim (APEX stays APEX), satisfying the JIG row.tier Display Clarification rule below (the modal renders in JIG context). No rule change — a compliance record.
+
+---
+
 ## JIG row.tier Display Clarification
 
 **Status:** Accepted doctrine (Option A) — 2026-06-10
@@ -97,6 +134,7 @@ JIG `leaderboard_rows_jig` rows inherit `row.tier` from MAIN via shallow copy. T
 3. Do not promote prototype card tiers (CRITICAL/HIGH/MODERATE/LOW) to production without an explicit authorized mapping.
 4. Any vocabulary merge or alias must be explicitly documented and operator-authorized before implementation.
 5. Do not describe JIG `row.tier` as JIG-native tactical tier or JIG confidence. It is MAIN model probability context inherited via shallow copy.
+6. Rating values on any surface must not reuse words from Vocabulary 1, 2, or 3. Feature and panel names (ARSENAL EDGE INTEL, EDGE STACK, EDGE SCORE) are surface names, not ratings, and are exempt.
 
 ---
 
