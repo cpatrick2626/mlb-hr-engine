@@ -1292,6 +1292,9 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false, isJi
   row = row._raw || row; // untagged stat reads here stay season/raw-scoped
   const [detail, setDetail] = React.useState(null);
   const [fetchState, setFetchState] = React.useState("loading");
+  const [activeBvpCols, setActiveBvpCols] = React.useState(() => new Set(_aeeReadBvpColumns()));
+  const visibleBvpCols = ARSENAL_BVP_COLS.filter(col => activeBvpCols.has(col.key));
+  const toggleBvpCol = key => setActiveBvpCols(prev => { const next = new Set(prev); next.has(key) ? next.delete(key) : next.add(key); try { window.localStorage.setItem(_AEE_BVP_COLS_STORAGE_KEY, JSON.stringify([...next])); } catch {} return next; });
 
   const pitcherId  = row.pitcher_id;
   const batterId   = row.id;
@@ -1621,10 +1624,25 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false, isJi
             </div>
 
             <div className="aei-tblwrap">
-              <div className="aei-tblwrap__cap">{bLast} VS {pitcherHand || "?"}HP — BY PITCH TYPE</div>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginBottom: 4 }}>
+                <div className="aei-tblwrap__cap" style={{ marginBottom: 0 }}>{bLast} VS {pitcherHand || "?"}HP — BY PITCH TYPE</div>
+                <details style={{ position: 'relative' }}>
+                  <summary style={{ listStyle: 'none', cursor: 'pointer', fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 8, color: '#8a9691', letterSpacing: '0.14em', textTransform: 'uppercase', border: '1px solid rgba(180,220,200,0.18)', borderRadius: 3, padding: '3px 6px', whiteSpace: 'nowrap' }}>COLUMNS</summary>
+                  <div style={{ position: 'absolute', zIndex: 2, top: 'calc(100% + 4px)', right: 0, minWidth: 154, padding: 7, background: '#0e1519', border: '1px solid rgba(180,220,200,0.18)', borderRadius: 3, boxShadow: '0 8px 20px rgba(0,0,0,0.28)' }}>
+                    {ARSENAL_BVP_COLS.map(col => (
+                      <label key={col.key} title={col.title} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 1px', cursor: 'pointer', fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 9, color: '#b8c2c0', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                        <input type="checkbox" checked={activeBvpCols.has(col.key)} onChange={() => toggleBvpCol(col.key)} style={{ accentColor: '#1aff66', margin: 0 }} />
+                        {col.head}
+                      </label>
+                    ))}
+                    <div style={{ marginTop: 4, paddingTop: 5, borderTop: '1px solid rgba(180,220,200,0.08)', fontFamily: 'var(--font-display)', fontSize: 8, color: '#3a4642', letterSpacing: '0.1em' }}>PITCH ALWAYS SHOWN</div>
+                  </div>
+                </details>
+              </div>
               <div className="aei-bt">
-                <div className="aei-bt__hd">
-                  <span>PITCH</span><span>PA</span><span>BA</span><span>SLG</span><span>HR</span><span>K%</span>
+                <div className="aei-bt__hd" style={{ gridTemplateColumns: `minmax(64px,1.2fr) repeat(${visibleBvpCols.length}, minmax(0,1fr))` }}>
+                  <span>PITCH</span>
+                  {visibleBvpCols.map(col => <span key={col.key}>{col.head}</span>)}
                 </div>
                 {fetchState === "loading" && <div className="aei-empty">Loading…</div>}
                 {fetchState !== "loading" && !hasBvp && (
@@ -1633,26 +1651,26 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false, isJi
                 {hasBvp && arsorted.map(p => {
                   const b = bvp[p.code];
                   if (!b || !b.pa) return null;
-                  const isKey  = p.code === keyPitch;
-                  const small  = b.pa < 10;
-                  const ba     = b.ba  != null ? Number(b.ba).toFixed(3).replace(/^0/, "")  : "—";
-                  const slgVal = b.slg != null ? Number(b.slg) : null;
-                  const slgStr = slgVal != null ? slgVal.toFixed(3).replace(/^0/, "") : "—";
-                  const slgCls = slgVal != null
-                    ? (slgVal >= 0.600 ? "aei-slg--dmg" : slgVal >= 0.450 ? "aei-slg--mid" : "aei-slg--lo")
-                    : "";
-                  const kPct = b.k_pct != null ? (Number(b.k_pct)*100).toFixed(1)+"%" : "—";
+                  const isKey = p.code === keyPitch;
+                  const small = b.pa < 10;
                   return (
-                    <div key={p.code} className={"aei-bt__row" + (isKey ? " aei-bt__row--key" : "")}>
+                    <div key={p.code} className={"aei-bt__row" + (isKey ? " aei-bt__row--key" : "")} style={{ gridTemplateColumns: `minmax(64px,1.2fr) repeat(${visibleBvpCols.length}, minmax(0,1fr))` }}>
                       <div className="aei-bt__pitch">
                         <b>{fsmPitchName(p.code)}</b>
                         {small && <span className="aei-bt__ss">SMALL · &lt;10 PA</span>}
                       </div>
-                      <span className={"aei-c" + (small ? " aei-c--warn" : "")}>{b.pa}</span>
-                      <span className="aei-c">{ba}</span>
-                      <span className="aei-c"><span className={"aei-slg " + slgCls}>{slgStr}</span></span>
-                      <span className={"aei-c" + ((b.hr ?? 0) > 0 ? " aei-c--hg" : "")}>{b.hr ?? "—"}</span>
-                      <span className="aei-c">{kPct}</span>
+                      {visibleBvpCols.map(col => {
+                        const value = col.gate(b) ? col.fmt(b) : '—';
+                        if (col.key === 'slg' && col.gate(b)) {
+                          const slgVal = Number(b.slg);
+                          const slgCls = slgVal >= 0.600 ? 'aei-slg--dmg' : slgVal >= 0.450 ? 'aei-slg--mid' : 'aei-slg--lo';
+                          return <span key={col.key} className="aei-c"><span className={"aei-slg " + slgCls}>{value}</span></span>;
+                        }
+                        const extraCls = col.key === 'pa' && small ? ' aei-c--warn'
+                          : col.key === 'hr_pct' && value !== '—' && parseFloat(value) >= 5 ? ' aei-c--hg'
+                          : '';
+                        return <span key={col.key} className={"aei-c" + extraCls}>{value}{col.key === 'pa' && small ? '*' : ''}</span>;
+                      })}
                     </div>
                   );
                 }).filter(Boolean)}
