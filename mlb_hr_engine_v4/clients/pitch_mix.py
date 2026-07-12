@@ -367,8 +367,9 @@ def _fetch_pitcher_savant(pitcher_id: int, *, display_only: bool = False) -> dic
                 resp.close()
                 csv_rows = csv.DictReader(io.StringIO(csv_body.decode("utf-8-sig")))
             else:
-                resp.raw.decode_content = True
-                csv_rows = csv.DictReader(io.TextIOWrapper(resp.raw, encoding="utf-8-sig"))
+                csv_body = resp.content
+                resp.close()
+                csv_rows = csv.DictReader(io.StringIO(csv_body.decode("utf-8-sig")))
 
             hand_totals:          dict[str, dict] = {}
             pitch_totals:         dict[str, dict] = {}           # overall (all batters)
@@ -604,6 +605,7 @@ def _fetch_all_batter_pitch_splits(batter_id: int) -> None:
 
     total_rows = 0
     seen_pa: set = set()
+    _got_data = False
 
     try:
         resp = _SESSION.get(
@@ -621,10 +623,11 @@ def _fetch_all_batter_pitch_splits(batter_id: int) -> None:
             timeout=15,
             stream=True,
         )
-        resp.raw.decode_content = True
         resp.raise_for_status()
+        csv_body = resp.content
+        resp.close()
 
-        for row in csv.DictReader(io.TextIOWrapper(resp.raw, encoding="utf-8-sig")):
+        for row in csv.DictReader(io.StringIO(csv_body.decode("utf-8-sig"))):
             raw_pt = (row.get("pitch_type") or "").strip().upper()
             ev     = (row.get("events") or "").strip().lower()
             if not raw_pt or not ev:
@@ -658,6 +661,7 @@ def _fetch_all_batter_pitch_splits(batter_id: int) -> None:
             if p_hand in ("R", "L"):
                 _acc(totals_by_hand[p_hand], pt, ev)
 
+        _got_data = True
         resp.close()
     except Exception as e:
         print(f"[pitch_mix] batter_vs_pitches fetch failed (bid={batter_id}): {e}")
@@ -665,9 +669,10 @@ def _fetch_all_batter_pitch_splits(batter_id: int) -> None:
     if total_rows == 0:
         print(f"[pitch_mix] WARNING: batter Savant returned 0 PA-ending rows (bid={batter_id}, season={season})")
 
-    _BATTER_PT_CACHE[(batter_id, "")]  = _finalize(totals_all)
-    _BATTER_PT_CACHE[(batter_id, "R")] = _finalize(totals_by_hand["R"])
-    _BATTER_PT_CACHE[(batter_id, "L")] = _finalize(totals_by_hand["L"])
+    if _got_data:
+        _BATTER_PT_CACHE[(batter_id, "")]  = _finalize(totals_all)
+        _BATTER_PT_CACHE[(batter_id, "R")] = _finalize(totals_by_hand["R"])
+        _BATTER_PT_CACHE[(batter_id, "L")] = _finalize(totals_by_hand["L"])
 
 
 def get_batter_vs_pitches(batter_id: int, pitcher_hand: str = "") -> dict:
