@@ -1290,11 +1290,33 @@ function FsmPitchMix({ row, onClose, onBatter, builderMode = false }) {
    ============================================================ */
 function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false, isJigContext = false }) {
   row = row._raw || row; // untagged stat reads here stay season/raw-scoped
+  const bvpColsStorageKey = 'hr-engine:aei-bvp-cols:v1';
+  const bvpDefaultCols = ['pa', 'ba', 'slg', 'iso', 'hr', 'hr_pct', 'k_pct', 'hh_pct'];
+  const bvpCols = [
+    { key: 'pa',     head: 'PA',        title: 'Plate appearances versus this pitch type', fmt: b => String(b.pa),                                      gate: b => b && b.pa != null && b.pa > 0 },
+    { key: 'ba',     head: 'BA',        title: 'Batting average versus this pitch type (minimum 3 AB)', fmt: b => Number(b.ba).toFixed(3),             gate: b => b && b.ba != null },
+    { key: 'slg',    head: 'SLG',       title: 'Slugging percentage versus this pitch type (minimum 3 AB)', fmt: b => Number(b.slg).toFixed(3),        gate: b => b && b.slg != null },
+    { key: 'iso',    head: 'ISO',       title: 'ISO versus this pitch type (SLG minus BA; minimum 3 AB)', fmt: b => (Number(b.slg) - Number(b.ba)).toFixed(3), gate: b => b && b.ba != null && b.slg != null },
+    { key: 'hr',     head: 'HR',        title: 'Home runs vs this pitch type (count)', fmt: b => String(b.hr) },
+    { key: 'hr_pct', head: 'HR%',       title: 'Home-run rate versus this pitch type (minimum 10 PA)', fmt: b => (Number(b.hr || 0) / Number(b.pa) * 100).toFixed(1) + '%', gate: b => b && b.pa != null && b.pa >= 10 },
+    { key: 'k_pct',  head: 'K%',        title: 'Strikeout rate versus this pitch type (minimum 5 PA)', fmt: b => (Number(b.k_pct) * 100).toFixed(0) + '%', gate: b => b && b.k_pct != null },
+    { key: 'hh_pct', head: 'HH% VS PT', title: 'Hard-hit rate versus this pitch type (minimum 5 contacts)', fmt: b => (Number(b.display_hh) * 100).toFixed(1) + '%', gate: b => b && b.display_hh != null },
+  ];
+  const readBvpColumns = () => {
+    try {
+      const saved = window.localStorage.getItem(bvpColsStorageKey);
+      if (!saved) return bvpDefaultCols;
+      const keys = JSON.parse(saved);
+      if (!Array.isArray(keys)) return bvpDefaultCols;
+      const valid = keys.filter(key => bvpCols.some(col => col.key === key));
+      return valid.length === keys.length ? valid : bvpDefaultCols;
+    } catch { return bvpDefaultCols; }
+  };
   const [detail, setDetail] = React.useState(null);
   const [fetchState, setFetchState] = React.useState("loading");
-  const [activeBvpCols, setActiveBvpCols] = React.useState(() => new Set(_aeeReadBvpColumns()));
-  const visibleBvpCols = ARSENAL_BVP_COLS.filter(col => activeBvpCols.has(col.key));
-  const toggleBvpCol = key => setActiveBvpCols(prev => { const next = new Set(prev); next.has(key) ? next.delete(key) : next.add(key); try { window.localStorage.setItem(_AEE_BVP_COLS_STORAGE_KEY, JSON.stringify([...next])); } catch {} return next; });
+  const [activeBvpCols, setActiveBvpCols] = React.useState(() => new Set(readBvpColumns()));
+  const visibleBvpCols = bvpCols.filter(col => activeBvpCols.has(col.key));
+  const toggleBvpCol = key => setActiveBvpCols(prev => { const next = new Set(prev); next.has(key) ? next.delete(key) : next.add(key); try { window.localStorage.setItem(bvpColsStorageKey, JSON.stringify([...next])); } catch {} return next; });
 
   const pitcherId  = row.pitcher_id;
   const batterId   = row.id;
@@ -1631,7 +1653,7 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false, isJi
                 <details style={{ position: 'relative' }}>
                   <summary style={{ listStyle: 'none', cursor: 'pointer', fontFamily: 'var(--font-display)', fontWeight: 700, fontSize: 8, color: '#8a9691', letterSpacing: '0.14em', textTransform: 'uppercase', border: '1px solid rgba(180,220,200,0.18)', borderRadius: 3, padding: '3px 6px', whiteSpace: 'nowrap' }}>COLUMNS</summary>
                   <div style={{ position: 'absolute', zIndex: 2, top: 'calc(100% + 4px)', right: 0, minWidth: 154, padding: 7, background: '#0e1519', border: '1px solid rgba(180,220,200,0.18)', borderRadius: 3, boxShadow: '0 8px 20px rgba(0,0,0,0.28)' }}>
-                    {ARSENAL_BVP_COLS.map(col => (
+                    {bvpCols.map(col => (
                       <label key={col.key} title={col.title} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '3px 1px', cursor: 'pointer', fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 9, color: '#b8c2c0', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
                         <input type="checkbox" checked={activeBvpCols.has(col.key)} onChange={() => toggleBvpCol(col.key)} style={{ accentColor: '#1aff66', margin: 0 }} />
                         {col.head}
@@ -1662,8 +1684,9 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false, isJi
                         {small && <span className="aei-bt__ss">SMALL · &lt;10 PA</span>}
                       </div>
                       {visibleBvpCols.map(col => {
-                        const value = col.gate(b) ? col.fmt(b) : '—';
-                        if (col.key === 'slg' && col.gate(b)) {
+                        const hasValue = col.key === 'hr' ? b && b.hr != null : col.gate(b);
+                        const value = hasValue ? col.fmt(b) : '—';
+                        if (col.key === 'slg' && hasValue) {
                           const slgVal = Number(b.slg);
                           const slgCls = slgVal >= 0.600 ? 'aei-slg--dmg' : slgVal >= 0.450 ? 'aei-slg--mid' : 'aei-slg--lo';
                           return <span key={col.key} className="aei-c"><span className={"aei-slg " + slgCls}>{value}</span></span>;
