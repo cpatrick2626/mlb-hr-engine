@@ -927,6 +927,42 @@ async def get_pitcher_detail(pitcher_id: int, batter_id: int = 0,
         log.warning("pitcher-detail h2h failed pid=%s bid=%s: %s", pitcher_id, batter_id, e)
         result["h2h"] = {}
 
+    # Pitcher recent form: last 5 starts (HR/K/IP/BB)
+    try:
+        from clients.mlb_stats import _pitcher_game_log_splits, parse_ip
+        result["pitcher_recent"] = [
+            {
+                "date": s.get("date"),
+                "hr":   int(s.get("stat", {}).get("homeRuns") or 0),
+                "k":    int(s.get("stat", {}).get("strikeOuts") or 0),
+                "ip":   parse_ip(s.get("stat", {}).get("inningsPitched")),
+                "bb":   int(s.get("stat", {}).get("baseOnBalls") or 0),
+            }
+            for s in _pitcher_game_log_splits(pitcher_id)[:5]
+        ]
+    except Exception as e:
+        log.warning("pitcher-detail pitcher_recent failed pid=%s: %s", pitcher_id, e)
+        result["pitcher_recent"] = []
+
+    # Batter recent form: last 5 games (HR/AVG/SLG/PA)
+    try:
+        from clients.mlb_stats import _game_log_splits
+        batter_recent = []
+        for s in (_game_log_splits(batter_id)[:5] if batter_id else []):
+            stat = s.get("stat", {})
+            ab = int(stat.get("atBats") or 0)
+            batter_recent.append({
+                "date": s.get("date"),
+                "hr":   int(stat.get("homeRuns") or 0),
+                "avg":  round(int(stat.get("hits") or 0) / ab, 3) if ab else None,
+                "slg":  round(int(stat.get("totalBases") or 0) / ab, 3) if ab else None,
+                "pa":   int(stat.get("plateAppearances") or 0),
+            })
+        result["batter_recent"] = batter_recent
+    except Exception as e:
+        log.warning("pitcher-detail batter_recent failed bid=%s: %s", batter_id, e)
+        result["batter_recent"] = []
+
     return result
 
 
