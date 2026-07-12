@@ -220,7 +220,7 @@ def _fetch_arsenal_from_stats(year: int) -> dict[int, list[dict]]:
                 if usage is None or usage <= 0:
                     continue
                 # Savant returns 0-100 scale for percentages
-                pct = usage / 100.0 if usage > 1.5 else usage
+                pct = usage / 100.0
                 if whiff is not None and whiff > 1.5:
                     whiff = whiff / 100.0
                 if hard_hit is not None and hard_hit > 1.5:
@@ -562,8 +562,8 @@ def _parse_arsenal_csv(raw: str) -> dict[int, list[dict]]:
                     continue
                 if pct <= 0:
                     continue
-                if pct > 1.5:
-                    pct /= 100.0
+                # Savant returns 0-100 scale for percentages
+                pct /= 100.0
                 pitches.append({
                     "pitch_type":   pt,
                     "pitch_pct":    round(pct, 4),
