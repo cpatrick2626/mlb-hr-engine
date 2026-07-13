@@ -507,6 +507,44 @@ def _build_odds_lookup(all_props):
     return odds_by_player, unique_names
 
 
+def _select_own_event_props(player, matches):
+    """Doubleheader disambiguation: a name-matched props pool spanning multiple
+    Odds API events means a DH sibling's lines merged into one pool. Keep only
+    the props for the event whose teams match this player's matchup; among DH
+    twin events (same matchup twice) pick the one whose commence_time is nearest
+    the player's game start — same rule as _attach_fd_links. Returns None when
+    the pool can't be cleanly narrowed (unmappable teams, missing commence_time)
+    so the caller falls back to the pooled match instead of dropping odds."""
+    home = player.get("home_team")
+    away = player.get("team") if player.get("team") != home else player.get("opponent")
+    by_event: dict[str, list[dict]] = {}
+    for p in matches:
+        by_event.setdefault(p.get("game_id"), []).append(p)
+    candidates = []
+    for props in by_event.values():
+        rep = props[0]
+        e_home = odds_api.TEAM_NAME_TO_ABBR.get(rep.get("home_team", ""))
+        e_away = odds_api.TEAM_NAME_TO_ABBR.get(rep.get("away_team", ""))
+        if e_home == home and e_away == away:
+            candidates.append(props)
+    if not candidates:
+        return None
+    if len(candidates) == 1:
+        return candidates[0]
+
+    def _dist(props):
+        try:
+            a = datetime.fromisoformat((player.get("game_time_utc") or "").replace("Z", "+00:00"))
+            b = datetime.fromisoformat((props[0].get("commence_time") or "").replace("Z", "+00:00"))
+            return abs((a - b).total_seconds())
+        except Exception:
+            return float("inf")
+    best = min(candidates, key=_dist)
+    if _dist(best) == float("inf"):
+        return None
+    return best
+
+
 def _match_odds(player, odds_lookup, unique_names):
     """Match odds using pre-built lookup structure (O(1) after fuzzy match)."""
     if not odds_lookup:
@@ -529,6 +567,13 @@ def _match_odds(player, odds_lookup, unique_names):
     matches = odds_lookup.get(matched_name, [])
     if not matches:
         return player
+
+    # DH guard: only fires when the name-matched pool spans >1 Odds API event.
+    # Single-event pools (the non-DH case) take the unchanged path below.
+    if len({p.get("game_id") for p in matches}) > 1:
+        own = _select_own_event_props(player, matches)
+        if own:
+            matches = own
 
     prices  = [p["price"] for p in matches]
     summary = mkt.market_summary(prices)

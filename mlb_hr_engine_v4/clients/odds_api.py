@@ -192,6 +192,7 @@ def _try_api() -> tuple[list[dict], dict]:
         for p in props:
             p["home_team"] = event.get("home_team", "")
             p["away_team"] = event.get("away_team", "")
+            p["commence_time"] = event.get("commence_time", "")
         all_props.extend(props)
         if fd_info.get("event_link"):
             fd_links.append({
