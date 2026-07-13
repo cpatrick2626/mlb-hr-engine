@@ -1,14 +1,14 @@
 ﻿"""
-P&L Tracker â€” logs picks and tracks outcomes + profit/loss.
+P&L Tracker â€" logs picks and tracks outcomes + profit/loss.
 
 Storage:
   When Google Sheets is configured (GOOGLE_CREDENTIALS + GOOGLE_SHEET_ID secrets),
-  data is written to and read from the cloud sheet â€” survives Streamlit restarts.
+  data is written to and read from the cloud sheet â€" survives Streamlit restarts.
   Otherwise falls back to local CSV files (codex_hr_engine_v4/tracking/).
 
 Workflow:
-  1. app.py / main.py calls log_picks() each run â†’ appends to picks_log
-  2. Sidebar "Update Yesterday" button calls update_yesterday() â†’ settles outcomes
+  1. app.py / main.py calls log_picks() each run â†' appends to picks_log
+  2. Sidebar "Update Yesterday" button calls update_yesterday() â†' settles outcomes
   3. tab_performance() calls pnl_summary() + get_picks_log() to display results
 """
 
@@ -48,7 +48,7 @@ RESULTS_FIELDS   = LOG_FIELDS + ["hr_result", "profit_loss", "notes", "clv_pp", 
 FULL_LOG_FIELDS  = LOG_FIELDS + ["confidence_tier", "qualified", "filter_reasons"]
 
 
-# â”€â”€ Public API â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€ Public API â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 def storage_backend() -> str:
     return "sheets" if _sheets.available() else "csv"
@@ -405,53 +405,53 @@ def get_picks_log() -> list[dict]:
 
 
 def reconcile_clv_to_results() -> dict:
-    “””Copy clv_pp/clv_pct_rel/beats_close from clv_log.csv into results.csv.
+    """Copy clv_pp/clv_pct_rel/beats_close from clv_log.csv into results.csv.
 
     Join key: (date, normalized player_name). Rows with no CLV match stay blank —
     never writes 0 or placeholder. Uses existing atomic writer.
-    Returns {“matched”: int, “unmatched”: int}.
-    “””
+    Returns {"matched": int, "unmatched": int}.
+    """
     def _norm(name: str) -> str:
-        return unicodedata.normalize(“NFKD”, name).encode(“ascii”, “ignore”).decode(“ascii”).lower().strip()
+        return unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode("ascii").lower().strip()
 
     # Build CLV map — only rows that have clv_pp computed
     clv_map: dict[tuple, dict] = {}
     if CLV_LOG_PATH.exists():
-        with open(CLV_LOG_PATH, newline=””, encoding=”utf-8”) as f:
+        with open(CLV_LOG_PATH, newline="", encoding="utf-8") as f:
             for row in csv.DictReader(f):
-                clv_pp = row.get(“clv_pp”, “”)
+                clv_pp = row.get("clv_pp", "")
                 if not clv_pp:
                     continue
-                key = (row.get(“date”, “”), _norm(row.get(“player_name”, “”)))
+                key = (row.get("date", ""), _norm(row.get("player_name", "")))
                 clv_map[key] = {
-                    “clv_pp”:      clv_pp,
-                    “clv_pct_rel”: row.get(“clv_pct_rel”, “”),
-                    “beats_close”: row.get(“beats_close”, “”),
+                    "clv_pp":      clv_pp,
+                    "clv_pct_rel": row.get("clv_pct_rel", ""),
+                    "beats_close": row.get("beats_close", ""),
                 }
 
     if not RESULTS_PATH.exists():
-        return {“matched”: 0, “unmatched”: 0}
+        return {"matched": 0, "unmatched": 0}
 
-    with open(RESULTS_PATH, newline=””, encoding=”utf-8”) as f:
+    with open(RESULTS_PATH, newline="", encoding="utf-8") as f:
         rows = list(csv.DictReader(f))
 
     matched = unmatched = 0
     for row in rows:
-        key = (row.get(“date”, “”), _norm(row.get(“player_name”, “”)))
+        key = (row.get("date", ""), _norm(row.get("player_name", "")))
         clv = clv_map.get(key)
         if clv:
-            row[“clv_pp”]      = clv[“clv_pp”]
-            row[“clv_pct_rel”] = clv[“clv_pct_rel”]
-            row[“beats_close”] = clv[“beats_close”]
+            row["clv_pp"]      = clv["clv_pp"]
+            row["clv_pct_rel"] = clv["clv_pct_rel"]
+            row["beats_close"] = clv["beats_close"]
             matched += 1
         else:
             unmatched += 1
 
     _atomic_csv_write(RESULTS_PATH, RESULTS_FIELDS, rows)
-    return {“matched”: matched, “unmatched”: unmatched}
+    return {"matched": matched, "unmatched": unmatched}
 
 
-# â”€â”€ Internal helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+# â"€â"€ Internal helpers â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€â"€
 
 def _fmtf(val, fmt=".4f") -> str:
     """Format a float field that may be None, '--', or numeric."""
@@ -634,4 +634,3 @@ def _compute_pl(bet: float, odds: int, hit_hr: bool) -> float:
             return 0.0
         return round(bet * 100 / abs(odds), 2)
     return round(-bet, 2)
-
