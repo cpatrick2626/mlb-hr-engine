@@ -686,16 +686,25 @@ def _build_slate_payload(data: dict) -> dict:
     jig_build_error = False
     try:
         _arsenal_data = get_pitcher_arsenal(_dt.datetime.now().year)
-        # Key lookup by stable player_id (same scheme as row "id") to avoid
-        # same-name collisions; fall back to name slug when player_id absent.
+        # Key lookup by (player_id, game_pk) so doubleheader siblings resolve
+        # their own game's profile; fall back to name slug when player_id absent,
+        # and to player_id-only when game_pk is missing on either side.
         players_by_id = {
+            ((p.get("player_id")
+              or (p.get("player_name") or "").lower().replace(" ", "-")),
+             p.get("game_pk")): p
+            for p in players
+        }
+        players_by_id_fallback = {
             (p.get("player_id")
              or (p.get("player_name") or "").lower().replace(" ", "-")): p
             for p in players
         }
         jig_rows = [copy.copy(r) for r in leaderboard_rows]
         for r in jig_rows:
-            p = players_by_id.get(r.get("id"), {})
+            p = players_by_id.get((r.get("id"), r.get("game_pk")))
+            if p is None:
+                p = players_by_id_fallback.get(r.get("id"), {})
             r["jigScore"] = _jig_score(p, arsenal_data=_arsenal_data)
             # JIG projected: same _jig_score with announced pitcher fed in (already the case
             # when pitcher_confirmed=True). Null when no pitcher announced — tactical signals
@@ -720,18 +729,28 @@ def _build_slate_payload(data: dict) -> dict:
     try:
         from engine.arsenal_edge import compute_aee_score
         _aee_arsenal = get_pitcher_arsenal(_dt.datetime.now().year)  # cache hit
+        # Keyed on (player_id, game_pk) so doubleheader siblings get their own
+        # game's AEE; player_id-only fallback when game_pk is missing.
         _aee_players = {
-            (p.get("player_id") or (p.get("player_name") or "").lower().replace(" ", "-")): p
+            ((p.get("player_id") or (p.get("player_name") or "").lower().replace(" ", "-")),
+             p.get("game_pk")): p
             for p in players
         }
-        _aee_map: dict[str, dict] = {
-            pid: compute_aee_score(p, _aee_arsenal)
-            for pid, p in _aee_players.items()
+        _aee_map: dict[tuple, dict] = {
+            pid_gpk: compute_aee_score(p, _aee_arsenal)
+            for pid_gpk, p in _aee_players.items()
         }
+        _aee_fallback = {pid: aee for (pid, _gpk), aee in _aee_map.items()}
         for r in leaderboard_rows:
-            r.update(_aee_map.get(r.get("id"), {}))
+            _aee = _aee_map.get((r.get("id"), r.get("game_pk")))
+            if _aee is None:
+                _aee = _aee_fallback.get(r.get("id"), {})
+            r.update(_aee)
         for r in jig_rows:
-            r.update(_aee_map.get(r.get("id"), {}))
+            _aee = _aee_map.get((r.get("id"), r.get("game_pk")))
+            if _aee is None:
+                _aee = _aee_fallback.get(r.get("id"), {})
+            r.update(_aee)
     except Exception as e:
         log.error("AEE precompute failed: %s", e, exc_info=True)
 
