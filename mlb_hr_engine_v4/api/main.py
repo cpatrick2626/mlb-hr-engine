@@ -544,6 +544,24 @@ def _build_slate_payload(data: dict) -> dict:
     import datetime as _dt
     players = data.get("all_players", [])
 
+    # DH disambiguation (site A): the same away-home slug can cover two games
+    # in a doubleheader. Pre-scan game_pks per base slug; append game_pk only
+    # on collision so non-DH slugs stay byte-identical to the legacy form.
+    _slug_pks = {}
+    for p in players:
+        _h = (p.get("home_team") or p.get("team") or "home").upper()
+        _o = (p.get("team") or "").upper()
+        _pp = (p.get("opponent") or "").upper()
+        _a = (_o if _o != _h else _pp) or "away"
+        _slug_pks.setdefault(
+            f"{_a}-{_h}".lower().replace(" ", "-"), set()
+        ).add(p.get("game_pk"))
+
+    def _game_slug(base_slug, game_pk):
+        if len(_slug_pks.get(base_slug, ())) > 1 and game_pk:
+            return f"{base_slug}-{game_pk}"
+        return base_slug
+
     leaderboard_rows = []
     for p in players:
         model_prob = float(p.get("model_prob") or 0)
@@ -568,7 +586,9 @@ def _build_slate_payload(data: dict) -> dict:
         _own = (p.get("team") or "").upper()
         _opp = (p.get("opponent") or "").upper()
         away = (_own if _own != home else _opp) or "away"
-        derived_game_id = f"{away}-{home}".lower().replace(" ", "-")
+        derived_game_id = _game_slug(
+            f"{away}-{home}".lower().replace(" ", "-"), p.get("game_pk")
+        )
 
         role = classify_role(p, tier)
         leaderboard_rows.append({
@@ -777,7 +797,9 @@ def _build_slate_payload(data: dict) -> dict:
         _own  = (p.get("team") or "").upper()
         _opp  = (p.get("opponent") or "").upper()
         _away = (_own if _own != _home else _opp) or "away"
-        gid = f"{_away}-{_home}".lower().replace(" ", "-")
+        gid = _game_slug(
+            f"{_away}-{_home}".lower().replace(" ", "-"), p.get("game_pk")
+        )
         if gid not in seen_games:
             _w = p.get("weather")
             _weather_str = (
