@@ -770,7 +770,7 @@ function FsmTable({ rows, cols, showGame, onBatter, onPitch, onReorder, onSort, 
               tierCounts[jigLabel] = (tierCounts[jigLabel] || 0) + 1;
               jigRank = tierCounts[jigLabel];
             }
-            const kBase = r.id != null ? r.id : r.name;
+            const kBase = `${r.id != null ? r.id : r.name}-${r.game_pk}`;
             const kN = keySeen[kBase] = (keySeen[kBase] || 0) + 1;
             return <FsmRow key={kN > 1 ? `${kBase}__dup${kN}` : kBase} row={r} cols={cols} showGame={showGame} onBatter={onBatter} onPitch={onPitch} builderMode={builderMode} isJigContext={isJigContext} jigLabel={jigLabel} jigRank={jigRank} onAddLeg={handleAddLeg} slipStatus={cardStatus[r.id || r.name] || 'idle'} sortState={sortState} />;
           });

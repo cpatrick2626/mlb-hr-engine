@@ -138,7 +138,7 @@ function HRThreatZone({ rows, isJigContext }) {
       {/* Desktop: top 5 */}
       <div className="hrtz-desktop">
         {desktop.map((row, i) => (
-          <HRThreatCard key={row.name || i} row={row} rank={i + 1} compact={false}
+          <HRThreatCard key={`${row.id || row.name || i}-${row.game_pk}`} row={row} rank={i + 1} compact={false}
             onAdd={addLeg} addStatus={cardStatus[row.id || row.name] || 'idle'} />
         ))}
       </div>
@@ -146,7 +146,7 @@ function HRThreatZone({ rows, isJigContext }) {
       {/* Mobile: top 3 compact */}
       <div className="hrtz-mobile">
         {mobile.map((row, i) => (
-          <HRThreatCard key={row.name || i} row={row} rank={i + 1} compact={true}
+          <HRThreatCard key={`${row.id || row.name || i}-${row.game_pk}`} row={row} rank={i + 1} compact={true}
             onAdd={addLeg} addStatus={cardStatus[row.id || row.name] || 'idle'} />
         ))}
       </div>

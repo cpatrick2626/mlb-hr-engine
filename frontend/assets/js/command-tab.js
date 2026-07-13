@@ -258,7 +258,7 @@ function CmtThreatZone({ mainRows, jigRows, games, engine }) {
           ? <div className="cmt-empty">NO DATA</div>
           : cards.map((row, i) => (
               <CmtThreatCard
-                key={row.name || i}
+                key={`${row.id || row.name || i}-${row.game_pk}`}
                 row={row} rank={i + 1}
                 engine={engine} games={games}
                 isTop={i === 0}
