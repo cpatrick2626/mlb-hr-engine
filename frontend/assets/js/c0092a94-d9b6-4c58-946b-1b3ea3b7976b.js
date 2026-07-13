@@ -241,7 +241,7 @@ const Leaderboard = ({ rows, onOpen, tierHeaderLabel = "TIER" }) => {
         <tbody>
           {rows.map((r) => (
             <LeaderRow
-              key={r.id}
+              key={`${r.id}-${r.game_pk}`}
               row={r}
               onOpen={onOpen}
               onAddLeg={handleAddLeg}

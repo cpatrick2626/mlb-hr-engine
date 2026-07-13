@@ -225,7 +225,7 @@ const StratCard = ({ strat, rows, count }) => {
       <div className="md-qp__heads" style={{ gridTemplateColumns: `repeat(${count}, 1fr)` }} onClick={(e) => e.stopPropagation()}>
         {players.map((p) => (
           <StratHead
-            key={p.id}
+            key={`${p.id}-${p.game_pk}`}
             stratId={strat.id}
             player={p}
             slipStatus={cardStatus[p.id || p.name] || 'idle'}
