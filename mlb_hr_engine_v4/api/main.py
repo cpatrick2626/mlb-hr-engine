@@ -39,6 +39,10 @@ from fastapi.middleware.cors import CORSMiddleware
 from api.auth import require_auth, require_beta
 from api.cache import get_picks, get_latest_picks, store_picks, list_runs, redeem_invite, add_leg, complete_ticket, remove_leg, ledger_legs, ledger_pending_count, today_et
 from clients.arsenal import get_pitcher_arsenal, arsenal_matchup_factor
+from clients.batter_pitch_profile import (
+    get_batter_pitch_profile_display,
+    pitch_mix_verdict_display,
+)
 from clients.pitch_mix import canonical_pitch_type, get_batter_vs_pitches, get_pitcher_pitch_stats
 from config import FS_TIER_THRESHOLDS, JIG_TIER_THRESHOLDS
 from roles import classify_role
@@ -46,6 +50,10 @@ from roles import classify_role
 log = logging.getLogger("uvicorn.error")
 
 app = FastAPI(title="MLB HR Engine", version="4.0", docs_url="/docs")
+
+# Display-only bridge between the existing /api/pitcher-detail arsenal payload
+# and /api/batter-detail's B4 verdict. It is separate from every scoring cache.
+_PITCHER_DETAIL_ARSENAL_DISPLAY_CACHE: dict[int, list[dict]] = {}
 
 app.add_middleware(
     CORSMiddleware,
@@ -951,9 +959,13 @@ async def get_pitcher_detail(pitcher_id: int, batter_id: int = 0,
                 arsenal_by_code[code] = row
         result["arsenal"] = list(arsenal_by_code.values())
         result["arsenal"].sort(key=lambda x: x["usage"], reverse=True)
+        _PITCHER_DETAIL_ARSENAL_DISPLAY_CACHE[pitcher_id] = copy.deepcopy(
+            result["arsenal"],
+        )
     except Exception as e:
         log.warning("pitcher-detail arsenal failed pid=%s: %s", pitcher_id, e)
         result["arsenal"] = []
+        _PITCHER_DETAIL_ARSENAL_DISPLAY_CACHE.pop(pitcher_id, None)
 
     # Pitcher pitch stats vs effective batter side
     try:
@@ -1184,7 +1196,7 @@ def _cached_batter_context(batter_id: int, pitcher_id: int = 0,
 
 @app.get("/api/batter-detail")
 async def get_batter_detail(batter_id: int, pitcher_id: int = 0, game_pk: int = 0):
-    """Cache-only aggregate detail for Batter Card/Pitch Mix display surfaces."""
+    """Aggregate detail with an isolated Savant pitch-profile read-through."""
     payload, player, row, game, freshness = _cached_batter_context(
         batter_id, pitcher_id, game_pk,
     )
@@ -1355,6 +1367,33 @@ async def get_batter_detail(batter_id: int, pitcher_id: int = 0, game_pk: int = 
         "pitcher_days_rest": player.get("pitcher_days_rest"),
         "fatigue_factor": player.get("fatigue_factor"),
     }
+    try:
+        pitch_profile = get_batter_pitch_profile_display(batter_id, pitcher_hand)
+    except Exception as exc:
+        log.warning("batter-detail pitch_profile failed bid=%s: %s", batter_id, exc)
+        pitch_profile = {
+            "rows": [],
+            "_meta": {
+                "source": "Baseball Savant statcast_search/csv (batter PA-ending + all pitches)",
+                "freshness": "Gap",
+                "availability": {
+                    "xwoba": "Gap", "barrel_pct": "Gap", "whiff_pct": "Gap",
+                },
+                "reason": "endpoint_error",
+                "display_only": True,
+            },
+        }
+
+    # Read-only display snapshot only: never call or read a scoring cache here.
+    # /api/pitcher-detail owns this already-serialized usage; absent data = Gap.
+    cached_pitcher_arsenal = []
+    if resolved_pitcher_id:
+        cached_pitcher_arsenal = copy.deepcopy(
+            _PITCHER_DETAIL_ARSENAL_DISPLAY_CACHE.get(int(resolved_pitcher_id), []),
+        )
+    pitch_mix_verdict = pitch_mix_verdict_display(
+        pitch_profile.get("rows", []), cached_pitcher_arsenal,
+    )
 
     return {
         "meta": {
@@ -1412,6 +1451,14 @@ async def get_batter_detail(batter_id: int, pitcher_id: int = 0, game_pk: int = 
         "fatigue": _detail_module(fatigue, {
             "pitcher_days_rest": "Pitcher days rest", "fatigue_factor": "Existing fatigue factor",
         }, "pipeline_runs.payload.persisted_player_state", freshness),
+        "pitch_profile": pitch_profile,
+        "pitch_mix_verdict": pitch_mix_verdict["label"],
+        "pitch_mix_exploit_pitches": pitch_mix_verdict["exploit_pitches"],
+        "pitch_mix_verdict_meta": {
+            key: value
+            for key, value in pitch_mix_verdict.items()
+            if key not in {"label", "exploit_pitches"}
+        },
         "recent": _detail_module({
             "batter_games": batter_recent,
             "pitcher_starts": pitcher_recent,
