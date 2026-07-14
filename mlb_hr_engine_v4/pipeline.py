@@ -982,7 +982,9 @@ def load_game_data(
         _game_batter_counts[_gk] = _game_batter_counts.get(_gk, 0) + 1
     _low_games = {k: v for k, v in _game_batter_counts.items() if v < 7}
     print(
-        f"[pipeline] SLATE_STATS | attempted={len(tasks)} emitted={len(all_players)} "
+        f"[pipeline] SLATE_STATS | games={len(games)} attempted={len(tasks)} "
+        f"emitted={len(all_players)} odds_lines={len(all_props)} "
+        f"matched={n_with_odds} qualified={len(qualified)} "
         f"dropped_zero_pa={_drop_no_profile[0]} "
         f"dropped_exception={len(tasks) - len(all_players) - _drop_no_profile[0]} "
         f"game_batter_counts={_game_batter_counts}"
@@ -1038,6 +1040,13 @@ def load_game_data(
         "profile_parlays": profile_parlays,
         "n_with_odds":  n_with_odds,
         "fail_reasons": _fail_reason_counts,
+        "_capture_stats": {
+            "games_scheduled": len(games),
+            "players_attempted": len(tasks),
+            "odds_lines_fetched": len(all_props),
+            "players_matched_to_odds": n_with_odds,
+            "qualified_count": len(qualified),
+        },
         "stats": {
             "games":     len(games),
             "players":   len(all_players),

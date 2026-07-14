@@ -34,11 +34,61 @@ from api.cache import store_picks, insert_picks, today_et
 MODEL_VERSION = "v4"
 
 
+def _require_odds_api_key() -> None:
+    if not os.getenv("ODDS_API_KEY", "").strip():
+        logger.error("[capture] FATAL: ODDS_API_KEY not set")
+        raise RuntimeError("ODDS_API_KEY not set")
+
+
+def _capture_readiness(data: dict) -> dict:
+    capture = data.get("_capture_stats", {})
+    return {
+        "games_scheduled": int(capture.get("games_scheduled", 0) or 0),
+        "players_attempted": int(capture.get("players_attempted", 0) or 0),
+        "odds_lines_fetched": int(capture.get("odds_lines_fetched", 0) or 0),
+        "players_matched_to_odds": int(capture.get("players_matched_to_odds", 0) or 0),
+        "qualified_count": int(capture.get("qualified_count", 0) or 0),
+    }
+
+
+def _log_capture_summary(capture: dict, picks_upserted: int) -> None:
+    logger.info(
+        "[capture] CAPTURE_SUMMARY: games=%d odds_lines=%d matched=%d qualified=%d picks_upserted=%d",
+        capture["games_scheduled"],
+        capture["odds_lines_fetched"],
+        capture["players_matched_to_odds"],
+        capture["qualified_count"],
+        picks_upserted,
+    )
+
+
+def _check_capture_readiness(capture: dict) -> None:
+    if capture["games_scheduled"] == 0:
+        logger.info("[capture] no games scheduled — empty slate expected")
+        return
+
+    if capture["odds_lines_fetched"] == 0:
+        _log_capture_summary(capture, picks_upserted=0)
+        logger.error(
+            "[capture] CAPTURE FAILED: games present but zero odds fetched — "
+            "check ODDS_API_KEY / odds source"
+        )
+        raise RuntimeError("capture failed: games present but zero odds fetched")
+
+    if capture["qualified_count"] == 0:
+        logger.warning(
+            "[capture] games and odds present but zero qualified — verify filters/thresholds"
+        )
+
+
 def run(target_date: str = None) -> dict:
+    _require_odds_api_key()
     target_date = target_date or today_et().strftime("%Y-%m-%d")
     print(f"[cron] Running pipeline for {target_date}...")
 
     data = load_game_data(target_date)
+    capture = _capture_readiness(data)
+    _check_capture_readiness(capture)
 
     payload = {
         "date":            target_date,
@@ -63,8 +113,10 @@ def run(target_date: str = None) -> dict:
 
     store_picks(target_date, payload)
 
+    picks_upserted = 0
     try:
         n = insert_picks(target_date, data.get("ranked", []), source_tab="cron", engine_version=MODEL_VERSION)
+        picks_upserted = int(n or 0)
         print(f"[cron] picks table — {n} rows upserted for {target_date}")
     except Exception as e:
         logger.error(
@@ -88,6 +140,7 @@ def run(target_date: str = None) -> dict:
         print(f"[cron] full_slate_log failed (non-fatal): {e}")
 
     stats = data.get("stats", {})
+    _log_capture_summary(capture, picks_upserted)
     print(
         f"[cron] Done — {stats.get('qualified', 0)} qualified picks, "
         f"{stats.get('players', 0)} total players stored for {target_date}"
