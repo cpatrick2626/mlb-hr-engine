@@ -1,6 +1,6 @@
 # Tier Vocabulary Doctrine
 
-**Last Updated:** 2026-07-12
+**Last Updated:** 2026-07-13
 
 ---
 
@@ -123,7 +123,36 @@ JIG `leaderboard_rows_jig` rows inherit `row.tier` from MAIN via shallow copy. T
 
 **Display rule:** When `row.tier` appears in JIG, label it or treat it as "Model Tier" (MAIN context), not "JIG Tier" or "JIG confidence."
 
-**No `jigTier` field exists.** If a JIG-native tier is desired, it must be introduced as a separate `jigTier` field after a `jigScore` distribution audit and explicit operator authorization. See `main-jig-separation.md`.
+### JIG-Native `jigTier` Field — Ratified 2026-07-13
+
+The distribution-audit precondition and operator authorization were both satisfied, and a
+JIG-native `jigTier` field now exists. It is computed server-side in `_build_slate_payload`
+(`api/main.py`, `_jig_tier` helper) from `jigScore` on its 0–100 scale, using the single
+threshold source `JIG_TIER_THRESHOLDS` in `mlb_hr_engine_v4/config.py` (the stale old-epoch
+values, e.g. APEX 13.5, were replaced in the same change).
+
+| Tier   | jigScore Threshold |
+|--------|--------------------|
+| APEX   | ≥ 88 |
+| ELITE  | ≥ 75 |
+| EDGE   | ≥ 60 |
+| SIGNAL | ≥ 40 |
+| WATCH  | ≥ 20 |
+| COLD   | < 20 |
+
+Rules:
+- `jigTier` is **display-only**. It never feeds sort order (JIG still sorts by `jigScore`),
+  scoring, filtering, or MAIN.
+- `jigTier` is **additive**. JIG rows still carry the inherited MAIN `row.tier` (Vocabulary 1);
+  the two coexist. The JIG board's tier label shows `jigTier`; `row.tier` in JIG remains
+  "Model Tier" context per the display rule above.
+- The frontend reads `row.jigTier` from the payload. The former client-side 0–1 threshold
+  block (`fsmJigTierLabel` in `frontend/assets/js/full-slate-matrix.js`) — which mislabeled
+  100% of rows APEX by applying 0–1 thresholds to the 0–100 score — was deleted in the same
+  change. No client-side JIG tier thresholds remain.
+- Bands are retunable only via `config.py` with operator authorization.
+
+See `main-jig-separation.md`.
 
 ---
 

@@ -31,7 +31,7 @@ MAIN and JIG are separate intelligence layers and must remain permanently separa
 | Signal source    | Statcast weighted stats       | Arsenal, pitch-mix, environment|
 | Output           | HR probability, EV, Edge      | Tactical escalation, HVY       |
 | Workflow         | SCAN → QUALIFY → DEPLOY       | MATCHUP → CONFIRM → EXPLOIT    |
-| Tier source      | Model score only              | row.tier inherited from MAIN (see below) |
+| Tier source      | Model score only              | jigTier from jigScore (display-only) + inherited row.tier (see below) |
 | Market data role | Display-only                  | Not used                       |
 
 ## JIG row.tier Inheritance
@@ -41,16 +41,23 @@ JIG `leaderboard_rows_jig` is built from shallow copies of MAIN rows. JIG rows t
 **Accepted doctrine (Option A):**
 
 - `row.tier` in JIG context = MAIN model probability tier, displayed as contextual probability information only.
-- JIG tactical priority is determined by `jigScore` and JIG sort order — not by `row.tier`.
+- JIG tactical priority is determined by `jigScore` and JIG sort order — not by `row.tier` and not by `jigTier`.
 - Do not interpret or label JIG `row.tier` as JIG tactical confidence, JIG deployment tier, or JIG-native escalation.
-- No `jigTier` field currently exists.
 
-**Future jigTier path (not yet authorized):**
+**JIG-native `jigTier` field (ratified 2026-07-13):**
 
-If a JIG-native tier is desired, it must be introduced as a separate `jigTier` field. Required preconditions:
-1. Dedicated `jigScore` distribution audit
-2. Explicit operator authorization
-3. Separate doctrine update to this file and `tier-vocabulary.md`
+The future-jigTier preconditions (jigScore distribution audit, operator authorization, doctrine
+update) were all satisfied, and `jigTier` now exists as a separate, additive field:
+
+- Computed server-side in `_build_slate_payload` (`api/main.py`) from `jigScore` (0–100), using
+  the single threshold source `config.JIG_TIER_THRESHOLDS` (APEX ≥88 / ELITE ≥75 / EDGE ≥60 /
+  SIGNAL ≥40 / WATCH ≥20 / COLD <20). Bands recorded in `tier-vocabulary.md`.
+- **Display-only.** `jigTier` does not affect JIG sort (still `jigScore` descending), any
+  scoring, any filter, or anything on the MAIN side. The `jigScore` formula (`_jig_score`) is
+  untouched.
+- Coexists with the inherited MAIN `row.tier` — both fields remain on JIG rows. The JIG board's
+  tier label reads `jigTier`; `row.tier` keeps its MAIN-context meaning per the rules above.
+- MAIN tiering (`FS_TIER_THRESHOLDS` on `model_prob`) is unchanged and does not read `jigTier`.
 
 This is not scoring contamination. MAIN probability is not affected by JIG. JIG logic does not affect MAIN tiers. HVY remains display-only and does not affect MAIN probability.
 

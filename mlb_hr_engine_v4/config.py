@@ -279,14 +279,16 @@ FS_TIER_DISPLAY: dict = {
 }
 
 # ── JIG Tier Thresholds ───────────────────────────────────────────────────────
-# 6-tier classification driven by jigScore (HVY score). Display-only — does not
-# affect model_prob, EV, edge, or MAIN tier ranking. MAIN/JIG tiers are separate.
+# 6-tier classification driven by jigScore (HVY score) on its 0-100 scale.
+# Display-only — does not affect model_prob, EV, edge, jigScore sort, or MAIN
+# tier ranking. MAIN/JIG tiers are separate. Bands ratified 2026-07-13
+# (replaced stale old-epoch values; see wiki/doctrine/tier-vocabulary.md).
 JIG_TIER_THRESHOLDS: dict = {
-    "APEX":   13.5,
-    "ELITE":  12.5,
-    "EDGE":   11.5,
-    "SIGNAL": 10.0,
-    "WATCH":   8.5,
+    "APEX":   88.0,
+    "ELITE":  75.0,
+    "EDGE":   60.0,
+    "SIGNAL": 40.0,
+    "WATCH":  20.0,
     "COLD":    0.0,
 }
 

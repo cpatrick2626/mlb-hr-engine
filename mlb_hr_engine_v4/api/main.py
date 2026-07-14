@@ -40,7 +40,7 @@ from api.auth import require_auth, require_beta
 from api.cache import get_picks, get_latest_picks, store_picks, list_runs, redeem_invite, add_leg, complete_ticket, remove_leg, ledger_legs, ledger_pending_count, today_et
 from clients.arsenal import get_pitcher_arsenal, arsenal_matchup_factor
 from clients.pitch_mix import canonical_pitch_type, get_batter_vs_pitches, get_pitcher_pitch_stats
-from config import FS_TIER_THRESHOLDS
+from config import FS_TIER_THRESHOLDS, JIG_TIER_THRESHOLDS
 from roles import classify_role
 
 log = logging.getLogger("uvicorn.error")
@@ -535,6 +535,18 @@ def _jig_score(player: dict, arsenal_data: dict | None = None) -> float:
 
 # ── Full Slate ─────────────────────────────────────────────────────────────────
 
+def _jig_tier(jig_score: float) -> str:
+    """
+    JIG-native display tier from jigScore (0-100 scale) via
+    config.JIG_TIER_THRESHOLDS. Display-only — never a sort or scoring input.
+    Separate from the MAIN `tier` field (model_prob based).
+    """
+    for t in ("APEX", "ELITE", "EDGE", "SIGNAL", "WATCH"):
+        if jig_score >= JIG_TIER_THRESHOLDS[t]:
+            return t
+    return "COLD"
+
+
 def _build_slate_payload(data: dict) -> dict:
     """
     Map pipeline data → React frontend shape.
@@ -726,6 +738,8 @@ def _build_slate_payload(data: dict) -> dict:
             if p is None:
                 p = players_by_id_fallback.get(r.get("id"), {})
             r["jigScore"] = _jig_score(p, arsenal_data=_arsenal_data)
+            # JIG-native display tier (additive; MAIN `tier` field untouched)
+            r["jigTier"] = _jig_tier(r["jigScore"])
             # JIG projected: same _jig_score with announced pitcher fed in (already the case
             # when pitcher_confirmed=True). Null when no pitcher announced — tactical signals
             # would be 0/neutral; don't fabricate a projected value without pitcher identity.
