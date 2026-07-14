@@ -44,9 +44,21 @@ Cross-ref: [[deploy-runbook]] — Streamlit listed as DEAD/NON-PRODUCTION there.
 
 ## Pitch Mix Modal Blank Fields
 
-**Gap:** Velo column and pitcher-panel HR/9 render blank in some cases.
+**Gap:** The AEI pitcher-arsenal table returned a populated usage/whiff arsenal but an empty
+`pitch_stats` object, leaving VELO, HR/PA, K%, and HH% blank.
 
-**Status:** Unverified — unknown if these are wiring bugs or just unpopulated data from the source. Needs a targeted audit session.
+**Root cause (verified 2026-07-11):** `get_pitcher_pitch_stats()` was called and attached by
+`/api/pitcher-detail`, but the Savant CSV parser read `response.raw` through `TextIOWrapper`.
+The streamed handle closed at EOF on the Fly/local Python runtime, raised `ValueError: I/O
+operation on closed file`, and fell back to `{}`. Raw arsenal codes also needed canonicalization
+before the frontend join (`FA` -> `FF`, `SV` -> `ST`).
+
+**Status:** Fixed and validated locally; not committed or deployed. The endpoint uses an isolated
+display-only buffered reader/cache, leaving the default `get_pitcher_pitch_stats()` cache and all
+scoring callers unchanged. It exposes canonical pitch keys on both sides of the join, and AEI
+formats `display_hh` from its stored 0-1 fraction to percent. Existing sample gates remain intact:
+HR/PA requires 10 PA, K% requires 5 PA, and HH% requires 5 tracked contacts. Production remains
+unchanged until operator-authorized commit plus Fly deploy; refresh the AEI detail after deploy.
 
 ---
 
@@ -223,6 +235,49 @@ Velocity is NOT available from `pitch-arsenal-stats`, and the alternate `pitch-a
 - **Per-browser localStorage caps** — `maxPlayers` default raised to 999, but existing browsers/phones retain their saved value (e.g. stale `maxPlayers:75`); clear via in-app reset.
 
 ---
+
+## Production status and open follow-ups — 2026-07-13
+
+### JIG native tier display — OPEN / MARQUEE
+
+The live JIG board currently labels effectively every row APEX because the frontend applies
+0-1 thresholds (`APEX >= 0.34` in `frontend/assets/js/full-slate-matrix.js`) to the 0-100
+`jigScore`. The `jigScore` formula itself is healthy: the audited distribution was clean across
+1,532 rows. This is a scale/ownership bug in display classification, not a scoring-formula bug.
+
+The distribution-audit precondition for a JIG-native tier is now met. The queued fix requires a
+separate, operator-authorized protected-surface implementation: emit a native backend `jigTier`
+from `_build_slate_payload`, keep one threshold source in `config.py`, and make the frontend read
+`row.jigTier`. Proposed percentile-anchored bands for Fable review are APEX >= 88, ELITE >= 75,
+EDGE >= 60, SIGNAL >= 40, WATCH >= 20, and COLD < 20. These bands remain retunable and are not
+authorized by this documentation pass. Do not alter `jigScore`, reuse MAIN `row.tier`, or describe
+MAIN's inherited model tier as JIG tactical confidence.
+
+### Closed incidents
+
+- **Doubleheader sibling collision:** fixed across all five sites by `2eefdc0`, `1546abd`,
+  `21b15bf`, `6357cd8`, `6b6d07f`, `96ec142`, and `1c7d3dc`; shipped and deployed. See
+  [[2026-07-13-doubleheader-collision-fix]].
+- **`pnl.py` smart-quote P0:** fixed by `f817fe9`; deployed and verified importing on Fly v96.
+  See [[2026-07-13-pnl-smartquote-p0]].
+- **Missing `ODDS_API_KEY` in GitHub Actions:** repository secret restored; capture-readiness
+  guard shipped in `e486eb1` with documentation in `4ff4038`. End-to-end game-day proof remains
+  the July 16 checkpoint. See [[2026-07-13-capture-outage-odds-secret]].
+
+### Still open
+
+- After the July 16 capture checkpoint passes, investigate and remove the junk GitHub secrets
+  `BOO` and `SUP`.
+- Make Supabase authoritative for scheduled pick logging; GitHub Actions runners cannot persist
+  the Fly `/data` CSV lane.
+- Confirm `rapidfuzz` remains installed in every production requirements surface before the next
+  deployment dependency cleanup. It is currently declared in both `requirements.txt` and
+  `requirements-api.txt`.
+- Keep `mlb_hr_engine_v4/engine/arsenal_edge.py` tracked; current git inspection confirms it is
+  tracked, but it is an imported production dependency.
+- The `pitcher_confirmed` -> `pitcher_status` rename remains gated as described above.
+- Continue observing TM bands before any display-only retune.
+- Poisson recalibration remains deferred until fresh post-break capture is large enough.
 
 ## Cross-References
 
