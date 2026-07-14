@@ -13,6 +13,7 @@ import csv
 import io
 import logging
 import math
+import time
 from datetime import datetime, timezone
 
 import requests
@@ -67,9 +68,18 @@ _SESSION.headers.update({
     "Referer": "https://baseballsavant.mlb.com/",
 })
 
-# Keyed by (batter_id, pitcher_hand, season). This cache is display-only and is
-# deliberately separate from clients.pitch_mix._BATTER_PT_CACHE.
-_BATTER_PITCH_PROFILE_DISPLAY_CACHE: dict[tuple[int, str, int], dict] = {}
+# Context key: (slate_date, batter_id, pitcher_id, game_pk,
+# effective_batter_side, pitcher_hand, source_season). The fetched season
+# profile is game-invariant, but retaining the request context makes cached
+# materializations DH-safe and prevents accidental cross-matchup reuse.
+# This cache is display-only and deliberately separate from every scoring cache.
+DISPLAY_CACHE_TTL_SECONDS = 6 * 60 * 60
+_BATTER_PITCH_PROFILE_DISPLAY_CACHE: dict[
+    tuple[str, int, int, int, str, str, int], dict
+] = {}
+_BATTER_PITCH_PROFILE_DISPLAY_CACHE_TIME: dict[
+    tuple[str, int, int, int, str, str, int], float
+] = {}
 
 _PITCH_ORDER = {
     code: index
@@ -86,7 +96,8 @@ def _float_or_none(value) -> float | None:
 
 
 def _empty_profile(*, pitcher_hand: str, reason: str,
-                   columns_present: dict[str, bool] | None = None) -> dict:
+                   columns_present: dict[str, bool] | None = None,
+                   source_season: int | None = None) -> dict:
     return {
         "rows": [],
         "_meta": {
@@ -96,7 +107,7 @@ def _empty_profile(*, pitcher_hand: str, reason: str,
                 "xwoba": "Gap", "barrel_pct": "Gap", "whiff_pct": "Gap",
             },
             "pitcher_hand": pitcher_hand or "ALL",
-            "season": config.CURRENT_SEASON,
+            "season": source_season or config.CURRENT_SEASON,
             "fetched_at": None,
             "cache": "miss",
             "columns_present": columns_present or {
@@ -126,6 +137,48 @@ def _empty_profile(*, pitcher_hand: str, reason: str,
             "display_only": True,
         },
     }
+
+
+def empty_batter_pitch_profile_display(
+    pitcher_hand: str = "", *, reason: str = "unavailable",
+    source_season: int | None = None,
+) -> dict:
+    """Return the stable all-Gap display contract without touching any cache."""
+    hand = (pitcher_hand or "").strip().upper()
+    if hand not in {"R", "L"}:
+        hand = ""
+    return _empty_profile(
+        pitcher_hand=hand,
+        reason=reason,
+        source_season=source_season,
+    )
+
+
+def _effective_batter_side(batter_side: str, pitcher_hand: str) -> str:
+    side = (batter_side or "").strip().upper()[:1]
+    hand = (pitcher_hand or "").strip().upper()[:1]
+    if side == "S" and hand == "R":
+        return "L"
+    if side == "S" and hand == "L":
+        return "R"
+    return side if side in {"L", "R", "S"} else ""
+
+
+def _display_cache_get(key: tuple[str, int, int, int, str, str, int]) -> dict | None:
+    cached_at = _BATTER_PITCH_PROFILE_DISPLAY_CACHE_TIME.get(key)
+    if cached_at is None or time.monotonic() - cached_at > DISPLAY_CACHE_TTL_SECONDS:
+        _BATTER_PITCH_PROFILE_DISPLAY_CACHE.pop(key, None)
+        _BATTER_PITCH_PROFILE_DISPLAY_CACHE_TIME.pop(key, None)
+        return None
+    cached = _BATTER_PITCH_PROFILE_DISPLAY_CACHE.get(key)
+    return copy.deepcopy(cached) if cached is not None else None
+
+
+def _display_cache_put(
+    key: tuple[str, int, int, int, str, str, int], profile: dict,
+) -> None:
+    _BATTER_PITCH_PROFILE_DISPLAY_CACHE[key] = copy.deepcopy(profile)
+    _BATTER_PITCH_PROFILE_DISPLAY_CACHE_TIME[key] = time.monotonic()
 
 
 def _damage_from_xwoba(xwoba: float | None) -> float | None:
@@ -208,9 +261,12 @@ def _finalize(
     return rows
 
 
-def _fetch_pa_ending_profile(batter_id: int) -> tuple[dict[str, dict], dict[str, bool], str | None]:
+def _fetch_pa_ending_profile(
+    batter_id: int, source_season: int | None = None,
+) -> tuple[dict[str, dict], dict[str, bool], str | None]:
     """Fetch B3 PA-ending xwOBA/barrel inputs without touching scoring state."""
-    season = config.CURRENT_SEASON
+    season = int(source_season or config.CURRENT_SEASON)
+    response = None
     try:
         response = _SESSION.get(
             f"{SAVANT}/statcast_search/csv",
@@ -228,10 +284,12 @@ def _fetch_pa_ending_profile(batter_id: int) -> tuple[dict[str, dict], dict[str,
         )
         response.raise_for_status()
         csv_body = response.content
-        response.close()
     except Exception as exc:
         log.warning("batter pitch-profile display fetch failed bid=%s: %s", batter_id, exc)
         return {}, {}, "pa_ending_fetch_failed"
+    finally:
+        if response is not None:
+            response.close()
 
     reader = csv.DictReader(io.StringIO(csv_body.decode("utf-8-sig")))
     fieldnames = set(reader.fieldnames or [])
@@ -293,9 +351,11 @@ def _fetch_pa_ending_profile(batter_id: int) -> tuple[dict[str, dict], dict[str,
 
 def _fetch_all_pitches_whiff_display(
     batter_id: int,
+    source_season: int | None = None,
 ) -> tuple[dict[str, dict], dict[str, bool], str | None]:
     """Fetch every regular-season pitch seen and accumulate whiffs / swings."""
-    season = config.CURRENT_SEASON
+    season = int(source_season or config.CURRENT_SEASON)
+    response = None
     try:
         response = _SESSION.get(
             f"{SAVANT}/statcast_search/csv",
@@ -312,10 +372,12 @@ def _fetch_all_pitches_whiff_display(
         )
         response.raise_for_status()
         csv_body = response.content
-        response.close()
     except Exception as exc:
         log.warning("batter all-pitches whiff fetch failed bid=%s: %s", batter_id, exc)
         return {}, {}, "all_pitches_fetch_failed"
+    finally:
+        if response is not None:
+            response.close()
 
     reader = csv.DictReader(io.StringIO(csv_body.decode("utf-8-sig")))
     fieldnames = set(reader.fieldnames or [])
@@ -368,11 +430,15 @@ def _fetch_all_pitches_whiff_display(
     return totals_by_hand, columns_present, None
 
 
-def _fetch_batter_pitch_profile_display(batter_id: int) -> dict[str, dict]:
+def _fetch_batter_pitch_profile_display(
+    batter_id: int, source_season: int | None = None,
+) -> dict[str, dict]:
     """Fetch isolated PA-ending/all-pitch inputs and build hand-split profiles."""
-    season = config.CURRENT_SEASON
-    pa_by_hand, pa_columns, pa_reason = _fetch_pa_ending_profile(batter_id)
-    whiff_by_hand, whiff_columns, whiff_reason = _fetch_all_pitches_whiff_display(batter_id)
+    season = int(source_season or config.CURRENT_SEASON)
+    pa_by_hand, pa_columns, pa_reason = _fetch_pa_ending_profile(batter_id, season)
+    whiff_by_hand, whiff_columns, whiff_reason = _fetch_all_pitches_whiff_display(
+        batter_id, season,
+    )
     if not pa_by_hand and not whiff_by_hand:
         return {}
 
@@ -434,15 +500,21 @@ def _fetch_batter_pitch_profile_display(batter_id: int) -> dict[str, dict]:
     return profiles
 
 
+def empty_pitch_mix_verdict_display(reason: str = "pitcher_usage_unavailable") -> dict:
+    """Return the stable all-Gap verdict contract without reading any cache."""
+    return {
+        "label": None, "exploit_pitches": [], "availability": "Gap",
+        "freshness": "Gap",
+        "source": "/api/pitcher-detail arsenal display snapshot",
+        "reason": reason, "top_usage_min_pct": TOP_USAGE_PCT,
+        "display_only": True,
+    }
+
+
 def pitch_mix_verdict_display(rows: list[dict], pitcher_arsenal: list[dict] | None) -> dict:
     """Apply the ratified display-only verdict contract to profile + usage rows."""
     if not pitcher_arsenal:
-        return {
-            "label": None, "exploit_pitches": [], "availability": "Gap",
-            "freshness": "Gap",
-            "source": "/api/pitcher-detail arsenal display snapshot",
-            "reason": "pitcher_usage_unavailable", "display_only": True,
-        }
+        return empty_pitch_mix_verdict_display()
 
     usage_by_pitch: dict[str, float] = {}
     for arsenal_row in pitcher_arsenal:
@@ -463,12 +535,7 @@ def pitch_mix_verdict_display(rows: list[dict], pitcher_arsenal: list[dict] | No
         if usage > 0:
             usage_by_pitch[pitch_type] = max(usage_by_pitch.get(pitch_type, 0.0), usage)
     if not usage_by_pitch:
-        return {
-            "label": None, "exploit_pitches": [], "availability": "Gap",
-            "freshness": "Gap",
-            "source": "/api/pitcher-detail arsenal display snapshot",
-            "reason": "pitcher_usage_unavailable", "display_only": True,
-        }
+        return empty_pitch_mix_verdict_display()
 
     profile_by_pitch = {row.get("pitch_type"): row for row in rows}
     joined = []
@@ -513,31 +580,68 @@ def pitch_mix_verdict_display(rows: list[dict], pitcher_arsenal: list[dict] | No
     }
 
 
-def get_batter_pitch_profile_display(batter_id: int, pitcher_hand: str = "") -> dict:
+def get_batter_pitch_profile_display(
+    batter_id: int,
+    pitcher_hand: str = "",
+    *,
+    slate_date: str = "",
+    pitcher_id: int = 0,
+    game_pk: int = 0,
+    batter_side: str = "",
+    source_season: int | None = None,
+) -> dict:
     """Return the display profile for one batter and opposing pitcher hand."""
     hand = (pitcher_hand or "").strip().upper()
     if hand not in {"R", "L"}:
         hand = ""
-    key = (int(batter_id), hand, config.CURRENT_SEASON)
-    cached = _BATTER_PITCH_PROFILE_DISPLAY_CACHE.get(key)
+    season = int(source_season or config.CURRENT_SEASON)
+    request_date = str(slate_date or datetime.now(timezone.utc).date().isoformat())
+    effective_side = _effective_batter_side(batter_side, hand)
+    key = (
+        request_date, int(batter_id), int(pitcher_id or 0), int(game_pk or 0),
+        effective_side, hand, season,
+    )
+    cached = _display_cache_get(key)
     if cached is not None:
-        result = copy.deepcopy(cached)
-        result["_meta"]["cache"] = "hit"
-        return result
+        cached["_meta"]["cache"] = "hit"
+        return cached
 
-    profiles = _fetch_batter_pitch_profile_display(int(batter_id))
+    # The source profile varies only by batter, faced hand, and season. Reuse a
+    # fresh source-equivalent entry while still materializing a distinct
+    # request-context key (notably for doubleheaders).
+    for candidate_key in list(_BATTER_PITCH_PROFILE_DISPLAY_CACHE):
+        if (
+            candidate_key[1] == int(batter_id)
+            and candidate_key[5] == hand
+            and candidate_key[6] == season
+        ):
+            source_equivalent = _display_cache_get(candidate_key)
+            if source_equivalent is not None:
+                source_equivalent["_meta"]["cache"] = "hit"
+                _display_cache_put(key, source_equivalent)
+                return copy.deepcopy(source_equivalent)
+
+    profiles = _fetch_batter_pitch_profile_display(int(batter_id), season)
     if not profiles:
-        return _empty_profile(pitcher_hand=hand, reason="fetch_failed_or_empty_response")
+        return _empty_profile(
+            pitcher_hand=hand,
+            reason="fetch_failed_or_empty_response",
+            source_season=season,
+        )
 
     for split_hand, profile in profiles.items():
-        split_key = (int(batter_id), split_hand, config.CURRENT_SEASON)
-        _BATTER_PITCH_PROFILE_DISPLAY_CACHE[split_key] = copy.deepcopy(profile)
+        split_key = (
+            request_date, int(batter_id), int(pitcher_id or 0), int(game_pk or 0),
+            _effective_batter_side(batter_side, split_hand), split_hand, season,
+        )
+        _display_cache_put(split_key, profile)
 
-    result = copy.deepcopy(_BATTER_PITCH_PROFILE_DISPLAY_CACHE.get(key))
+    result = _display_cache_get(key)
     if result is None:
         return _empty_profile(
             pitcher_hand=hand,
             reason="no_rows_for_pitcher_hand",
             columns_present=profiles[""].get("_meta", {}).get("columns_present"),
+            source_season=season,
         )
     return result

@@ -121,6 +121,7 @@ class BatterPitchProfileTests(unittest.TestCase):
         from clients import batter_pitch_profile
 
         batter_pitch_profile._BATTER_PITCH_PROFILE_DISPLAY_CACHE.clear()
+        batter_pitch_profile._BATTER_PITCH_PROFILE_DISPLAY_CACHE_TIME.clear()
 
     def test_display_cache_is_isolated_canonical_and_sample_gated(self) -> None:
         from clients import batter_pitch_profile
@@ -205,9 +206,87 @@ class BatterPitchProfileTests(unittest.TestCase):
         self.assertEqual(profile["rows"], [])
         self.assertEqual(profile["_meta"]["freshness"], "Gap")
         self.assertFalse(any(
-            key[0] == 79
+            key[1] == 79
             for key in batter_pitch_profile._BATTER_PITCH_PROFILE_DISPLAY_CACHE
         ))
+
+    def test_each_pitch_metric_has_an_independent_thin_sample_gate(self) -> None:
+        from clients import batter_pitch_profile
+
+        rows = {
+            row["pitch_type"]: row
+            for row in batter_pitch_profile._finalize(
+                {
+                    "FF": {
+                        "pa_ending_events": 9, "xwoba_sum": 3.6, "xwoba_n": 9,
+                        "contacts": 5, "barrels": 1,
+                    },
+                    "SL": {
+                        "pa_ending_events": 10, "xwoba_sum": 4.0, "xwoba_n": 10,
+                        "contacts": 4, "barrels": 1,
+                    },
+                    "CH": {
+                        "pa_ending_events": 10, "xwoba_sum": 4.0, "xwoba_n": 10,
+                        "contacts": 5, "barrels": 1,
+                    },
+                },
+                {
+                    "FF": {"swings": 15, "whiffs": 3},
+                    "SL": {"swings": 15, "whiffs": 3},
+                    "CH": {"swings": 14, "whiffs": 3},
+                },
+                pa_freshness="Live",
+                whiff_freshness="Live",
+            )
+        }
+
+        self.assertIsNone(rows["FF"]["xwoba"])
+        self.assertIsNotNone(rows["FF"]["barrel_pct"])
+        self.assertIsNotNone(rows["FF"]["whiff_pct"])
+        self.assertIsNotNone(rows["SL"]["xwoba"])
+        self.assertIsNone(rows["SL"]["barrel_pct"])
+        self.assertIsNotNone(rows["SL"]["whiff_pct"])
+        self.assertIsNotNone(rows["CH"]["xwoba"])
+        self.assertIsNotNone(rows["CH"]["barrel_pct"])
+        self.assertIsNone(rows["CH"]["whiff_pct"])
+
+    def test_context_cache_is_dh_distinct_and_ttl_safe(self) -> None:
+        from clients import batter_pitch_profile
+
+        responses = [
+            _BufferedCsvResponse(_profile_csv(batter_pitch_profile.config.CURRENT_SEASON)),
+            _BufferedCsvResponse(_all_pitches_csv(batter_pitch_profile.config.CURRENT_SEASON)),
+        ]
+        with mock.patch.object(
+            batter_pitch_profile._SESSION, "get", side_effect=responses,
+        ) as fetch:
+            first = batter_pitch_profile.get_batter_pitch_profile_display(
+                80, "R", slate_date="2026-07-14", pitcher_id=91,
+                game_pk=1001, batter_side="S",
+            )
+            second = batter_pitch_profile.get_batter_pitch_profile_display(
+                80, "R", slate_date="2026-07-14", pitcher_id=92,
+                game_pk=1002, batter_side="S",
+            )
+
+        matching_keys = [
+            key for key in batter_pitch_profile._BATTER_PITCH_PROFILE_DISPLAY_CACHE
+            if key[1] == 80 and key[5] == "R"
+        ]
+        self.assertEqual(fetch.call_count, 2)
+        self.assertEqual({key[3] for key in matching_keys}, {1001, 1002})
+        self.assertEqual({key[2] for key in matching_keys}, {91, 92})
+        self.assertEqual({key[4] for key in matching_keys}, {"L"})
+        self.assertEqual(first["rows"], second["rows"])
+        self.assertEqual(second["_meta"]["cache"], "hit")
+
+        expired_key = next(key for key in matching_keys if key[3] == 1002)
+        batter_pitch_profile._BATTER_PITCH_PROFILE_DISPLAY_CACHE_TIME[expired_key] = (
+            batter_pitch_profile.time.monotonic()
+            - batter_pitch_profile.DISPLAY_CACHE_TTL_SECONDS
+            - 1
+        )
+        self.assertIsNone(batter_pitch_profile._display_cache_get(expired_key))
 
     def test_ratified_pills_and_xwoba_damage_scale(self) -> None:
         from clients import batter_pitch_profile
@@ -313,7 +392,14 @@ class BatterPitchProfileTests(unittest.TestCase):
         self.assertEqual(detail["pitch_mix_exploit_pitches"][0]["pitch_type"], "FF")
         self.assertEqual(detail["pitch_mix_verdict_meta"]["availability"], "Live")
         self.assertEqual(pitch_mix._BATTER_PT_CACHE, cache_before)
-        get_profile.assert_called_once_with(77, "R")
+        get_profile.assert_called_once_with(
+            77,
+            "R",
+            slate_date="2026-07-14",
+            pitcher_id=88,
+            game_pk=0,
+            batter_side="",
+        )
 
 
 if __name__ == "__main__":

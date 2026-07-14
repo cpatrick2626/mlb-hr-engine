@@ -40,6 +40,8 @@ from api.auth import require_auth, require_beta
 from api.cache import get_picks, get_latest_picks, store_picks, list_runs, redeem_invite, add_leg, complete_ticket, remove_leg, ledger_legs, ledger_pending_count, today_et
 from clients.arsenal import get_pitcher_arsenal, arsenal_matchup_factor
 from clients.batter_pitch_profile import (
+    empty_batter_pitch_profile_display,
+    empty_pitch_mix_verdict_display,
     get_batter_pitch_profile_display,
     pitch_mix_verdict_display,
 )
@@ -1135,8 +1137,13 @@ def _cached_batter_context(batter_id: int, pitcher_id: int = 0,
         except Exception as exc:
             log.warning("batter-detail latest cache lookup failed: %s", exc)
 
-    if not payload:
-        raise HTTPException(status_code=404, detail="No cached slate data available.")
+    if not isinstance(payload, dict):
+        # Upstream/cache outages degrade to the same stable response contract.
+        # The detail endpoint is display-only and must never rebuild the slate.
+        return {
+            "date": today,
+            "slate_cache": {"date": today},
+        }, {}, {}, {}, "Gap"
 
     slate_cache = payload.get("slate_cache") or {}
 
@@ -1161,11 +1168,11 @@ def _cached_batter_context(batter_id: int, pitcher_id: int = 0,
     )
     player_candidates = [
         row for row in persisted_players
-        if _matches(row, "player_id")
+        if isinstance(row, dict) and _matches(row, "player_id")
     ]
     slate_candidates = [
         row for row in (slate_cache.get("leaderboard_rows") or [])
-        if _matches(row, "id", allow_legacy_game_gap=True)
+        if isinstance(row, dict) and _matches(row, "id", allow_legacy_game_gap=True)
     ]
 
     if len(player_candidates) > 1 and not game_pk:
@@ -1179,7 +1186,7 @@ def _cached_batter_context(batter_id: int, pitcher_id: int = 0,
             detail="Multiple cached slate rows match; a game-specific row is required.",
         )
     if not player_candidates and not slate_candidates:
-        raise HTTPException(status_code=404, detail="Batter not found in cached slate.")
+        return payload, {}, {}, {}, "Gap"
 
     player = player_candidates[0] if player_candidates else {}
     slate_row = slate_candidates[0] if slate_candidates else {}
@@ -1187,7 +1194,9 @@ def _cached_batter_context(batter_id: int, pitcher_id: int = 0,
     game = next(
         (
             row for row in (slate_cache.get("slate_games") or [])
-            if resolved_game_pk and str(row.get("game_pk") or "") == str(resolved_game_pk)
+            if isinstance(row, dict)
+            and resolved_game_pk
+            and str(row.get("game_pk") or "") == str(resolved_game_pk)
         ),
         {},
     )
@@ -1208,43 +1217,69 @@ async def get_batter_detail(batter_id: int, pitcher_id: int = 0, game_pk: int = 
     # Cache-only recent records. Calling the existing game-log helpers on a miss
     # would perform an external MLB StatsAPI request, which B1 explicitly forbids.
     from clients import mlb_stats as _mlb_stats
-    batter_cache_hit = batter_id in _mlb_stats._GAME_LOG_CACHE
-    pitcher_cache_hit = bool(
-        resolved_pitcher_id in _mlb_stats._PITCHER_GAME_LOG_CACHE
-        if resolved_pitcher_id else False
-    )
-    cached_batter_games = _mlb_stats._GAME_LOG_CACHE.get(batter_id, [])
+    batter_cache_hit = False
+    pitcher_cache_hit = False
+    cached_batter_games = []
     batter_recent = []
-    for split in cached_batter_games[:5]:
-        stat = split.get("stat", {})
-        ab = int(stat.get("atBats") or 0)
-        batter_recent.append({
-            "date": split.get("date"),
-            "hr": int(stat.get("homeRuns") or 0),
-            "avg": round(int(stat.get("hits") or 0) / ab, 3) if ab else None,
-            "slg": round(int(stat.get("totalBases") or 0) / ab, 3) if ab else None,
-            "pa": int(stat.get("plateAppearances") or 0),
-        })
     twenty_game_trend = None
-    if cached_batter_games:
-        twenty_game_trend = [
-            {
-                "date": split.get("date"),
-                "hr": int((split.get("stat") or {}).get("homeRuns") or 0),
-            }
-            for split in reversed(cached_batter_games[:20])
-        ]
-    twenty_game_trend_sample_count = len(twenty_game_trend or [])
     pitcher_recent = []
-    for split in _mlb_stats._PITCHER_GAME_LOG_CACHE.get(resolved_pitcher_id, [])[:5]:
-        stat = split.get("stat", {})
-        pitcher_recent.append({
-            "date": split.get("date"),
-            "hr": int(stat.get("homeRuns") or 0),
-            "k": int(stat.get("strikeOuts") or 0),
-            "ip": _mlb_stats.parse_ip(stat.get("inningsPitched")),
-            "bb": int(stat.get("baseOnBalls") or 0),
-        })
+    try:
+        batter_cache_hit = batter_id in _mlb_stats._GAME_LOG_CACHE
+        cached_batter_games = _mlb_stats._GAME_LOG_CACHE.get(batter_id, [])
+        if not isinstance(cached_batter_games, list):
+            raise TypeError("batter game-log cache entry is not a list")
+        for split in cached_batter_games[:5]:
+            stat = split.get("stat", {})
+            ab = int(stat.get("atBats") or 0)
+            batter_recent.append({
+                "date": split.get("date"),
+                "hr": int(stat.get("homeRuns") or 0),
+                "avg": round(int(stat.get("hits") or 0) / ab, 3) if ab else None,
+                "slg": round(int(stat.get("totalBases") or 0) / ab, 3) if ab else None,
+                "pa": int(stat.get("plateAppearances") or 0),
+            })
+        if cached_batter_games:
+            twenty_game_trend = [
+                {
+                    "date": split.get("date"),
+                    "hr": int((split.get("stat") or {}).get("homeRuns") or 0),
+                }
+                for split in reversed(cached_batter_games[:20])
+            ]
+    except Exception as exc:
+        log.warning("batter-detail batter recent cache failed bid=%s: %s", batter_id, exc)
+        batter_cache_hit = False
+        cached_batter_games = []
+        batter_recent = []
+        twenty_game_trend = None
+
+    try:
+        pitcher_cache_hit = bool(
+            resolved_pitcher_id in _mlb_stats._PITCHER_GAME_LOG_CACHE
+            if resolved_pitcher_id else False
+        )
+        cached_pitcher_games = _mlb_stats._PITCHER_GAME_LOG_CACHE.get(
+            resolved_pitcher_id, [],
+        )
+        if not isinstance(cached_pitcher_games, list):
+            raise TypeError("pitcher game-log cache entry is not a list")
+        for split in cached_pitcher_games[:5]:
+            stat = split.get("stat", {})
+            pitcher_recent.append({
+                "date": split.get("date"),
+                "hr": int(stat.get("homeRuns") or 0),
+                "k": int(stat.get("strikeOuts") or 0),
+                "ip": _mlb_stats.parse_ip(stat.get("inningsPitched")),
+                "bb": int(stat.get("baseOnBalls") or 0),
+            })
+    except Exception as exc:
+        log.warning(
+            "batter-detail pitcher recent cache failed pid=%s: %s",
+            resolved_pitcher_id, exc,
+        )
+        pitcher_cache_hit = False
+        pitcher_recent = []
+    twenty_game_trend_sample_count = len(twenty_game_trend or [])
 
     season_hr = player.get("season_hr") if player.get("season_hr") is not None else row.get("hr")
     batter_games_played = len(cached_batter_games) if batter_cache_hit else None
@@ -1368,32 +1403,46 @@ async def get_batter_detail(batter_id: int, pitcher_id: int = 0, game_pk: int = 
         "fatigue_factor": player.get("fatigue_factor"),
     }
     try:
-        pitch_profile = get_batter_pitch_profile_display(batter_id, pitcher_hand)
+        pitch_profile = get_batter_pitch_profile_display(
+            batter_id,
+            pitcher_hand,
+            slate_date=(
+                payload.get("date")
+                or (payload.get("slate_cache") or {}).get("date")
+                or ""
+            ),
+            pitcher_id=int(resolved_pitcher_id or 0),
+            game_pk=int(resolved_game_pk or 0),
+            batter_side=str(bats or ""),
+        )
     except Exception as exc:
         log.warning("batter-detail pitch_profile failed bid=%s: %s", batter_id, exc)
-        pitch_profile = {
-            "rows": [],
-            "_meta": {
-                "source": "Baseball Savant statcast_search/csv (batter PA-ending + all pitches)",
-                "freshness": "Gap",
-                "availability": {
-                    "xwoba": "Gap", "barrel_pct": "Gap", "whiff_pct": "Gap",
-                },
-                "reason": "endpoint_error",
-                "display_only": True,
-            },
-        }
+        pitch_profile = empty_batter_pitch_profile_display(
+            pitcher_hand,
+            reason="endpoint_error",
+        )
 
     # Read-only display snapshot only: never call or read a scoring cache here.
     # /api/pitcher-detail owns this already-serialized usage; absent data = Gap.
     cached_pitcher_arsenal = []
-    if resolved_pitcher_id:
-        cached_pitcher_arsenal = copy.deepcopy(
-            _PITCHER_DETAIL_ARSENAL_DISPLAY_CACHE.get(int(resolved_pitcher_id), []),
+    try:
+        if resolved_pitcher_id:
+            cached_pitcher_arsenal = copy.deepcopy(
+                _PITCHER_DETAIL_ARSENAL_DISPLAY_CACHE.get(int(resolved_pitcher_id), []),
+            )
+    except Exception as exc:
+        log.warning(
+            "batter-detail pitcher arsenal snapshot failed pid=%s: %s",
+            resolved_pitcher_id, exc,
         )
-    pitch_mix_verdict = pitch_mix_verdict_display(
-        pitch_profile.get("rows", []), cached_pitcher_arsenal,
-    )
+        cached_pitcher_arsenal = []
+    try:
+        pitch_mix_verdict = pitch_mix_verdict_display(
+            pitch_profile.get("rows", []), cached_pitcher_arsenal,
+        )
+    except Exception as exc:
+        log.warning("batter-detail verdict failed bid=%s: %s", batter_id, exc)
+        pitch_mix_verdict = empty_pitch_mix_verdict_display("verdict_error")
 
     return {
         "meta": {
