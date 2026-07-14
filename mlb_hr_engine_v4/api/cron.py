@@ -13,7 +13,6 @@ Locally, these are read from .env via python-dotenv.
 import sys
 import os
 import logging
-import traceback
 from datetime import datetime
 
 logging.basicConfig(
@@ -113,18 +112,24 @@ def run(target_date: str = None) -> dict:
 
     store_picks(target_date, payload)
 
+    qualified_rows = data.get("ranked") or []
     picks_upserted = 0
     try:
-        n = insert_picks(target_date, data.get("ranked", []), source_tab="cron", engine_version=MODEL_VERSION)
+        n = insert_picks(target_date, qualified_rows, source_tab="cron", engine_version=MODEL_VERSION)
         picks_upserted = int(n or 0)
+        if picks_upserted != len(qualified_rows):
+            raise RuntimeError(
+                f"picks upsert count mismatch: submitted {len(qualified_rows)}, "
+                f"confirmed {picks_upserted}"
+            )
         print(f"[cron] picks table — {n} rows upserted for {target_date}")
     except Exception as e:
         logger.error(
-            "[cron] picks table insert FAILED for %s — picks NOT written: %s",
-            target_date, e, exc_info=True,
+            "[capture] PERSIST FAILED: %d qualified rows submitted, "
+            "write did not confirm — failing run: %s",
+            len(qualified_rows), e, exc_info=True,
         )
-        print(f"[cron] ERROR: picks table insert FAILED for {target_date}: {e}", file=sys.stderr)
-        traceback.print_exc(file=sys.stderr)
+        raise
 
     # Log full slate to full_slate_log.csv on the Fly volume (Part 3)
     try:

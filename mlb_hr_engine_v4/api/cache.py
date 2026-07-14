@@ -78,7 +78,7 @@ def insert_picks(
     source_tab: str = "cron",
     engine_version: str = "v4",
 ) -> int:
-    """Upsert qualified picks into the picks table. Returns count of rows submitted."""
+    """Upsert qualified picks and return the number Supabase confirms written."""
     if not picks:
         return 0
     rows = []
@@ -109,10 +109,22 @@ def insert_picks(
             "source_tab":       source_tab,
             "engine_version":   engine_version,
         })
-    _client().table("picks").upsert(
+    result = _client().table("picks").upsert(
         rows, on_conflict="date,player_id,source_tab"
     ).execute()
-    return len(rows)
+    error = getattr(result, "error", None)
+    if error:
+        raise RuntimeError(f"picks upsert returned an error: {error}")
+
+    written_rows = getattr(result, "data", None)
+    if not isinstance(written_rows, list):
+        raise RuntimeError("picks upsert did not return a verifiable row list")
+    if len(written_rows) != len(rows):
+        raise RuntimeError(
+            f"picks upsert count mismatch: submitted {len(rows)}, "
+            f"confirmed {len(written_rows)}"
+        )
+    return len(written_rows)
 
 
 def list_runs(limit: int = 30) -> list:
