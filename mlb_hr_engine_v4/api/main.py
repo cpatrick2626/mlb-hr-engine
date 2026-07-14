@@ -1043,6 +1043,57 @@ def _detail_module(values: dict, labels: dict, source: str, freshness: str,
     }
 
 
+def _display_hr_environment(park_factor, weather_factor) -> float | None:
+    """Park-weighted display score; never feeds the model or recomputes inputs."""
+    park = _rate(park_factor)
+    weather = _rate(weather_factor)
+    if park is None or weather is None:
+        return None
+    park_anchor = 5.0 + 20.0 * (park - 1.0)
+    weather_modifier = 10.0 * (weather - 1.0)
+    return round(max(0.0, min(10.0, park_anchor + weather_modifier)), 1)
+
+
+def _handedness_edge_label(bats, pitcher_hand, vs_lhp_slg, vs_rhp_slg) -> str | None:
+    """Classify the live faced-hand SLG delta for display only."""
+    batter_side = str(bats or "").upper()[:1]
+    faced_hand = str(pitcher_hand or "").upper()[:1]
+    if batter_side not in {"L", "R", "S"} or faced_hand not in {"L", "R"}:
+        return None
+
+    vs_left = _rate(vs_lhp_slg)
+    vs_right = _rate(vs_rhp_slg)
+    if vs_left is None or vs_right is None:
+        return None
+
+    faced_slg = vs_left if faced_hand == "L" else vs_right
+    other_slg = vs_right if faced_hand == "L" else vs_left
+    delta = faced_slg - other_slg
+    if delta >= 0.050:
+        return "PLATOON EDGE"
+    if delta <= -0.050:
+        return "REVERSE"
+    return "NEUTRAL"
+
+
+def _season_pace_projection(season_hr, games_played) -> tuple[int | None, str | None]:
+    """Return a guarded 162-game HR pace for display only."""
+    try:
+        games = int(games_played)
+    except (TypeError, ValueError):
+        return None, "games unavailable"
+    if games < 30:
+        return None, f"insufficient games ({games}<30)"
+
+    try:
+        pace = float(season_hr) / games * 162
+    except (TypeError, ValueError):
+        return None, "season HR unavailable"
+    if pace > 80:
+        return None, "implausible projection"
+    return round(pace), None
+
+
 def _cached_batter_context(batter_id: int, pitcher_id: int = 0,
                            game_pk: int = 0) -> tuple[dict, dict, dict, dict, str]:
     """Read one batter/game from persisted pipeline state; never rebuild the slate."""
@@ -1150,8 +1201,9 @@ async def get_batter_detail(batter_id: int, pitcher_id: int = 0, game_pk: int = 
         resolved_pitcher_id in _mlb_stats._PITCHER_GAME_LOG_CACHE
         if resolved_pitcher_id else False
     )
+    cached_batter_games = _mlb_stats._GAME_LOG_CACHE.get(batter_id, [])
     batter_recent = []
-    for split in _mlb_stats._GAME_LOG_CACHE.get(batter_id, [])[:5]:
+    for split in cached_batter_games[:5]:
         stat = split.get("stat", {})
         ab = int(stat.get("atBats") or 0)
         batter_recent.append({
@@ -1161,6 +1213,16 @@ async def get_batter_detail(batter_id: int, pitcher_id: int = 0, game_pk: int = 
             "slg": round(int(stat.get("totalBases") or 0) / ab, 3) if ab else None,
             "pa": int(stat.get("plateAppearances") or 0),
         })
+    twenty_game_trend = None
+    if cached_batter_games:
+        twenty_game_trend = [
+            {
+                "date": split.get("date"),
+                "hr": int((split.get("stat") or {}).get("homeRuns") or 0),
+            }
+            for split in reversed(cached_batter_games[:20])
+        ]
+    twenty_game_trend_sample_count = len(twenty_game_trend or [])
     pitcher_recent = []
     for split in _mlb_stats._PITCHER_GAME_LOG_CACHE.get(resolved_pitcher_id, [])[:5]:
         stat = split.get("stat", {})
@@ -1172,6 +1234,62 @@ async def get_batter_detail(batter_id: int, pitcher_id: int = 0, game_pk: int = 
             "bb": int(stat.get("baseOnBalls") or 0),
         })
 
+    season_hr = player.get("season_hr") if player.get("season_hr") is not None else row.get("hr")
+    batter_games_played = len(cached_batter_games) if batter_cache_hit else None
+    team_games_played_raw = next(
+        (
+            source.get(key)
+            for source in (player, row, game)
+            for key in ("team_games_played", "teamGamesPlayed")
+            if source.get(key) is not None
+        ),
+        None,
+    )
+    try:
+        team_games_played = int(team_games_played_raw)
+    except (TypeError, ValueError):
+        team_games_played = None
+    if team_games_played is not None and team_games_played <= 0:
+        team_games_played = None
+    if team_games_played is not None:
+        season_pace_games_used = team_games_played
+        season_pace_games_source = "team_games_played_cache"
+    else:
+        season_pace_games_used = batter_games_played
+        season_pace_games_source = (
+            "batter_game_log_cache_fallback" if batter_games_played is not None else None
+        )
+    season_pace_hr, season_pace_reason = _season_pace_projection(
+        season_hr, season_pace_games_used,
+    )
+
+    actual_avg = _rate(player.get("batting_avg"))
+    if actual_avg is None:
+        actual_avg = _rate(row.get("avg"))
+    actual_slg = _rate(player.get("actual_slg"))
+    if actual_slg is None:
+        actual_slg = _rate(row.get("slg"))
+    actual_iso = (
+        round(actual_slg - actual_avg, 3)
+        if actual_avg is not None and actual_slg is not None else None
+    )
+
+    bats = player.get("batter_side", row.get("bats"))
+    pitcher_hand = player.get("pitcher_hand", row.get("pitcher_hand"))
+    vs_lhp_slg = player.get("vs_lhp_slg")
+    if vs_lhp_slg is None:
+        vs_lhp_slg = row.get("vs_lhp_slg")
+    vs_rhp_slg = player.get("vs_rhp_slg")
+    if vs_rhp_slg is None:
+        vs_rhp_slg = row.get("vs_rhp_slg")
+    handedness_edge_label = _handedness_edge_label(
+        bats, pitcher_hand, vs_lhp_slg, vs_rhp_slg,
+    )
+    park_factor = player.get("park_factor")
+    if park_factor is None:
+        park_factor = game.get("hrFactor")
+    weather_factor = player.get("weather_factor")
+
     threat = {
         "hrprob": row.get("hrprob"),
         "model_prob": row.get("model_prob", player.get("model_prob")),
@@ -1179,6 +1297,10 @@ async def get_batter_detail(batter_id: int, pitcher_id: int = 0, game_pk: int = 
         "model_tier_rank": row.get("model_tier_rank"),
         "hrprob_projected": row.get("hrprob_projected", player.get("hrprob_projected")),
         "model_prob_projected": row.get("model_prob_projected", player.get("model_prob_projected")),
+        "season_pace_hr": season_pace_hr,
+        "season_pace_games_used": season_pace_games_used,
+        "season_pace_games_source": season_pace_games_source,
+        "season_pace_reason": season_pace_reason,
     }
     statcast = {
         "maxev": row.get("maxev", _flt(player.get("max_ev"))),
@@ -1190,6 +1312,7 @@ async def get_batter_detail(batter_id: int, pitcher_id: int = 0, game_pk: int = 
         "pullair": row.get("pullair", _pct(player.get("pull_air_pct"))),
         "xslg": row.get("xslg", _rate(player.get("xslg"))),
         "xiso": _rate(player.get("xiso")) if player else row.get("iso"),
+        "actual_iso": actual_iso,
         "woba": None,
     }
     splits = {
@@ -1197,7 +1320,8 @@ async def get_batter_detail(batter_id: int, pitcher_id: int = 0, game_pk: int = 
         "actual_slg_vs_lhp": _rate(player.get("vs_lhp_slg")) if player else row.get("vs_lhp_slg"),
         "pull": row.get("pull", _pct(player.get("pull_pct"))),
         "center": row.get("center", _pct(player.get("center_pct"))),
-        "oppo_pct": _pct(player.get("oppo_pct")),
+        "oppo_pct": _pct(player.get("oppo_pct")) if player else row.get("oppo_pct"),
+        "handedness_edge_label": handedness_edge_label,
     }
     discipline = {
         "bbpct": row.get("bbpct"),
@@ -1206,9 +1330,11 @@ async def get_batter_detail(batter_id: int, pitcher_id: int = 0, game_pk: int = 
     environment = {
         "temp": weather.get("temp_f"),
         "wind": weather.get("wind_mph"),
-        "park_factor": player.get("park_factor", game.get("hrFactor")),
-        "hrFactor": game.get("hrFactor", player.get("park_factor")),
+        "park_factor": park_factor,
+        "hrFactor": game.get("hrFactor", park_factor),
+        "weather_factor": weather_factor,
         "humidity_pct": weather.get("humidity_pct"),
+        "hr_environment_0_10": _display_hr_environment(park_factor, weather_factor),
     }
     pitcher = {
         "pitcher_id": resolved_pitcher_id,
@@ -1246,16 +1372,22 @@ async def get_batter_detail(batter_id: int, pitcher_id: int = 0, game_pk: int = 
             "tier": "MAIN model tier", "model_tier_rank": "HR Threat Rank within tier",
             "hrprob_projected": "Projected HR threat (0-100)",
             "model_prob_projected": "Projected MAIN model probability",
-        }, "pipeline_runs.payload.slate_cache.leaderboard_rows", freshness),
+            "season_pace_hr": "On pace (162g)",
+            "season_pace_games_used": "Games used for 162-game pace",
+            "season_pace_games_source": "Pace denominator source",
+            "season_pace_reason": "Reason pace is unavailable",
+        }, "pipeline_runs.payload + clients.mlb_stats in-process game-log cache", freshness),
         "statcast": _detail_module(statcast, {
             "maxev": "Max exit velocity", "ev": "Average exit velocity",
             "hh": "Hard-hit rate", "barrel": "Barrel rate", "sweet": "Sweet-spot rate",
             "la": "Average launch angle", "pullair": "Pull-air rate",
-            "xslg": "xSLG", "xiso": "xISO", "woba": "wOBA (unavailable in B1)",
-        }, "pipeline_runs.payload.persisted_player_state.statcast_aggregate", freshness),
+            "xslg": "xSLG", "xiso": "xISO", "actual_iso": "ISO (actual)",
+            "woba": "wOBA (unavailable in B1)",
+        }, "pipeline_runs.payload.persisted_player_state season + statcast aggregates", freshness),
         "splits": _detail_module(splits, {
             "actual_slg_vs_rhp": "Actual SLG vs RHP", "actual_slg_vs_lhp": "Actual SLG vs LHP",
             "pull": "Pull rate", "center": "Center rate", "oppo_pct": "Opposite-field rate",
+            "handedness_edge_label": "Live platoon SLG edge",
         }, "pipeline_runs.payload.persisted_player_state", freshness),
         "discipline": _detail_module(discipline, {
             "bbpct": "Walk rate", "squp": "Squared-up rate per swing",
@@ -1263,7 +1395,9 @@ async def get_batter_detail(batter_id: int, pitcher_id: int = 0, game_pk: int = 
         "environment": _detail_module(environment, {
             "temp": "Temperature (F)", "wind": "Wind speed (mph)",
             "park_factor": "Park HR factor", "hrFactor": "Park HR factor",
+            "weather_factor": "Existing model weather factor (read-only input)",
             "humidity_pct": "Humidity",
+            "hr_environment_0_10": "Park-weighted HR environment (0-10, display only)",
         }, "pipeline_runs.payload.persisted_player_state.weather + slate_cache.slate_games", freshness),
         "pitcher": _detail_module(pitcher, {
             "pitcher_id": "MLB pitcher id", "pitcher_hr9": "Pitcher HR/9",
@@ -1281,11 +1415,17 @@ async def get_batter_detail(batter_id: int, pitcher_id: int = 0, game_pk: int = 
         "recent": _detail_module({
             "batter_games": batter_recent,
             "pitcher_starts": pitcher_recent,
+            "twenty_game_trend": twenty_game_trend,
+            "twenty_game_trend_sample_count": twenty_game_trend_sample_count,
         }, {
             "batter_games": "Last 5 games", "pitcher_starts": "Last 5 starts",
+            "twenty_game_trend": "Last 20 cached games, chronological HR trend",
+            "twenty_game_trend_sample_count": "Cached games represented in trend",
         }, "clients.mlb_stats in-process game-log caches", freshness, {
             "batter_games": freshness if batter_cache_hit else "Gap",
             "pitcher_starts": freshness if pitcher_cache_hit else "Gap",
+            "twenty_game_trend": freshness if twenty_game_trend is not None else "Gap",
+            "twenty_game_trend_sample_count": freshness if twenty_game_trend is not None else "Gap",
         }),
     }
 
