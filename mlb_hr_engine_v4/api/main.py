@@ -1025,6 +1025,271 @@ async def get_pitcher_detail(pitcher_id: int, batter_id: int = 0,
     return result
 
 
+def _detail_module(values: dict, labels: dict, source: str, freshness: str,
+                   availability: dict | None = None) -> dict:
+    """Attach field-level provenance without changing or deriving stored values."""
+    field_availability = availability or {
+        key: freshness if value is not None else "Gap"
+        for key, value in values.items()
+    }
+    return {
+        **values,
+        "_meta": {
+            "source": source,
+            "freshness": freshness if any(v != "Gap" for v in field_availability.values()) else "Gap",
+            "availability": field_availability,
+            "labels": labels,
+        },
+    }
+
+
+def _cached_batter_context(batter_id: int, pitcher_id: int = 0,
+                           game_pk: int = 0) -> tuple[dict, dict, dict, dict, str]:
+    """Read one batter/game from persisted pipeline state; never rebuild the slate."""
+    import datetime as _dt
+
+    today = today_et().strftime("%Y-%m-%d")
+    payload = None
+    freshness = "Stale"
+    try:
+        payload = get_picks(today)
+    except Exception as exc:
+        log.warning("batter-detail current cache lookup failed: %s", exc)
+
+    if payload:
+        slate_cache = payload.get("slate_cache") or {}
+        generated_at = slate_cache.get("generated_at")
+        if slate_cache.get("date") == today and generated_at:
+            try:
+                generated = _dt.datetime.fromisoformat(generated_at.replace("Z", ""))
+                if (_dt.datetime.utcnow() - generated).total_seconds() <= 43200:
+                    freshness = "Live"
+            except (TypeError, ValueError):
+                pass
+    else:
+        try:
+            payload = get_latest_picks()
+        except Exception as exc:
+            log.warning("batter-detail latest cache lookup failed: %s", exc)
+
+    if not payload:
+        raise HTTPException(status_code=404, detail="No cached slate data available.")
+
+    slate_cache = payload.get("slate_cache") or {}
+
+    def _matches(row: dict, id_key: str, allow_legacy_game_gap: bool = False) -> bool:
+        if str(row.get(id_key) or "") != str(batter_id):
+            return False
+        if pitcher_id and str(row.get("pitcher_id") or "") != str(pitcher_id):
+            return False
+        if game_pk:
+            row_game_pk = row.get("game_pk")
+            if row_game_pk is None and allow_legacy_game_gap:
+                pass
+            elif str(row_game_pk or "") != str(game_pk):
+                return False
+        return True
+
+    persisted_players = (
+        payload.get("all_players")
+        or payload.get("all_by_model")
+        or payload.get("ranked")
+        or []
+    )
+    player_candidates = [
+        row for row in persisted_players
+        if _matches(row, "player_id")
+    ]
+    slate_candidates = [
+        row for row in (slate_cache.get("leaderboard_rows") or [])
+        if _matches(row, "id", allow_legacy_game_gap=True)
+    ]
+
+    if len(player_candidates) > 1 and not game_pk:
+        raise HTTPException(
+            status_code=409,
+            detail="Multiple cached games found for batter_id; game_pk is required.",
+        )
+    if len(slate_candidates) > 1:
+        raise HTTPException(
+            status_code=409,
+            detail="Multiple cached slate rows match; a game-specific row is required.",
+        )
+    if not player_candidates and not slate_candidates:
+        raise HTTPException(status_code=404, detail="Batter not found in cached slate.")
+
+    player = player_candidates[0] if player_candidates else {}
+    slate_row = slate_candidates[0] if slate_candidates else {}
+    resolved_game_pk = game_pk or player.get("game_pk") or slate_row.get("game_pk")
+    game = next(
+        (
+            row for row in (slate_cache.get("slate_games") or [])
+            if resolved_game_pk and str(row.get("game_pk") or "") == str(resolved_game_pk)
+        ),
+        {},
+    )
+    return payload, player, slate_row, game, freshness
+
+
+@app.get("/api/batter-detail")
+async def get_batter_detail(batter_id: int, pitcher_id: int = 0, game_pk: int = 0):
+    """Cache-only aggregate detail for Batter Card/Pitch Mix display surfaces."""
+    payload, player, row, game, freshness = _cached_batter_context(
+        batter_id, pitcher_id, game_pk,
+    )
+    weather = player.get("weather") if isinstance(player.get("weather"), dict) else {}
+    resolved_pitcher_id = pitcher_id or player.get("pitcher_id") or row.get("pitcher_id")
+    resolved_game_pk = game_pk or player.get("game_pk") or row.get("game_pk")
+    generated_at = (payload.get("slate_cache") or {}).get("generated_at")
+
+    # Cache-only recent records. Calling the existing game-log helpers on a miss
+    # would perform an external MLB StatsAPI request, which B1 explicitly forbids.
+    from clients import mlb_stats as _mlb_stats
+    batter_cache_hit = batter_id in _mlb_stats._GAME_LOG_CACHE
+    pitcher_cache_hit = bool(
+        resolved_pitcher_id in _mlb_stats._PITCHER_GAME_LOG_CACHE
+        if resolved_pitcher_id else False
+    )
+    batter_recent = []
+    for split in _mlb_stats._GAME_LOG_CACHE.get(batter_id, [])[:5]:
+        stat = split.get("stat", {})
+        ab = int(stat.get("atBats") or 0)
+        batter_recent.append({
+            "date": split.get("date"),
+            "hr": int(stat.get("homeRuns") or 0),
+            "avg": round(int(stat.get("hits") or 0) / ab, 3) if ab else None,
+            "slg": round(int(stat.get("totalBases") or 0) / ab, 3) if ab else None,
+            "pa": int(stat.get("plateAppearances") or 0),
+        })
+    pitcher_recent = []
+    for split in _mlb_stats._PITCHER_GAME_LOG_CACHE.get(resolved_pitcher_id, [])[:5]:
+        stat = split.get("stat", {})
+        pitcher_recent.append({
+            "date": split.get("date"),
+            "hr": int(stat.get("homeRuns") or 0),
+            "k": int(stat.get("strikeOuts") or 0),
+            "ip": _mlb_stats.parse_ip(stat.get("inningsPitched")),
+            "bb": int(stat.get("baseOnBalls") or 0),
+        })
+
+    threat = {
+        "hrprob": row.get("hrprob"),
+        "model_prob": row.get("model_prob", player.get("model_prob")),
+        "tier": row.get("tier"),
+        "model_tier_rank": row.get("model_tier_rank"),
+        "hrprob_projected": row.get("hrprob_projected", player.get("hrprob_projected")),
+        "model_prob_projected": row.get("model_prob_projected", player.get("model_prob_projected")),
+    }
+    statcast = {
+        "maxev": row.get("maxev", _flt(player.get("max_ev"))),
+        "ev": row.get("ev", _flt(player.get("exit_velo"))),
+        "hh": row.get("hh", _pct(player.get("hard_hit"))),
+        "barrel": row.get("barrel", _pct(player.get("barrel_pct"))),
+        "sweet": row.get("sweet", _pct(player.get("sweet_spot_pct"))),
+        "la": row.get("la", _flt(player.get("avg_launch_angle"))),
+        "pullair": row.get("pullair", _pct(player.get("pull_air_pct"))),
+        "xslg": row.get("xslg", _rate(player.get("xslg"))),
+        "xiso": _rate(player.get("xiso")) if player else row.get("iso"),
+        "woba": None,
+    }
+    splits = {
+        "actual_slg_vs_rhp": _rate(player.get("vs_rhp_slg")) if player else row.get("vs_rhp_slg"),
+        "actual_slg_vs_lhp": _rate(player.get("vs_lhp_slg")) if player else row.get("vs_lhp_slg"),
+        "pull": row.get("pull", _pct(player.get("pull_pct"))),
+        "center": row.get("center", _pct(player.get("center_pct"))),
+        "oppo_pct": _pct(player.get("oppo_pct")),
+    }
+    discipline = {
+        "bbpct": row.get("bbpct"),
+        "squp": row.get("squp", player.get("squp")),
+    }
+    environment = {
+        "temp": weather.get("temp_f"),
+        "wind": weather.get("wind_mph"),
+        "park_factor": player.get("park_factor", game.get("hrFactor")),
+        "hrFactor": game.get("hrFactor", player.get("park_factor")),
+        "humidity_pct": weather.get("humidity_pct"),
+    }
+    pitcher = {
+        "pitcher_id": resolved_pitcher_id,
+        "pitcher_hr9": player.get("pitcher_hr9", row.get("pitcher_hr9")),
+        "opphr": row.get("opphr", player.get("pitcher_hr9")),
+        "pitcher_barrel_allowed": player.get(
+            "pitcher_barrel_allowed", row.get("pitcher_barrel_allowed")
+        ),
+        "pitcherVuln": row.get("pitcherVuln", player.get("pitcher_vuln")),
+    }
+    arsenal = {
+        "arsenal_edge_score": row.get("arsenal_edge_score"),
+        "arsenal_edge_label": row.get("arsenal_edge_label"),
+        "arsenal_edge_key_pitch": row.get("arsenal_edge_key_pitch"),
+        "arsenal_edge_confidence": row.get("arsenal_edge_confidence"),
+    }
+    fatigue = {
+        "pitcher_days_rest": player.get("pitcher_days_rest"),
+        "fatigue_factor": player.get("fatigue_factor"),
+    }
+
+    return {
+        "meta": {
+            "batter_id": batter_id,
+            "pitcher_id": resolved_pitcher_id,
+            "game_pk": resolved_game_pk,
+            "slate_date": payload.get("date") or (payload.get("slate_cache") or {}).get("date"),
+            "generated_at": generated_at,
+            "freshness": freshness,
+            "source": "pipeline_runs.payload + in_process_game_log_cache",
+            "display_only": True,
+        },
+        "threat": _detail_module(threat, {
+            "hrprob": "HR threat (0-100)", "model_prob": "MAIN model probability",
+            "tier": "MAIN model tier", "model_tier_rank": "HR Threat Rank within tier",
+            "hrprob_projected": "Projected HR threat (0-100)",
+            "model_prob_projected": "Projected MAIN model probability",
+        }, "pipeline_runs.payload.slate_cache.leaderboard_rows", freshness),
+        "statcast": _detail_module(statcast, {
+            "maxev": "Max exit velocity", "ev": "Average exit velocity",
+            "hh": "Hard-hit rate", "barrel": "Barrel rate", "sweet": "Sweet-spot rate",
+            "la": "Average launch angle", "pullair": "Pull-air rate",
+            "xslg": "xSLG", "xiso": "xISO", "woba": "wOBA (unavailable in B1)",
+        }, "pipeline_runs.payload.persisted_player_state.statcast_aggregate", freshness),
+        "splits": _detail_module(splits, {
+            "actual_slg_vs_rhp": "Actual SLG vs RHP", "actual_slg_vs_lhp": "Actual SLG vs LHP",
+            "pull": "Pull rate", "center": "Center rate", "oppo_pct": "Opposite-field rate",
+        }, "pipeline_runs.payload.persisted_player_state", freshness),
+        "discipline": _detail_module(discipline, {
+            "bbpct": "Walk rate", "squp": "Squared-up rate per swing",
+        }, "pipeline_runs.payload.persisted_player_state", freshness),
+        "environment": _detail_module(environment, {
+            "temp": "Temperature (F)", "wind": "Wind speed (mph)",
+            "park_factor": "Park HR factor", "hrFactor": "Park HR factor",
+            "humidity_pct": "Humidity",
+        }, "pipeline_runs.payload.persisted_player_state.weather + slate_cache.slate_games", freshness),
+        "pitcher": _detail_module(pitcher, {
+            "pitcher_id": "MLB pitcher id", "pitcher_hr9": "Pitcher HR/9",
+            "opphr": "Opposing pitcher HR/9", "pitcher_barrel_allowed": "Pitcher barrel rate allowed",
+            "pitcherVuln": "Pitcher HR-risk tier",
+        }, "pipeline_runs.payload.persisted_player_state + slate_cache.leaderboard_rows", freshness),
+        "arsenal": _detail_module(arsenal, {
+            "arsenal_edge_score": "Arsenal Edge score", "arsenal_edge_label": "Arsenal Edge label",
+            "arsenal_edge_key_pitch": "Arsenal Edge key pitch",
+            "arsenal_edge_confidence": "Arsenal Edge confidence",
+        }, "pipeline_runs.payload.slate_cache.leaderboard_rows", freshness),
+        "fatigue": _detail_module(fatigue, {
+            "pitcher_days_rest": "Pitcher days rest", "fatigue_factor": "Existing fatigue factor",
+        }, "pipeline_runs.payload.persisted_player_state", freshness),
+        "recent": _detail_module({
+            "batter_games": batter_recent,
+            "pitcher_starts": pitcher_recent,
+        }, {
+            "batter_games": "Last 5 games", "pitcher_starts": "Last 5 starts",
+        }, "clients.mlb_stats in-process game-log caches", freshness, {
+            "batter_games": freshness if batter_cache_hit else "Gap",
+            "pitcher_starts": freshness if pitcher_cache_hit else "Gap",
+        }),
+    }
+
+
 # ── Internals ──────────────────────────────────────────────────────────────────
 
 def _picks_or_404(date_str: str) -> dict:
