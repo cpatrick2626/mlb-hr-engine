@@ -59,21 +59,8 @@ const FSM_BUILDER_TIER_DESC = {
   COLD: "MAIN model probability tier: COLD — inherited by JIG display",
 };
 
-/* JIG-owned tier thresholds (approved operator values) */
-const JIG_TIER_THRESHOLDS = [
-  { tier: "APEX",   min: 0.34 },
-  { tier: "ELITE",  min: 0.30 },
-  { tier: "EDGE",   min: 0.26 },
-  { tier: "SIGNAL", min: 0.21 },
-  { tier: "WATCH",  min: 0.15 },
-  { tier: "COLD",   min: 0    },
-];
-function fsmJigTierLabel(score) {
-  for (const { tier, min } of JIG_TIER_THRESHOLDS) {
-    if ((score || 0) >= min) return tier;
-  }
-  return "COLD";
-}
+/* JIG tier is server-computed (row.jigTier from config.JIG_TIER_THRESHOLDS,
+   0-100 jigScore bands ratified 2026-07-13). No client-side tier thresholds. */
 
 const TEAM_COLOR = {
   MIA: "#00a3e0", TOR: "#1d4f91", NYY: "#8a95a0", BOS: "#bd3039", COL: "#5b48a0",
@@ -766,7 +753,7 @@ function FsmTable({ rows, cols, showGame, onBatter, onPitch, onReorder, onSort, 
           return rows.map((r) => {
             let jigLabel = null, jigRank = null;
             if (isJigContext) {
-              jigLabel = fsmJigTierLabel(r.jigScore);
+              jigLabel = r.jigTier || "COLD";
               tierCounts[jigLabel] = (tierCounts[jigLabel] || 0) + 1;
               jigRank = tierCounts[jigLabel];
             }
