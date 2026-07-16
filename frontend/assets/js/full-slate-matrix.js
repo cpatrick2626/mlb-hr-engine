@@ -1346,7 +1346,8 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false, isJi
   const pitchStats = detail ? (detail.pitch_stats || {}) : {};
   const bvp        = detail ? (detail.batter_vs_pitches || {}) : {};
   const pitcherRecent = detail && Array.isArray(detail.pitcher_recent) ? detail.pitcher_recent : [];
-  const batterRecent  = detail && Array.isArray(detail.batter_recent) ? detail.batter_recent : [];
+  // TODO: exclude PH-only games when `started` field becomes available from MLB StatsAPI
+  const batterRecent  = detail && Array.isArray(detail.batter_recent) ? detail.batter_recent.filter(g => (g.pa ?? 0) >= 1) : [];
   const h2h        = detail && detail.h2h && detail.h2h.pa ? detail.h2h : null;
 
   const keyPitch     = row.arsenal_edge_key_pitch || null;
@@ -1776,8 +1777,7 @@ function FsmDetailModal({ modal, onClose, setModal, builderMode = false, isJigCo
   return (
     <div className="fsm-modal" onClick={onClose}>
       <div className="fsm-modal__inner" onClick={(e) => e.stopPropagation()}>
-        {modal.type === "batter" ?
-        <FsmBatterCard row={modal.row} onClose={onClose} onPitch={() => setModal({ type: "pitch", row: modal.row })} builderMode={builderMode} /> :
+        {modal.type === "batter" ? (() => { const BDC = window.BatterDetailCard || FsmBatterCard; return <BDC row={modal.row} onClose={onClose} onPitch={() => setModal({ type: "pitch", row: modal.row })} builderMode={builderMode} />; })() :
         <FsmArsenalEdgeIntel row={modal.row} onClose={onClose} onBatter={() => setModal({ type: "batter", row: modal.row })} builderMode={builderMode} isJigContext={isJigContext} />}
       </div>
     </div>);
