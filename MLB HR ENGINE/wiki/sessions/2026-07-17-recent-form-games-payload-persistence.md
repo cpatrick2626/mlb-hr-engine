@@ -2,7 +2,7 @@
 
 ## Status
 
-Built and locally validated on 2026-07-17. Not committed, pushed, or deployed.
+Committed, deployed via manual `flyctl deploy`, and verified live — pipeline run #203, machine-restart-confirmed on 2026-07-17 (`recent_form_games` populated on 378/379 rows post-restart, log-less batter returns `[]`).
 
 ## Production behavior added
 
