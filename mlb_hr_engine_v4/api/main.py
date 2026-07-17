@@ -674,6 +674,7 @@ def _build_slate_payload(data: dict) -> dict:
             "model_prob_projected": p.get("model_prob_projected"),
             "hrprob_projected":    p.get("hrprob_projected"),
             "projected_pa_source": p.get("projected_pa_source"),
+            "recent_form_games":  p.get("recent_form_games", []),
             # Real hand-specific batter splits (display only — additive passthrough)
             "vs_hand":       p.get("vs_hand"),
             "vs_hand_avg":   p.get("vs_hand_avg"),

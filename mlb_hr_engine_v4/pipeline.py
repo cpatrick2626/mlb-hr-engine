@@ -159,6 +159,30 @@ def _safe_float(val) -> "float | None":
         return None
 
 
+def _recent_form_games_from_cache(player_id: int) -> list[dict]:
+    """Format up to five cached batter game logs for display-only persistence."""
+    cached_games = mlb_stats._GAME_LOG_CACHE.get(player_id, [])
+    if not isinstance(cached_games, list):
+        return []
+
+    recent_games = []
+    for split in cached_games[:5]:
+        if not isinstance(split, dict):
+            continue
+        stat = split.get("stat") or {}
+        if not isinstance(stat, dict):
+            stat = {}
+        ab = mlb_stats._safe_int(stat.get("atBats"))
+        recent_games.append({
+            "date": split.get("date"),
+            "hr": mlb_stats._safe_int(stat.get("homeRuns")),
+            "avg": round(mlb_stats._safe_int(stat.get("hits")) / ab, 3) if ab else None,
+            "slg": round(mlb_stats._safe_int(stat.get("totalBases")) / ab, 3) if ab else None,
+            "pa": mlb_stats._safe_int(stat.get("plateAppearances")),
+        })
+    return recent_games
+
+
 def _build_player_profile(
     player_id, player_name, lineup_spot, team, opponent,
     home_team, pitcher, batter_data, pitcher_data,
@@ -446,6 +470,8 @@ def _build_player_profile(
         "pitcher_hr9": pitcher_hr9,
         "short_form_pa": int(short_form.get("plateAppearances", 0)),
         "short_form_hr": int(short_form.get("homeRuns", 0)),
+        # Display-only cache snapshot; never read by scoring, filters, or ranking.
+        "recent_form_games": _recent_form_games_from_cache(player_id),
         "streak_factor": round(streak_fac, 3),
         "k_factor": round(k_fac, 3),
         "early_season_suppressor": round(early_supp, 3),
