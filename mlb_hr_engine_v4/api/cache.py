@@ -81,6 +81,14 @@ def insert_picks(
     """Upsert qualified picks and return the number Supabase confirms written."""
     if not picks:
         return 0
+
+    def _float(value):
+        try:
+            normalized = value.replace("%", "").strip() if isinstance(value, str) else value
+            return float(normalized)
+        except (TypeError, ValueError):
+            return None
+
     rows = []
     for p in picks:
         model_prob  = float(p.get("model_prob") or 0)
@@ -95,12 +103,12 @@ def insert_picks(
             "lineup_spot":      p.get("lineup_spot"),
             "model_prob_pct":   round(model_prob  * 100, 3),
             "market_prob_pct":  round(market_prob * 100, 3),
-            "ev_pct":           p.get("ev_pct"),
-            "edge_pct":         p.get("edge_pct"),
+            "ev_pct":           _float(p.get("ev_pct")),
+            "edge_pct":         _float(p.get("edge_pct")),
             "american_odds":    p.get("best_american"),
             "bet_dollars":      p.get("bet_dollars"),
-            "barrel_pct":       p.get("barrel_pct"),
-            "xslg":             p.get("xslg"),
+            "barrel_pct":       _float(p.get("barrel_pct")),
+            "xslg":             _float(p.get("xslg")),
             "park_factor":      p.get("park_factor"),
             "pitcher_factor":   p.get("pitcher_factor"),
             "confidence_tier":  p.get("confidence_tier"),
