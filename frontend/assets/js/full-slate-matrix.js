@@ -626,6 +626,7 @@ const FSM_ROLE_OPTS = [
   { id: "explosive", label: "EXPLOSIVE", color: "#ff9f1a", borderColor: "rgba(255,159,26,0.5)" },
   { id: "advantage", label: "ADVANTAGE", color: "#3b9eff", borderColor: "rgba(59,158,255,0.5)" },
   { id: "wildcard",  label: "WILDCARD",  color: "#c77dff", borderColor: "rgba(199,125,255,0.5)" },
+  { id: "norole",    label: "NO ROLE",   color: "#6b7872", borderColor: "rgba(107,120,114,0.5)" },
 ];
 
 function FsmRoleFilter({ selRoles, onToggle }) {
@@ -1868,7 +1869,11 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
     return true;
   };
 
-  const passRole = (r) => selRoles.length === 0 || selRoles.every((id) => r[id] === true);
+  const passRole = (r) => {
+    if (selRoles.length === 0) return true;
+    if (selRoles.includes("norole")) return !r.prime && !r.explosive && !r.advantage && !r.wildcard;
+    return selRoles.every((id) => r[id] === true);
+  };
   const passMetric = (_r) => true;
 
   const pool = sorted.filter((r) => (selGame === "all" || r.gameId === selGame) && passGroup(r) && passFocus(r) && passRole(r) && passMetric(r));
