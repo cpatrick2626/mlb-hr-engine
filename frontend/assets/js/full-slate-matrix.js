@@ -75,6 +75,14 @@ const getFSMGames = () => window.SLATE_GAMES && window.SLATE_GAMES.length > 0
        weather: "Roof Closed · 72°F", wind: "Calm", hrFactor: 0.94, teams: ["TOR", "MIA"] }];
 
 
+/* ET time formatter — same pattern as slate-command-strip.js */
+function fsmFmtEt(utc) {
+  if (!utc) return null;
+  const ms = Date.parse(utc);
+  if (isNaN(ms)) return null;
+  return new Date(ms).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: true });
+}
+
 /* formatters */
 const f3d = (v) => v.toFixed(3).replace(/^0/, ""); // .222
 const fp = (v) => v.toFixed(1) + "%";
@@ -91,15 +99,15 @@ const FSM_COLS = [
 { key: "iso", head: "ISO", title: "Isolated power (SLG − AVG) — REAL vs-hand split when available (thin samples tagged with PA); SZN = season-blended fallback", group: "STATS", bucketsHi: [0.250, 0.180, 0.120, 0.070], fmt: f3d },
 { key: "hh", head: "HH%", title: "Hard-hit rate (95+ mph exit velo)", group: "STATCAST", bucketsHi: [45, 40, 34, 28], fmt: fp },
 { key: "pullair", head: "PULLAIR%", title: "Pulled-air rate — fly balls/liners to the pull side, prime HR contact", group: "STATCAST", bucketsHi: [26, 21, 16, 12], fmt: fp },
-{ key: "blast", head: "BLAST%", title: "Blast rate — fast swing + squared-up contact", group: "STATCAST", bucketsHi: [16, 11, 7, 4], fmt: fp },
+{ key: "blast", head: "BLAST%", title: "Blast rate — fast swing + squared-up contact", group: "STATCAST", bucketsHi: [16, 11, 7, 4], fmt: fp, na: "--" },
 { key: "maxev", head: "MAX EV", title: "Max exit velocity (mph) — peak raw power", group: "STATCAST", bucketsHi: [112, 109, 106, 103], fmt: f1 },
-{ key: "squp", head: "SQUP%", title: "Squared-up rate — efficiency of contact vs max EV", group: "STATCAST", bucketsHi: [30, 25, 20, 15], fmt: fp },
+{ key: "squp", head: "SQUP%", title: "Squared-up rate — efficiency of contact vs max EV", group: "STATCAST", bucketsHi: [30, 25, 20, 15], fmt: fp, na: "--" },
 { key: "ev", head: "EV", title: "Average exit velocity (mph)", group: "STATCAST", bucketsHi: [92, 90, 88, 86], fmt: f1 },
 { key: "hrpa", head: "HR/PA", title: "Home runs per plate appearance — REAL vs-hand split when available (thin samples tagged with PA); SZN = season rate fallback", group: "STATS", mode: "headline", fmt: (v) => v.toFixed(3) },
-{ key: "sweet", head: "Sweet Spot%", title: "Launch-angle sweet-spot rate — batted balls at 8–32°", group: "STATCAST", bucketsHi: [38, 34, 30, 26], fmt: fp },
+{ key: "sweet", head: "SS%", title: "Launch-angle sweet-spot rate — batted balls at 8–32°", group: "STATCAST", bucketsHi: [38, 34, 30, 26], fmt: fp },
 { key: "la", head: "LA°", title: "Launch angle — HR sweet spot ≈ 15°", group: "STATCAST", special: "la", fmt: fdeg },
 { key: "slg", head: "SLG", title: "Slugging percentage — REAL vs-hand split when available (thin samples tagged with PA); SZN = season-blended fallback", group: "STATS", bucketsHi: [0.520, 0.460, 0.410, 0.370], fmt: f3d },
-{ key: "fast", head: "FAST%", title: "Fast-swing rate — swings at 75+ mph bat speed", group: "STATCAST", bucketsHi: [40, 28, 18, 10], fmt: fp },
+{ key: "fast", head: "FAST%", title: "Fast-swing rate — swings at 75+ mph bat speed", group: "STATCAST", bucketsHi: [40, 28, 18, 10], fmt: fp, na: "--" },
 { key: "xwoba", head: "xwOBA", title: "Expected weighted on-base average", group: "STATS", bucketsHi: [0.350, 0.330, 0.310, 0.290], fmt: f3d },
 { key: "obp", head: "OBP", title: "On-base percentage", group: "STATS", bucketsHi: [0.360, 0.335, 0.310, 0.290], fmt: f3d },
 { key: "avg", head: "AVG", title: "Batting average — REAL vs-hand split when available (thin samples tagged with PA); SZN = season-blended fallback", group: "STATS", bucketsHi: [0.290, 0.265, 0.240, 0.215], fmt: f3d },
@@ -114,10 +122,14 @@ const FSM_COLS = [
 { key: "gb", head: "GB%", title: "Ground-ball rate — LOWER is better for HR", group: "STATCAST", bucketsLo: [35, 40, 45, 50], fmt: fp },
 { key: "fb", head: "FB%", title: "Fly-ball rate — more fly balls = more HR chances", group: "STATCAST", bucketsHi: [42, 36, 30, 24], fmt: fp },
 { key: "ld", head: "LD%", title: "Line-drive rate", group: "STATCAST", bucketsHi: [28, 24, 20, 17], fmt: fp },
+{ key: "air", head: "AIR%", title: "Air-ball rate — derived display value (FB% + LD%)", group: "STATCAST", bucketsHi: [60, 52, 44, 36], fmt: fp },
 { key: "pull", head: "PULL%", title: "Pull rate — pull-side power", group: "STATCAST", bucketsHi: [45, 40, 35, 30], fmt: fp },
 { key: "center", head: "CENTER%", title: "Center rate — lower favors pull-side power", group: "STATCAST", bucketsLo: [22, 26, 32, 40], fmt: fp },
+{ key: "oppo", head: "OPPO%", title: "Opposite-field rate", group: "STATCAST", bucketsLo: [20, 25, 30, 35], fmt: fp },
 { key: "hrfb", head: "HR/FB%", title: "Home-run-per-fly-ball rate", group: "STATCAST", bucketsHi: [20, 14, 9, 5], fmt: fp },
 { key: "opphr", head: "OPP HR/9", title: "Opposing pitcher HR allowed per 9 — HIGHER favors the batter", group: "MATCHUP", danger: true, bucketsHi: [1.5, 1.3, 1.0, 0.7], fmt: f2 }];
+
+const FSM_PICKER_COLS = FSM_COLS.filter((c) => !["woba", "whiff", "swstr", "pullbrl"].includes(c.key));
 
 const FSM_COLSPAN = 3 + FSM_COLS.length; // tier + player + matchup + stats
 
@@ -139,7 +151,7 @@ const FSM_VS_HAND_MIN_PA = 30; // matches the backend's reliable-sample gate
 function fsmSplitRow(row) {
   const hand = row.vs_hand || null;
   const pa = row.vs_hand_pa;
-  const o = { ...row, _raw: row, _vsScope: {} };
+  const o = { ...row, air: fsmAirPct(row), _raw: row, _vsScope: {} };
   Object.keys(FSM_VS_HAND_SRC).forEach((key) => {
     const v = row[FSM_VS_HAND_SRC[key]];
     if (hand && pa > 0 && v != null) {
@@ -158,6 +170,12 @@ function fsmSplitRow(row) {
     o._vsScope["hr"] = { scope: "season" };
   }
   return o;
+}
+
+function fsmAirPct(row) {
+  if (row.fb == null || row.ld == null) return null;
+  const air = Number(row.fb) + Number(row.ld);
+  return Number.isFinite(air) ? Math.round(air * 10) / 10 : null;
 }
 
 /* Honest scope tag under a split-column cell value. Never lets a vs-hand number
@@ -299,16 +317,17 @@ function FsmCell({ col, row, extra }) {
   const xc = extra ? " fsm-cell--extra" : "";
   const scope = col.scope === "hand" && row._vsScope ? row._vsScope[col.key] : null;
   const tag = scope ? <FsmScopeTag scope={scope} /> : null;
-  if (col.mode === "odds") return <td className={`fsm-cell fsm-cell--odds${xc}`} data-label={lbl}>{v == null ? "—" : col.fmt(v)}</td>;
-  if (col.mode === "headline") return <td className={`fsm-cell fsm-cell--headline${xc}`} data-label={lbl}>{v == null ? "—" : col.fmt(v)}{tag}</td>;
-  if (col.mode === "neutral") return <td className={`fsm-cell fsm-cell--neutral${xc}`} data-label={lbl}>{v == null ? "—" : col.fmt(v)}</td>;
+  const na = col.na || "—";
+  if (col.mode === "odds") return <td className={`fsm-cell fsm-cell--odds${xc}`} data-label={lbl}>{v == null ? na : col.fmt(v)}</td>;
+  if (col.mode === "headline") return <td className={`fsm-cell fsm-cell--headline${xc}`} data-label={lbl}>{v == null ? na : col.fmt(v)}{tag}</td>;
+  if (col.mode === "neutral") return <td className={`fsm-cell fsm-cell--neutral${xc}`} data-label={lbl}>{v == null ? na : col.fmt(v)}</td>;
   /* HR column in VS HAND mode: show "N HR" as value for clarity (PA in scope tag) */
   if (col.key === "hr" && scope && scope.scope === "hand") {
     const b = fsmBucket(col, v);
-    return <td className={`fsm-cell ${FSM_BUCKET_CLASS[b] || ""}${xc}`} data-label={lbl}>{v == null ? "—" : v + " HR"}{tag}</td>;
+    return <td className={`fsm-cell ${FSM_BUCKET_CLASS[b] || ""}${xc}`} data-label={lbl}>{v == null ? na : v + " HR"}{tag}</td>;
   }
   const b = fsmBucket(col, v);
-  return <td className={`fsm-cell ${FSM_BUCKET_CLASS[b] || ""}${xc}`} data-label={lbl}>{v == null ? "—" : col.fmt(v)}{tag}</td>;
+  return <td className={`fsm-cell ${FSM_BUCKET_CLASS[b] || ""}${xc}`} data-label={lbl}>{v == null ? na : col.fmt(v)}{tag}</td>;
 }
 
 const FSM_FANDUEL_SEARCH_URL = "https://sportsbook.fanduel.com/search";
@@ -532,7 +551,9 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, i
           <span className="fsm-player__col">
             <span className="fsm-player__name">{row.name}</span>
             <span className="fsm-player__meta">{row.teamAbbr}<i className="fsm-player__bar">|</i>{row.bats}</span>
-            {game && <span className="fsm-player__game">{game.away}@{game.home}<i className="fsm-player__bar">·</i>{game.time}</span>}
+            {game
+        ? <span className="fsm-player__game"><span className="fsm-player__gm--opp">{game.away}@{game.home}</span><i className="fsm-player__bar">·</i><span className="fsm-player__gm--time">{game.time || fsmFmtEt(row.gameStartUtc)}</span>{row.pitcher_name && <><i className="fsm-player__bar">·</i><span className="fsm-player__gm--pitcher">{row.pitcher_name}</span></>}</span>
+        : (row.gameStartUtc || row.pitcher_name) && <span className="fsm-player__game"><span className="fsm-player__gm--time">{fsmFmtEt(row.gameStartUtc)}</span>{row.gameStartUtc && row.pitcher_name && <i className="fsm-player__bar">·</i>}{row.pitcher_name && <span className="fsm-player__gm--pitcher">{row.pitcher_name}</span>}</span>}
           </span>
         </button>
       </td>
@@ -1798,11 +1819,10 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
   const [selMetrics, setSelMetrics] = React.useState([]);
   const toggleMetric = (id) => setSelMetrics((prev) => prev.includes(id) ? prev.filter((m) => m !== id) : [...prev, id]);
   const [modal, setModal] = React.useState(null);
-  const FSM_PREF_V = 3;
-  const FSM_DATA_GAP = ["woba", "whiff", "swstr", "pullbrl"];
+  const FSM_PREF_V = 4;
   const [colPref, setColPref] = React.useState(() => {
-    try { const s = JSON.parse(localStorage.getItem("fsmColPref")); if (s && Array.isArray(s.order)) { if ((s.v || 1) < FSM_PREF_V) { return { order: FSM_COLS.map((c) => c.key), hidden: [...new Set([...(s.hidden || []), ...FSM_DATA_GAP])], v: FSM_PREF_V }; } return s; } } catch (e) {}
-    return { order: FSM_COLS.map((c) => c.key), hidden: FSM_DATA_GAP, v: FSM_PREF_V };
+    try { const s = JSON.parse(localStorage.getItem("fsmColPref")); if (s && Array.isArray(s.order)) { if ((s.v || 1) < FSM_PREF_V) { return { order: FSM_PICKER_COLS.map((c) => c.key), hidden: (s.hidden || []).filter((k) => FSM_PICKER_COLS.some((c) => c.key === k)), v: FSM_PREF_V }; } return { ...s, order: s.order.filter((k) => FSM_PICKER_COLS.some((c) => c.key === k)) }; } } catch (e) {}
+    return { order: FSM_PICKER_COLS.map((c) => c.key), hidden: [], v: FSM_PREF_V };
   });
   const [colOpen, setColOpen] = React.useState(false);
   const [colInfo, setColInfo] = React.useState(null);
@@ -1818,11 +1838,11 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
   const onSort = (key) => setSortState((s) => s && s.key === key ? { key, dir: s.dir === "desc" ? "asc" : "desc" } : { key, dir: "desc" });
   const onReorder = (fromKey, toKey) => setColPref((p) => { if (fromKey === toKey) return p; const o = p.order.filter((k) => k !== fromKey); o.splice(o.indexOf(toKey), 0, fromKey); return { ...p, order: o }; });
   React.useEffect(() => { try { localStorage.setItem("fsmColPref", JSON.stringify(colPref)); } catch (e) {} }, [colPref]);
-  React.useEffect(() => { setColPref((p) => { const missing = FSM_COLS.filter((c) => !p.order.includes(c.key)).map((c) => c.key); return missing.length ? { ...p, order: [...p.order, ...missing] } : p; }); }, []);
+  React.useEffect(() => { setColPref((p) => { const missing = FSM_PICKER_COLS.filter((c) => !p.order.includes(c.key)).map((c) => c.key); return missing.length ? { ...p, order: [...p.order, ...missing] } : p; }); }, []);
   const activeCols = colPref.order.map((k) => FSM_COLS.find((c) => c.key === k)).filter((c) => c && !colPref.hidden.includes(c.key));
   const toggleCol = (k) => setColPref((p) => ({ ...p, hidden: p.hidden.includes(k) ? p.hidden.filter((x) => x !== k) : [...p.hidden, k] }));
   const moveCol = (idx, dir) => setColPref((p) => { const o = [...p.order]; const j = idx + dir; if (j < 0 || j >= o.length) return p; [o[idx], o[j]] = [o[j], o[idx]]; return { ...p, order: o }; });
-  const resetCols = () => setColPref({ order: FSM_COLS.map((c) => c.key), hidden: FSM_DATA_GAP, v: FSM_PREF_V });
+  const resetCols = () => setColPref({ order: FSM_PICKER_COLS.map((c) => c.key), hidden: [], v: FSM_PREF_V });
   const [secs, setSecs] = React.useState(3);
   React.useEffect(() => {const id = setInterval(() => setSecs((s) => (s + 1) % 600), 1000);return () => clearInterval(id);}, []);
   const timer = `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, "0")}`;
@@ -1831,7 +1851,7 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
      In 'season' mode skip the overlay — season values already live on the row. */
   const splitRows = React.useMemo(() => {
     if (splitScope === 'season') {
-      return rows.map((r) => ({ ...r, _raw: r, _vsScope: Object.fromEntries(FSM_SCOPE_HAND_KEYS.map((k) => [k, { scope: 'season' }])) }));
+      return rows.map((r) => ({ ...r, air: fsmAirPct(r), _raw: r, _vsScope: Object.fromEntries(FSM_SCOPE_HAND_KEYS.map((k) => [k, { scope: 'season' }])) }));
     }
     return rows.map(fsmSplitRow);
   }, [rows, splitScope]);
