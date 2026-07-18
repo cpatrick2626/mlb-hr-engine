@@ -35,6 +35,7 @@ Supabase issues ES256 JWTs signed with a per-project EC private key.
 | `picks` | Per-batter qualified picks from cron | `002_picks_table.sql` | UNIQUE `(date, player_id, source_tab)`; written by `insert_picks()` in `api/cache.py` |
 | `tickets` | User-created bet slips (legs collection) | `003_tickets_legs.sql` + `004_add_tickets_user_id.sql` | `ticket_id` PK (uuid), `user_id` FK, `date`, `board`, `status`, `stake` numeric, `created_at` |
 | `legs` | Individual legs within a ticket | `003_tickets_legs.sql` + `005_add_leg_calibration_fields.sql` + `006_add_legs_signal_snapshot.sql` | `leg_id` PK (uuid), `ticket_id` FK, `player_id`, `model_prob` (decimal — calibration key), calibration fields, `signal_snapshot` jsonb (see below) |
+| `fd_events` | Append-only operator FanDuel handoff clicks | `008_fd_events.sql` | Per-user idempotency; write-separate from engine tables; `handoff_initiated` is not proof of bet placement |
 
 ### `picks` Table Columns
 
@@ -116,6 +117,10 @@ Note: `board` lives on `tickets`, not `legs` — leg queries needing board ident
 **Leg payload integrity rule:** `model_prob` is ALWAYS a decimal from `row.model_prob` (API field). NEVER `row.hrprob × 100`, NEVER `jigScore`, NEVER `hrpa`. Enforced in `window.__hrSlip.buildLegPayload()`. The `signal_snapshot` never substitutes for or alters `model_prob` — it is a display record only.
 
 **Snapshot capture (Phase S1-a, 2026-07-06):** `POST /api/tickets/leg` accepts an optional `signal_snapshot` JSON object (422 if not an object or >16KB). Absent snapshot → NULL, never an error. Populating surfaces: `full-slate` (both add paths), `aei` (AeeCard), `strategy-rail`. Each surface records only what it displays; alignment rule and H2H threshold are canonical per strategy-section-spec operator decisions.
+
+### `fd_events` Table (FanDuel handoff capture Phase 1 — 2026-07-18)
+
+`POST /api/fd-event` requires `require_auth` and stamps `user_id` only from the validated JWT `sub`. It inserts one `handoff_initiated` row per player click and slate date; `(user_id, idempotency_key)` makes retries a no-op. `board` is optional analysis metadata and does not control future pick-dot state. RLS is enabled with no client policies, so writes stay behind the FastAPI service-role path. There is no foreign key or write path to engine, scoring, odds, or CLV tables.
 
 ### Environment Variables Required
 - `SUPABASE_URL` — Supabase project URL
