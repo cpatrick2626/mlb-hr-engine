@@ -15,6 +15,7 @@ POST /api/invite/redeem           — redeem invite code (auth required)
 POST /api/tickets/leg             — add leg to ticket; null ticket_id opens new ticket (JWT required — Phase 1)
 POST /api/tickets/leg/remove      — soft-delete a leg (sets removed=true); ownership-checked (JWT required — Phase A)
 POST /api/tickets/complete        — finalize ticket, set fd_deployed=true (JWT required — Phase 1)
+POST /api/fd-event                — record a FanDuel handoff click (JWT required)
 GET  /api/ledger?lane=main|jig    — settled/void legs + hit-rate buckets, per user per lane (JWT required — Phase S2/D5)
 GET  /api/builds                  — list caller's named TCC builds (JWT required)
 POST /api/builds                  — create/update caller's named TCC build (JWT required)
@@ -272,6 +273,63 @@ async def ticket_complete(body: dict, user=Depends(require_auth)):
     stake = float(raw_stake) if raw_stake is not None else None
     result = complete_ticket(ticket_id, user_id=user.get("sub"), stake=stake)
     return {"status": "ok", **result}
+
+
+# ── FanDuel handoff capture (Phase 1) ─────────────────────────────────────
+
+@app.post("/api/fd-event")
+async def record_fd_event(body: dict, user=Depends(require_auth)):
+    """Record an FD handoff initiation; this is not proof of bet placement."""
+    player_id = body.get("player_id")
+    source_surface = body.get("source_surface")
+    idempotency_key = body.get("idempotency_key")
+    board = body.get("board")
+
+    if player_id is None or isinstance(player_id, bool) or not str(player_id).strip():
+        raise HTTPException(status_code=400, detail="player_id is required")
+    if not isinstance(source_surface, str) or not source_surface.strip():
+        raise HTTPException(status_code=400, detail="source_surface is required")
+    if not isinstance(idempotency_key, str) or not idempotency_key.strip():
+        raise HTTPException(status_code=400, detail="idempotency_key is required")
+    if board is not None and (not isinstance(board, str) or not board.strip()):
+        raise HTTPException(status_code=422, detail="board must be a non-empty string or null")
+
+    slate_date = body.get("slate_date")
+    if slate_date is None:
+        event_date = today_et()
+    else:
+        try:
+            event_date = date.fromisoformat(slate_date)
+        except (TypeError, ValueError):
+            raise HTTPException(status_code=422, detail="slate_date must be YYYY-MM-DD")
+
+    row = {
+        "user_id": user.get("sub"),
+        "player_id": str(player_id).strip(),
+        "slate_date": event_date.isoformat(),
+        "event_type": "handoff_initiated",
+        "source_surface": source_surface.strip(),
+        "board": board.strip() if board is not None else None,
+        "idempotency_key": idempotency_key.strip(),
+    }
+    result = (
+        supabase_client()
+        .table("fd_events")
+        .upsert(
+            row,
+            on_conflict="user_id,idempotency_key",
+            ignore_duplicates=True,
+        )
+        .execute()
+    )
+    created = bool(result.data)
+    return {
+        "status": "ok",
+        "event": "handoff_initiated",
+        "created": created,
+        "duplicate": not created,
+        "slate_date": event_date.isoformat(),
+    }
 
 
 # ── Ledger (Phase S2 / D5 — read-only) ────────────────────────────────────────
