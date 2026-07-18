@@ -16,6 +16,9 @@ POST /api/tickets/leg             — add leg to ticket; null ticket_id opens ne
 POST /api/tickets/leg/remove      — soft-delete a leg (sets removed=true); ownership-checked (JWT required — Phase A)
 POST /api/tickets/complete        — finalize ticket, set fd_deployed=true (JWT required — Phase 1)
 GET  /api/ledger?lane=main|jig    — settled/void legs + hit-rate buckets, per user per lane (JWT required — Phase S2/D5)
+GET  /api/builds                  — list caller's named TCC builds (JWT required)
+POST /api/builds                  — create/update caller's named TCC build (JWT required)
+DELETE /api/builds/{build_id}     — delete caller's own TCC build (JWT required)
 
 The pipeline is normally triggered by GitHub Actions cron (see api/cron.py).
 The /api/pipeline/run endpoint is a manual fallback; it runs in a background
@@ -28,7 +31,7 @@ import os
 import copy
 import json
 import logging
-from datetime import date
+from datetime import date, datetime, timezone
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -37,7 +40,7 @@ from fastapi import FastAPI, Depends, HTTPException, Query, Request, BackgroundT
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.auth import require_auth, require_beta
-from api.cache import get_picks, get_latest_picks, store_picks, list_runs, redeem_invite, add_leg, complete_ticket, remove_leg, ledger_legs, ledger_pending_count, today_et
+from api.cache import _client as supabase_client, get_picks, get_latest_picks, store_picks, list_runs, redeem_invite, add_leg, complete_ticket, remove_leg, ledger_legs, ledger_pending_count, today_et
 from clients.arsenal import get_pitcher_arsenal, arsenal_matchup_factor
 from clients.batter_pitch_profile import (
     empty_batter_pitch_profile_display,
@@ -375,6 +378,90 @@ async def ticket_remove_leg(body: dict, user=Depends(require_auth)):
     return {"status": "ok", **result}
 
 
+# ── TCC build persistence ──────────────────────────────────────────────────────
+
+_TCC_BUILD_COLUMNS = (
+    "build_id,name,main_filters,jig_filters,schema_version,created_at,updated_at"
+)
+
+
+@app.get("/api/builds")
+async def list_tcc_builds(user=Depends(require_auth)):
+    """List only the authenticated caller's saved TCC builds."""
+    user_id = user.get("sub")
+    result = (
+        supabase_client()
+        .table("tcc_builds")
+        .select(_TCC_BUILD_COLUMNS)
+        .eq("user_id", user_id)
+        .order("updated_at", desc=True)
+        .execute()
+    )
+    return {"builds": result.data or []}
+
+
+@app.post("/api/builds")
+async def save_tcc_build(body: dict, user=Depends(require_auth)):
+    """Upsert one named build; ownership and schema version are server-stamped."""
+    name = body.get("name")
+    if not isinstance(name, str) or not name.strip():
+        raise HTTPException(status_code=400, detail="name is required")
+
+    missing = {key for key in ("main_filters", "jig_filters") if key not in body}
+    if missing:
+        raise HTTPException(status_code=400, detail=f"Missing fields: {sorted(missing)}")
+    if not isinstance(body["main_filters"], dict):
+        raise HTTPException(status_code=422, detail="main_filters must be a JSON object")
+    if not isinstance(body["jig_filters"], dict):
+        raise HTTPException(status_code=422, detail="jig_filters must be a JSON object")
+
+    row = {
+        "user_id": user.get("sub"),
+        "name": name.strip(),
+        "main_filters": body["main_filters"],
+        "jig_filters": body["jig_filters"],
+        "schema_version": 1,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    result = (
+        supabase_client()
+        .table("tcc_builds")
+        .upsert(row, on_conflict="user_id,name")
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(status_code=500, detail="Build save returned no row")
+    return {"status": "ok", "build": result.data[0]}
+
+
+@app.delete("/api/builds/{build_id}")
+async def delete_tcc_build(build_id: str, user=Depends(require_auth)):
+    """Delete a build only after confirming it belongs to the JWT subject."""
+    user_id = user.get("sub")
+    existing = (
+        supabase_client()
+        .table("tcc_builds")
+        .select("build_id,user_id")
+        .eq("build_id", build_id)
+        .limit(1)
+        .execute()
+    )
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="Build not found")
+    if existing.data[0].get("user_id") != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized for this build")
+
+    (
+        supabase_client()
+        .table("tcc_builds")
+        .delete()
+        .eq("build_id", build_id)
+        .eq("user_id", user_id)
+        .execute()
+    )
+    return {"status": "ok", "build_id": build_id, "deleted": True}
+
+
 def _pct(val):
     """Strip % suffix and return float, or None if missing."""
     if val is None:
@@ -632,6 +719,7 @@ def _build_slate_payload(data: dict) -> dict:
             "la":       _flt(p.get("avg_launch_angle")),
             "pull":     _pct(p.get("pull_pct")),
             "center":   _pct(p.get("center_pct")),
+            "oppo":     _pct(p.get("oppo_pct")),
             "opphr":    p.get("pitcher_hr9"),
             "xwoba":    _rate(p.get("xwoba")),
             "hrpa":     hrpa,
