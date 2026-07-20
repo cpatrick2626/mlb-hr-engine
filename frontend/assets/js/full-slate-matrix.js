@@ -687,7 +687,7 @@ function FsmRadioGroup({ label, value, onChange, options }) {
 
 let fsmDragKey = null;
 
-function FsmTable({ rows, cols, showGame, onBatter, onPitch, onReorder, onSort, sortState, builderMode = false, isJigContext = false, splitScope = 'vs_hand' }) {
+function FsmTable({ rows, cols, showGame, onBatter, onPitch, onReorder, onFront, onSort, sortState, builderMode = false, isJigContext = false, splitScope = 'vs_hand' }) {
   const [slipState, setSlipState] = React.useState(() => window.__hrSlip ? window.__hrSlip.getState() : { cardStatus: {} });
   React.useEffect(() => {
     if (!window.__hrSlip) return;
@@ -750,7 +750,7 @@ function FsmTable({ rows, cols, showGame, onBatter, onPitch, onReorder, onSort, 
           <th className="fsm-th-player">PLAYER</th>
           <th className="fsm-th-matchup">MATCHUP</th>
           {cols.map((c) =>
-          <th key={c.key} className={"fsm-th-stat" + (c.danger ? " fsm-th-danger" : "") + (sortState && sortState.key === c.key ? " is-sorted" : "")} {...thProps(c)}>{c.head}{arrow(c)}{c.scope === "hand" ? (splitScope === 'vs_hand' ? <span className="fsm-th-scope fsm-th-scope--hand">VS HAND</span> : <span className="fsm-th-scope">SZN</span>) : c.scope === "season" ? <span className="fsm-th-scope">SZN</span> : null}</th>
+          <th key={c.key} className={"fsm-th-stat" + (c.danger ? " fsm-th-danger" : "") + (sortState && sortState.key === c.key ? " is-sorted" : "")} {...thProps(c)}><button type="button" className="fsm-statfront" onClick={(e) => { e.stopPropagation(); onFront(c.key); }} title={`Move ${c.head} to the first stat column`} aria-label={`Move ${c.head} to the first stat column`}>{c.head}</button>{arrow(c)}{c.scope === "hand" ? (splitScope === 'vs_hand' ? <span className="fsm-th-scope fsm-th-scope--hand">VS HAND</span> : <span className="fsm-th-scope">SZN</span>) : c.scope === "season" ? <span className="fsm-th-scope">SZN</span> : null}</th>
           )}
           <th className="fsm-th-stat" style={{ width: "36px", textAlign: "center", cursor: "default" }} title="Add to slip">SLIP</th>
         </tr>
@@ -1810,10 +1810,7 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
   const toggleMetric = (id) => setSelMetrics((prev) => prev.includes(id) ? prev.filter((m) => m !== id) : [...prev, id]);
   const [modal, setModal] = React.useState(null);
   const FSM_PREF_V = 4;
-  const [colPref, setColPref] = React.useState(() => {
-    try { const s = JSON.parse(localStorage.getItem("fsmColPref")); if (s && Array.isArray(s.order)) { if ((s.v || 1) < FSM_PREF_V) { return { order: FSM_PICKER_COLS.map((c) => c.key), hidden: (s.hidden || []).filter((k) => FSM_PICKER_COLS.some((c) => c.key === k)), v: FSM_PREF_V }; } return { ...s, order: s.order.filter((k) => FSM_PICKER_COLS.some((c) => c.key === k)) }; } } catch (e) {}
-    return { order: FSM_PICKER_COLS.map((c) => c.key), hidden: [], v: FSM_PREF_V };
-  });
+  const [colPref, setColPref] = React.useState({ order: FSM_PICKER_COLS.map((c) => c.key), hidden: [], v: FSM_PREF_V });
   const [colOpen, setColOpen] = React.useState(false);
   const [colInfo, setColInfo] = React.useState(null);
   const [projSortOn, setProjSortOn] = React.useState(false);
@@ -1827,7 +1824,6 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
   }, []);
   const onSort = (key) => setSortState((s) => s && s.key === key ? { key, dir: s.dir === "desc" ? "asc" : "desc" } : { key, dir: "desc" });
   const onReorder = (fromKey, toKey) => setColPref((p) => { if (fromKey === toKey) return p; const o = p.order.filter((k) => k !== fromKey); o.splice(o.indexOf(toKey), 0, fromKey); return { ...p, order: o }; });
-  React.useEffect(() => { try { localStorage.setItem("fsmColPref", JSON.stringify(colPref)); } catch (e) {} }, [colPref]);
   React.useEffect(() => { setColPref((p) => { const missing = FSM_PICKER_COLS.filter((c) => !p.order.includes(c.key)).map((c) => c.key); return missing.length ? { ...p, order: [...p.order, ...missing] } : p; }); }, []);
   const activeCols = colPref.order.map((k) => FSM_COLS.find((c) => c.key === k)).filter((c) => c && !colPref.hidden.includes(c.key));
   const toggleCol = (k) => setColPref((p) => ({ ...p, hidden: p.hidden.includes(k) ? p.hidden.filter((x) => x !== k) : [...p.hidden, k] }));
@@ -2062,7 +2058,7 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
         <span className="fsm-metric-empty__msg">No players on today's slate.</span>
       </div> :
       view === "player" ?
-      <div className="fsm-tablewrap fsm-scroll-container"><FsmTable rows={pool} cols={activeCols} showGame={true} onBatter={openBatter} onPitch={openPitch} onReorder={onReorder} onSort={onSort} sortState={sortState} builderMode={builderMode} isJigContext={isJigContext} splitScope={splitScope} /></div> :
+      <div className="fsm-tablewrap fsm-scroll-container"><FsmTable rows={pool} cols={activeCols} showGame={true} onBatter={openBatter} onPitch={openPitch} onReorder={onReorder} onFront={(key) => { const first = activeCols[0]; if (first && first.key !== key) onReorder(key, first.key); }} onSort={onSort} sortState={sortState} builderMode={builderMode} isJigContext={isJigContext} splitScope={splitScope} /></div> :
 
       gamesToShow.map((game) => {
         const gameRows = pool.filter((r) => r.gameId === game.id);
@@ -2070,7 +2066,7 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
         return (
           <div className="fsm-gameblock" key={game.id} id={`fsm-game-${game.id}`}>
               <FsmGameHeader game={game} n={gameRows.length} />
-              <div className="fsm-tablewrap fsm-scroll-container"><FsmTable rows={gameRows} cols={activeCols} onBatter={openBatter} onPitch={openPitch} onReorder={onReorder} onSort={onSort} sortState={sortState} builderMode={builderMode} isJigContext={isJigContext} splitScope={splitScope} /></div>
+              <div className="fsm-tablewrap fsm-scroll-container"><FsmTable rows={gameRows} cols={activeCols} onBatter={openBatter} onPitch={openPitch} onReorder={onReorder} onFront={(key) => { const first = activeCols[0]; if (first && first.key !== key) onReorder(key, first.key); }} onSort={onSort} sortState={sortState} builderMode={builderMode} isJigContext={isJigContext} splitScope={splitScope} /></div>
             </div>);
 
       })
