@@ -131,6 +131,7 @@ const Stage = ({ engine, lens, ccOpen, onCloseCC, appliedFilters, roomFilters, o
       engine={engine}
       lens={lens}
       initialFilters={appliedFilters}
+      roomFilters={roomFilters}
       onApply={onApplyFilters}
       onClose={onCloseCC} />;
 

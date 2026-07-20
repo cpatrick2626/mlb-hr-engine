@@ -3,7 +3,7 @@
    Tweak filters here, then APPLY TO ROOM — the change affects the room you're in
    and is saved (persists when you navigate away and come back). */
 
-const StageCommand = ({ engine, lens, onClose, initialFilters, onApply }) => {
+const StageCommand = ({ engine, lens, onClose, initialFilters, roomFilters, onApply }) => {
   const ctx = lens ? `${engine.name} · ${lens.name}` : `${engine.name}${engine.suffix ? " " + engine.suffix : ""}`;
   const accent = engine.color;
 
@@ -14,6 +14,7 @@ const StageCommand = ({ engine, lens, onClose, initialFilters, onApply }) => {
   const [draft, setDraft] = React.useState(seed);
   const [resetKey, setResetKey] = React.useState(0);
   const [justApplied, setJustApplied] = React.useState(false);
+  const { preset, feedback, builds, loadOpen, busy, setLoadOpen, doSave, doLoad, applyBuild } = useTccBuildSaver({ roomFilters, onApplyFilters: onApply });
 
   const set = (patch) => { setDraft((d) => ({ ...d, ...patch })); setJustApplied(false); };
   const active = countActiveFilters(draft);
@@ -37,6 +38,19 @@ const StageCommand = ({ engine, lens, onClose, initialFilters, onApply }) => {
             <Icon name="filter" size={13} color="currentColor" /> {active} ACTIVE
           </span>
           <button className="md-cc__reset" onClick={doReset}>RESET</button>
+          {feedback && <span className={`jig-bar__flash jig-bar__flash--${feedback.kind}`} role="status" aria-live="polite">{feedback.kind === "success" ? "✓ " : ""}{feedback.text}</span>}
+          <button className="hr-btn hr-btn--ghost" onClick={doSave} disabled={busy !== null}>{busy === "save" ? "SAVING…" : "SAVE BUILD"}</button>
+          <div className="jig-load">
+            <button className="hr-btn hr-btn--ghost" onClick={doLoad} disabled={busy !== null} aria-expanded={loadOpen}>{busy === "load" ? "LOADING…" : "LOAD BUILD"}</button>
+            {loadOpen && (
+              <div className="jig-load__menu" role="dialog" aria-label="Saved TCC builds">
+                <div className="jig-load__head"><span>SAVED BUILDS</span><button className="jig-load__close" onClick={() => setLoadOpen(false)} aria-label="Close saved builds">×</button></div>
+                <div className="jig-load__list">
+                  {builds.map((build) => <button className="jig-load__item" key={build.build_id || build.name} onClick={() => applyBuild(build)}><span>{build.name}</span><span className="jig-load__apply">APPLY</span></button>)}
+                </div>
+              </div>
+            )}
+          </div>
           <button className="md-cc__apply" onClick={doApply}>
             {justApplied ? "✓ APPLIED" : "APPLY TO ROOM"}
           </button>
@@ -130,7 +144,7 @@ const StageCommand = ({ engine, lens, onClose, initialFilters, onApply }) => {
       <div className="md-cc__foot">
         <span className="md-cc__foot-brand"><LiveDot size={6} /> COMMAND SYSTEM</span>
         <span>SCOPE: <b style={{ color: accent }}>{ctx}</b></span>
-        <span>{active > 0 ? `${active} FILTER${active > 1 ? "S" : ""} STAGED — APPLY TO SAVE` : "ADJUST FILTERS, THEN APPLY TO ROOM"}</span>
+        <span>{active > 0 ? `${active} FILTER${active > 1 ? "S" : ""} STAGED — APPLY TO SAVE` : `BUILD: ${preset}`}</span>
         <span style={{ marginLeft: "auto" }}>SOURCE: MLB STATS API</span>
       </div>
     </div>
