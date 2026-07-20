@@ -380,6 +380,9 @@ def _build_player_profile(
     season_k = int(season_stats.get("strikeOuts", 0))
     season_sf = int(season_stats.get("sacFlies", 0))
     season_hr = int(season_stats.get("homeRuns", 0))
+    season_air_outs = int(season_stats.get("airOuts", 0) or 0)
+    season_fly_balls = season_hr + season_air_outs
+    hrfb = round(season_hr / season_fly_balls * 100, 1) if season_fly_balls > 0 else None
     season_babip = round(
         (season_hits - season_hr) / (season_ab - season_k - season_hr + season_sf), 3
     ) if (season_ab - season_k - season_hr + season_sf) > 0 else None
@@ -425,6 +428,7 @@ def _build_player_profile(
         "hrprob_projected": round(_proj_model_prob * 100, 1) if _proj_model_prob is not None else None,
         "projected_pa_source": _proj_pa_src,
         "season_pa": season_pa, "season_hr": int(season_stats.get("homeRuns", 0)),
+        "hrfb": hrfb,
         "recent_pa": recent_pa, "hr_rate": round(hr_rate, 5),
         "raw_hr_rate": round(raw_rate, 5), "statcast_power_mult": power_mult,
         "has_statcast": (player_id in batter_data
