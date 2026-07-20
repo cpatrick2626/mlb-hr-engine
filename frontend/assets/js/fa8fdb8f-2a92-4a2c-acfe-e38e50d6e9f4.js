@@ -14,11 +14,7 @@ const StageCommand = ({ engine, lens, onClose, initialFilters, roomFilters, onAp
   const [draft, setDraft] = React.useState(seed);
   const [resetKey, setResetKey] = React.useState(0);
   const [justApplied, setJustApplied] = React.useState(false);
-  const onApplyBuildFilters = (filters, targetRoom) => {
-    onApply(filters, targetRoom);
-    if (engine.id === "main" && targetRoom === "main") setDraft({ ...engineDefaults, ...(filters || {}) });
-  };
-  const { preset, feedback, builds, loadOpen, busy, setLoadOpen, doSave, doLoad, applyBuild } = useTccBuildSaver({ roomFilters, onApplyFilters: onApplyBuildFilters });
+  const { preset, feedback, builds, loadOpen, busy, setLoadOpen, doSave, doLoad, applyBuild } = useTccBuildSaver({ roomFilters, onApplyFilters: onApply });
 
   const set = (patch) => { setDraft((d) => ({ ...d, ...patch })); setJustApplied(false); };
   const active = countActiveFilters(draft);
