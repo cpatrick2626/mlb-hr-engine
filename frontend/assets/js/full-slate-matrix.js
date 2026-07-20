@@ -514,28 +514,18 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, i
   return (
     <tr className={"fsm-row" + (expanded ? " is-expanded" : "")}>
       <td className="fsm-tiercell">
-        {builderMode ? (
-          <span
-            className="fsm-tier"
-            style={{ "--tc": t.color, "--tg": t.glow }}
-            title={fsmTierTip(row, isJigContext, jigLabel, jigRank)}>
-            <span className="fsm-tier__icon"><FsmTierIcon tier={displayTier} /></span>
-            <span className="fsm-tier__label">{isJigContext && jigLabel ? `${jigLabel} #${jigRank}` : row.tier}</span>
-          </span>
-        ) : (
-          <button
-            type="button"
-            className="fsm-tier fsm-tier--btn"
-            style={{ "--tc": t.color, "--tg": t.glow }}
-            onClick={(e) => { e.stopPropagation(); e.preventDefault(); const board = isJigContext ? 'jig' : (row._board || 'main'); const raw = row._raw || row; window.__hrSlip && window.__hrSlip.requestAdd({ player_id: raw.id, name: raw.name, teamAbbr: raw.teamAbbr, team: raw.teamAbbr, pitcher: raw.pitcher_name, pitcher_name: raw.pitcher_name, model_prob: raw.model_prob, tier: raw.tier, model_tier_rank: raw.model_tier_rank, board: board, hrprob: raw.hrprob, barrel: raw.barrel, hh: raw.hh, fd_bet_link: raw.fd_bet_link, fd_event_link: raw.fd_event_link, signal_snapshot: fsmBuildSnapshot(raw, board, sortState) }); }}
-            title={fsmTierTip(row, isJigContext, jigLabel, jigRank) + " · Click: select destination"}
-            aria-label={`Select destination for ${row.name}`}>
+        <button
+          type="button"
+          className="fsm-tier fsm-tier--btn"
+          style={{ "--tc": t.color, "--tg": t.glow }}
+          onClick={(e) => { e.stopPropagation(); e.preventDefault(); const board = isJigContext ? 'jig' : (row._board || 'main'); const raw = row._raw || row; window.__hrSlip && window.__hrSlip.requestAdd({ player_id: raw.id, name: raw.name, teamAbbr: raw.teamAbbr, team: raw.teamAbbr, pitcher: raw.pitcher_name, pitcher_name: raw.pitcher_name, model_prob: raw.model_prob, tier: raw.tier, model_tier_rank: raw.model_tier_rank, board: board, hrprob: raw.hrprob, barrel: raw.barrel, hh: raw.hh, fd_bet_link: raw.fd_bet_link, fd_event_link: raw.fd_event_link, signal_snapshot: fsmBuildSnapshot(raw, board, sortState) }); }}
+          title={fsmTierTip(row, isJigContext, jigLabel, jigRank) + " · Click: select destination"}
+          aria-label={`Select destination for ${row.name}`}>
 
-            <span className="fsm-tier__icon"><FsmTierIcon tier={displayTier} /></span>
-            <span className="fsm-tier__label">{isJigContext && jigLabel ? `${jigLabel} #${jigRank}` : row.tier}</span>
-            <span className="fsm-tier__add" aria-hidden="true">+ FD</span>
-          </button>
-        )}
+          <span className="fsm-tier__icon"><FsmTierIcon tier={displayTier} /></span>
+          <span className="fsm-tier__label">{isJigContext && jigLabel ? `${jigLabel} #${jigRank}` : row.tier}</span>
+          <span className="fsm-tier__add" aria-hidden="true">+ FD</span>
+        </button>
         {(row.prime || row.explosive || row.advantage || row.wildcard) && (
           <span className="fsm-tiercell__roles">
             {row.prime && <span className="fsm-role-badge--prime" title={fsmRoleTip("prime", row)}>PRIME</span>}
@@ -1860,7 +1850,8 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
     if (!sortState) return s0;
     if (sortState.key === '_board_metric') {
       const pick = (row, curKey, projKey) => {
-        if (row.lineup_confirmed === true) return row[curKey] ?? -Infinity;
+        const confirmed = isJigContext ? row.pitcher_confirmed === true : row.lineup_confirmed === true;
+        if (confirmed) return row[curKey] ?? -Infinity;
         return (projSortOn ? (row[projKey] ?? row[curKey]) : row[curKey]) ?? -Infinity;
       };
       return [...s0].sort((a, b) => {

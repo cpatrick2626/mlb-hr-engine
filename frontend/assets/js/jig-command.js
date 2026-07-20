@@ -51,7 +51,7 @@ function JigCommand({ engine, lens, appliedFilters, roomFilters, onApplyFilters,
         <div className="jig-banner__title">JIG BUILDER · PHASE A WORKSPACE</div>
         <div className="jig-banner__sub">Current source: JIG scored slate rows. Raw unscored Builder feed is not exposed yet.</div>
       </div>
-      <FullSlateMatrix rows={applyRoomFilters(builderRows, appliedFilters)} total={builderRows.length} onOpen={onOpenPlayer} builderMode={true} />
+      <FullSlateMatrix rows={applyRoomFilters(builderRows, appliedFilters)} total={builderRows.length} onOpen={onOpenPlayer} builderMode={true} isJigContext={true} />
     </div>
   );
 }
