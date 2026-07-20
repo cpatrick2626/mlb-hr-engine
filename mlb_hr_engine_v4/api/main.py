@@ -17,6 +17,7 @@ POST /api/tickets/leg/remove      — soft-delete a leg (sets removed=true); own
 POST /api/tickets/complete        — finalize ticket, set fd_deployed=true (JWT required — Phase 1)
 POST /api/fd-event                — record a FanDuel handoff click (JWT required)
 GET  /api/ledger?lane=main|jig    — settled/void legs + hit-rate buckets, per user per lane (JWT required — Phase S2/D5)
+GET  /api/my-tickets              — caller's tickets + legs + game linescores (JWT required)
 GET  /api/builds                  — list caller's named TCC builds (JWT required)
 POST /api/builds                  — create/update caller's named TCC build (JWT required)
 DELETE /api/builds/{build_id}     — delete caller's own TCC build (JWT required)
@@ -42,6 +43,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from api.auth import require_auth, require_beta
 from api.cache import _client as supabase_client, get_picks, get_latest_picks, store_picks, list_runs, redeem_invite, add_leg, complete_ticket, remove_leg, ledger_legs, ledger_pending_count, today_et
+from api.ticket_history import get_my_tickets
 from clients.arsenal import get_pitcher_arsenal, arsenal_matchup_factor
 from clients.batter_pitch_profile import (
     empty_batter_pitch_profile_display,
@@ -434,6 +436,17 @@ async def ticket_remove_leg(body: dict, user=Depends(require_auth)):
     except PermissionError:
         raise HTTPException(status_code=403, detail="Not authorized for this leg")
     return {"status": "ok", **result}
+
+
+# ── My Tickets (read-only) ────────────────────────────────────────────────────
+
+@app.get("/api/my-tickets")
+def my_tickets(user=Depends(require_auth)):
+    """Return only the JWT caller's tickets, legs, and public game context."""
+    user_id = user.get("sub")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authenticated token is missing sub")
+    return {"tickets": get_my_tickets(supabase_client(), user_id)}
 
 
 # ── TCC build persistence ──────────────────────────────────────────────────────
