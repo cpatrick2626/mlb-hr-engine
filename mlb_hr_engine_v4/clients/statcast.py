@@ -726,8 +726,8 @@ def _stabilize_metric(value: float, league_avg: float, pa: int, half_life: int) 
 def get_bat_tracking(year: int = None) -> dict[int, dict]:
     """Fetch Savant bat-tracking leaderboard for batters.
 
-    Returns dict keyed by MLBAM player_id with decimal-ratio values:
-      hard_swing_rate, squared_up_per_swing, blast_per_swing
+    Returns dict keyed by MLBAM player_id with decimal-ratio values for the
+    percentage fields plus numeric avg_bat_speed.
     """
     year = year or config.CURRENT_SEASON
     key = ("bt", year)
@@ -770,10 +770,21 @@ def bat_tracking_summary(
         except (TypeError, ValueError):
             return None
 
+    def _to_num(key: str) -> Optional[float]:
+        v = stats.get(key)
+        if v is None:
+            return None
+        try:
+            return round(float(v), 1)
+        except (TypeError, ValueError):
+            return None
+
     return {
         "fast": _to_pct("hard_swing_rate"),
         "squp": _to_pct("squared_up_per_swing"),
         "blast": _to_pct("blast_per_swing"),
+        "comp": _to_pct("percent_swings_competitive"),
+        "batspeed": _to_num("avg_bat_speed"),
     }
 
 
@@ -792,6 +803,15 @@ def _parse_bat_tracking_csv(raw: str) -> dict[int, dict]:
                 pass
         return None
 
+    def _numeric(row, key) -> Optional[float]:
+        v = row.get(key)
+        if v not in (None, "", "null", "NA", "N/A"):
+            try:
+                return float(v)
+            except (TypeError, ValueError):
+                pass
+        return None
+
     for row in reader:
         try:
             pid = int(row.get("id") or 0)
@@ -807,6 +827,12 @@ def _parse_bat_tracking_csv(raw: str) -> dict[int, dict]:
             v = _f(row, "blast_per_swing")
             if v is not None:
                 row_out["blast_per_swing"] = v
+            v = _f(row, "percent_swings_competitive")
+            if v is not None:
+                row_out["percent_swings_competitive"] = v
+            v = _numeric(row, "avg_bat_speed")
+            if v is not None:
+                row_out["avg_bat_speed"] = v
             if row_out:
                 result[pid] = row_out
         except (ValueError, KeyError):

@@ -808,6 +808,8 @@ def _build_slate_payload(data: dict) -> dict:
             "fast":     p.get("fast"),
             "squp":     p.get("squp"),
             "blast":    p.get("blast"),
+            "comp":     p.get("comp"),
+            "batspeed": p.get("batspeed"),
             "maxev":    _flt(p.get("max_ev")),
             "hrfb":     _flt(p.get("hrfb")),
             "pitcher_name":      p.get("pitcher_name", None),

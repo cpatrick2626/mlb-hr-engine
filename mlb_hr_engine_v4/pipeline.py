@@ -494,6 +494,7 @@ def _build_player_profile(
         "pitcher_vuln": _pitcher_vulnerability_tier(pitcher_hr9),
         "batter_bb_pct": round(_bb / season_pa, 3) if season_pa > 0 else None,
         "batter_k_pct":  round(season_k / season_pa, 3) if season_pa > 0 else None,
+        # Bat-tracking summary is display-only; never read by scoring, filters, or ranking.
         **statcast_client.bat_tracking_summary(player_id, bat_tracking_data or {}),
         # Pitcher season stats (display only — not used in model)
         "pitcher_era":    _safe_float(pitcher_stats.get("era")),
