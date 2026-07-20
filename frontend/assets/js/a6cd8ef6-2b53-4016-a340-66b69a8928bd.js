@@ -59,9 +59,10 @@ function MasterDashboard() {
   const roomKey = active.engineId;
   const currentFilters = roomFilters[roomKey] || null;
 
-  // Save TCC filters to the room you're in.
-  const onApplyFilters = (filters) => {
-    setRoomFilters((prev) => ({ ...prev, [roomKey]: filters }));
+  // Save TCC filters to the active room, or an explicitly targeted room when
+  // restoring a named MAIN/JIG build.
+  const onApplyFilters = (filters, targetRoomKey = roomKey) => {
+    setRoomFilters((prev) => ({ ...prev, [targetRoomKey]: filters }));
   };
   const onClearFilters = () => {
     setRoomFilters((prev) => { const n = { ...prev }; delete n[roomKey]; return n; });
@@ -194,6 +195,7 @@ function MasterDashboard() {
             ccOpen={ccOpen}
             onCloseCC={() => setCcOpen(false)}
             appliedFilters={currentFilters}
+            roomFilters={roomFilters}
             onApplyFilters={onApplyFilters}
             onClearFilters={onClearFilters}
             onOpenPlayer={() => {}} />

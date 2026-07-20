@@ -2017,8 +2017,23 @@ html, body {
 .jig-bar__title { font-family: var(--font-display); font-weight: 800; font-size: 18px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg-1); }
 .jig-bar__preset { font-family: var(--font-display); font-weight: 600; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg-2); }
 .jig-bar__k { color: var(--fg-4); }
-.jig-bar__actions { display: flex; align-items: center; gap: 10px; }
+.jig-bar__actions { display: flex; align-items: center; gap: 10px; position: relative; }
 .jig-bar__flash { font-family: var(--font-display); font-weight: 700; font-size: 11px; letter-spacing: 0.1em; color: var(--green-500); text-shadow: 0 0 8px rgba(26,255,102,0.5); }
+.jig-bar__flash--error { color: var(--red-500); text-shadow: none; }
+.jig-bar__flash--neutral { color: var(--cyan-400, #00d9ff); text-shadow: none; }
+.jig-load { position: relative; }
+.jig-load__menu {
+  position: absolute; z-index: 40; top: calc(100% + 8px); right: 0; width: min(300px, 82vw);
+  padding: 8px; border: 1px solid rgba(0,217,255,0.26); border-radius: 7px;
+  background: var(--bg-raised, #0e1519); box-shadow: 0 14px 36px rgba(0,0,0,0.58), inset 0 1px 0 rgba(0,217,255,0.09);
+}
+.jig-load__head { display: flex; align-items: center; justify-content: space-between; padding: 3px 4px 7px; font-family: var(--font-display); font-size: 10px; font-weight: 800; letter-spacing: 0.16em; color: var(--fg-3); }
+.jig-load__close { border: 0; background: transparent; color: var(--fg-3); font: inherit; font-size: 17px; line-height: 1; cursor: pointer; }
+.jig-load__list { display: flex; flex-direction: column; gap: 4px; max-height: 248px; overflow-y: auto; }
+.jig-load__item { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 9px 10px; border: 1px solid rgba(180,220,200,0.10); border-radius: 4px; background: rgba(180,220,200,0.035); color: var(--fg-1); font-family: var(--font-display); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-align: left; cursor: pointer; transition: border-color .2s, background .2s, transform .15s; }
+.jig-load__item:hover, .jig-load__item:focus-visible { border-color: rgba(0,217,255,0.42); background: rgba(0,217,255,0.07); outline: none; }
+.jig-load__item:active { transform: translateY(1px); }
+.jig-load__apply { color: var(--cyan-400, #00d9ff); font-size: 9px; letter-spacing: 0.14em; }
 
 /* ===== (legacy) JIG command-center overrides ===== */
 .hr-cc--jig {
