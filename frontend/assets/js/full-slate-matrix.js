@@ -1354,6 +1354,12 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false, isJi
       .catch(() => setFetchState("error"));
   }, [pitcherId, batterId]);
 
+  const [slipSt, setSlipSt] = React.useState(() => window.__hrSlip ? window.__hrSlip.getState() : { cardStatus: {} });
+  React.useEffect(() => {
+    if (!window.__hrSlip) return;
+    return window.__hrSlip.subscribe(() => setSlipSt(window.__hrSlip.getState()));
+  }, []);
+
   const arsenal    = detail ? (detail.arsenal || []) : [];
   const pitchStats = detail ? (detail.pitch_stats || {}) : {};
   const bvp        = detail ? (detail.batter_vs_pitches || {}) : {};
@@ -1419,10 +1425,36 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false, isJi
   const pitcherConfirmed = row.pitcher_confirmed === true;
   const aeiState = isConfirmed ? "CONFIRMED" : (pitcherConfirmed ? "PROJECTION" : null);
 
+  const aeiBoard = isJigContext || builderMode ? 'jig' : (row._board || 'main');
+  const addStatus = (slipSt.cardStatus && row.id && slipSt.cardStatus[row.id]) || 'idle';
+  const handlePick = () => {
+    if (!window.__hrSlip) return;
+    window.__hrSlip.requestAdd({
+      player_id:       row.id,
+      name:            batterName,
+      teamAbbr:        row.teamAbbr,
+      team:            row.teamAbbr,
+      pitcher:         row.pitcher_name,
+      pitcher_name:    row.pitcher_name,
+      model_prob:      row.model_prob,
+      tier:            row.tier,
+      model_tier_rank: row.model_tier_rank,
+      board:           aeiBoard,
+      hrprob:          row.hrprob,
+      barrel:          row.barrel,
+      hh:              row.hh,
+      fd_bet_link:     row.fd_bet_link,
+      fd_event_link:   row.fd_event_link,
+      signal_snapshot: fsmBuildSnapshot(row, aeiBoard, null),
+    });
+  };
+
   return (
     <div className="fsm-card aei-wrap">
-      <button className="fsm-card__close fsm-card__close--abs" onClick={onClose} aria-label="Close">✕</button>
-
+      <div className="aei-top-bar">
+        <button className="fsm-card__close" onClick={onClose} aria-label="Close">✕</button>
+      </div>
+      <div className="aei-scroll-body">
       <div className="aei-header">
         <div className="aei-header__title">ARSENAL EDGE INTEL</div>
         {aeiState && <div className={`aei-header__state aei-header__state--${aeiState.toLowerCase()}`}>{aeiState}</div>}
@@ -1769,11 +1801,17 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false, isJi
       <div className="fsm-card__foot">
         <button className="fsm-card__pitchbtn" onClick={onBatter}>← BATTER CARD</button>
         {!builderMode && (
-          <a className="fsm-card__fd" href={fsmFanDuelUrl(batterName)} target="_blank" rel="noopener"
-             onClick={(e) => fsmOpenFanDuelSearch(e, batterName)}>
-            + ADD {bLast.toUpperCase()} TO FANDUEL
-          </a>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button
+              className={"aei-pick-btn" + (addStatus === 'added' ? ' aei-pick-btn--added' : '')}
+              onClick={handlePick}
+              disabled={addStatus === 'loading'}
+            >
+              {addStatus === 'added' ? '✓ PICKED' : addStatus === 'loading' ? '…' : '+ PICK'}
+            </button>
+          </div>
         )}
+      </div>
       </div>
     </div>
   );
