@@ -94,11 +94,11 @@ const fdeg = (v) => v.toFixed(1) + "°";
 const FSM_COLS = [
 { key: "odds", head: "ODDS", title: "HR prop odds (American)", group: "STATS", mode: "odds", fmt: (v) => String(v) },
 { key: "hr", head: "HR", title: "Home runs — REAL vs-hand split count in VS HAND mode (PA always shown; thin <30 PA tagged amber); season total in SEASON mode", group: "STATS", bucketsHi: [28, 18, 10, 5], fmt: (v) => String(v) },
-{ key: "barrel", head: "BARREL%", title: "Barrel rate — optimal EV + launch-angle contact, the best HR predictor", group: "STATCAST", bucketsHi: [8, 6, 4.5, 3], fmt: fp },
+{ key: "barrel", head: "BARREL%", title: "Barrel rate (Savant brl_pa: barrels per plate appearance, not per batted-ball event) — optimal EV + launch-angle contact, the best HR predictor", group: "STATCAST", bucketsHi: [8, 6, 4.5, 3], fmt: fp },
 { key: "xslg", head: "xSLG", title: "Expected slugging from quality of contact", group: "STATS", bucketsHi: [0.520, 0.450, 0.400, 0.350], fmt: f3d },
-{ key: "iso", head: "ISO", title: "Isolated power (SLG − AVG) — REAL vs-hand split when available (thin samples tagged with PA); SZN = season-blended fallback", group: "STATS", bucketsHi: [0.250, 0.180, 0.120, 0.070], fmt: f3d },
+{ key: "iso", head: "xISO", title: "Expected isolated power (xSLG − xBA) from quality of contact — season Statcast stat; not split-adjustable", group: "STATS", bucketsHi: [0.250, 0.180, 0.120, 0.070], fmt: f3d },
 { key: "hh", head: "HH%", title: "Hard-hit rate (95+ mph exit velo)", group: "STATCAST", bucketsHi: [45, 40, 34, 28], fmt: fp },
-{ key: "pullair", head: "PULLAIR%", title: "Pulled-air rate — fly balls/liners to the pull side, prime HR contact", group: "STATCAST", bucketsHi: [26, 21, 16, 12], fmt: fp },
+{ key: "pullair", head: "PULLAIR%", title: "Pull-air proxy: pulled FB+LD as share of ALL batted-ball events (pull% × (FB%+LD%)), not pulled air balls only — approximates pulled-air contact tendency", group: "STATCAST", bucketsHi: [26, 21, 16, 12], fmt: fp },
 { key: "blast", head: "BLAST%", title: "Blast rate — fast swing + squared-up contact", group: "STATCAST", bucketsHi: [16, 11, 7, 4], fmt: fp, na: "--" },
 { key: "maxev", head: "MAX EV", title: "Max exit velocity (mph) — peak raw power", group: "STATCAST", bucketsHi: [112, 109, 106, 103], fmt: f1 },
 { key: "squp", head: "SQUP%", title: "Squared-up rate — efficiency of contact vs max EV", group: "STATCAST", bucketsHi: [30, 25, 20, 15], fmt: fp, na: "--" },
@@ -109,7 +109,7 @@ const FSM_COLS = [
 { key: "slg", head: "SLG", title: "Slugging percentage — REAL vs-hand split when available (thin samples tagged with PA); SZN = season-blended fallback", group: "STATS", bucketsHi: [0.520, 0.460, 0.410, 0.370], fmt: f3d },
 { key: "fast", head: "FAST%", title: "Fast-swing rate — swings at 75+ mph bat speed", group: "STATCAST", bucketsHi: [40, 28, 18, 10], fmt: fp, na: "--" },
 { key: "xwoba", head: "xwOBA", title: "Expected weighted on-base average", group: "STATS", bucketsHi: [0.350, 0.330, 0.310, 0.290], fmt: f3d },
-{ key: "obp", head: "OBP", title: "On-base percentage", group: "STATS", bucketsHi: [0.360, 0.335, 0.310, 0.290], fmt: f3d },
+{ key: "obp", head: "OBP", title: "On-base percentage — approximation; sacrifice flies (SF) excluded from denominator (source limitation)", group: "STATS", bucketsHi: [0.360, 0.335, 0.310, 0.290], fmt: f3d },
 { key: "avg", head: "AVG", title: "Batting average — REAL vs-hand split when available (thin samples tagged with PA); SZN = season-blended fallback", group: "STATS", bucketsHi: [0.290, 0.265, 0.240, 0.215], fmt: f3d },
 { key: "babip", head: "BABIP", title: "Batting average on balls in play", group: "STATS", bucketsHi: [0.330, 0.300, 0.270, 0.240], fmt: f3d },
 { key: "bbpct", head: "BB%", title: "Walk rate", group: "STATS", bucketsHi: [12, 9, 7, 5], fmt: fp },
@@ -939,7 +939,7 @@ function FsmBatterCard({ row, onClose, onPitch, builderMode = false }) {
             <div className="fsm-hb__rates">
               <div><span className="fsm-hb__rval">{fsmS3(rawRow.avg)}</span><span className="fsm-hb__rlbl">AVG</span></div>
               <div><span className="fsm-hb__rval">{fsmS3(rawRow.slg)}</span><span className="fsm-hb__rlbl">SLG</span></div>
-              <div><span className="fsm-hb__rval">{rawRow.iso != null ? fsmS3(rawRow.iso) : (rawRow.slg != null && rawRow.avg != null ? fsmS3(+(rawRow.slg - rawRow.avg).toFixed(3)) : "—")}</span><span className="fsm-hb__rlbl">ISO</span></div>
+              <div><span className="fsm-hb__rval">{rawRow.iso != null ? fsmS3(rawRow.iso) : (rawRow.slg != null && rawRow.avg != null ? fsmS3(+(rawRow.slg - rawRow.avg).toFixed(3)) : "—")}</span><span className="fsm-hb__rlbl">xISO</span></div>
             </div>
           </div>
           {/* vs LHP / vs RHP columns */}
@@ -1676,7 +1676,7 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false, isJi
             <div className="aei-chips">
               {[
                 ["AVG",     fsmS3(row.avg)],
-                ["ISO",     fsmS3(iso)],
+                ["xISO",    fsmS3(iso)],
                 ["HR",      row.hr     != null ? String(row.hr)        : "—"],
                 ["K%",      row.kpct   != null ? row.kpct.toFixed(1)   : "—"],
                 ["BARREL%", row.barrel != null ? row.barrel.toFixed(1) : "—"],
