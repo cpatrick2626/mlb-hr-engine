@@ -8,7 +8,9 @@ a single dict that both the CLI display and the Streamlit UI can consume.
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import date, timedelta, datetime, timezone
 from rapidfuzz import fuzz, process as fuzz_process
+import logging
 import math
+import os
 import unicodedata
 
 import config
@@ -40,6 +42,107 @@ AUTO_LEARN_FROZEN = True
 # Typical batting-slot cache — populated once per slate run by _fetch_typical_slots()
 # before the parallel profile phase. Read-only during threading. {player_id: mode_slot}
 _TYPICAL_SLOT_CACHE: dict[int, int] = {}
+
+_LOG = logging.getLogger(__name__)
+_WAREHOUSE_EXECUTOR = ThreadPoolExecutor(
+    max_workers=1,
+    thread_name_prefix="batter-stat-history",
+)
+
+
+def _warehouse_json_value(value):
+    """Deeply normalize a value for JSONB without dropping payload fields."""
+    if value is None or isinstance(value, (str, bool, int)):
+        return value
+    if isinstance(value, float):
+        return value if math.isfinite(value) else None
+    if isinstance(value, (datetime, date)):
+        return value.isoformat()
+    if isinstance(value, dict):
+        return {str(key): _warehouse_json_value(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_warehouse_json_value(item) for item in value]
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+
+    # NumPy/pandas scalars expose item(); normalize the underlying Python value.
+    try:
+        scalar = value.item()
+    except (AttributeError, TypeError, ValueError):
+        scalar = value
+    if scalar is not value:
+        return _warehouse_json_value(scalar)
+
+    # Preserve otherwise unsupported values as text rather than deleting fields.
+    return str(value)
+
+
+def _write_batter_stat_history(
+    slate_date: str,
+    run_ts: str,
+    players: tuple[dict, ...],
+) -> None:
+    """Background worker: batch-upsert one immutable unified slate snapshot."""
+    try:
+        rows = []
+        for player in players:
+            batter_id = player.get("player_id")
+            game_pk = player.get("game_pk")
+            if batter_id is None or game_pk is None:
+                raise ValueError(
+                    "warehouse capture requires player_id and game_pk for every batter"
+                )
+            rows.append({
+                "slate_date": slate_date,
+                "run_ts": run_ts,
+                "batter_id": int(batter_id),
+                "game_pk": int(game_pk),
+                "raw_payload": _warehouse_json_value(player),
+            })
+
+        if not rows:
+            return
+
+        # A dedicated client keeps this background write isolated from the
+        # board/cache persistence client used concurrently by API/cron callers.
+        from supabase import create_client
+
+        warehouse_client = create_client(
+            os.environ["SUPABASE_URL"],
+            os.environ["SUPABASE_SERVICE_KEY"],
+        )
+        warehouse_client.table("batter_stat_history").upsert(
+            rows,
+            on_conflict="slate_date,run_ts,batter_id,game_pk",
+        ).execute()
+        _LOG.info(
+            "[warehouse] batter_stat_history captured %d rows for %s at %s",
+            len(rows), slate_date, run_ts,
+        )
+    except Exception as exc:
+        _LOG.warning(
+            "[warehouse] batter_stat_history capture failed (non-fatal): %s",
+            exc,
+            exc_info=True,
+        )
+
+
+def _schedule_batter_stat_history_capture(slate_date: str, players: list[dict]) -> None:
+    """Submit capture without waiting; board generation always continues."""
+    run_ts = datetime.now(timezone.utc).isoformat()
+    try:
+        _WAREHOUSE_EXECUTOR.submit(
+            _write_batter_stat_history,
+            slate_date,
+            run_ts,
+            tuple(players),
+        )
+    except Exception as exc:
+        _LOG.warning(
+            "[warehouse] batter_stat_history scheduling failed (non-fatal): %s",
+            exc,
+            exc_info=True,
+        )
 
 
 # ── Core helpers (same logic as v3 main.py, extracted here) ──────────────────
@@ -1054,6 +1157,10 @@ def load_game_data(
     # Auto parlay combos (legacy leg-count view + new profile-based view)
     auto_parlays    = parlay_engine.build_auto_parlays(ranked)
     profile_parlays = build_profile_parlays(all_players)
+
+    # Warehouse Phase 1: capture the complete unified pre-split batter payload.
+    # Submission is asynchronous and never gates the live board return path.
+    _schedule_batter_stat_history_capture(game_date, all_players)
 
     return {
         "date":         game_date,
