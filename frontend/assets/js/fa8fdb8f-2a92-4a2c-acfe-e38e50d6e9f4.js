@@ -14,7 +14,27 @@ const StageCommand = ({ engine, lens, onClose, initialFilters, roomFilters, onAp
   const [draft, setDraft] = React.useState(seed);
   const [resetKey, setResetKey] = React.useState(0);
   const [justApplied, setJustApplied] = React.useState(false);
+  const ccRef = React.useRef(null);
+  const stickyHeadRef = React.useRef(null);
   const { preset, feedback, builds, loadOpen, busy, setLoadOpen, doSave, doLoad, applyBuild } = useTccBuildSaver({ roomFilters, onApplyFilters: onApply });
+
+  React.useLayoutEffect(() => {
+    const cc = ccRef.current;
+    const head = stickyHeadRef.current;
+    if (!cc || !head) return undefined;
+    const syncStickyHeight = () => {
+      cc.style.setProperty("--md-cc-sticky-head-height", `${Math.ceil(head.getBoundingClientRect().height)}px`);
+    };
+    syncStickyHeight();
+    const observer = typeof ResizeObserver === "function" ? new ResizeObserver(syncStickyHeight) : null;
+    observer?.observe(head);
+    window.addEventListener("resize", syncStickyHeight);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", syncStickyHeight);
+      cc.style.removeProperty("--md-cc-sticky-head-height");
+    };
+  }, []);
 
   const set = (patch) => { setDraft((d) => ({ ...d, ...patch })); setJustApplied(false); };
   const active = countActiveFilters(draft);
@@ -26,40 +46,47 @@ const StageCommand = ({ engine, lens, onClose, initialFilters, roomFilters, onAp
   const doApply = () => { onApply(draft); setJustApplied(true); setTimeout(() => onClose(), 650); };
 
   return (
-    <div className="md-cc">
-      <div className="md-cc__bar">
-        <div className="md-cc__titlewrap">
-          <span className="md-cc__logo" style={{ color: accent }}><Icon name="gear" size={18} color="currentColor" /></span>
-          <span className="md-cc__title">Tactical Command Center</span>
-          <span className="md-cc__ctx" style={{ "--ctx-color": accent }}>TUNING <b>{ctx}</b></span>
-        </div>
-        <div className="md-cc__baractions">
-          <span className="md-cc__filters" data-on={active > 0}>
-            <Icon name="filter" size={13} color="currentColor" /> {active} ACTIVE
-          </span>
-          <button className="md-cc__reset" onClick={doReset}>RESET</button>
-          {feedback && <span className={`jig-bar__flash jig-bar__flash--${feedback.kind}`} role="status" aria-live="polite">{feedback.kind === "success" ? "✓ " : ""}{feedback.text}</span>}
-          <button className="hr-btn hr-btn--ghost" onClick={doSave} disabled={busy !== null}>{busy === "save" ? "SAVING…" : "SAVE BUILD"}</button>
-          <div className="jig-load">
-            <button className="hr-btn hr-btn--ghost" onClick={doLoad} disabled={busy !== null} aria-expanded={loadOpen}>{busy === "load" ? "LOADING…" : "LOAD BUILD"}</button>
-            {loadOpen && (
-              <div className="jig-load__menu" role="dialog" aria-label="Saved TCC builds">
-                <div className="jig-load__head"><span>SAVED BUILDS</span><button className="jig-load__close" onClick={() => setLoadOpen(false)} aria-label="Close saved builds">×</button></div>
-                <div className="jig-load__list">
-                  {builds.map((build) => <button className="jig-load__item" key={build.build_id || build.name} onClick={() => applyBuild(build)}><span>{build.name}</span><span className="jig-load__apply">APPLY</span></button>)}
-                </div>
-              </div>
-            )}
+    <div className="md-cc" ref={ccRef}>
+      <div className="md-cc__sticky-head" ref={stickyHeadRef}>
+        <div className="md-cc__bar">
+          <div className="md-cc__titlewrap">
+            <span className="md-cc__logo" style={{ color: accent }}><Icon name="gear" size={18} color="currentColor" /></span>
+            <span className="md-cc__title">Tactical Command Center</span>
+            <span className="md-cc__ctx" style={{ "--ctx-color": accent }}>TUNING <b>{ctx}</b></span>
           </div>
-          <button className="md-cc__apply" onClick={doApply}>
-            {justApplied ? "✓ APPLIED" : "APPLY TO ROOM"}
-          </button>
-          <button className="md-cc__close" onClick={onClose} title="Close">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
-          </button>
+          <div className="md-cc__baractions">
+            <div className="md-cc__build-actions">
+              <span className="md-cc__filters" data-on={active > 0}>
+                <Icon name="filter" size={13} color="currentColor" /> {active} ACTIVE
+              </span>
+              <button className="md-cc__reset" onClick={doReset}>RESET</button>
+              {feedback && <span className={`jig-bar__flash jig-bar__flash--${feedback.kind}`} role="status" aria-live="polite">{feedback.kind === "success" ? "✓ " : ""}{feedback.text}</span>}
+              <button className="hr-btn hr-btn--ghost" onClick={doSave} disabled={busy !== null}>{busy === "save" ? "SAVING…" : "SAVE BUILD"}</button>
+              <div className="jig-load">
+                <button className="hr-btn hr-btn--ghost" onClick={doLoad} disabled={busy !== null} aria-expanded={loadOpen}>{busy === "load" ? "LOADING…" : "LOAD BUILD"}</button>
+                {loadOpen && (
+                  <div className="jig-load__menu" role="dialog" aria-label="Saved TCC builds">
+                    <div className="jig-load__head"><span>SAVED BUILDS</span><button className="jig-load__close" onClick={() => setLoadOpen(false)} aria-label="Close saved builds">×</button></div>
+                    <div className="jig-load__list">
+                      {builds.map((build) => <button className="jig-load__item" key={build.build_id || build.name} onClick={() => applyBuild(build)}><span>{build.name}</span><span className="jig-load__apply">APPLY</span></button>)}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+            <div className="md-cc__apply-actions">
+              <button className="md-cc__apply" onClick={doApply}>
+                {justApplied ? "✓ APPLIED" : "APPLY TO ROOM"}
+              </button>
+              <button className="md-cc__close" onClick={onClose} title="Close">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
+      <div className="md-cc__body">
       {!lens && (
         <div className="md-cc__note">This room has no filterable slate — tuning applies to MAIN and JIG lenses (Full Slate, Top Targets).</div>
       )}
@@ -76,15 +103,15 @@ const StageCommand = ({ engine, lens, onClose, initialFilters, roomFilters, onAp
 
         <FilterPanel num="2" title="LAUNCH & CONTACT SHAPE" cols={2}>
           <Stepper label="Pull Air %" value={draft.minPullAir} step={0.5} decimals={1} max={100} onChange={(v) => set({ minPullAir: v })} />
-          <Stepper label="Launch Angle" unit="(°)" value={0} step={0.5} decimals={1} min={-20} max={60} />
+          <Stepper label="Launch Angle" unit="(°)" value={draft.minLaunchAngle} step={0.5} decimals={1} min={-20} max={60} onChange={(v) => set({ minLaunchAngle: v })} />
           <Stepper label="HR Window %" value={0} step={0.5} decimals={1} max={100} />
           <Stepper label="Sweet Spot %" value={draft.minSweet} step={0.5} decimals={1} max={100} onChange={(v) => set({ minSweet: v })} />
           <Stepper label="Fly Ball %" value={draft.minFB} step={0.5} decimals={1} max={100} onChange={(v) => set({ minFB: v })} />
         </FilterPanel>
 
         <FilterPanel num="3" title="MATCHUP & SPLITS" cols={2}>
-          <Stepper label="vs RHP ISO" value={0} step={0.005} decimals={3} max={1} />
-          <Stepper label="vs LHP ISO" value={0} step={0.005} decimals={3} max={1} />
+          <Stepper label="vs RHP ISO" value={draft.minRHPISO} step={0.005} decimals={3} max={1} onChange={(v) => set({ minRHPISO: v })} />
+          <Stepper label="vs LHP ISO" value={draft.minLHPISO} step={0.005} decimals={3} max={1} onChange={(v) => set({ minLHPISO: v })} />
           <Stepper label="Pitch Type Damage %" value={0} step={0.5} decimals={1} max={100} />
           <Stepper label="Min Matchup Modifier %" value={75} step={1} decimals={0} max={100} />
           <Stepper label="Min HVY Score" value={0} step={1} decimals={0} max={100} />
@@ -92,10 +119,10 @@ const StageCommand = ({ engine, lens, onClose, initialFilters, roomFilters, onAp
 
         <FilterPanel num="4" title="PITCHER VULNERABILITY" cols={2}>
           <Stepper label="Total HR Allowed" value={0} step={1} decimals={0} max={100} />
-          <Stepper label="HR/9" value={0} step={0.01} decimals={2} max={10} />
-          <Stepper label="Barrel % Allowed" value={0} step={0.5} decimals={1} max={100} />
-          <Stepper label="Hard Hit % Allowed" value={0} step={0.5} decimals={1} max={100} />
-          <Stepper label="Fly Ball % Allowed" value={0} step={0.5} decimals={1} max={100} />
+          <Stepper label="HR/9" value={draft.minHR9} step={0.01} decimals={2} max={10} onChange={(v) => set({ minHR9: v })} />
+          <Stepper label="Barrel % Allowed" value={draft.minBarrelAllowed} step={0.5} decimals={1} max={100} onChange={(v) => set({ minBarrelAllowed: v })} />
+          <Stepper label="Hard Hit % Allowed" value={draft.minHHAllowed} step={0.5} decimals={1} max={100} onChange={(v) => set({ minHHAllowed: v })} />
+          <Stepper label="Fly Ball % Allowed" value={draft.minFBAllowed} step={0.5} decimals={1} max={100} onChange={(v) => set({ minFBAllowed: v })} />
           <Stepper label="Pull Damage Allowed %" value={0} step={0.5} decimals={1} max={100} />
         </FilterPanel>
 
@@ -146,6 +173,7 @@ const StageCommand = ({ engine, lens, onClose, initialFilters, roomFilters, onAp
         <span>SCOPE: <b style={{ color: accent }}>{ctx}</b></span>
         <span>{active > 0 ? `${active} FILTER${active > 1 ? "S" : ""} STAGED — APPLY TO SAVE` : `BUILD: ${preset}`}</span>
         <span style={{ marginLeft: "auto" }}>SOURCE: MLB STATS API</span>
+      </div>
       </div>
     </div>
   );

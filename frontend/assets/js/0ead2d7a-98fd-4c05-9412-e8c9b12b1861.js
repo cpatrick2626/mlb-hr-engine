@@ -83,6 +83,9 @@ window.ENGINES = [
 window.FILTER_DEFAULTS = {
   minBarrel: 0, minHH: 0, minEV: 0,
   minISO: 0, minXSLG: 0, minHRFB: 0, minPullAir: 0, minSweet: 0, minFB: 0,
+  minLaunchAngle: 0,
+  minRHPISO: 0, minLHPISO: 0,
+  minHR9: 0, minBarrelAllowed: 0, minHHAllowed: 0, minFBAllowed: 0,
   minHRProb: 0,
   sortKey: "none", sortDir: "Descending", maxPlayers: 999,
   excludeStarted: false,
@@ -114,6 +117,13 @@ window.applyRoomFilters = function (rows, f) {
     if (f.minPullAir && !(r.pullair >= f.minPullAir))  return false;
     if (f.minSweet   && !(r.sweet   >= f.minSweet))    return false;
     if (f.minFB      && !(r.fb      >= f.minFB))       return false;
+    if (f.minLaunchAngle && !(r.la >= f.minLaunchAngle)) return false;
+    if (f.minRHPISO  && !(r.vs_rhp_iso >= f.minRHPISO)) return false;
+    if (f.minLHPISO  && !(r.vs_lhp_iso >= f.minLHPISO)) return false;
+    if (f.minHR9     && !(r.opphr >= f.minHR9))          return false;
+    if (f.minBarrelAllowed && !(r.pitcher_barrel_allowed != null && r.pitcher_barrel_allowed * 100 >= f.minBarrelAllowed)) return false;
+    if (f.minHHAllowed     && !(r.pitcher_hh_allowed     != null && r.pitcher_hh_allowed     * 100 >= f.minHHAllowed))     return false;
+    if (f.minFBAllowed     && !(r.pitcher_fb_allowed     != null && r.pitcher_fb_allowed     * 100 >= f.minFBAllowed))     return false;
     if (f.minHRProb  && !(r.hrprob  >= f.minHRProb))   return false;
     // Game Context filters
     if (f.confirmedLineupsOnly && !r.pitcher_confirmed) return false;
@@ -158,6 +168,13 @@ window.countActiveFilters = function (f) {
   if (f.minPullAir > d.minPullAir) n++;
   if (f.minSweet   > d.minSweet)   n++;
   if (f.minFB      > d.minFB)      n++;
+  if (f.minLaunchAngle > d.minLaunchAngle) n++;
+  if (f.minRHPISO  > d.minRHPISO)  n++;
+  if (f.minLHPISO  > d.minLHPISO)  n++;
+  if (f.minHR9     > d.minHR9)     n++;
+  if (f.minBarrelAllowed > d.minBarrelAllowed) n++;
+  if (f.minHHAllowed     > d.minHHAllowed)     n++;
+  if (f.minFBAllowed     > d.minFBAllowed)     n++;
   if (f.minHRProb  > d.minHRProb)  n++;
   if (f.sortKey && f.sortKey !== "none") n++;
   if (f.maxPlayers != null && f.maxPlayers !== d.maxPlayers) n++;
