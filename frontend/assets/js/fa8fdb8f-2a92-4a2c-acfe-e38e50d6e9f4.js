@@ -113,12 +113,14 @@ const StageCommand = ({ engine, lens, onClose, initialFilters, roomFilters, onAp
           <Stepper label="vs RHP ISO" value={draft.minRHPISO} step={0.005} decimals={3} max={1} onChange={(v) => set({ minRHPISO: v })} />
           <Stepper label="vs LHP ISO" value={draft.minLHPISO} step={0.005} decimals={3} max={1} onChange={(v) => set({ minLHPISO: v })} />
           <Stepper label="Pitch Type Damage %" value={0} step={0.5} decimals={1} max={100} />
-          <Stepper label="Min Matchup Modifier %" value={75} step={1} decimals={0} max={100} />
+          {engine.id === "jig"
+            ? <Stepper label="Min Matchup Modifier %" value={draft.minMatchupModifier} step={1} decimals={0} min={75} max={140} onChange={(v) => set({ minMatchupModifier: v })} />
+            : <Stepper label="Min Matchup Modifier %" value={75} step={1} decimals={0} max={100} />}
           <Stepper label="Min HVY Score" value={0} step={1} decimals={0} max={100} />
         </FilterPanel>
 
         <FilterPanel num="4" title="PITCHER VULNERABILITY" cols={2}>
-          <Stepper label="Total HR Allowed" value={0} step={1} decimals={0} max={100} />
+          <Stepper label="Total HR Allowed" value={draft.minPitcherHRAllowed} step={1} decimals={0} max={100} onChange={(v) => set({ minPitcherHRAllowed: v })} />
           <Stepper label="HR/9" value={draft.minHR9} step={0.01} decimals={2} max={10} onChange={(v) => set({ minHR9: v })} />
           <Stepper label="Barrel % Allowed" value={draft.minBarrelAllowed} step={0.5} decimals={1} max={100} onChange={(v) => set({ minBarrelAllowed: v })} />
           <Stepper label="Hard Hit % Allowed" value={draft.minHHAllowed} step={0.5} decimals={1} max={100} onChange={(v) => set({ minHHAllowed: v })} />
@@ -143,10 +145,10 @@ const StageCommand = ({ engine, lens, onClose, initialFilters, roomFilters, onAp
         </FilterPanel>
 
         <FilterPanel num="7" title="MOMENTUM & RECENCY" cols={2}>
-          <Stepper label="Recent HRs" unit="(7G)" value={0} step={1} decimals={0} max={50} />
+          <Stepper label="Recent HRs" unit="(10G)" value={draft.minRecentHRs} step={1} decimals={0} max={50} onChange={(v) => set({ minRecentHRs: v })} />
           <Stepper label="Recent Hard Hit %" unit="(7G)" value={0} step={0.5} decimals={1} max={100} />
           <Stepper label="Recent Barrel %" value={0} step={0.5} decimals={1} max={100} />
-          <Stepper label="Hot Streak Indicator" value={0} step={1} decimals={0} max={100} />
+          <Stepper label="Hot Streak Indicator" value={draft.minStreakFactor} step={0.01} decimals={2} min={0.89} max={1.12} onChange={(v) => set({ minStreakFactor: v })} />
           <Stepper label="Recent EV Trend" unit="(7G)" value={0} step={0.5} decimals={1} min={-50} max={50} />
         </FilterPanel>
 
