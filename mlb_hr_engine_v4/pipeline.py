@@ -575,6 +575,8 @@ def _build_player_profile(
         "multi_season_vs_hand": multiseason_splits,
         "model_prob": round(model_prob, 4), "weather": weather,
         "pitcher_hr9": pitcher_hr9,
+        # Display-only raw season count; only pitcher_hr9 is a scoring input.
+        "pitcher_hr_allowed": pit_hrs,
         "short_form_pa": int(short_form.get("plateAppearances", 0)),
         "short_form_hr": int(short_form.get("homeRuns", 0)),
         # Display-only cache snapshot; never read by scoring, filters, or ranking.

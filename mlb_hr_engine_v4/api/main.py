@@ -51,7 +51,7 @@ from clients.batter_pitch_profile import (
     get_batter_pitch_profile_display,
     pitch_mix_verdict_display,
 )
-from clients.pitch_mix import canonical_pitch_type, get_batter_vs_pitches, get_pitcher_pitch_stats
+from clients.pitch_mix import canonical_pitch_type, get_batter_vs_pitches, get_pitcher_pitch_stats, load_hvy_context
 from config import FS_TIER_THRESHOLDS, JIG_TIER_THRESHOLDS
 from roles import classify_role
 
@@ -867,6 +867,10 @@ def _build_slate_payload(data: dict) -> dict:
             "pitcher_fb_allowed":     p.get("pitcher_fb_allowed"),
             "pitcher_gb_allowed":     p.get("pitcher_gb_allowed"),
             "pitcher_hr9":            p.get("pitcher_hr9"),
+            "pitcher_hr_allowed":     p.get("pitcher_hr_allowed"),
+            "short_form_hr":          p.get("short_form_hr"),
+            # Display-only passthrough. This factor is already applied once in pipeline scoring.
+            "streak_factor":          p.get("streak_factor"),
             "gameStartUtc":      p.get("game_time_utc", ""),
             "gameStatus":        p.get("game_status", "Scheduled"),
             "prime":             role["prime"],
@@ -910,6 +914,16 @@ def _build_slate_payload(data: dict) -> dict:
             if p is None:
                 p = players_by_id_fallback.get(r.get("id"), {})
             r["jigScore"] = _jig_score(p, arsenal_data=_arsenal_data)
+            try:
+                r["hvy_modifier"] = load_hvy_context(
+                    p, arsenal_data=_arsenal_data
+                ).get("hvy_modifier")
+            except Exception as e:
+                log.warning(
+                    "JIG hvy_modifier display fallback | player=%s pitcher=%s err=%s",
+                    p.get("player_name", "?"), p.get("pitcher_id"), e,
+                )
+                r["hvy_modifier"] = None
             # JIG-native display tier (additive; MAIN `tier` field untouched)
             r["jigTier"] = _jig_tier(r["jigScore"])
             # JIG projected: same _jig_score with announced pitcher fed in (already the case
