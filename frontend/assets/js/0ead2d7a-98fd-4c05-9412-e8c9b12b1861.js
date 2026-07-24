@@ -89,6 +89,7 @@ window.FILTER_DEFAULTS = {
   minHR9: 0, minBarrelAllowed: 0, minHHAllowed: 0, minFBAllowed: 0,
   minPitcherHRAllowed: 0,
   minRecentHRs: 0, minStreakFactor: 0.89,
+  minTempF: 0, minWindMph: 0, windDirection: "Any",
   minHRProb: 0,
   sortKey: "none", sortDir: "Descending", maxPlayers: 999,
   excludeStarted: false,
@@ -107,6 +108,15 @@ window.SORT_OPTIONS = [
   { label: "AVG",            key: "avg" },
   { label: "JIG Score",      key: "jigScore" },
 ];
+
+window.windDegToCompass = function (degrees) {
+  if (degrees == null || degrees === "") return null;
+  const numeric = Number(degrees);
+  if (!Number.isFinite(numeric)) return null;
+  const buckets = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+  const normalized = ((numeric % 360) + 360) % 360;
+  return buckets[Math.round(normalized / 45) % buckets.length];
+};
 
 window.applyRoomFilters = function (rows, f) {
   if (!f) return rows;
@@ -133,6 +143,15 @@ window.applyRoomFilters = function (rows, f) {
     if (f.minRecentHRs && !(r.short_form_hr != null && r.short_form_hr >= f.minRecentHRs)) return false;
     if (f.minStreakFactor > window.FILTER_DEFAULTS.minStreakFactor &&
         !(r.streak_factor != null && r.streak_factor >= f.minStreakFactor)) return false;
+    // Environment is display/filter only. Missing weather is explicitly allowed through.
+    if (f.minTempF && r.temp_f != null && Number.isFinite(Number(r.temp_f)) &&
+        Number(r.temp_f) < f.minTempF) return false;
+    if (f.minWindMph && r.wind_mph != null && Number.isFinite(Number(r.wind_mph)) &&
+        Number(r.wind_mph) < f.minWindMph) return false;
+    if (f.windDirection && f.windDirection !== "Any") {
+      const windDirection = window.windDegToCompass(r.wind_deg);
+      if (windDirection != null && windDirection !== f.windDirection) return false;
+    }
     if (f.minHRProb  && !(r.hrprob  >= f.minHRProb))   return false;
     // Game Context filters
     if (f.confirmedLineupsOnly && !r.pitcher_confirmed) return false;
@@ -188,6 +207,9 @@ window.countActiveFilters = function (f) {
   if (f.minFBAllowed     > d.minFBAllowed)     n++;
   if (f.minRecentHRs > d.minRecentHRs) n++;
   if (f.minStreakFactor > d.minStreakFactor) n++;
+  if (f.minTempF > d.minTempF) n++;
+  if (f.minWindMph > d.minWindMph) n++;
+  if (f.windDirection && f.windDirection !== d.windDirection) n++;
   if (f.minHRProb  > d.minHRProb)  n++;
   if (f.sortKey && f.sortKey !== "none") n++;
   if (f.maxPlayers != null && f.maxPlayers !== d.maxPlayers) n++;

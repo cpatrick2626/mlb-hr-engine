@@ -130,9 +130,9 @@ const StageCommand = ({ engine, lens, onClose, initialFilters, roomFilters, onAp
 
         <FilterPanel num="5" title="ENVIRONMENT" cols={2}>
           <Stepper label="Park HR Factor" value={0} step={0.5} decimals={1} max={200} />
-          <Stepper label="Wind" unit="(MPH)" value={0} step={0.5} decimals={1} max={60} />
-          <Dropdown label="Wind Direction" options={["Any", "Out to LF", "Out to CF", "Out to RF", "In from LF", "In from RF"]} />
-          <Stepper label="Temperature" unit="(°F)" value={0} step={1} decimals={1} min={0} max={120} />
+          <Stepper label="Wind" unit="(MPH)" value={draft.minWindMph} step={0.5} decimals={1} max={60} onChange={(v) => set({ minWindMph: v })} />
+          <Dropdown label="Wind Direction" value={draft.windDirection} options={["Any", "N", "NE", "E", "SE", "S", "SW", "W", "NW"]} onChange={(v) => set({ windDirection: v })} />
+          <Stepper label="Temperature" unit="(°F)" value={draft.minTempF} step={1} decimals={1} min={0} max={120} onChange={(v) => set({ minTempF: v })} />
           <Dropdown label="Air Density" options={["Any", "Low", "Average", "High"]} />
         </FilterPanel>
 
