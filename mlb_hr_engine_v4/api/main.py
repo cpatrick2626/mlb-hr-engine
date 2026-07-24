@@ -742,6 +742,26 @@ def _build_slate_payload(data: dict) -> dict:
             return f"{base_slug}-{game_pk}"
         return base_slug
 
+    # Pipeline owns the game-level numeric weather record. Index by both MLB
+    # game_pk and frontend gameId so player rows can join without reading the
+    # player-level weather dict that is used by scoring upstream.
+    _game_weather_by_pk = {}
+    _game_weather_by_id = {}
+    for game in data.get("games", []):
+        _game_pk = game.get("game_pk")
+        _weather = {
+            "temp_f": _flt(game.get("temp_f")),
+            "wind_mph": _flt(game.get("wind_mph")),
+            "wind_deg": _flt(game.get("wind_deg")),
+        }
+        if _game_pk is not None:
+            _game_weather_by_pk[str(_game_pk)] = _weather
+        _away = (game.get("away_team") or "").upper()
+        _home = (game.get("home_team") or "").upper()
+        if _away and _home:
+            _base_slug = f"{_away}-{_home}".lower().replace(" ", "-")
+            _game_weather_by_id[_game_slug(_base_slug, _game_pk)] = _weather
+
     leaderboard_rows = []
     for p in players:
         model_prob = float(p.get("model_prob") or 0)
@@ -769,6 +789,11 @@ def _build_slate_payload(data: dict) -> dict:
         derived_game_id = _game_slug(
             f"{away}-{home}".lower().replace(" ", "-"), p.get("game_pk")
         )
+        game_weather = (
+            _game_weather_by_pk.get(str(p.get("game_pk")))
+            if p.get("game_pk") is not None
+            else None
+        ) or _game_weather_by_id.get(derived_game_id, {})
 
         role = classify_role(p, tier)
         leaderboard_rows.append({
@@ -800,6 +825,10 @@ def _build_slate_payload(data: dict) -> dict:
             "gameId":   derived_game_id,
             # MLB game_pk pass-through (display/identity only — additive, not yet keyed on)
             "game_pk":  p.get("game_pk"),
+            # Game-level weather join (display/filter only; never scoring inputs).
+            "temp_f":   game_weather.get("temp_f"),
+            "wind_mph": game_weather.get("wind_mph"),
+            "wind_deg": game_weather.get("wind_deg"),
             "odds":     odds,
             # FanDuel deep links (display/handoff only — additive passthrough)
             "fd_event_link": p.get("fd_event_link"),
@@ -1001,7 +1030,17 @@ def _build_slate_payload(data: dict) -> dict:
             f"{_away}-{_home}".lower().replace(" ", "-"), p.get("game_pk")
         )
         if gid not in seen_games:
-            _w = p.get("weather")
+            _game_weather = (
+                _game_weather_by_pk.get(str(p.get("game_pk")))
+                if p.get("game_pk") is not None
+                else None
+            ) or _game_weather_by_id.get(gid, {})
+            _player_weather = p.get("weather")
+            _w = (
+                _game_weather
+                if any(value is not None for value in _game_weather.values())
+                else _player_weather
+            )
             _weather_str = (
                 f"{_w.get('temp_f', '')}°F · {_w.get('wind_mph', '')} mph"
                 if isinstance(_w, dict)
@@ -1019,6 +1058,10 @@ def _build_slate_payload(data: dict) -> dict:
                 "teams":    [_away, _home],
                 # MLB game_pk pass-through (additive — cards still keyed by team slug)
                 "game_pk":  p.get("game_pk"),
+                # Numeric environment fields are additive and display/filter only.
+                "temp_f":   _game_weather.get("temp_f"),
+                "wind_mph": _game_weather.get("wind_mph"),
+                "wind_deg": _game_weather.get("wind_deg"),
             }
 
     return {

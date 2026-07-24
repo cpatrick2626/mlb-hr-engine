@@ -1064,6 +1064,26 @@ def load_game_data(
             if p:
                 all_players.append(p)
 
+    # Additive game-level weather for downstream display/filter joins.
+    # Raw weather already influenced weather_factor above; these numeric copies
+    # are never read by scoring, ranking, qualification, or EV.
+    _weather_by_game_pk: dict[str, dict] = {}
+    for p in all_players:
+        _game_pk = p.get("game_pk")
+        if _game_pk is None:
+            continue
+        _weather_by_game_pk.setdefault(
+            str(_game_pk),
+            weather_client.display_weather_fields(p.get("weather")),
+        )
+    for game in games:
+        game.update(
+            _weather_by_game_pk.get(
+                str(game.get("game_pk")),
+                weather_client.display_weather_fields(None),
+            )
+        )
+
     _cb("Computing EV...")
     # Pre-build odds lookup structure once (O(n))
     odds_lookup, unique_names = _build_odds_lookup(all_props)
