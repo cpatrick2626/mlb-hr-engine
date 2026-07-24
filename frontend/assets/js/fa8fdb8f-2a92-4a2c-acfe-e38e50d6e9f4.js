@@ -116,7 +116,9 @@ const StageCommand = ({ engine, lens, onClose, initialFilters, roomFilters, onAp
           {engine.id === "jig"
             ? <Stepper label="Min Matchup Modifier %" value={draft.minMatchupModifier} step={1} decimals={0} min={75} max={140} onChange={(v) => set({ minMatchupModifier: v })} />
             : <Stepper label="Min Matchup Modifier %" value={75} step={1} decimals={0} max={100} />}
-          <Stepper label="Min HVY Score" value={0} step={1} decimals={0} max={100} />
+          {engine.id === "jig"
+            ? <Stepper label="Min HVY Score" value={draft.minHVYScore} step={1} decimals={0} max={100} onChange={(v) => set({ minHVYScore: v })} />
+            : <Stepper label="Min HVY Score" value={0} step={1} decimals={0} max={100} />}
         </FilterPanel>
 
         <FilterPanel num="4" title="PITCHER VULNERABILITY" cols={2}>

@@ -3051,6 +3051,10 @@ html, body { height: 100%; overflow: hidden; }
 }
 .md-cc__ctx b { color: var(--ctx-color, var(--cyan-300)); font-weight: 800; }
 .md-cc__baractions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.md-sticky-head,
+.md-cc__sticky-head,
+.md-cc__build-actions,
+.md-cc__apply-actions { display: contents; }
 .md-cc__filters {
   display: inline-flex; align-items: center; gap: 6px;
   font-family: var(--font-display);
@@ -3841,12 +3845,21 @@ button.fsm-tier { appearance: none; text-decoration: none; }
    MOBILE PHASE 1 — ≤ 768px
    ============================================================ */
 @media (max-width: 768px) {
-  /* 1 — Remove desktop viewport lock, enable vertical scroll */
-  html, body {
+  /* 1 — Remove desktop viewport lock, enable vertical scroll.
+     Only html gets overflow-y: auto (html = viewport scroller).
+     body must NOT get overflow-y: auto — if it did, body would become
+     the nearest scroll-container for sticky children, but body never
+     actually scrolls (height: auto expands to content), so sticky
+     top sections would be unable to stick. */
+  html {
     height: auto;
     overflow-x: hidden;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+  }
+  body {
+    height: auto;
+    overflow: visible;
   }
   #root {
     height: auto;
@@ -3861,8 +3874,23 @@ button.fsm-tier { appearance: none; text-decoration: none; }
   .md-app {
     height: auto;
     min-height: 100vh;
+    /* Keep the sticky slate head and the full slate in one document-height
+       containing block. A flex item may otherwise be constrained by its
+       sibling's layout bounds before the batter list has finished scrolling. */
+    display: block;
     padding: 0 10px 70px;
     gap: 8px;
+  }
+
+  /* Full Slate: collapse the desktop stage scroller into the mobile page
+     scroller so the sticky slate head owns the entire matrix/list length. */
+  .md-stage,
+  .md-stage__body {
+    display: block;
+    flex: none;
+    height: auto;
+    min-height: 0;
+    overflow: visible;
   }
 
   /* 3 — Sticky topbar, wraps to two rows on mobile */
@@ -3883,6 +3911,9 @@ button.fsm-tier { appearance: none; text-decoration: none; }
   .md-split {
     grid-template-columns: 1fr;
     gap: 8px;
+    /* Keep the slate in normal flow below the variable-height sticky head.
+       The wrapper retains its rendered height, so the first row starts flush
+       below it instead of being pulled up underneath it. */
   }
 
   /* 4 — Hide right sidebar */
@@ -3982,6 +4013,89 @@ button.fsm-tier { appearance: none; text-decoration: none; }
     height: 100vh;
     position: sticky;
     top: 0;
+  }
+}
+
+/* ============================================================
+   MOBILE: Slate sticky top section + TCC header/scroll fixes
+   ============================================================ */
+@media (max-width: 768px) {
+  /* -- Slate: stick the full mobile command block as one JSX unit -- */
+  .md-sticky-head {
+    display: block;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: var(--bg-void);
+  }
+  /* topbar is already sticky alone; inside wrapper it's just in-flow */
+  .md-sticky-head .md-topbar {
+    position: relative;
+    top: auto;
+  }
+
+  /* -- TCC: one sticky JSX wrapper containing all three header rows -- */
+  .md-cc__sticky-head {
+    display: block;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: var(--bg-void);
+    flex-shrink: 0;
+  }
+  .md-cc__bar {
+    position: relative;
+    top: auto;
+    z-index: auto;
+    flex-direction: column;
+    align-items: stretch;
+    padding: 10px 12px 8px;
+    gap: 6px;
+  }
+  .md-cc__titlewrap {
+    width: 100%;
+    min-width: 0;
+  }
+  /* hide context chip on mobile to reclaim space */
+  .md-cc__ctx { display: none; }
+  .md-cc__title { font-size: 15px; }
+  .md-cc__baractions {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+  .md-cc__build-actions,
+  .md-cc__apply-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .md-cc__build-actions { justify-content: flex-start; }
+  .md-cc__apply-actions { justify-content: flex-end; }
+  .md-cc__reset,
+  .md-cc__apply,
+  .md-cc__baractions .hr-btn {
+    min-height: 40px;
+    padding: 8px 10px;
+    font-size: 10px;
+  }
+  .md-cc__close {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* -- TCC: sticky bar + scrollable body (AEI pattern) -- */
+  .md-cc {
+    height: calc(100dvh - 95px);
+    overflow: hidden;
+  }
+  .md-cc__body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    box-sizing: border-box;
   }
 }
 </style>
