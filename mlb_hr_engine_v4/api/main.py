@@ -953,6 +953,35 @@ def _build_slate_payload(data: dict) -> dict:
                     p.get("player_name", "?"), p.get("pitcher_id"), e,
                 )
                 r["hvy_modifier"] = None
+            # hvy_score: JIG display-only composite 0-100.
+            # Inline formula from _hvy_base_score (app.py): xSLG 25% · Barrel 20% ·
+            # ISO 15% · PullAir 15% · HH 15% · Sweet Spot (HR window) 10%,
+            # × hvy_modifier, capped at 100. Null-guard: any missing → None.
+            try:
+                _hxslg = r.get("xslg")
+                _hbrl  = r.get("barrel")
+                _hiso  = r.get("iso")
+                _hpa   = r.get("pullair")
+                _hhh   = r.get("hh")
+                _hss   = r.get("sweet")
+                _hmod  = r.get("hvy_modifier")
+                if any(v is None for v in (_hxslg, _hbrl, _hiso, _hpa, _hhh, _hss, _hmod)):
+                    r["hvy_score"] = None
+                else:
+                    def _hvy_n(v, thr, sc):
+                        return min(max((v - thr) / sc + 0.5, 0.0), 1.0)
+                    _hbase = (
+                        _hvy_n(float(_hxslg), 0.40, 0.15) * 0.25
+                        + _hvy_n(float(_hbrl),  5.0,  6.0)  * 0.20
+                        + _hvy_n(float(_hiso),  0.15, 0.12) * 0.15
+                        + _hvy_n(float(_hpa),  12.0,  8.0)  * 0.15
+                        + _hvy_n(float(_hhh),  35.0, 12.0)  * 0.15
+                        + _hvy_n(float(_hss),  28.0,  8.0)  * 0.10
+                    ) * 100.0
+                    r["hvy_score"] = int(round(min(100.0, _hbase * float(_hmod))))
+            except Exception as _hvy_exc:
+                log.debug("hvy_score inline failed player=%s: %s", r.get("name"), _hvy_exc)
+                r["hvy_score"] = None
             # JIG-native display tier (additive; MAIN `tier` field untouched)
             r["jigTier"] = _jig_tier(r["jigScore"])
             # JIG projected: same _jig_score with announced pitcher fed in (already the case
