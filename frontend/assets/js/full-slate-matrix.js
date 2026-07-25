@@ -1851,7 +1851,7 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
   const toggleMetric = (id) => setSelMetrics((prev) => prev.includes(id) ? prev.filter((m) => m !== id) : [...prev, id]);
   const [modal, setModal] = React.useState(null);
   const FSM_PREF_V = 4;
-  const [colPref, setColPref] = React.useState({ order: FSM_PICKER_COLS.map((c) => c.key), hidden: [], v: FSM_PREF_V });
+  const [colPref, setColPref] = useColumnLayout("fsm_shared", { order: FSM_PICKER_COLS.map((c) => c.key), hidden: [], v: FSM_PREF_V });
   const [colOpen, setColOpen] = React.useState(false);
   const [colInfo, setColInfo] = React.useState(null);
   const [editMode, setEditMode] = React.useState(false);
@@ -2019,7 +2019,7 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
             COLUMNS <b>{activeCols.length}</b>
             <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
           </button>
-          <button className="fsm-colbtn" onClick={() => setEditMode((o) => !o)} title={editMode ? "EDIT mode ON — drag column headers to reorder; click to exit" : "EDIT mode — drag column headers to reorder (session only, resets on reload)"} style={editMode ? { borderColor: "rgba(26,255,102,0.5)", color: "#1aff66" } : undefined}>
+          <button className="fsm-colbtn" onClick={() => setEditMode((o) => !o)} title={editMode ? "EDIT mode ON — drag column headers to reorder; click to exit" : "EDIT mode — drag column headers to reorder (persists across sessions)"} style={editMode ? { borderColor: "rgba(26,255,102,0.5)", color: "#1aff66" } : undefined}>
             EDIT{editMode ? " ✓" : ""}
           </button>
           {colOpen &&
