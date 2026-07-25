@@ -21,6 +21,8 @@ GET  /api/my-tickets              — caller's tickets + legs + game linescores 
 GET  /api/builds                  — list caller's named TCC builds (JWT required)
 POST /api/builds                  — create/update caller's named TCC build (JWT required)
 DELETE /api/builds/{build_id}     — delete caller's own TCC build (JWT required)
+GET  /api/layout/{layout_key}     — return caller's column layout for key, or null (JWT required)
+POST /api/layout/{layout_key}     — upsert caller's column layout for key (JWT required)
 
 The pipeline is normally triggered by GitHub Actions cron (see api/cron.py).
 The /api/pipeline/run endpoint is a manual fallback; it runs in a background
@@ -531,6 +533,53 @@ async def delete_tcc_build(build_id: str, user=Depends(require_auth)):
         .execute()
     )
     return {"status": "ok", "build_id": build_id, "deleted": True}
+
+
+# ── Column layout persistence ──────────────────────────────────────────────────
+
+@app.get("/api/layout/{layout_key}")
+async def get_column_layout(layout_key: str, user=Depends(require_auth)):
+    """Return the caller's saved column layout for layout_key, or null if none exists."""
+    user_id = user.get("sub")
+    result = (
+        supabase_client()
+        .table("user_layout_prefs")
+        .select("layout_data")
+        .eq("user_id", user_id)
+        .eq("layout_key", layout_key)
+        .limit(1)
+        .execute()
+    )
+    if not result.data:
+        return {"layout": None}
+    return {"layout": result.data[0]["layout_data"]}
+
+
+@app.post("/api/layout/{layout_key}")
+async def save_column_layout(layout_key: str, body: dict, user=Depends(require_auth)):
+    """Upsert the caller's column layout for layout_key. Body: {order, hidden, v}."""
+    user_id = user.get("sub")
+    order = body.get("order")
+    hidden = body.get("hidden")
+    if not isinstance(order, list):
+        raise HTTPException(status_code=422, detail="order must be an array")
+    if not isinstance(hidden, list):
+        raise HTTPException(status_code=422, detail="hidden must be an array")
+    row = {
+        "user_id": user_id,
+        "layout_key": layout_key,
+        "layout_data": {"order": order, "hidden": hidden, "v": body.get("v")},
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    result = (
+        supabase_client()
+        .table("user_layout_prefs")
+        .upsert(row, on_conflict="user_id,layout_key")
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(status_code=500, detail="Layout save returned no row")
+    return {"status": "ok"}
 
 
 def _pct(val):
