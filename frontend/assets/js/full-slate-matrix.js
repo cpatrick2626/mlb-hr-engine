@@ -192,8 +192,11 @@ function FsmScopeTag({ scope }) {
 function fsmBucket(col, v) {
   if (v == null) return "NA";
   if (col.special === "la") {
-    const d = Math.abs(v - 15);
-    if (d <= 2) return "ELITE";if (d <= 4) return "STRONG";if (d <= 7) return "AVERAGE";if (d <= 10) return "WEAK";return "DANGER";
+    if (v >= 24 && v <= 30) return "ELITE";
+    if (v >= 21 && v <= 33) return "STRONG";
+    if (v >= 17 && v <= 37) return "AVERAGE";
+    if (v >= 13 && v <= 41) return "WEAK";
+    return "DANGER";
   }
   if (col.bucketsHi) {const b = col.bucketsHi;
     if (v >= b[0]) return "ELITE";if (v >= b[1]) return "STRONG";if (v >= b[2]) return "AVERAGE";if (v >= b[3]) return "WEAK";return "DANGER";}
