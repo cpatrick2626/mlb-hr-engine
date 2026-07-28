@@ -2017,8 +2017,23 @@ html, body {
 .jig-bar__title { font-family: var(--font-display); font-weight: 800; font-size: 18px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--fg-1); }
 .jig-bar__preset { font-family: var(--font-display); font-weight: 600; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg-2); }
 .jig-bar__k { color: var(--fg-4); }
-.jig-bar__actions { display: flex; align-items: center; gap: 10px; }
+.jig-bar__actions { display: flex; align-items: center; gap: 10px; position: relative; }
 .jig-bar__flash { font-family: var(--font-display); font-weight: 700; font-size: 11px; letter-spacing: 0.1em; color: var(--green-500); text-shadow: 0 0 8px rgba(26,255,102,0.5); }
+.jig-bar__flash--error { color: var(--red-500); text-shadow: none; }
+.jig-bar__flash--neutral { color: var(--cyan-400, #00d9ff); text-shadow: none; }
+.jig-load { position: relative; }
+.jig-load__menu {
+  position: absolute; z-index: 40; top: calc(100% + 8px); right: 0; width: min(300px, 82vw);
+  padding: 8px; border: 1px solid rgba(0,217,255,0.26); border-radius: 7px;
+  background: var(--bg-raised, #0e1519); box-shadow: 0 14px 36px rgba(0,0,0,0.58), inset 0 1px 0 rgba(0,217,255,0.09);
+}
+.jig-load__head { display: flex; align-items: center; justify-content: space-between; padding: 3px 4px 7px; font-family: var(--font-display); font-size: 10px; font-weight: 800; letter-spacing: 0.16em; color: var(--fg-3); }
+.jig-load__close { border: 0; background: transparent; color: var(--fg-3); font: inherit; font-size: 17px; line-height: 1; cursor: pointer; }
+.jig-load__list { display: flex; flex-direction: column; gap: 4px; max-height: 248px; overflow-y: auto; }
+.jig-load__item { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; padding: 9px 10px; border: 1px solid rgba(180,220,200,0.10); border-radius: 4px; background: rgba(180,220,200,0.035); color: var(--fg-1); font-family: var(--font-display); font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-align: left; cursor: pointer; transition: border-color .2s, background .2s, transform .15s; }
+.jig-load__item:hover, .jig-load__item:focus-visible { border-color: rgba(0,217,255,0.42); background: rgba(0,217,255,0.07); outline: none; }
+.jig-load__item:active { transform: translateY(1px); }
+.jig-load__apply { color: var(--cyan-400, #00d9ff); font-size: 9px; letter-spacing: 0.14em; }
 
 /* ===== (legacy) JIG command-center overrides ===== */
 .hr-cc--jig {
@@ -3036,6 +3051,10 @@ html, body { height: 100%; overflow: hidden; }
 }
 .md-cc__ctx b { color: var(--ctx-color, var(--cyan-300)); font-weight: 800; }
 .md-cc__baractions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.md-sticky-head,
+.md-cc__sticky-head,
+.md-cc__build-actions,
+.md-cc__apply-actions { display: contents; }
 .md-cc__filters {
   display: inline-flex; align-items: center; gap: 6px;
   font-family: var(--font-display);
@@ -3327,6 +3346,9 @@ html, body { height: 100%; overflow: hidden; }
 /* COLUMNS add/remove/reorder menu */
 .fsm-th-stat { cursor: grab; -webkit-user-select: none; user-select: none; }
 .fsm-th-stat:hover { color: var(--fg-1); background: rgba(180,220,200,0.05); }
+.fsm-statfront { appearance: none; border: 0; padding: 0; background: transparent; color: inherit; font: inherit; letter-spacing: inherit; text-transform: inherit; cursor: pointer; }
+.fsm-statfront:hover, .fsm-statfront:focus-visible { color: var(--green-500); outline: none; }
+.fsm-statfront:focus-visible { text-decoration: underline; text-underline-offset: 2px; }
 .fsm-th-stat.is-drop { box-shadow: inset 2px 0 0 var(--green-500); }
 .fsm-th-stat.is-sorted { color: var(--green-500) !important; }
 .fsm-colmenu { position: relative; }
@@ -3823,12 +3845,21 @@ button.fsm-tier { appearance: none; text-decoration: none; }
    MOBILE PHASE 1 — ≤ 768px
    ============================================================ */
 @media (max-width: 768px) {
-  /* 1 — Remove desktop viewport lock, enable vertical scroll */
-  html, body {
+  /* 1 — Remove desktop viewport lock, enable vertical scroll.
+     Only html gets overflow-y: auto (html = viewport scroller).
+     body must NOT get overflow-y: auto — if it did, body would become
+     the nearest scroll-container for sticky children, but body never
+     actually scrolls (height: auto expands to content), so sticky
+     top sections would be unable to stick. */
+  html {
     height: auto;
     overflow-x: hidden;
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
+  }
+  body {
+    height: auto;
+    overflow: visible;
   }
   #root {
     height: auto;
@@ -3843,8 +3874,23 @@ button.fsm-tier { appearance: none; text-decoration: none; }
   .md-app {
     height: auto;
     min-height: 100vh;
+    /* Keep the sticky slate head and the full slate in one document-height
+       containing block. A flex item may otherwise be constrained by its
+       sibling's layout bounds before the batter list has finished scrolling. */
+    display: block;
     padding: 0 10px 70px;
     gap: 8px;
+  }
+
+  /* Full Slate: collapse the desktop stage scroller into the mobile page
+     scroller so the sticky slate head owns the entire matrix/list length. */
+  .md-stage,
+  .md-stage__body {
+    display: block;
+    flex: none;
+    height: auto;
+    min-height: 0;
+    overflow: visible;
   }
 
   /* 3 — Sticky topbar, wraps to two rows on mobile */
@@ -3865,6 +3911,9 @@ button.fsm-tier { appearance: none; text-decoration: none; }
   .md-split {
     grid-template-columns: 1fr;
     gap: 8px;
+    /* Keep the slate in normal flow below the variable-height sticky head.
+       The wrapper retains its rendered height, so the first row starts flush
+       below it instead of being pulled up underneath it. */
   }
 
   /* 4 — Hide right sidebar */
@@ -3964,6 +4013,89 @@ button.fsm-tier { appearance: none; text-decoration: none; }
     height: 100vh;
     position: sticky;
     top: 0;
+  }
+}
+
+/* ============================================================
+   MOBILE: Slate sticky top section + TCC header/scroll fixes
+   ============================================================ */
+@media (max-width: 768px) {
+  /* -- Slate: stick the full mobile command block as one JSX unit -- */
+  .md-sticky-head {
+    display: block;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: var(--bg-void);
+  }
+  /* topbar is already sticky alone; inside wrapper it's just in-flow */
+  .md-sticky-head .md-topbar {
+    position: relative;
+    top: auto;
+  }
+
+  /* -- TCC: one sticky JSX wrapper containing all three header rows -- */
+  .md-cc__sticky-head {
+    display: block;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: var(--bg-void);
+    flex-shrink: 0;
+  }
+  .md-cc__bar {
+    position: relative;
+    top: auto;
+    z-index: auto;
+    flex-direction: column;
+    align-items: stretch;
+    padding: 10px 12px 8px;
+    gap: 6px;
+  }
+  .md-cc__titlewrap {
+    width: 100%;
+    min-width: 0;
+  }
+  /* hide context chip on mobile to reclaim space */
+  .md-cc__ctx { display: none; }
+  .md-cc__title { font-size: 15px; }
+  .md-cc__baractions {
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
+  }
+  .md-cc__build-actions,
+  .md-cc__apply-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .md-cc__build-actions { justify-content: flex-start; }
+  .md-cc__apply-actions { justify-content: flex-end; }
+  .md-cc__reset,
+  .md-cc__apply,
+  .md-cc__baractions .hr-btn {
+    min-height: 40px;
+    padding: 8px 10px;
+    font-size: 10px;
+  }
+  .md-cc__close {
+    min-width: 44px;
+    min-height: 44px;
+  }
+
+  /* -- TCC: sticky bar + scrollable body (AEI pattern) -- */
+  .md-cc {
+    height: calc(100dvh - 95px);
+    overflow: hidden;
+  }
+  .md-cc__body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    box-sizing: border-box;
   }
 }
 </style>
@@ -4619,6 +4751,21 @@ button.fsm-tier { appearance: none; text-decoration: none; }
   padding: 4px 11px 8px;
   letter-spacing: 0.04em;
 }
+/* sticky close bar + scrollable body */
+.fsm-card.aei-wrap { overflow: hidden; display: flex; flex-direction: column; }
+.aei-top-bar { display: flex; justify-content: flex-end; padding: 8px 10px 0; flex-shrink: 0; }
+.aei-top-bar .fsm-card__close { width: 44px; height: 44px; font-size: 16px; }
+.aei-scroll-body { overflow: auto; flex: 1; min-height: 0; }
+/* pick button */
+.aei-pick-btn {
+  font-family: var(--font-display); font-weight: 800; font-size: 11px; letter-spacing: 0.1em;
+  text-transform: uppercase; color: #e0e8ff; background: rgba(59,111,255,0.18);
+  border: 1px solid rgba(59,111,255,0.55); border-radius: 6px; padding: 8px 16px;
+  cursor: pointer; white-space: nowrap; transition: all .14s ease;
+}
+.aei-pick-btn:hover { background: rgba(59,111,255,0.3); box-shadow: 0 0 14px rgba(59,111,255,0.28); }
+.aei-pick-btn--added { color: #1aff66; background: rgba(26,255,102,0.12); border-color: rgba(26,255,102,0.4); }
+.aei-pick-btn:disabled { opacity: 0.5; cursor: default; }
 </style>
 <style>
 /* ============================================================
@@ -6120,8 +6267,23 @@ button.fsm-tier { appearance: none; text-decoration: none; }
   .fsm-row .fsm-cell--extra { display: none !important; }
   .fsm-row.is-expanded .fsm-cell--extra { display: flex !important; }
 
-  /* Slip button: no room on mobile card */
-  .fsm-row .fsm-cell--slip { display: none !important; }
+  /* Slip action — keep the existing control reachable before the expand row */
+  .fsm-row .fsm-cell--slip {
+    display: flex !important;
+    grid-column: 1 / -1;
+    align-items: center;
+    justify-content: flex-end;
+    min-height: 44px;
+    margin-top: 2px;
+    padding: 3px 4px 2px !important;
+    border-top: 1px solid rgba(180,220,200,0.08) !important;
+    background: rgba(12,18,23,0.34);
+  }
+  .fsm-row .fsm-cell--slip::before { display: none; }
+  .fsm-row .fsm-cell--slip button {
+    min-width: 44px;
+    min-height: 44px;
+  }
 
   /* Expand button — full-width row at card bottom */
   .fsm-expandcell {
@@ -6151,8 +6313,10 @@ button.fsm-tier { appearance: none; text-decoration: none; }
   <script src="assets/js/70f6ea6c-2a16-47ac-908c-807ee1421ab6.js"></script>
   <script src="assets/js/0ead2d7a-98fd-4c05-9412-e8c9b12b1861.js"></script>
   <script type="text/babel" src="assets/js/c0092a94-d9b6-4c58-946b-1b3ea3b7976b.js"></script>
+  <script type="text/babel" src="assets/js/column-layout.js"></script>
   <script type="text/babel" src="assets/js/full-slate-matrix.js"></script>
   <script type="text/babel" src="assets/js/batter-detail-card.js"></script>
+  <script type="text/babel" src="assets/js/tcc-build-saver.js"></script>
   <script type="text/babel" src="assets/js/jig-command.js"></script>
   <script type="text/babel" src="assets/js/196ab388-1144-4a63-b5de-2526716dcf22.js"></script>
   <script type="text/babel" src="assets/js/fa8fdb8f-2a92-4a2c-acfe-e38e50d6e9f4.js"></script>

@@ -88,7 +88,7 @@ const JigBuilder = ({ eyebrow }) =>
   </div>;
 
 
-const Stage = ({ engine, lens, ccOpen, onCloseCC, appliedFilters, onApplyFilters, onClearFilters, onOpenPlayer }) => {
+const Stage = ({ engine, lens, ccOpen, onCloseCC, appliedFilters, roomFilters, onApplyFilters, onClearFilters, onOpenPlayer }) => {
   const eyebrow = `${engine.name}${engine.suffix ? " " + engine.suffix : ""}${lens ? "  /  " + lens.name.toUpperCase() : ""}`;
   const [mainRows, setMainRows] = React.useState([]);
   const [jigRows, setJigRows] = React.useState([]);
@@ -131,6 +131,7 @@ const Stage = ({ engine, lens, ccOpen, onCloseCC, appliedFilters, onApplyFilters
       engine={engine}
       lens={lens}
       initialFilters={appliedFilters}
+      roomFilters={roomFilters}
       onApply={onApplyFilters}
       onClose={onCloseCC} />;
 
@@ -187,7 +188,7 @@ const Stage = ({ engine, lens, ccOpen, onCloseCC, appliedFilters, onApplyFilters
   } else if (engine.id === "command") {
     body = <CommandTabPanel />;
   } else if (lens && lens.id === "builder") {
-    body = <JigCommand engine={engine} lens={lens} appliedFilters={appliedFilters} onOpenPlayer={onOpenPlayer} />;
+    body = <JigCommand engine={engine} lens={lens} appliedFilters={appliedFilters} roomFilters={roomFilters} onApplyFilters={onApplyFilters} onOpenPlayer={onOpenPlayer} />;
   } else if (lens && lens.id === "arsenal") {
     const arsenalRows = engine.id === "jig" ? jigRows : mainRows;
     body = (

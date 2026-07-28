@@ -19,6 +19,21 @@ _DEGRADED_CACHE: dict[str, dict] = {}
 _WEATHER_RETRY_COOLDOWN_S = 15 * 60
 
 
+def display_weather_fields(weather: dict | None) -> dict:
+    """Return null-safe numeric weather fields for display/filter payloads."""
+    fields = {}
+    for key in ("temp_f", "wind_mph", "wind_deg"):
+        value = weather.get(key) if isinstance(weather, dict) else None
+        if isinstance(value, bool):
+            value = None
+        try:
+            value = float(value) if value is not None else None
+        except (TypeError, ValueError):
+            value = None
+        fields[key] = value if value is not None and math.isfinite(value) else None
+    return fields
+
+
 def _neutral_weather(*, source: str = "neutral-fallback", trust: str = "degraded", degraded: bool = True) -> dict:
     """Return neutral weather defaults with explicit trust metadata."""
     return {

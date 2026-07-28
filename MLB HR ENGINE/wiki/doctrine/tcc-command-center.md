@@ -2,7 +2,7 @@
 
 > **STATUS: LIVE — three surfaces.** See mock/partial flags per surface below.
 
-**Last Updated:** 2026-07-01
+**Last Updated:** 2026-07-24
 **Authoritative root doc:** `MASTER_TCC_DOCTRINE.md` (Streamlit layer — see scope note)
 
 ---
@@ -20,7 +20,7 @@ The full filter architecture, preset philosophy, engine-scope isolation rules, a
 | Surface | File | Scope | Status |
 |---------|------|-------|--------|
 | Streamlit filter controls | `mlb_hr_engine_v4/app.py` + `filter_controls.py` | MAIN + JIG threshold filters, preset bars | LIVE |
-| Frontend — CommandCenter overlay | `frontend/assets/js/196ab388-1144-4a63-b5de-2526716dcf22.js` | 9-panel filter UI overlay ("TACTICAL COMMAND CENTER" header) | LIVE (partial — see flags) |
+| Frontend — CommandCenter overlay | `frontend/assets/js/fa8fdb8f-2a92-4a2c-acfe-e38e50d6e9f4.js` + `0ead2d7a-98fd-4c05-9412-e8c9b12b1861.js` | 9-panel filter UI and room-filter predicates | LIVE (partially wired — see checkpoint/flags) |
 | Frontend — COMMAND tab | `frontend/assets/js/command-tab.js` | 4-panel tactical read-only overview, engine toggle | LIVE |
 
 ---
@@ -42,9 +42,10 @@ See `MASTER_TCC_DOCTRINE.md` §§ 2–4, 9 for filter vocabulary, preset rules, 
 
 ## Surface 2 — Production Frontend CommandCenter Overlay
 
-`frontend/assets/js/196ab388-1144-4a63-b5de-2526716dcf22.js`
+Current overlay UI: `frontend/assets/js/fa8fdb8f-2a92-4a2c-acfe-e38e50d6e9f4.js`
+Current defaults/predicates/counters: `frontend/assets/js/0ead2d7a-98fd-4c05-9412-e8c9b12b1861.js`
 
-Opens as a full-screen overlay from the production board. Renders 9 filter panels via `Stepper` / `Dropdown` / read-only display components. Registered globals: `CommandCenter`, `FilterPanel`, `VisibilityPanel`.
+Opens inside the production board stage. Renders 9 filter panels via `Stepper`, `Dropdown`, and `Toggle` components. `APPLY TO ROOM` stores the active room's filter object in the existing `md_roomFilters` channel; MAIN and JIG retain separate room keys.
 
 ### Panels (as coded)
 
@@ -59,6 +60,22 @@ Opens as a full-screen overlay from the production board. Renders 9 filter panel
 | 7 | Momentum & Recency | Steppers: Recent HRs (7G), Recent HH % (7G), Recent Barrel %, Hot Streak Indicator, Recent EV Trend, LA Trend |
 | 8 | Game Context | Read-only status display (see below) |
 | 9 | Output Control | Min Projected HR %, Min Confidence %, Max Players, Sort By, Sort Direction |
+
+### 2026-07-24 Environment Filter Checkpoint
+
+Temperature, wind speed, and wind direction are now wired through the live slate as display/filter-only fields:
+
+- Pipeline game records emit numeric `temp_f`, `wind_mph`, and meteorological `wind_deg`, keyed by MLB `game_pk`.
+- `/api/slate` joins the game record to each MAIN/JIG player row by `game_pk` with frontend `gameId` fallback and also keeps the fields on `slate_games`.
+- Temperature and wind controls are minimum thresholds. Rows with missing weather pass rather than being silently dropped.
+- Wind Direction is categorical: frontend buckets `wind_deg` into `N / NE / E / SE / S / SW / W / NW`.
+- The three controls participate in draft state, defaults, `APPLY TO ROOM`, active-filter counts, reopen persistence, and RESET.
+- Air Density remains dead: there is no source and no density formula was introduced.
+- The passthrough is additive only. Raw fields do not feed `model_prob`, `jigScore`, `hrFactor`, ranking, tiers, EV, or any scoring formula.
+
+Local real-slate proof on 2026-07-24: 389 MAIN + 389 JIG rows across 15 games; every player weather tuple matched its game. Hunter Goodman (`COL-MIL`, `game_pk=823759`) matched `78.4°F`, `13.5 mph`, `122°`. Browser proof on a 389-row local slate: Temperature `>=85°F` produced 18 rows, Wind `>=10 mph` produced 15, Direction `E` produced 15, values persisted on TCC reopen, and RESET restored 389.
+
+Production remains gated: the backend changes require a Fly deploy and then a fresh pipeline run before the production cache and player rows carry the numeric fields.
 
 ### Panel 8 — Game Context (honest after commit 9514a4d, 2026-06-27)
 
@@ -78,7 +95,7 @@ This is a status display, not interactive controls. These values are hardcoded s
 - **CommandHeader status bar:** "ACTIVE SLATE: 8 GAMES", "SYSTEM LOAD: 14%", "CURRENT PRESET: DEFAULT TACTICAL", "Active Filters: 12" — hardcoded strings, not pulled from real state.
 - **Footer:** "UPDATE TIMER: 28s", "ACTIVE FILTERS: 12", "TACTICAL MODE: ENGAGED" — hardcoded.
 - **VisibilityPanel:** Toggles have hardcoded `on` values; "LYAR TREKRM MODE" appears to be a garbled placeholder label. Buttons are decorative.
-- **Stepper filter wiring:** The `Stepper` and `Dropdown` components render UI controls, but this file contains no event handlers connecting filter values to live data filtering. Whether filter values are read by the pipeline cannot be confirmed from this file alone.
+- **Remaining unwired controls:** Controls not named in the checkpoint above or prior scoped wiring phases may still be decorative. Do not infer a live predicate from the presence of a `Stepper` or `Dropdown`.
 - **Panel 8 values:** Strings are hardcoded, not API-driven. Accurate as a static description of current system behavior, but not reactive.
 
 ---

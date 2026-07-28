@@ -68,7 +68,7 @@ unchanged until operator-authorized commit plus Fly deploy; refresh the AEI deta
 
 **Impact:** Latent. Ticket roles correctly gate on FS tier (not JIG tier), so role assignment is unaffected. JIG display ordering may not differentiate well.
 
-**Status:** Parked. Low urgency until operator wants sharper JIG tier discrimination.
+**Status:** RESOLVED 2026-07-13. `config.JIG_TIER_THRESHOLDS` replaced with operator-ratified 0–100 bands (APEX ≥88 / ELITE ≥75 / EDGE ≥60 / SIGNAL ≥40 / WATCH ≥20 / COLD <20) as part of the native `jigTier` build. See `tier-vocabulary.md`.
 
 ---
 
@@ -238,20 +238,21 @@ Velocity is NOT available from `pitch-arsenal-stats`, and the alternate `pitch-a
 
 ## Production status and open follow-ups — 2026-07-13
 
-### JIG native tier display — OPEN / MARQUEE
+### JIG native tier display — RESOLVED 2026-07-13 (deploy pending)
 
-The live JIG board currently labels effectively every row APEX because the frontend applies
+The live JIG board labeled effectively every row APEX because the frontend applied
 0-1 thresholds (`APEX >= 0.34` in `frontend/assets/js/full-slate-matrix.js`) to the 0-100
-`jigScore`. The `jigScore` formula itself is healthy: the audited distribution was clean across
-1,532 rows. This is a scale/ownership bug in display classification, not a scoring-formula bug.
+`jigScore`. The `jigScore` formula itself was healthy — this was a scale/ownership bug in
+display classification, not a scoring-formula bug.
 
-The distribution-audit precondition for a JIG-native tier is now met. The queued fix requires a
-separate, operator-authorized protected-surface implementation: emit a native backend `jigTier`
-from `_build_slate_payload`, keep one threshold source in `config.py`, and make the frontend read
-`row.jigTier`. Proposed percentile-anchored bands for Fable review are APEX >= 88, ELITE >= 75,
-EDGE >= 60, SIGNAL >= 40, WATCH >= 20, and COLD < 20. These bands remain retunable and are not
-authorized by this documentation pass. Do not alter `jigScore`, reuse MAIN `row.tier`, or describe
-MAIN's inherited model tier as JIG tactical confidence.
+Fixed by the operator-ratified `jigTier` build: `config.JIG_TIER_THRESHOLDS` now holds the
+ratified 0–100 bands (APEX ≥88 / ELITE ≥75 / EDGE ≥60 / SIGNAL ≥40 / WATCH ≥20 / COLD <20),
+`_build_slate_payload` emits an additive `jigTier` next to `jigScore`, and the frontend reads
+`row.jigTier` (the mis-scaled `fsmJigTierLabel` block was deleted). Validated against cached
+slates 2026-07-01→07-11 (n=1,784): APEX 7.7% / ELITE 14.6% / EDGE 18.8% / SIGNAL 25.4% /
+WATCH 26.1% / COLD 7.5%. `jigScore` formula untouched; MAIN `row.tier` untouched; JIG still
+sorts by `jigScore`. Requires Fly deploy (API) + Vercel deploy (frontend); verify tier spread
+on the live JIG board July 16. See `tier-vocabulary.md` and `main-jig-separation.md`.
 
 ### Closed incidents
 

@@ -52,3 +52,19 @@ jobs:
           SUPABASE_SERVICE_KEY:  ${{ secrets.SUPABASE_SERVICE_KEY }}
         run: python -m api.settle_legs --commit --date "${{ steps.settlement-date.outputs.date }}"
         working-directory: mlb_hr_engine_v4
+
+      - name: Backfill warehouse HR outcomes (non-blocking)
+        continue-on-error: true
+        env:
+          SUPABASE_URL:          ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY:  ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python -m api.warehouse_backfill --commit --date "${{ steps.settlement-date.outputs.date }}"
+        working-directory: mlb_hr_engine_v4
+
+      - name: Run supervised learning analysis (non-blocking)
+        continue-on-error: true
+        env:
+          SUPABASE_URL:          ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY:  ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: python -m api.learning_analysis --commit
+        working-directory: mlb_hr_engine_v4

@@ -17,9 +17,12 @@ POST /api/tickets/leg/remove      — soft-delete a leg (sets removed=true); own
 POST /api/tickets/complete        — finalize ticket, set fd_deployed=true (JWT required — Phase 1)
 POST /api/fd-event                — record a FanDuel handoff click (JWT required)
 GET  /api/ledger?lane=main|jig    — settled/void legs + hit-rate buckets, per user per lane (JWT required — Phase S2/D5)
+GET  /api/my-tickets              — caller's tickets + legs + game linescores (JWT required)
 GET  /api/builds                  — list caller's named TCC builds (JWT required)
 POST /api/builds                  — create/update caller's named TCC build (JWT required)
 DELETE /api/builds/{build_id}     — delete caller's own TCC build (JWT required)
+GET  /api/layout/{layout_key}     — return caller's column layout for key, or null (JWT required)
+POST /api/layout/{layout_key}     — upsert caller's column layout for key (JWT required)
 
 The pipeline is normally triggered by GitHub Actions cron (see api/cron.py).
 The /api/pipeline/run endpoint is a manual fallback; it runs in a background
@@ -42,6 +45,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from api.auth import require_auth, require_beta
 from api.cache import _client as supabase_client, get_picks, get_latest_picks, store_picks, list_runs, redeem_invite, add_leg, complete_ticket, remove_leg, ledger_legs, ledger_pending_count, today_et
+from api.ticket_history import get_my_tickets
 from clients.arsenal import get_pitcher_arsenal, arsenal_matchup_factor
 from clients.batter_pitch_profile import (
     empty_batter_pitch_profile_display,
@@ -49,7 +53,7 @@ from clients.batter_pitch_profile import (
     get_batter_pitch_profile_display,
     pitch_mix_verdict_display,
 )
-from clients.pitch_mix import canonical_pitch_type, get_batter_vs_pitches, get_pitcher_pitch_stats
+from clients.pitch_mix import canonical_pitch_type, get_batter_vs_pitches, get_pitcher_pitch_stats, load_hvy_context
 from config import FS_TIER_THRESHOLDS, JIG_TIER_THRESHOLDS
 from roles import classify_role
 
@@ -436,6 +440,17 @@ async def ticket_remove_leg(body: dict, user=Depends(require_auth)):
     return {"status": "ok", **result}
 
 
+# ── My Tickets (read-only) ────────────────────────────────────────────────────
+
+@app.get("/api/my-tickets")
+def my_tickets(user=Depends(require_auth)):
+    """Return only the JWT caller's tickets, legs, and public game context."""
+    user_id = user.get("sub")
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Authenticated token is missing sub")
+    return {"tickets": get_my_tickets(supabase_client(), user_id)}
+
+
 # ── TCC build persistence ──────────────────────────────────────────────────────
 
 _TCC_BUILD_COLUMNS = (
@@ -518,6 +533,53 @@ async def delete_tcc_build(build_id: str, user=Depends(require_auth)):
         .execute()
     )
     return {"status": "ok", "build_id": build_id, "deleted": True}
+
+
+# ── Column layout persistence ──────────────────────────────────────────────────
+
+@app.get("/api/layout/{layout_key}")
+async def get_column_layout(layout_key: str, user=Depends(require_auth)):
+    """Return the caller's saved column layout for layout_key, or null if none exists."""
+    user_id = user.get("sub")
+    result = (
+        supabase_client()
+        .table("user_layout_prefs")
+        .select("layout_data")
+        .eq("user_id", user_id)
+        .eq("layout_key", layout_key)
+        .limit(1)
+        .execute()
+    )
+    if not result.data:
+        return {"layout": None}
+    return {"layout": result.data[0]["layout_data"]}
+
+
+@app.post("/api/layout/{layout_key}")
+async def save_column_layout(layout_key: str, body: dict, user=Depends(require_auth)):
+    """Upsert the caller's column layout for layout_key. Body: {order, hidden, v}."""
+    user_id = user.get("sub")
+    order = body.get("order")
+    hidden = body.get("hidden")
+    if not isinstance(order, list):
+        raise HTTPException(status_code=422, detail="order must be an array")
+    if not isinstance(hidden, list):
+        raise HTTPException(status_code=422, detail="hidden must be an array")
+    row = {
+        "user_id": user_id,
+        "layout_key": layout_key,
+        "layout_data": {"order": order, "hidden": hidden, "v": body.get("v")},
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    result = (
+        supabase_client()
+        .table("user_layout_prefs")
+        .upsert(row, on_conflict="user_id,layout_key")
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(status_code=500, detail="Layout save returned no row")
+    return {"status": "ok"}
 
 
 def _pct(val):
@@ -729,6 +791,26 @@ def _build_slate_payload(data: dict) -> dict:
             return f"{base_slug}-{game_pk}"
         return base_slug
 
+    # Pipeline owns the game-level numeric weather record. Index by both MLB
+    # game_pk and frontend gameId so player rows can join without reading the
+    # player-level weather dict that is used by scoring upstream.
+    _game_weather_by_pk = {}
+    _game_weather_by_id = {}
+    for game in data.get("games", []):
+        _game_pk = game.get("game_pk")
+        _weather = {
+            "temp_f": _flt(game.get("temp_f")),
+            "wind_mph": _flt(game.get("wind_mph")),
+            "wind_deg": _flt(game.get("wind_deg")),
+        }
+        if _game_pk is not None:
+            _game_weather_by_pk[str(_game_pk)] = _weather
+        _away = (game.get("away_team") or "").upper()
+        _home = (game.get("home_team") or "").upper()
+        if _away and _home:
+            _base_slug = f"{_away}-{_home}".lower().replace(" ", "-")
+            _game_weather_by_id[_game_slug(_base_slug, _game_pk)] = _weather
+
     leaderboard_rows = []
     for p in players:
         model_prob = float(p.get("model_prob") or 0)
@@ -756,6 +838,11 @@ def _build_slate_payload(data: dict) -> dict:
         derived_game_id = _game_slug(
             f"{away}-{home}".lower().replace(" ", "-"), p.get("game_pk")
         )
+        game_weather = (
+            _game_weather_by_pk.get(str(p.get("game_pk")))
+            if p.get("game_pk") is not None
+            else None
+        ) or _game_weather_by_id.get(derived_game_id, {})
 
         role = classify_role(p, tier)
         leaderboard_rows.append({
@@ -787,6 +874,10 @@ def _build_slate_payload(data: dict) -> dict:
             "gameId":   derived_game_id,
             # MLB game_pk pass-through (display/identity only — additive, not yet keyed on)
             "game_pk":  p.get("game_pk"),
+            # Game-level weather join (display/filter only; never scoring inputs).
+            "temp_f":   game_weather.get("temp_f"),
+            "wind_mph": game_weather.get("wind_mph"),
+            "wind_deg": game_weather.get("wind_deg"),
             "odds":     odds,
             # FanDuel deep links (display/handoff only — additive passthrough)
             "fd_event_link": p.get("fd_event_link"),
@@ -808,8 +899,10 @@ def _build_slate_payload(data: dict) -> dict:
             "fast":     p.get("fast"),
             "squp":     p.get("squp"),
             "blast":    p.get("blast"),
+            "comp":     p.get("comp"),
+            "batspeed": p.get("batspeed"),
             "maxev":    _flt(p.get("max_ev")),
-            "hrfb":     _flt(p.get("hr_rate")),
+            "hrfb":     _flt(p.get("hrfb")),
             "pitcher_name":      p.get("pitcher_name", None),
             "pitcher_confirmed": p.get("pitcher_confirmed", False),
             "pitcher_id":        p.get("pitcher_id", None),
@@ -852,6 +945,10 @@ def _build_slate_payload(data: dict) -> dict:
             "pitcher_fb_allowed":     p.get("pitcher_fb_allowed"),
             "pitcher_gb_allowed":     p.get("pitcher_gb_allowed"),
             "pitcher_hr9":            p.get("pitcher_hr9"),
+            "pitcher_hr_allowed":     p.get("pitcher_hr_allowed"),
+            "short_form_hr":          p.get("short_form_hr"),
+            # Display-only passthrough. This factor is already applied once in pipeline scoring.
+            "streak_factor":          p.get("streak_factor"),
             "gameStartUtc":      p.get("game_time_utc", ""),
             "gameStatus":        p.get("game_status", "Scheduled"),
             "prime":             role["prime"],
@@ -895,6 +992,45 @@ def _build_slate_payload(data: dict) -> dict:
             if p is None:
                 p = players_by_id_fallback.get(r.get("id"), {})
             r["jigScore"] = _jig_score(p, arsenal_data=_arsenal_data)
+            try:
+                r["hvy_modifier"] = load_hvy_context(
+                    p, arsenal_data=_arsenal_data
+                ).get("hvy_modifier")
+            except Exception as e:
+                log.warning(
+                    "JIG hvy_modifier display fallback | player=%s pitcher=%s err=%s",
+                    p.get("player_name", "?"), p.get("pitcher_id"), e,
+                )
+                r["hvy_modifier"] = None
+            # hvy_score: JIG display-only composite 0-100.
+            # Inline formula from _hvy_base_score (app.py): xSLG 25% · Barrel 20% ·
+            # ISO 15% · PullAir 15% · HH 15% · Sweet Spot (HR window) 10%,
+            # × hvy_modifier, capped at 100. Null-guard: any missing → None.
+            try:
+                _hxslg = r.get("xslg")
+                _hbrl  = r.get("barrel")
+                _hiso  = r.get("iso")
+                _hpa   = r.get("pullair")
+                _hhh   = r.get("hh")
+                _hss   = r.get("sweet")
+                _hmod  = r.get("hvy_modifier")
+                if any(v is None for v in (_hxslg, _hbrl, _hiso, _hpa, _hhh, _hss, _hmod)):
+                    r["hvy_score"] = None
+                else:
+                    def _hvy_n(v, thr, sc):
+                        return min(max((v - thr) / sc + 0.5, 0.0), 1.0)
+                    _hbase = (
+                        _hvy_n(float(_hxslg), 0.40, 0.15) * 0.25
+                        + _hvy_n(float(_hbrl),  5.0,  6.0)  * 0.20
+                        + _hvy_n(float(_hiso),  0.15, 0.12) * 0.15
+                        + _hvy_n(float(_hpa),  12.0,  8.0)  * 0.15
+                        + _hvy_n(float(_hhh),  35.0, 12.0)  * 0.15
+                        + _hvy_n(float(_hss),  28.0,  8.0)  * 0.10
+                    ) * 100.0
+                    r["hvy_score"] = int(round(min(100.0, _hbase * float(_hmod))))
+            except Exception as _hvy_exc:
+                log.debug("hvy_score inline failed player=%s: %s", r.get("name"), _hvy_exc)
+                r["hvy_score"] = None
             # JIG-native display tier (additive; MAIN `tier` field untouched)
             r["jigTier"] = _jig_tier(r["jigScore"])
             # JIG projected: same _jig_score with announced pitcher fed in (already the case
@@ -972,7 +1108,17 @@ def _build_slate_payload(data: dict) -> dict:
             f"{_away}-{_home}".lower().replace(" ", "-"), p.get("game_pk")
         )
         if gid not in seen_games:
-            _w = p.get("weather")
+            _game_weather = (
+                _game_weather_by_pk.get(str(p.get("game_pk")))
+                if p.get("game_pk") is not None
+                else None
+            ) or _game_weather_by_id.get(gid, {})
+            _player_weather = p.get("weather")
+            _w = (
+                _game_weather
+                if any(value is not None for value in _game_weather.values())
+                else _player_weather
+            )
             _weather_str = (
                 f"{_w.get('temp_f', '')}°F · {_w.get('wind_mph', '')} mph"
                 if isinstance(_w, dict)
@@ -990,6 +1136,10 @@ def _build_slate_payload(data: dict) -> dict:
                 "teams":    [_away, _home],
                 # MLB game_pk pass-through (additive — cards still keyed by team slug)
                 "game_pk":  p.get("game_pk"),
+                # Numeric environment fields are additive and display/filter only.
+                "temp_f":   _game_weather.get("temp_f"),
+                "wind_mph": _game_weather.get("wind_mph"),
+                "wind_deg": _game_weather.get("wind_deg"),
             }
 
     return {

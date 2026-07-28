@@ -83,6 +83,14 @@ window.ENGINES = [
 window.FILTER_DEFAULTS = {
   minBarrel: 0, minHH: 0, minEV: 0,
   minISO: 0, minXSLG: 0, minHRFB: 0, minPullAir: 0, minSweet: 0, minFB: 0,
+  minLaunchAngle: 0,
+  minRHPISO: 0, minLHPISO: 0,
+  minMatchupModifier: 75,
+  minHVYScore: 0,
+  minHR9: 0, minBarrelAllowed: 0, minHHAllowed: 0, minFBAllowed: 0,
+  minPitcherHRAllowed: 0,
+  minRecentHRs: 0, minStreakFactor: 0.89,
+  minTempF: 0, minWindMph: 0, windDirection: "Any",
   minHRProb: 0,
   sortKey: "none", sortDir: "Descending", maxPlayers: 999,
   excludeStarted: false,
@@ -102,6 +110,15 @@ window.SORT_OPTIONS = [
   { label: "JIG Score",      key: "jigScore" },
 ];
 
+window.windDegToCompass = function (degrees) {
+  if (degrees == null || degrees === "") return null;
+  const numeric = Number(degrees);
+  if (!Number.isFinite(numeric)) return null;
+  const buckets = ["N", "NE", "E", "SE", "S", "SW", "W", "NW"];
+  const normalized = ((numeric % 360) + 360) % 360;
+  return buckets[Math.round(normalized / 45) % buckets.length];
+};
+
 window.applyRoomFilters = function (rows, f) {
   if (!f) return rows;
   let out = rows.filter((r) => {
@@ -114,6 +131,30 @@ window.applyRoomFilters = function (rows, f) {
     if (f.minPullAir && !(r.pullair >= f.minPullAir))  return false;
     if (f.minSweet   && !(r.sweet   >= f.minSweet))    return false;
     if (f.minFB      && !(r.fb      >= f.minFB))       return false;
+    if (f.minLaunchAngle && !(r.la >= f.minLaunchAngle)) return false;
+    if (f.minRHPISO  && !(r.vs_rhp_iso >= f.minRHPISO)) return false;
+    if (f.minLHPISO  && !(r.vs_lhp_iso >= f.minLHPISO)) return false;
+    if (r._board === "jig" && f.minMatchupModifier > window.FILTER_DEFAULTS.minMatchupModifier &&
+        !(r.hvy_modifier != null && r.hvy_modifier * 100 >= f.minMatchupModifier)) return false;
+    if (r._board === "jig" && f.minHVYScore > window.FILTER_DEFAULTS.minHVYScore &&
+        !(r.hvy_score != null && r.hvy_score >= f.minHVYScore)) return false;
+    if (f.minHR9     && !(r.opphr >= f.minHR9))          return false;
+    if (f.minPitcherHRAllowed && !(r.pitcher_hr_allowed != null && r.pitcher_hr_allowed >= f.minPitcherHRAllowed)) return false;
+    if (f.minBarrelAllowed && !(r.pitcher_barrel_allowed != null && r.pitcher_barrel_allowed * 100 >= f.minBarrelAllowed)) return false;
+    if (f.minHHAllowed     && !(r.pitcher_hh_allowed     != null && r.pitcher_hh_allowed     * 100 >= f.minHHAllowed))     return false;
+    if (f.minFBAllowed     && !(r.pitcher_fb_allowed     != null && r.pitcher_fb_allowed     * 100 >= f.minFBAllowed))     return false;
+    if (f.minRecentHRs && !(r.short_form_hr != null && r.short_form_hr >= f.minRecentHRs)) return false;
+    if (f.minStreakFactor > window.FILTER_DEFAULTS.minStreakFactor &&
+        !(r.streak_factor != null && r.streak_factor >= f.minStreakFactor)) return false;
+    // Environment is display/filter only. Missing weather is explicitly allowed through.
+    if (f.minTempF && r.temp_f != null && Number.isFinite(Number(r.temp_f)) &&
+        Number(r.temp_f) < f.minTempF) return false;
+    if (f.minWindMph && r.wind_mph != null && Number.isFinite(Number(r.wind_mph)) &&
+        Number(r.wind_mph) < f.minWindMph) return false;
+    if (f.windDirection && f.windDirection !== "Any") {
+      const windDirection = window.windDegToCompass(r.wind_deg);
+      if (windDirection != null && windDirection !== f.windDirection) return false;
+    }
     if (f.minHRProb  && !(r.hrprob  >= f.minHRProb))   return false;
     // Game Context filters
     if (f.confirmedLineupsOnly && !r.pitcher_confirmed) return false;
@@ -158,6 +199,21 @@ window.countActiveFilters = function (f) {
   if (f.minPullAir > d.minPullAir) n++;
   if (f.minSweet   > d.minSweet)   n++;
   if (f.minFB      > d.minFB)      n++;
+  if (f.minLaunchAngle > d.minLaunchAngle) n++;
+  if (f.minRHPISO  > d.minRHPISO)  n++;
+  if (f.minLHPISO  > d.minLHPISO)  n++;
+  if (f.minMatchupModifier > d.minMatchupModifier) n++;
+  if (f.minHVYScore > d.minHVYScore) n++;
+  if (f.minHR9     > d.minHR9)     n++;
+  if (f.minPitcherHRAllowed > d.minPitcherHRAllowed) n++;
+  if (f.minBarrelAllowed > d.minBarrelAllowed) n++;
+  if (f.minHHAllowed     > d.minHHAllowed)     n++;
+  if (f.minFBAllowed     > d.minFBAllowed)     n++;
+  if (f.minRecentHRs > d.minRecentHRs) n++;
+  if (f.minStreakFactor > d.minStreakFactor) n++;
+  if (f.minTempF > d.minTempF) n++;
+  if (f.minWindMph > d.minWindMph) n++;
+  if (f.windDirection && f.windDirection !== d.windDirection) n++;
   if (f.minHRProb  > d.minHRProb)  n++;
   if (f.sortKey && f.sortKey !== "none") n++;
   if (f.maxPlayers != null && f.maxPlayers !== d.maxPlayers) n++;
