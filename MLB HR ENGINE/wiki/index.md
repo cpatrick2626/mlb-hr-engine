@@ -1,25 +1,27 @@
 # MLB HR ENGINE — Intelligence Wiki Index
-Last updated: 2026-06-18
+Last updated: 2026-07-06
 
 ## DOCTRINE
 | Page | Summary | Agent | Status |
 |------|---------|-------|--------|
 | [MAIN Model Doctrine](doctrine/main-model-doctrine.md) | Quantitative/model scoring philosophy; Primary Ranking Doctrine (HR Threat Rank pure); score=model_prob; bet_value_score deferred | Claude Code | updated 2026-06-11 |
 | [JIG Tactical Doctrine](doctrine/jig-tactical-doctrine.md) | HVY pitch-mix signal, arsenal hunting, matchup exploitation | Claude | complete |
-| [MAIN/JIG Separation Rules](doctrine/main-jig-separation.md) | Invariants governing separation of intelligence layers; tac_* vs jig_tac_* key namespaces; Bet Value Rank deferred/JIG-excluded | Claude Code | updated 2026-06-11 |
+| [MAIN/JIG Separation Rules](doctrine/main-jig-separation.md) | Invariants governing separation of intelligence layers; tac_* vs jig_tac_* key namespaces; native display-only jigTier ratified | Claude Code | updated 2026-07-13 |
 | [Visual Design Doctrine](doctrine/visual-design-doctrine.md) | Cinematic HUD, restrained glow, escalation hierarchy | Claude | complete |
 | [Room Governance](doctrine/room-governance.md) | Rooms 05/08/09/10/11 ownership boundaries | Claude | complete |
 | [App Shell Layout](doctrine/app-shell-layout.md) | MasterDashboard shell, engine-lens nav, MAIN/JIG identity colors, layout truth scope | Claude Code | 2026-06-08 |
 | [Production Surface Truth](doctrine/production-surface-truth.md) | root frontend/ = production; v4/frontend/ = prototype; main branch canonical | Claude Code | 2026-06-08 |
-| [Tier Vocabulary](doctrine/tier-vocabulary.md) | APEX/ELITE/EDGE vs QUIET/ACTIVE/ELEVATED vs prototype CRITICAL/HIGH — must not merge; Primary Ranking Doctrine added 2026-06-11 | Claude Code | updated 2026-06-11 |
+| [Tier Vocabulary](doctrine/tier-vocabulary.md) | APEX/ELITE/EDGE vs QUIET/ACTIVE/ELEVATED vs prototype CRITICAL/HIGH — must not merge; jigTier bands ratified 2026-07-13 | Claude Code | updated 2026-07-13 |
 | [Build Log and Spec Status](doctrine/build-log-and-spec-status.md) | latest.md missing; empty spec placeholders; Tier Ranking Room foundation recorded 2026-06-11 | Claude Code | updated 2026-06-11 |
 | [Mobile Architecture V2](doctrine/mobile-architecture-v2.md) | Mobile/responsive layout doctrine; canonical reductions, MAIN/JIG preservation, stale patterns to avoid | Claude Code | 2026-06-09 |
 | [Deploy Runbook](doctrine/deploy-runbook.md) | Manual flyctl deploy steps, cache refresh procedure, production surface map | Claude Code | 2026-06-15 |
 | [Ticket Roles](doctrine/ticket-roles.md) | PRIME/EXPLOSIVE/ADVANTAGE/WILDCARD — usage archetypes, gates, display-only invariants, recalibration history | Claude Code | 2026-06-15 |
 | [Design: Pitch Mix Analysis](doctrine/design-pitch-mix-analysis.md) | Modal de-fabrication 2026-06-15; real data sources; removed 3×3 zone grid | Claude Code | 2026-06-15 |
-| [Known Gaps / Parked](doctrine/known-gaps.md) | xFIP mismatch, silent neutral pitcher default, dead app.py, pitch mix blanks, JIG tier epoch, rooms governance | Claude Code | 2026-06-15 |
+| [Known Gaps / Parked](doctrine/known-gaps.md) | xFIP mismatch, silent neutral pitcher default, dead app.py, pitch mix blanks, JIG tier gaps RESOLVED 2026-07-13, rooms governance | Claude Code | updated 2026-07-13 |
 | [Tracking Consolidation Plan](doctrine/tracking-consolidation-plan.md) | Option A phased plan: redirect automated settlement to pnl path, CLV reconcile, reader repoints, pick_tracker retirement | Claude Code | 2026-06-17 |
 | [Feedback Loop Architecture](doctrine/feedback-loop-architecture.md) | 14-loop catalog, 4-grain warehouse, agent architecture, Ticket/Data Capture strategy, activation thresholds, dual accuracy/market lens | Claude Code | 2026-06-18 |
+| [TCC — Tactical Command Center](doctrine/tcc-command-center.md) | Three surfaces: Streamlit filter_controls.py (root doc), frontend CommandCenter overlay (9-panel filters, mock header/footer, honest GAME CONTEXT post-9514a4d), frontend COMMAND tab (4-panel read-only overview, real data, no mock) | Claude Code | 2026-07-01 |
+| [Formula Boundaries](doctrine/formula-boundaries.md) | Authoritative map of every scoring/model formula: file:line locations, protection status, PROTECTED vs RETUNABLE lists, hard boundary invariants | Claude Code | 2026-07-01 |
 
 ## ARCHITECTURE
 | Page | Summary | Agent |
@@ -27,7 +29,7 @@ Last updated: 2026-06-18
 | [Pipeline Data Flow](architecture/pipeline-data-flow.md) | pipeline.py canonical data assembly | Claude Code |
 | [Session State Map](architecture/session-state-map.md) | session_state ownership and protected keys | Claude Code |
 | [Cache Ownership Map](architecture/cache-ownership-map.md) | Cache surfaces and ownership boundaries | Claude Code |
-| [Supabase Schema](architecture/supabase-schema.md) | Service layer, tables, and key records | Claude Code |
+| [Supabase Schema](architecture/supabase-schema.md) | Service layer, tables, and key records; legs.signal_snapshot (migration 006, Phase S1-a) added 2026-07-06 | Claude Code |
 | [Pitch-Mix Data Availability](architecture/pitch-mix-data-availability.md) | Arsenal Exploit Score audit: what pitch-type data exists/doesn't; reduced score scope; null rule; PAUSED | Claude Code |
 
 ## FORMULAS
@@ -59,6 +61,8 @@ Last updated: 2026-06-18
 ## SESSIONS
 | Session | Summary | Agent | Date |
 |---------|---------|-------|------|
+| [2026-07-22 Supervised Auto-Analysis Validation](sessions/2026-07-22-supervised-auto-analysis.md) | First live dry-run: 338 legs, AUC=0.473 (ranking inversion 20-25% confirmed), brier=0.159, ece=0.057; --report flag added; migration 010 pending apply | Claude Code | 2026-07-22 |
+| [2026-07-22 Supervised Learning Loop](sessions/2026-07-22-supervised-learning-loop.md) | learning_metrics table + daily analysis job (Brier/ECE/AUC/buckets); non-blocking settle_legs.yml step; read-only on scoring; ready_for_refit_review flag at n≥500 | Claude Code | 2026-07-22 |
 | [2026-05-26 Phase 0 Closure](sessions/2026-05-26-phase0-closure.md) | Phase 0 closure | Claude | 2026-05-26 |
 | [2026-05-26 Phase 1 Track A + MAIN Doctrine](sessions/2026-05-26-phase1-track-a-and-main-doctrine.md) | Track A MAIN doctrine session | Claude | 2026-05-26 |
 | [2026-05-26 Ranker Audit](sessions/2026-05-26-ranker-audit.md) | Ranker audit findings | Codex | 2026-05-26 |

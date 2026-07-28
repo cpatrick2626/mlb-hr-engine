@@ -17,8 +17,8 @@ The FSM renders in two display modes: **GAME VIEW** (batters grouped under their
 
 - Default order = canonical `model_tier_rank` (MAIN ranking). This order is invariant — sort and filter are view-level only and never reorder the model's ranking.
 - Payload field units: `model_prob` is decimal 0–1; `hrprob` is ×100 (already a percentage); `true_matchup_score` is honest 0–100; `arsenal_edge_score` is 0–10; `arsenal_edge_confidence` is 0–1.
-- Four data-gap columns (`woba`, `whiff`, `swstr`, `pullbrl`) are hidden by default via `FSM_DATA_GAP`; noted "DATA GAP" in their column title strings.
-- Column preferences (order, visibility) are saved to `localStorage("fsmColPref")`, version-gated (`FSM_PREF_V = 3`).
+- Four data-gap definitions (`woba`, `whiff`, `swstr`, `pullbrl`) are excluded from the column picker via `FSM_PICKER_COLS`; they cannot be enabled without a real data source.
+- Column preferences (order, visibility) are saved to `localStorage("fsmColPref")`, version-gated (`FSM_PREF_V = 4`).
 - The component is fully self-contained — no shared React state, session state, or cache with Streamlit.
 
 ---
@@ -77,7 +77,7 @@ Column definitions live in `FSM_COLS` (array, `full-slate-matrix.js` lines 100�
 | `squp` | SQUP% | STATCAST | higher | Squared-up rate |
 | `ev` | EV | STATCAST | higher | Average exit velocity |
 | `hrpa` | HR/PA | STATS | higher | HR per plate appearance (model output) |
-| `sweet` | Sweet Spot% | STATCAST | higher | Launch-angle sweet-spot rate |
+| `sweet` | SS% | STATCAST | higher | Launch-angle sweet-spot rate |
 | `la` | LA° | STATCAST | special | Launch angle (optimal ≈ 15°) |
 | `slg` | SLG | STATS | higher | Slugging |
 | `fast` | FAST% | STATCAST | higher | Fast-swing rate |
@@ -95,12 +95,14 @@ Column definitions live in `FSM_COLS` (array, `full-slate-matrix.js` lines 100�
 | `gb` | GB% | STATCAST | lower | Ground-ball rate |
 | `fb` | FB% | STATCAST | higher | Fly-ball rate |
 | `ld` | LD% | STATCAST | higher | Line-drive rate |
+| `air` | AIR% | STATCAST | higher | Display-only derivation: `fb + ld`; null if either source is missing |
 | `pull` | PULL% | STATCAST | higher | Pull rate |
 | `center` | CENTER% | STATCAST | lower | Center rate |
+| `oppo` | OPPO% | STATCAST | lower | Additive `/api/slate` passthrough of upstream `oppo_pct` |
 | `hrfb` | HR/FB% | STATCAST | higher | HR per fly ball |
 | `opphr` | OPP HR/9 | MATCHUP | higher | Opposing pitcher HR/9 (danger-flagged header) |
 
-`FSM_DATA_GAP = ["woba", "whiff", "swstr", "pullbrl"]` — hidden on fresh load; users can re-enable via the COLUMNS panel. Data-gap reason is documented in each column's `title` string.
+`FSM_PICKER_COLS` excludes `woba`, `whiff`, `swstr`, and `pullbrl`; no picker entries exist for these no-data fields. AvgDist, 300+, 350+, Bat Spd, Comp%, and 1st Pitch Swing also remain unavailable. `HR/FB%` is unchanged and remains a separate repair surface.
 
 **Column manager**: the COLUMNS button opens a popover listing all columns with checkboxes (show/hide), ⓘ tooltip for stat description, and ▲/▼ reorder arrows. Columns are also drag-reorderable on desktop (drag from `<th>`, drop onto destination `<th>`). Order and visibility persist to `localStorage`.
 
@@ -162,6 +164,8 @@ Role badge tooltips are dynamically generated with the batter's real qualifying 
 ## Mobile Card View
 
 At `≤ 768px` portrait, CSS in `<style id="fsm-mobile-cards">` converts the table to stacked labeled-tile cards. Desktop (`> 768px`) and landscape are completely unaffected.
+
+**Mobile scroll ownership**: At `≤ 768px`, `html` is the single vertical slate scroller. `.md-stage` and `.md-stage__body` use normal block flow with visible overflow, so the slate intelligence strips, Matrix, and full batter list all contribute to one document height. `.md-sticky-head` therefore remains pinned across the entire slate. Desktop keeps the height-constrained `.md-stage__body { overflow: auto; }` two-pane behavior; TCC retains its separate scoped body scroll.
 
 **Card layout**: Each `tr.fsm-row` becomes `display: grid; grid-template-columns: repeat(6, 1fr)`. Structure:
 
@@ -248,7 +252,7 @@ These are invariants. Do not modify without operator authorization and a doctrin
 3. **MAIN/JIG separation.** When `isJigContext = true`, the FSM renders JIG tier labels (derived from `jigScore` via `fsmJigTierLabel`) and JIG rank counters. It never blends JIG signals into the MAIN matchup cell or MAIN tier badge. See [[main-jig-separation]].
 4. **TM not rescaled.** `FsmTMGauge` arc fill = `score / 100` raw. No client-side stretching.
 5. **FsmPitchMix stays unrouted** unless the operator explicitly authorizes restoring it as the pitch modal.
-6. **FSM_DATA_GAP columns** (`woba`, `whiff`, `swstr`, `pullbrl`) remain hidden by default. Do not silently un-gap them without a data source.
+6. **No-data columns stay unavailable.** `FSM_PICKER_COLS` excludes `woba`, `whiff`, `swstr`, and `pullbrl`. Do not expose them—or add other deferred stats—without a real payload source.
 
 ---
 
