@@ -873,6 +873,10 @@ def load_game_data(
     _ET = timezone(timedelta(hours=-4))  # EDT (Apr–Oct)
     game_date = target_date or (config.TARGET_DATE or datetime.now(_ET).strftime("%Y-%m-%d"))
 
+    # Game logs are run-scoped inputs: force the slate's bulk fetch to hydrate
+    # current-season batter/pitcher recency instead of reusing an older run.
+    mlb_stats.clear_game_log_caches()
+
     # Clear stale name-match cache so expired None entries from a previous run
     # (e.g., a run where props were empty or quota-exhausted) don't block matching.
     _NAME_MATCH_CACHE.clear()

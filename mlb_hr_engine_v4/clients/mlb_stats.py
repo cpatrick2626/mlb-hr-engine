@@ -26,6 +26,12 @@ _GAME_LOG_CACHE: dict[int, list] = {}
 # get_pitcher_days_rest(), which previously made identical requests independently.
 _PITCHER_GAME_LOG_CACHE: dict[int, list] = {}
 
+def clear_game_log_caches() -> None:
+    """Expire run-scoped batter/pitcher game logs before a new slate fetch."""
+    _GAME_LOG_CACHE.clear()
+    _PITCHER_GAME_LOG_CACHE.clear()
+
+
 # Bulk stats caches - populated by bulk fetch operations
 _BULK_SEASON_STATS_CACHE: dict[int, dict] = {}
 _BULK_RECENT_STATS_CACHE: dict[int, dict] = {}
