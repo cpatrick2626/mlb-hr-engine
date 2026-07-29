@@ -29,11 +29,29 @@ function fdSearchName(displayName) {
   /* CRITICAL: window.open must be called synchronously inside the click handler,
      before any await, to avoid popup-blocker. Never await before this call.
      deepLink (bet-level, then event-level, resolved by caller) lands on the specific
-     game; often absent — name search stays the fallback, clipboard copy always. */
+     game; often absent — name search stays the fallback, clipboard copy always.
+     Mobile search fallback routes through /fd.html (our domain) so the mobile browser,
+     not the FD app universal-link intercept, handles the tap. Deep links unchanged. */
   function dpOpenFD(name, deepLink) {
-    window.open(deepLink || dpFdUrl(name), "_blank", "noopener");
-    if (navigator.clipboard) navigator.clipboard.writeText(name).catch(() => {});
-    dpToast(deepLink ? "Opened FanDuel event: " + name : "Opened FanDuel search: " + name);
+    if (deepLink) {
+      window.open(deepLink, "_blank", "noopener");
+      if (navigator.clipboard) navigator.clipboard.writeText(name).catch(() => {});
+      dpToast("Opened FanDuel event: " + name);
+      return;
+    }
+    const normalized = fdSearchName(name);
+    // Clipboard write must fire synchronously inside the gesture — before navigation.
+    if (navigator.clipboard) navigator.clipboard.writeText(normalized).catch(() => {});
+    if (window.innerWidth < 640) {
+      const handoffUrl = normalized
+        ? `/fd.html?q=${encodeURIComponent(normalized)}`
+        : "https://sportsbook.fanduel.com/baseball/mlb?tab=player-home-runs";
+      window.open(handoffUrl, "_blank", "noopener");
+      dpToast("Name copied — paste in FanDuel");
+    } else {
+      window.open(dpFdUrl(name), "_blank", "noopener");
+      dpToast("Opened FanDuel search: " + name);
+    }
   }
 
   function dpToast(msg) {

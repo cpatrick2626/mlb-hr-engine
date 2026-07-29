@@ -374,9 +374,21 @@ function fsmShowFanDuelToast(term) {
 function fsmOpenFanDuelSearch(e, term) {
   e.stopPropagation();
   e.preventDefault();
-  fsmCopyFanDuelSearch(term);
-  window.open(fsmFanDuelUrl(term), "_blank", "noopener");
-  fsmShowFanDuelToast(term);
+  const normalized = fdSearchName(term);
+  // Clipboard write must be synchronous inside the gesture — do it first, before any navigation.
+  if (navigator.clipboard) navigator.clipboard.writeText(normalized).catch(() => {});
+  if (window.innerWidth < 640) {
+    // Mobile: route through our domain handoff page so the browser, not the FD app,
+    // handles the navigation. User taps "Open FanDuel" on that page.
+    const handoffUrl = normalized
+      ? `/fd.html?q=${encodeURIComponent(normalized)}`
+      : "https://sportsbook.fanduel.com/baseball/mlb?tab=player-home-runs";
+    window.open(handoffUrl, "_blank", "noopener");
+    fsmShowFanDuelToast("Name copied — paste in FanDuel");
+  } else {
+    window.open(fsmFanDuelUrl(term), "_blank", "noopener");
+    fsmShowFanDuelToast(term);
+  }
 }
 
 /* FD tier-icon click: prefer captured deep link (bet-level, then event-level —
