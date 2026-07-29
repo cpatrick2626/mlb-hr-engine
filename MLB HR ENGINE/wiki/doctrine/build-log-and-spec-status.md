@@ -287,7 +287,7 @@ If a future task populates these files, update this note.
    - `FS_TIER_THRESHOLDS`: APEX 0.20, ELITE 0.16, EDGE 0.11, SIGNAL 0.07, WATCH 0.04, COLD 0.00
 2. `ffa156c` — `fix(frontend): align full slate fanduel search links`
    - File: `frontend/assets/js/full-slate-matrix.js` only
-   - `fsmFanduelUrl` pattern: `https://sportsbook.fanduel.com/search?query=<encoded player name> home run`
+   - `fsmFanDuelUrl` pattern: `https://sportsbook.fanduel.com/search?q=<encoded player name>` (desktop opens FD directly; mobile routes via `/fd.html?q=<name>` intermediary — clipboard copy fires synchronously in the tap gesture as reliable fallback)
 
 ### Fly.io Deploy
 
