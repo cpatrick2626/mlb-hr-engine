@@ -354,6 +354,7 @@ function fsmFanDuelUrl(term) {
 function fsmOpenFanDuelSearch(e, term) {
   e.stopPropagation();
   e.preventDefault();
+  try { navigator.clipboard.writeText(term); } catch (_) {}
   window.open(fsmFanDuelUrl(term), "_blank", "noopener");
 }
 
