@@ -27,45 +27,9 @@ function fdSearchName(displayName) {
   }
 
   /* CRITICAL: window.open must be called synchronously inside the click handler,
-     before any await, to avoid popup-blocker. Never await before this call.
-     deepLink (bet-level, then event-level, resolved by caller) lands on the specific
-     game; often absent — name search stays the fallback, clipboard copy always.
-     Mobile search fallback routes through /fd.html (our domain) so the mobile browser,
-     not the FD app universal-link intercept, handles the tap. Deep links unchanged. */
-  function dpOpenFD(name, deepLink) {
-    if (deepLink) {
-      window.open(deepLink, "_blank", "noopener");
-      if (navigator.clipboard) navigator.clipboard.writeText(name).catch(() => {});
-      dpToast("Opened FanDuel event: " + name);
-      return;
-    }
-    const normalized = fdSearchName(name);
-    // Clipboard write must fire synchronously inside the gesture — before navigation.
-    if (navigator.clipboard) navigator.clipboard.writeText(normalized).catch(() => {});
-    if (window.innerWidth < 640) {
-      const handoffUrl = normalized
-        ? `/fd.html?q=${encodeURIComponent(normalized)}`
-        : "https://sportsbook.fanduel.com/baseball/mlb?tab=player-home-runs";
-      window.open(handoffUrl, "_blank", "noopener");
-      dpToast("Name copied — paste in FanDuel");
-    } else {
-      window.open(dpFdUrl(name), "_blank", "noopener");
-      dpToast("Opened FanDuel search: " + name);
-    }
-  }
-
-  function dpToast(msg) {
-    let el = document.getElementById("dp-toast");
-    if (!el) {
-      el = document.createElement("div");
-      el.id = "dp-toast";
-      el.style.cssText = "position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1a2030;border:1px solid #3b6fff;color:#e0e8ff;padding:10px 18px;border-radius:8px;font-size:13px;font-family:inherit;z-index:10001;pointer-events:none;transition:opacity .3s;white-space:nowrap;";
-      document.body.appendChild(el);
-    }
-    el.textContent = msg;
-    el.style.opacity = "1";
-    clearTimeout(el._t);
-    el._t = setTimeout(() => { el.style.opacity = "0"; }, 2800);
+     before any await, to avoid popup-blocker. Never await before this call. */
+  function dpOpenFD(name) {
+    window.open(dpFdUrl(name), "_blank", "noopener");
   }
 
   function dpIsAuthed() {
@@ -122,12 +86,10 @@ function fdSearchName(displayName) {
         ? (Number(row.model_prob) * 100).toFixed(1) + "%"
         : "—";
     const authed = dpIsAuthed();
-    // Deep-link priority: bet link → event link → null (dpOpenFD falls back to search)
-    const fdLink = row.fd_bet_link || row.fd_event_link || null;
 
     // Option 1: FD only — no auth required
     const handleFDOnly = () => {
-      dpOpenFD(name, fdLink);   // SYNC — popup-safe
+      dpOpenFD(name);   // SYNC — popup-safe
       onClose();
     };
 
@@ -140,7 +102,7 @@ function fdSearchName(displayName) {
 
     // Option 3: FD + Slip — FD MUST open synchronously before any async op
     const handleFDAndSlip = () => {
-      dpOpenFD(name, fdLink);   // SYNC — must be first; kept inside user gesture
+      dpOpenFD(name);   // SYNC — must be first; kept inside user gesture
       if (!authed) { onClose(); dpOpenAuth(); return; }
       window.__hrSlip.addLeg(row);   // async internally; fires, _notify updates surfaces
       onClose();

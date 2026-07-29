@@ -351,60 +351,14 @@ function fsmFanDuelUrl(term) {
     : "https://sportsbook.fanduel.com/baseball/mlb?tab=player-home-runs";
 }
 
-function fsmCopyFanDuelSearch(term) {
-  if (navigator.clipboard) {
-    navigator.clipboard.writeText(term).catch(() => {});
-  }
-}
-
-function fsmShowFanDuelToast(term) {
-  let el = document.getElementById("fsm-fd-toast");
-  if (!el) {
-    el = document.createElement("div");
-    el.id = "fsm-fd-toast";
-    el.style.cssText = "position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1a2030;border:1px solid #3b6fff;color:#e0e8ff;padding:10px 18px;border-radius:8px;font-size:13px;font-family:inherit;z-index:9999;pointer-events:none;transition:opacity .3s;white-space:nowrap;";
-    document.body.appendChild(el);
-  }
-  el.textContent = "Copied FanDuel search: " + term;
-  el.style.opacity = "1";
-  clearTimeout(el._t);
-  el._t = setTimeout(() => { el.style.opacity = "0"; }, 2800);
-}
-
 function fsmOpenFanDuelSearch(e, term) {
   e.stopPropagation();
   e.preventDefault();
-  const normalized = fdSearchName(term);
-  // Clipboard write must be synchronous inside the gesture — do it first, before any navigation.
-  if (navigator.clipboard) navigator.clipboard.writeText(normalized).catch(() => {});
-  if (window.innerWidth < 640) {
-    // Mobile: route through our domain handoff page so the browser, not the FD app,
-    // handles the navigation. User taps "Open FanDuel" on that page.
-    const handoffUrl = normalized
-      ? `/fd.html?q=${encodeURIComponent(normalized)}`
-      : "https://sportsbook.fanduel.com/baseball/mlb?tab=player-home-runs";
-    window.open(handoffUrl, "_blank", "noopener");
-    fsmShowFanDuelToast("Name copied — paste in FanDuel");
-  } else {
-    window.open(fsmFanDuelUrl(term), "_blank", "noopener");
-    fsmShowFanDuelToast(term);
-  }
+  window.open(fsmFanDuelUrl(term), "_blank", "noopener");
 }
 
-/* FD tier-icon click: prefer captured deep link (bet-level, then event-level —
-   lands on the specific game), else Streamlit parity search URL. Links are often
-   absent (FD rarely posts outcome links); name search + clipboard stays the fallback. */
 function fsmOpenFD(e, row) {
-  const deepLink = row.fd_bet_link || row.fd_event_link;
-  if (deepLink) {
-    e.stopPropagation();
-    e.preventDefault();
-    fsmCopyFanDuelSearch(row.name);   // keep name on clipboard for manual fallback
-    window.open(deepLink, "_blank", "noopener");
-    fsmShowFanDuelToast(row.name);
-  } else {
-    fsmOpenFanDuelSearch(e, row.name);
-  }
+  fsmOpenFanDuelSearch(e, row.name);
 }
 
 /* Tier badge tooltip — tier name + doctrine description + this row's real model_prob. */
