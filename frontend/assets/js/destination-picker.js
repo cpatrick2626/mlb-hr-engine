@@ -29,7 +29,9 @@ function fdSearchName(displayName) {
   /* CRITICAL: window.open must be called synchronously inside the click handler,
      before any await, to avoid popup-blocker. Never await before this call. */
   function dpOpenFD(name) {
-    window.open(dpFdUrl(name), "_blank", "noopener");
+    const url = dpFdUrl(name);
+    console.log("[HR-Picker] window.open →", url, "| name:", JSON.stringify(name));
+    window.open(url, "_blank", "noopener");
   }
 
   function dpIsAuthed() {
