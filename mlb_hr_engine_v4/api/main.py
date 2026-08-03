@@ -1319,8 +1319,8 @@ async def get_pitcher_detail(pitcher_id: int, batter_id: int = 0,
     # in-process _GAME_LOG_CACHE that clear_game_log_caches() cannot reach in Fly.
     try:
         if batter_id:
-            _, _bd_player, _, _, _ = _cached_batter_context(batter_id)
-            result["batter_recent"] = list(_bd_player.get("recent_form_games") or [])
+            _, _bd_player, _bd_row, _, _ = _cached_batter_context(batter_id)
+            result["batter_recent"] = list(_bd_player.get("recent_form_games") or _bd_row.get("recent_form_games") or [])
         else:
             result["batter_recent"] = []
     except Exception as e:
@@ -1517,7 +1517,7 @@ async def get_batter_detail(batter_id: int, pitcher_id: int = 0, game_pk: int = 
     twenty_game_trend = None
     pitcher_recent = []
     try:
-        batter_recent = list(player.get("recent_form_games") or [])
+        batter_recent = list(player.get("recent_form_games") or row.get("recent_form_games") or [])
         batter_cache_hit = bool(batter_recent)
         cached_batter_games = _mlb_stats._GAME_LOG_CACHE.get(batter_id, [])
         if not isinstance(cached_batter_games, list):
