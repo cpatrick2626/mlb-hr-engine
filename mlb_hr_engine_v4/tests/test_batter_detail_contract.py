@@ -79,6 +79,7 @@ def _context(*, full: bool) -> tuple[dict, dict, dict, dict, str]:
         "weather": {"temp_f": 82, "wind_mph": 8, "humidity_pct": 60},
         "pitcher_hr9": 1.4, "pitcher_barrel_allowed": 0.09,
         "pitcher_vuln": "HIGH", "pitcher_days_rest": 4, "fatigue_factor": 1.02,
+        "recent_form_games": [{"date": "2026-07-13", "hr": 1, "avg": 0.5, "slg": 1.25, "pa": 4}],
     }
     row = {
         "id": 77, "pitcher_id": 88, "game_pk": 1001, "hrprob": 62.0,
@@ -245,7 +246,11 @@ class BatterDetailContractTests(unittest.TestCase):
 
         self.assertEqual(detail["threat"]["model_prob"], 0.18)
         self.assertEqual(detail["pitch_profile"]["_meta"]["freshness"], "Gap")
-        self.assertEqual(detail["recent"]["_meta"]["freshness"], "Gap")
+        # recent form now comes from slate (recent_form_games), not the game-log cache,
+        # so a corrupt cache no longer produces a Gap — batter_recent is still valid.
+        self.assertEqual(detail["recent"]["batter_games"], [
+            {"date": "2026-07-13", "hr": 1, "avg": 0.5, "slg": 1.25, "pa": 4},
+        ])
         self.assertEqual(pitch_mix._BATTER_PT_CACHE, scoring_cache_before)
 
 

@@ -1314,21 +1314,15 @@ async def get_pitcher_detail(pitcher_id: int, batter_id: int = 0,
         log.warning("pitcher-detail pitcher_recent failed pid=%s: %s", pitcher_id, e)
         result["pitcher_recent"] = []
 
-    # Batter recent form: last 5 games (HR/AVG/SLG/PA)
+    # Batter recent form: read from persisted slate (fresh per pipeline run).
+    # Slate recent_form_games matches what /api/slate serves; avoids the stale
+    # in-process _GAME_LOG_CACHE that clear_game_log_caches() cannot reach in Fly.
     try:
-        from clients.mlb_stats import _game_log_splits
-        batter_recent = []
-        for s in (_game_log_splits(batter_id)[:5] if batter_id else []):
-            stat = s.get("stat", {})
-            ab = int(stat.get("atBats") or 0)
-            batter_recent.append({
-                "date": s.get("date"),
-                "hr":   int(stat.get("homeRuns") or 0),
-                "avg":  round(int(stat.get("hits") or 0) / ab, 3) if ab else None,
-                "slg":  round(int(stat.get("totalBases") or 0) / ab, 3) if ab else None,
-                "pa":   int(stat.get("plateAppearances") or 0),
-            })
-        result["batter_recent"] = batter_recent
+        if batter_id:
+            _, _bd_player, _, _, _ = _cached_batter_context(batter_id)
+            result["batter_recent"] = list(_bd_player.get("recent_form_games") or [])
+        else:
+            result["batter_recent"] = []
     except Exception as e:
         log.warning("pitcher-detail batter_recent failed bid=%s: %s", batter_id, e)
         result["batter_recent"] = []
@@ -1511,8 +1505,10 @@ async def get_batter_detail(batter_id: int, pitcher_id: int = 0, game_pk: int = 
     resolved_game_pk = game_pk or player.get("game_pk") or row.get("game_pk")
     generated_at = (payload.get("slate_cache") or {}).get("generated_at")
 
-    # Cache-only recent records. Calling the existing game-log helpers on a miss
-    # would perform an external MLB StatsAPI request, which B1 explicitly forbids.
+    # Recent form: PRIMARY source is the persisted slate (fresh per pipeline run).
+    # The in-process _GAME_LOG_CACHE is stale in the long-running Fly process —
+    # clear_game_log_caches() runs only in the GH Actions pipeline process, not here.
+    # twenty_game_trend is kept from the in-process cache (best-effort; slate stores 5).
     from clients import mlb_stats as _mlb_stats
     batter_cache_hit = False
     pitcher_cache_hit = False
@@ -1521,20 +1517,11 @@ async def get_batter_detail(batter_id: int, pitcher_id: int = 0, game_pk: int = 
     twenty_game_trend = None
     pitcher_recent = []
     try:
-        batter_cache_hit = batter_id in _mlb_stats._GAME_LOG_CACHE
+        batter_recent = list(player.get("recent_form_games") or [])
+        batter_cache_hit = bool(batter_recent)
         cached_batter_games = _mlb_stats._GAME_LOG_CACHE.get(batter_id, [])
         if not isinstance(cached_batter_games, list):
-            raise TypeError("batter game-log cache entry is not a list")
-        for split in cached_batter_games[:5]:
-            stat = split.get("stat", {})
-            ab = int(stat.get("atBats") or 0)
-            batter_recent.append({
-                "date": split.get("date"),
-                "hr": int(stat.get("homeRuns") or 0),
-                "avg": round(int(stat.get("hits") or 0) / ab, 3) if ab else None,
-                "slg": round(int(stat.get("totalBases") or 0) / ab, 3) if ab else None,
-                "pa": int(stat.get("plateAppearances") or 0),
-            })
+            cached_batter_games = []
         if cached_batter_games:
             twenty_game_trend = [
                 {
@@ -1544,7 +1531,7 @@ async def get_batter_detail(batter_id: int, pitcher_id: int = 0, game_pk: int = 
                 for split in reversed(cached_batter_games[:20])
             ]
     except Exception as exc:
-        log.warning("batter-detail batter recent cache failed bid=%s: %s", batter_id, exc)
+        log.warning("batter-detail recent failed bid=%s: %s", batter_id, exc)
         batter_cache_hit = False
         cached_batter_games = []
         batter_recent = []
@@ -1579,7 +1566,7 @@ async def get_batter_detail(batter_id: int, pitcher_id: int = 0, game_pk: int = 
     twenty_game_trend_sample_count = len(twenty_game_trend or [])
 
     season_hr = player.get("season_hr") if player.get("season_hr") is not None else row.get("hr")
-    batter_games_played = len(cached_batter_games) if batter_cache_hit else None
+    batter_games_played = len(cached_batter_games) if cached_batter_games else None
     team_games_played_raw = next(
         (
             source.get(key)
@@ -1749,7 +1736,7 @@ async def get_batter_detail(batter_id: int, pitcher_id: int = 0, game_pk: int = 
             "slate_date": payload.get("date") or (payload.get("slate_cache") or {}).get("date"),
             "generated_at": generated_at,
             "freshness": freshness,
-            "source": "pipeline_runs.payload + in_process_game_log_cache",
+            "source": "pipeline_runs.payload (recent_form) + in_process_game_log_cache (20g trend)",
             "display_only": True,
         },
         "threat": _detail_module(threat, {

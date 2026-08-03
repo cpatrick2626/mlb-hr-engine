@@ -21,15 +21,24 @@ _SESSION.headers.update({"User-Agent": "Codex-HR-Engine/1.0"})
 # Session-level cache for game logs â€" avoids duplicate API calls when
 # get_player_recent_stats() and get_player_short_form() are both called.
 _GAME_LOG_CACHE: dict[int, list] = {}
+_GAME_LOG_CACHE_TS: dict[int, float] = {}  # fetched-at epoch seconds
 
 # Pitcher game log cache — shared by get_pitcher_recent_stats() and
 # get_pitcher_days_rest(), which previously made identical requests independently.
 _PITCHER_GAME_LOG_CACHE: dict[int, list] = {}
+_PITCHER_GAME_LOG_CACHE_TS: dict[int, float] = {}  # fetched-at epoch seconds
+
+# Entries older than this are re-fetched. Prevents the long-running Fly process
+# from serving game-log data that is days stale. Pipeline clears both caches
+# before each run via clear_game_log_caches(), so TTL doesn't affect scoring.
+_GAME_LOG_CACHE_TTL = 4 * 3600  # 4 hours
 
 def clear_game_log_caches() -> None:
     """Expire run-scoped batter/pitcher game logs before a new slate fetch."""
     _GAME_LOG_CACHE.clear()
+    _GAME_LOG_CACHE_TS.clear()
     _PITCHER_GAME_LOG_CACHE.clear()
+    _PITCHER_GAME_LOG_CACHE_TS.clear()
 
 
 # Bulk stats caches - populated by bulk fetch operations
@@ -88,45 +97,53 @@ def _save_multiseason_cache() -> None:
 
 
 def _pitcher_game_log_splits(pitcher_id: int) -> list:
-    if pitcher_id not in _PITCHER_GAME_LOG_CACHE:
-        try:
-            data = _get(f"/people/{pitcher_id}/stats", {
-                "stats": "gameLog", "group": "pitching",
-                "season": config.CURRENT_SEASON,
-                "limit": 162,
-            })
-            stats_list = data.get("stats", [])
-            splits = stats_list[0].get("splits", []) if stats_list else []
-            # Cache even when empty — player has no game log this season (IL, minors, etc.)
-            # Network failures still skip caching (caught below) so they stay retryable.
-            _PITCHER_GAME_LOG_CACHE[pitcher_id] = sorted(
-                splits, key=lambda s: s.get("date", ""), reverse=True
-            )
-        except Exception as e:
-            # Don't cache network/parse failures — allow retry on next call.
-            print(f"[mlb_stats] pitcher game log failed (id={pitcher_id}): {e}")
-            return []
+    now = time.time()
+    if (pitcher_id in _PITCHER_GAME_LOG_CACHE
+            and now - _PITCHER_GAME_LOG_CACHE_TS.get(pitcher_id, 0) < _GAME_LOG_CACHE_TTL):
+        return _PITCHER_GAME_LOG_CACHE[pitcher_id]
+    try:
+        data = _get(f"/people/{pitcher_id}/stats", {
+            "stats": "gameLog", "group": "pitching",
+            "season": config.CURRENT_SEASON,
+            "limit": 162,
+        })
+        stats_list = data.get("stats", [])
+        splits = stats_list[0].get("splits", []) if stats_list else []
+        # Cache even when empty — player has no game log this season (IL, minors, etc.)
+        # Network failures still skip caching (caught below) so they stay retryable.
+        _PITCHER_GAME_LOG_CACHE[pitcher_id] = sorted(
+            splits, key=lambda s: s.get("date", ""), reverse=True
+        )
+        _PITCHER_GAME_LOG_CACHE_TS[pitcher_id] = now
+    except Exception as e:
+        # Don't cache network/parse failures — return stale if available.
+        print(f"[mlb_stats] pitcher game log failed (id={pitcher_id}): {e}")
+        return _PITCHER_GAME_LOG_CACHE.get(pitcher_id, [])
     return _PITCHER_GAME_LOG_CACHE[pitcher_id]
 
 
 def _game_log_splits(player_id: int) -> list:
-    if player_id not in _GAME_LOG_CACHE:
-        try:
-            data = _get(f"/people/{player_id}/stats", {
-                "stats": "gameLog", "group": "hitting",
-                "season": config.CURRENT_SEASON,
-                "limit": 162,   # full season; without this MLB API silently caps results
-            })
-            stats_list = data.get("stats", [])
-            splits = stats_list[0].get("splits", []) if stats_list else []
-            # Cache even when empty — player has no game log this season.
-            _GAME_LOG_CACHE[player_id] = sorted(
-                splits, key=lambda s: s.get("date", ""), reverse=True
-            )
-        except Exception as e:
-            # Don't cache network/parse failures — allow retry on next call.
-            print(f"[mlb_stats] batter game log failed (id={player_id}): {e}")
-            return []
+    now = time.time()
+    if (player_id in _GAME_LOG_CACHE
+            and now - _GAME_LOG_CACHE_TS.get(player_id, 0) < _GAME_LOG_CACHE_TTL):
+        return _GAME_LOG_CACHE[player_id]
+    try:
+        data = _get(f"/people/{player_id}/stats", {
+            "stats": "gameLog", "group": "hitting",
+            "season": config.CURRENT_SEASON,
+            "limit": 162,   # full season; without this MLB API silently caps results
+        })
+        stats_list = data.get("stats", [])
+        splits = stats_list[0].get("splits", []) if stats_list else []
+        # Cache even when empty — player has no game log this season.
+        _GAME_LOG_CACHE[player_id] = sorted(
+            splits, key=lambda s: s.get("date", ""), reverse=True
+        )
+        _GAME_LOG_CACHE_TS[player_id] = now
+    except Exception as e:
+        # Don't cache network/parse failures — return stale if available.
+        print(f"[mlb_stats] batter game log failed (id={player_id}): {e}")
+        return _GAME_LOG_CACHE.get(player_id, [])
     return _GAME_LOG_CACHE[player_id]
 
 
@@ -882,6 +899,7 @@ def _fetch_batch_stats(player_ids: list[int]) -> None:
             _BULK_SEASON_STATS_CACHE[player_id] = season_stats
 
             _GAME_LOG_CACHE[player_id] = game_logs  # cache empty list too — prevents individual re-fetch
+            _GAME_LOG_CACHE_TS[player_id] = time.time()
             if game_logs:
                 recent_stats = _calculate_recent_from_logs(game_logs)
                 _BULK_RECENT_STATS_CACHE[player_id] = recent_stats
@@ -989,6 +1007,7 @@ def _fetch_batch_pitcher_stats(pitcher_ids: list[int]) -> None:
                     game_logs = stat_group.get("splits", [])
                     game_logs = sorted(game_logs, key=lambda s: s.get("date", ""), reverse=True)
                     _PITCHER_GAME_LOG_CACHE[pitcher_id] = game_logs
+                    _PITCHER_GAME_LOG_CACHE_TS[pitcher_id] = time.time()
 
     except Exception as e:
         print(f"[mlb_stats] Bulk pitcher fetch failed for batch: {e}")
@@ -998,7 +1017,9 @@ def clear_all_caches() -> None:
     """Clear all in-process caches. Call this before a Force Refresh so
     the next load fetches fresh player stats, platoon splits, and game logs."""
     _GAME_LOG_CACHE.clear()
+    _GAME_LOG_CACHE_TS.clear()
     _PITCHER_GAME_LOG_CACHE.clear()
+    _PITCHER_GAME_LOG_CACHE_TS.clear()
     _BULK_SEASON_STATS_CACHE.clear()
     _BULK_RECENT_STATS_CACHE.clear()
     _BULK_PITCHER_STATS_CACHE.clear()
