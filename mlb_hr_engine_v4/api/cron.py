@@ -69,10 +69,11 @@ def _check_capture_readiness(capture: dict) -> None:
     if capture["odds_lines_fetched"] == 0:
         _log_capture_summary(capture, picks_upserted=0)
         logger.error(
-            "[capture] CAPTURE FAILED: games present but zero odds fetched — "
-            "check ODDS_API_KEY / odds source"
+            "[capture] ODDS PENDING: games present but zero odds fetched — "
+            "building projected slate; will backfill when odds post. "
+            "Check ODDS_API_KEY / odds source if this persists past expected post time."
         )
-        raise RuntimeError("capture failed: games present but zero odds fetched")
+        return  # proceed — projected slate builds without odds
 
     if capture["qualified_count"] == 0:
         logger.warning(
@@ -89,14 +90,32 @@ def run(target_date: str = None) -> dict:
     capture = _capture_readiness(data)
     _check_capture_readiness(capture)
 
+    odds_pending = capture["games_scheduled"] > 0 and capture["odds_lines_fetched"] == 0
+
+    # Observability: distinguish early-morning pending (normal) from stale pending
+    # (odds should have posted by now — likely dead key or quota exhaustion).
+    # Threshold: 1pm ET = 17:00 UTC (EDT, UTC-4 in season). Greppable alert label.
+    odds_pending_stale = False
+    if odds_pending:
+        _ODDS_EXPECTED_POST_HOUR_UTC = 17
+        if datetime.utcnow().hour >= _ODDS_EXPECTED_POST_HOUR_UTC:
+            odds_pending_stale = True
+            logger.error(
+                "[capture] ALERT ODDS_PENDING_PAST_THRESHOLD: odds still zero past %d:00 UTC — "
+                "check ODDS_API_KEY / quota; possible dead key.",
+                _ODDS_EXPECTED_POST_HOUR_UTC,
+            )
+
     payload = {
-        "date":            target_date,
-        "ran_at":          datetime.utcnow().isoformat() + "Z",
-        "ranked":          serializable(data.get("ranked", [])),
-        "all_by_model":    serializable(data.get("all_by_model", []))[:50],
-        "auto_parlays":    data.get("auto_parlays", {}),
-        "profile_parlays": data.get("profile_parlays", {}),
-        "stats":           data.get("stats", {}),
+        "date":               target_date,
+        "ran_at":             datetime.utcnow().isoformat() + "Z",
+        "ranked":             serializable(data.get("ranked", [])),
+        "all_by_model":       serializable(data.get("all_by_model", []))[:50],
+        "auto_parlays":       data.get("auto_parlays", {}),
+        "profile_parlays":    data.get("profile_parlays", {}),
+        "stats":              data.get("stats", {}),
+        "odds_pending":       odds_pending,
+        "odds_pending_stale": odds_pending_stale,
     }
 
     try:
@@ -105,7 +124,9 @@ def run(target_date: str = None) -> dict:
         # verifies JWTs), so provide a placeholder before importing.
         os.environ.setdefault("SUPABASE_JWT_SECRET", "")
         from api.main import _build_slate_payload
-        payload["slate_cache"] = _build_slate_payload(data)
+        payload["slate_cache"] = _build_slate_payload(
+            data, odds_pending=odds_pending, odds_pending_stale=odds_pending_stale
+        )
         print(f"[cron] slate_cache built — {len(payload['slate_cache'].get('leaderboard_rows', []))} rows")
     except Exception as e:
         print(f"[cron] slate_cache build failed (payload stored without it): {e}")

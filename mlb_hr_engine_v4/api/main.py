@@ -764,11 +764,13 @@ def _jig_tier(jig_score: float) -> str:
     return "COLD"
 
 
-def _build_slate_payload(data: dict) -> dict:
+def _build_slate_payload(data: dict, odds_pending: bool = False, odds_pending_stale: bool = False) -> dict:
     """
     Map pipeline data → React frontend shape.
     Returns leaderboard_rows, leaderboard_rows_jig, slate_games, generated_at, date.
     Does NOT include from_cache / cache_age_minutes — caller adds those.
+    odds_pending=True when games are scheduled but no odds were fetched; projected
+    fields (model_prob, tiers, Statcast) are still populated — odds/EV/edge are null.
     """
     import datetime as _dt
     players = data.get("all_players", [])
@@ -1150,6 +1152,8 @@ def _build_slate_payload(data: dict) -> dict:
         "date":                 today_et().strftime("%Y-%m-%d"),
         "fs_tier_thresholds":   dict(FS_TIER_THRESHOLDS),
         "jig_build_error":      jig_build_error,
+        "odds_pending":         odds_pending,
+        "odds_pending_stale":   odds_pending_stale,
     }
 
 
