@@ -1,3 +1,31 @@
+function OddsPendingBanner() {
+  const [info, setInfo] = React.useState(() => ({
+    pending: window.SLATE_ODDS_PENDING === true,
+    stale: window.SLATE_ODDS_PENDING_STALE === true,
+  }));
+  React.useEffect(() => {
+    const handler = (e) => {
+      setInfo({
+        pending: !!(e.detail && e.detail.odds_pending),
+        stale: !!(e.detail && e.detail.odds_pending_stale),
+      });
+    };
+    window.addEventListener("hrEngineDataLoaded", handler);
+    return () => window.removeEventListener("hrEngineDataLoaded", handler);
+  }, []);
+  if (!info.pending) return null;
+  return (
+    <div className="stale-banner stale-banner--odds-pending" style={{ background: "rgba(255,176,32,0.12)", borderColor: "rgba(255,176,32,0.4)" }}>
+      <span className="stale-banner__dot" style={{ background: "#ffb020" }} />
+      <span className="stale-banner__text" style={{ color: "#ffb020" }}>
+        {info.stale
+          ? "ODDS DELAYED — verify feed · projected model data shown · EV/edge/odds will populate when odds post"
+          : "PROJECTED — ODDS PENDING · model probability and Statcast data shown · EV/edge/odds will populate when odds post"}
+      </span>
+    </div>
+  );
+}
+
 function StaleBanner() {
   const [info, setInfo] = React.useState(() => ({
     stale: window.SLATE_STALE === true,
@@ -131,6 +159,8 @@ function MasterDashboard() {
             if (data.slate_games?.length) window.SLATE_GAMES = data.slate_games;
             if (data.generated_at) window.SLATE_GENERATED_AT = data.generated_at;
             window.SLATE_STALE = data.stale === true;
+            window.SLATE_ODDS_PENDING = data.odds_pending === true;
+            window.SLATE_ODDS_PENDING_STALE = data.odds_pending_stale === true;
             window.dispatchEvent(new CustomEvent("hrEngineDataLoaded", { detail: data }));
             return;
           }
@@ -227,6 +257,7 @@ function MasterDashboard() {
       <div className="md-sticky-head" ref={stickyHeadRef}>
         {topBar}
         <SlateCommandStrip />
+        <OddsPendingBanner />
         <StaleBanner />
         {isMobileLayout && <LiveTargets targets={LIVE_TARGETS} onPick={() => {}} />}
       </div>
