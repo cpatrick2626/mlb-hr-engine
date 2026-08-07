@@ -26,6 +26,38 @@ function OddsPendingBanner() {
   );
 }
 
+function OddsQuotaBanner() {
+  const [info, setInfo] = React.useState(() => ({
+    remaining: window.SLATE_ODDS_QUOTA_REMAINING ?? null,
+    low: window.SLATE_ODDS_QUOTA_LOW === true,
+  }));
+  React.useEffect(() => {
+    const handler = (e) => {
+      setInfo({
+        remaining: e.detail?.odds_quota_remaining ?? null,
+        low: !!(e.detail && e.detail.odds_quota_low),
+      });
+    };
+    window.addEventListener("hrEngineDataLoaded", handler);
+    return () => window.removeEventListener("hrEngineDataLoaded", handler);
+  }, []);
+  if (!info.low || info.remaining === null) return null;
+  const critical = info.remaining === 0;
+  const color = critical ? "#ef4444" : "#ffb020";
+  const bg = critical ? "rgba(239,68,68,0.12)" : "rgba(255,176,32,0.12)";
+  const border = critical ? "rgba(239,68,68,0.4)" : "rgba(255,176,32,0.4)";
+  return (
+    <div className="stale-banner stale-banner--odds-pending" style={{ background: bg, borderColor: border }}>
+      <span className="stale-banner__dot" style={{ background: color }} />
+      <span className="stale-banner__text" style={{ color }}>
+        {critical
+          ? "ODDS API QUOTA EXHAUSTED — odds/EV/edge unavailable until monthly quota resets"
+          : `ODDS API: ${info.remaining} requests remaining — quota low`}
+      </span>
+    </div>
+  );
+}
+
 function StaleBanner() {
   const [info, setInfo] = React.useState(() => ({
     stale: window.SLATE_STALE === true,
@@ -161,6 +193,8 @@ function MasterDashboard() {
             window.SLATE_STALE = data.stale === true;
             window.SLATE_ODDS_PENDING = data.odds_pending === true;
             window.SLATE_ODDS_PENDING_STALE = data.odds_pending_stale === true;
+            window.SLATE_ODDS_QUOTA_REMAINING = data.odds_quota_remaining ?? null;
+            window.SLATE_ODDS_QUOTA_LOW = data.odds_quota_low === true;
             window.dispatchEvent(new CustomEvent("hrEngineDataLoaded", { detail: data }));
             return;
           }
@@ -258,6 +292,7 @@ function MasterDashboard() {
         {topBar}
         <SlateCommandStrip />
         <OddsPendingBanner />
+        <OddsQuotaBanner />
         <StaleBanner />
         {isMobileLayout && <LiveTargets targets={LIVE_TARGETS} onPick={() => {}} />}
       </div>
