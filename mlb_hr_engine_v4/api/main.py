@@ -75,6 +75,10 @@ app.add_middleware(
 
 CRON_SECRET = os.environ.get("CRON_SECRET", "")
 
+# Warn on board when Odds API remaining requests fall at or below this value.
+# Free tier is 500/month; 50 gives ~4-5 pipeline runs of headroom before exhaustion.
+ODDS_QUOTA_LOW_THRESHOLD = 50
+
 
 # ── Health ─────────────────────────────────────────────────────────────────────
 
@@ -1144,6 +1148,14 @@ def _build_slate_payload(data: dict, odds_pending: bool = False, odds_pending_st
                 "wind_deg": _game_weather.get("wind_deg"),
             }
 
+    odds_quota = data.get("odds_quota") or {}
+    odds_quota_remaining = odds_quota.get("remaining")
+    odds_quota_used = odds_quota.get("used")
+    odds_quota_low = (
+        odds_quota_remaining is not None
+        and odds_quota_remaining < ODDS_QUOTA_LOW_THRESHOLD
+    )
+
     return {
         "leaderboard_rows":     leaderboard_rows,
         "leaderboard_rows_jig": jig_rows,
@@ -1154,6 +1166,9 @@ def _build_slate_payload(data: dict, odds_pending: bool = False, odds_pending_st
         "jig_build_error":      jig_build_error,
         "odds_pending":         odds_pending,
         "odds_pending_stale":   odds_pending_stale,
+        "odds_quota_remaining": odds_quota_remaining,
+        "odds_quota_used":      odds_quota_used,
+        "odds_quota_low":       odds_quota_low,
     }
 
 
