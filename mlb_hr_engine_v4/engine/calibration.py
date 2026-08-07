@@ -24,10 +24,20 @@ Parameters are fitted by analyze_calibration.py. The recommended params
 are stored in config.py after the analyst approves them.
 """
 
+import json
 import math
+from pathlib import Path
+
 import config
 
 _EPS = 1e-7
+
+# Warehouse isotonic recalibration curve — fitted on labeled
+# batter_stat_history outcomes by scripts/analysis/fit_warehouse_isotonic.py.
+# Fit input is the FINAL model_prob (post prob_scale, post Platt), so this
+# stage composes AFTER apply_calibration() — never before it.
+_WAREHOUSE_ISOTONIC_PATH = Path(__file__).resolve().parent.parent / "data" / "warehouse_isotonic.json"
+_warehouse_curve: "dict | None | bool" = None  # None=not loaded, False=unavailable
 
 
 def logit(p: float) -> float:
@@ -148,3 +158,45 @@ def apply_calibration(p: float, barrel_rate: float = 0.0) -> float:
 
     _max = getattr(config, "MAX_GAME_HR_PROB", 0.29)
     return round(min(_max, max(0.001, result)), 4)
+
+
+def _load_warehouse_curve() -> "dict | bool":
+    """Load the fitted warehouse isotonic curve once per session."""
+    global _warehouse_curve
+    if _warehouse_curve is not None:
+        return _warehouse_curve
+    try:
+        with open(_WAREHOUSE_ISOTONIC_PATH, encoding="utf-8") as f:
+            curve = json.load(f)
+        bp, vals = curve["breakpoints"], curve["values"]
+        if len(bp) >= 2 and len(bp) == len(vals):
+            _warehouse_curve = {"breakpoints": bp, "values": vals}
+        else:
+            _warehouse_curve = False
+    except Exception:
+        _warehouse_curve = False
+    return _warehouse_curve
+
+
+def apply_warehouse_isotonic(p: float) -> float:
+    """
+    Final-stage isotonic recalibration fitted on labeled warehouse outcomes
+    (batter_stat_history.hr_outcome vs the FINAL displayed model_prob).
+
+    Monotone piecewise-linear — ranking is preserved exactly. Corrects levels
+    only, so calibrated probabilities match observed HR rates.
+
+    Integration point:
+      pipeline.py — applied AFTER apply_calibration() (which itself runs after
+      apply_prob_scale()). Fit input == production input; no double-correction.
+
+    Returns p unchanged when disabled (WAREHOUSE_ISOTONIC_ENABLED=False) or
+    when the curve artifact (data/warehouse_isotonic.json) is unavailable.
+    """
+    if not getattr(config, "WAREHOUSE_ISOTONIC_ENABLED", False):
+        return p
+    curve = _load_warehouse_curve()
+    if not curve:
+        return p
+    result = isotonic_scale(p, curve["breakpoints"], curve["values"])
+    return round(max(0.001, min(1.0 - _EPS, result)), 4)

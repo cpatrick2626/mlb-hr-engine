@@ -445,6 +445,9 @@ def _build_player_profile(
     # Apply post-model probability calibration (monotone → ranking preserved)
     # barrel_rate passed for elite tier Platt (ELITE_PLATT_ENABLED in config.py)
     model_prob = round(_cal.apply_calibration(model_prob, barrel_rate=sc_barrel), 4)
+    # Final stage: warehouse isotonic recalibration (monotone — ranking preserved).
+    # Fitted on labeled batter_stat_history outcomes vs this exact post-Platt value.
+    model_prob = _cal.apply_warehouse_isotonic(model_prob)
 
     # ── MAIN projected values (display-only; never fed into scoring/EV/filters) ──
     # Projection: same calc sequence without ×0.82 lineup penalty, using typical slot PA.
@@ -471,7 +474,9 @@ def _build_player_profile(
             )
             if _aw is not None:
                 _proj_raw = round(_aw.apply_prob_scale(_proj_raw), 4)
-            _proj_model_prob = round(_cal.apply_calibration(_proj_raw, barrel_rate=sc_barrel), 4)
+            _proj_model_prob = _cal.apply_warehouse_isotonic(
+                round(_cal.apply_calibration(_proj_raw, barrel_rate=sc_barrel), 4)
+            )
 
     # Additional fields for Full Slate table display
     season_hits = int(season_stats.get("hits", 0))

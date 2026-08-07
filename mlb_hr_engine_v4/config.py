@@ -186,6 +186,21 @@ CALIBRATION_PLATT_B: float = -0.4611      # intercept — Platt CV-fitted
 CALIBRATION_ISOTONIC_BREAKPOINTS: list = []  # raw prob breakpoints (fitted)
 CALIBRATION_ISOTONIC_VALUES:      list = []  # calibrated prob at each breakpoint
 
+# ── Warehouse Isotonic Recalibration (final stage) ────────────────────────────
+# Isotonic curve fitted on labeled batter_stat_history outcomes (hr_outcome vs
+# the FINAL displayed model_prob, i.e. post prob_scale + post Platt). Applied in
+# pipeline.py AFTER apply_calibration() so fit input == production input.
+# Curve artifact: data/warehouse_isotonic.json — refit via
+# scripts/analysis/fit_warehouse_isotonic.py (never hand-edit the curve).
+# Fitted 2026-08-07 on 5,596 unique labeled batter-games (17 slates, 7/21–8/6):
+#   mean predicted 10.68% → calibrated 7.68% vs observed 7.63%.
+#   AUC 0.7092 before AND after (monotone — ranking preserved exactly).
+#   Brier 0.06873 → 0.06757.
+# NOTE: refit required if prob_scale (learned_adjustments.json) or Platt params
+# change — the curve is fitted against the output of that exact upstream chain.
+# Rollback: set WAREHOUSE_ISOTONIC_ENABLED=False.
+WAREHOUSE_ISOTONIC_ENABLED: bool = True
+
 # ── Context Moderation ────────────────────────────────────────────────────────
 # Guards against contact/suppressed-power batters reaching ≥15% probability
 # solely via multiplicative context stacking (park + hittable pitcher + platoon).
@@ -260,12 +275,17 @@ PITCHER_VULNERABILITY_HR9_THRESHOLD: float = 2.2  # pitcher_hr9 ≥ this → TAR
 # ── Full Slate Tier Display ───────────────────────────────────────────────────
 # 6-tier classification driven by model_prob. Display-only — does not affect
 # model probability, EV, or confidence_tier (which is EV/edge-based).
+# Rethresholded 2026-08-07 for the warehouse isotonic recalibration: each cutoff
+# is the isotonic image of the previous cutoff (old APEX 0.20 → 0.189, ELITE
+# 0.16 → 0.152, EDGE 0.11 → 0.061, SIGNAL 0.07 → 0.027, WATCH 0.04 → 0.018),
+# so historical tier membership is preserved on the honest post-calibration
+# scale. Derivation: scripts/analysis/fit_warehouse_isotonic.py output.
 FS_TIER_THRESHOLDS: dict = {
-    "APEX":   0.20,
-    "ELITE":  0.16,
-    "EDGE":   0.11,
-    "SIGNAL": 0.07,
-    "WATCH":  0.04,
+    "APEX":   0.189,
+    "ELITE":  0.152,
+    "EDGE":   0.061,
+    "SIGNAL": 0.027,
+    "WATCH":  0.018,
     "COLD":   0.00,
 }
 
