@@ -2,15 +2,13 @@ name: Daily MLB HR Pipeline
 
 on:
   schedule:
-    # All times UTC. During EDT (summer, UTC-4): exact ET shown. During EST (winter, UTC-5): runs fire 1 hr earlier in ET.
-    # GitHub Actions cron is fixed UTC — no DST adjustment possible.
-    # 6 runs/day to limit Odds API quota burn; tune if quota changes.
-    - cron: '37 7 * * *'    #  3:37 AM EDT — early slate build; GitHub delay (~1-2hr) targets ~5am ET arrival
-    - cron: '5 14 * * *'    # 10:05 AM EDT — morning run (lineups settled)
-    - cron: '5 16 * * *'    # 12:05 PM EDT — midday pitcher refresh
-    - cron: '5 18 * * *'    #  2:05 PM EDT — afternoon refresh
-    - cron: '41 21 * * *'   #  5:41 PM EDT — evening game refresh
-    - cron: '23 0 * * *'    #  8:23 PM EDT — end-of-window refresh
+    # All times UTC. Currently EDT (UTC-4); times shown in ET reflect that offset.
+    # GitHub Actions cron is fixed UTC — does NOT auto-adjust for DST.
+    # When ET returns to EST (UTC-5) in November, these fire 1 hr earlier in ET; revisit then.
+    - cron: "0 10 * * *"    #  6:00 AM ET — tripwire / early build (surfaces problems with time to fix)
+    - cron: "0 15 * * *"    # 11:00 AM ET — early games (afternoon slate, lineups settled)
+    - cron: "30 19 * * *"   #  3:30 PM ET — mid games (evening block)
+    - cron: "30 23 * * *"   #  7:30 PM ET — late games (West Coast 9-10 PM)
   workflow_dispatch:
     inputs:
       date:
