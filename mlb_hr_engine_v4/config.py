@@ -199,7 +199,12 @@ CALIBRATION_ISOTONIC_VALUES:      list = []  # calibrated prob at each breakpoin
 # NOTE: refit required if prob_scale (learned_adjustments.json) or Platt params
 # change — the curve is fitted against the output of that exact upstream chain.
 # Rollback: set WAREHOUSE_ISOTONIC_ENABLED=False.
-WAREHOUSE_ISOTONIC_ENABLED: bool = True
+# ROLLED BACK 2026-08-07: the 2026-08-07 curve was fit on contaminated data
+# (fit window overlapped 100% of the holdout dates, 705 post-start snapshots,
+# no Preview/pre-start filter) and WORSENED held-out calibration (ECE 2.54pp
+# → 3.27pp; Brier delta -0.000181 with CI crossing zero). Artifact + fit
+# script retained for a properly-validated refit when data supports it.
+WAREHOUSE_ISOTONIC_ENABLED: bool = False
 
 # ── Context Moderation ────────────────────────────────────────────────────────
 # Guards against contact/suppressed-power batters reaching ≥15% probability
@@ -275,17 +280,16 @@ PITCHER_VULNERABILITY_HR9_THRESHOLD: float = 2.2  # pitcher_hr9 ≥ this → TAR
 # ── Full Slate Tier Display ───────────────────────────────────────────────────
 # 6-tier classification driven by model_prob. Display-only — does not affect
 # model probability, EV, or confidence_tier (which is EV/edge-based).
-# Rethresholded 2026-08-07 for the warehouse isotonic recalibration: each cutoff
-# is the isotonic image of the previous cutoff (old APEX 0.20 → 0.189, ELITE
-# 0.16 → 0.152, EDGE 0.11 → 0.061, SIGNAL 0.07 → 0.027, WATCH 0.04 → 0.018),
-# so historical tier membership is preserved on the honest post-calibration
-# scale. Derivation: scripts/analysis/fit_warehouse_isotonic.py output.
+# Restored 2026-08-07: original raw-probability cutoffs, paired with the
+# warehouse isotonic rollback (WAREHOUSE_ISOTONIC_ENABLED=False above). The
+# 54599fc isotonic-image cutoffs only make sense against isotonic output;
+# with raw model_prob these are the correct thresholds.
 FS_TIER_THRESHOLDS: dict = {
-    "APEX":   0.189,
-    "ELITE":  0.152,
-    "EDGE":   0.061,
-    "SIGNAL": 0.027,
-    "WATCH":  0.018,
+    "APEX":   0.20,
+    "ELITE":  0.16,
+    "EDGE":   0.11,
+    "SIGNAL": 0.07,
+    "WATCH":  0.04,
     "COLD":   0.00,
 }
 
