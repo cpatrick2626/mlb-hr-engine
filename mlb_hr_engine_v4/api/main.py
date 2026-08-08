@@ -53,7 +53,7 @@ from clients.batter_pitch_profile import (
     get_batter_pitch_profile_display,
     pitch_mix_verdict_display,
 )
-from clients.pitch_mix import canonical_pitch_type, get_batter_vs_pitches, get_pitcher_pitch_stats, load_hvy_context
+from clients.pitch_mix import canonical_pitch_type, get_batter_vs_pitches, get_pitcher_data_year, get_pitcher_pitch_stats, load_hvy_context
 from config import FS_TIER_THRESHOLDS, JIG_TIER_THRESHOLDS
 from roles import classify_role
 
@@ -1298,6 +1298,8 @@ async def get_pitcher_detail(pitcher_id: int, batter_id: int = 0,
     except Exception as e:
         log.warning("pitcher-detail pitch_stats failed pid=%s: %s", pitcher_id, e)
         result["pitch_stats"] = {}
+
+    result["data_year"] = get_pitcher_data_year(pitcher_id)
 
     # Batter vs pitches (vs pitcher_hand, not batter_side)
     try:

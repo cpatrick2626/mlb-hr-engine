@@ -1011,25 +1011,31 @@ function FsmArsenalTable({ title, arsenal, pitchStats }) {
     <div className="fsm-pt fsm-pt--red fsm-pt--arsenal">
       <div className="fsm-pt__title">{title}</div>
       <div className="fsm-pt__grid">
-        <div className="fsm-pt__hd"><span>PITCH TYPE</span><span>USAGE</span><span>VELO</span><span>WHIFF%</span><span>HR</span><span>K%</span><span>HH%</span></div>
+        <div className="fsm-pt__hd"><span>PITCH TYPE</span><span>USAGE</span><span>VELO</span><span>WHIFF%</span><span>PA</span><span>HR</span><span>K%</span><span>HH%</span></div>
         {arsenal.map((p, i) => {
           const ps = pitchStats[p.code] || {};
           const velo = p.velo ?? ps.avg_speed;
           const hrVal = ps.hr != null ? ps.hr : null;
           const kPct = ps.k_pct != null ? ps.k_pct * 100 : null;
           const hh = ps.display_hh != null ? ps.display_hh * 100 : null;
+          const paVal = ps.pa != null ? ps.pa : null;
+          const paSmall = paVal != null && paVal < 10;
           return (
             <div className="fsm-pt__row" key={i}>
               <span className="fsm-pt__type">{p.name || fsmPitchName(p.code)}</span>
               <span className="fsm-pt__usage"><span className="fsm-pt__bar" style={{ width: Math.min(100, p.usage ?? 0) + "%" }} /><i>{p.usage != null ? p.usage.toFixed(1) : "—"}%</i></span>
               <span className="fsm-pt__num">{velo != null ? velo.toFixed(1) : "—"}</span>
               <span className={fsmArsWhiffCls(p.whiff)}>{p.whiff != null ? p.whiff.toFixed(1) + "%" : "—"}</span>
+              <span className="fsm-pt__num" style={paSmall ? {color:"var(--amber)"} : undefined} title={paSmall ? "Small sample (<10 PA)" : undefined}>{paVal != null ? paVal + (paSmall ? "*" : "") : "—"}</span>
               <span className={fsmArsHrCls(hrVal)}>{hrVal != null ? hrVal : "—"}</span>
               <span className={fsmArsKCls(kPct)}>{kPct != null ? kPct.toFixed(1) + "%" : "—"}</span>
               <span className={fsmArsHhCls(hh)}>{hh != null ? hh.toFixed(1) + "%" : "—"}</span>
             </div>
           );
         })}
+        {arsenal.some(p => { const pa = (pitchStats[p.code] || {}).pa; return pa != null && pa < 10; }) && (
+          <div className="fsm-pt__note">* &lt;10 PA — small sample, treat with caution</div>
+        )}
       </div>
     </div>
   );
@@ -1051,11 +1057,13 @@ function FsmBatterVsPitchTable({ title, bvp, arsenal }) {
     <div className="fsm-pt fsm-pt--blue fsm-pt--bvp">
       <div className="fsm-pt__title">{title}</div>
       <div className="fsm-pt__grid">
-        <div className="fsm-pt__hd"><span>PITCH TYPE</span><span>PA</span><span>BA</span><span>SLG</span><span>HR</span><span>K%</span></div>
+        <div className="fsm-pt__hd"><span>PITCH TYPE</span><span>PA</span><span>BA</span><span>SLG</span><span>ISO</span><span>HR</span><span>HR%</span><span>K%</span></div>
         {rows.map((p, i) => {
           const ba = parseFloat(p.ba) || null;
           const slg = parseFloat(p.slg) || null;
+          const iso = (ba != null && slg != null) ? +(slg - ba).toFixed(3) : null;
           const kPct = p.k_pct != null ? p.k_pct * 100 : null;
+          const hrPct = (p.hr != null && (p.pa || 0) >= 10) ? (p.hr / p.pa * 100) : null;
           const smallSample = (p.pa || 0) < 10;
           return (
             <div className={"fsm-pt__row" + (smallSample ? " fsm-pt__row--dim" : "")} key={i}>
@@ -1063,13 +1071,15 @@ function FsmBatterVsPitchTable({ title, bvp, arsenal }) {
               <span className="fsm-pt__num">{p.pa != null ? p.pa : "—"}</span>
               <span className={"fsm-ht " + fsmHeatClass(ba, [0.320, 0.275, 0.230, 0.180])}>{ba != null ? ba.toFixed(3).replace(/^0/, "") : "—"}</span>
               <span className={"fsm-ht " + fsmHeatClass(slg, [0.520, 0.430, 0.350, 0.270])}>{slg != null ? slg.toFixed(3).replace(/^0/, "") : "—"}</span>
+              <span className={"fsm-ht " + fsmHeatClass(iso, [0.250, 0.200, 0.150, 0.100])}>{iso != null ? iso.toFixed(3).replace(/^0/, "") : "—"}</span>
               <span className={fsmBvpHrCls(p.hr)}>{p.hr != null ? p.hr : "—"}</span>
+              <span className="fsm-pt__num">{hrPct != null ? hrPct.toFixed(1) + "%" : "—"}</span>
               <span className={fsmBvpKCls(kPct)}>{kPct != null ? kPct.toFixed(1) + "%" : "—"}</span>
             </div>
           );
         })}
       </div>
-      {rows.some((r) => (r.pa || 0) < 10) && <div className="fsm-pt__note">· = small sample (&lt;10 PA)</div>}
+      {rows.some((r) => (r.pa || 0) < 10) && <div className="fsm-pt__note">· = small sample (&lt;10 PA) — HR% suppressed below 10 PA</div>}
     </div>
   );
 }
@@ -1130,6 +1140,8 @@ function FsmPitchMix({ row, onClose, onBatter, builderMode = false }) {
   const arsenal = detail ? (detail.arsenal || []) : [];
   const pitchStats = detail ? (detail.pitch_stats || {}) : {};
   const bvp = detail ? (detail.batter_vs_pitches || {}) : {};
+  const dataYear = detail ? (detail.data_year || null) : null;
+  const isPriorYear = dataYear != null && dataYear !== new Date().getFullYear();
 
   return (
     <div className="fsm-card fsm-card--h2h">
@@ -1142,6 +1154,7 @@ function FsmPitchMix({ row, onClose, onBatter, builderMode = false }) {
             <div className="fsm-h2h__team">{oppTeam}</div>
             <div className="fsm-h2h__name">{pitcherName}</div>
             <span className="fsm-h2h__badge">{pitcherHand || "?"}HP</span>
+            {isPriorYear && <div className="aei-data-year-warn" style={{marginTop:"6px"}}>⚠ {dataYear} DATA — PRIOR SEASON</div>}
           </div>
           {arsenal.length === 0 ? (
             <div className="fsm-ah">
@@ -1333,6 +1346,8 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false, isJi
   const arsenal    = detail ? (detail.arsenal || []) : [];
   const pitchStats = detail ? (detail.pitch_stats || {}) : {};
   const bvp        = detail ? (detail.batter_vs_pitches || {}) : {};
+  const dataYear   = detail ? (detail.data_year || null) : null;
+  const isPriorYear = dataYear != null && dataYear !== new Date().getFullYear();
   const pitcherRecent = detail && Array.isArray(detail.pitcher_recent) ? detail.pitcher_recent : [];
   // TODO: exclude PH-only games when `started` field becomes available from MLB StatsAPI
   const batterRecent  = detail && Array.isArray(detail.batter_recent) ? detail.batter_recent.filter(g => (g.pa ?? 0) >= 1) : [];
@@ -1429,6 +1444,7 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false, isJi
         <div className="aei-header__title">ARSENAL EDGE INTEL</div>
         {aeiState && <div className={`aei-header__state aei-header__state--${aeiState.toLowerCase()}`}>{aeiState}</div>}
         <div className="aei-header__sub">{batterName} VS {pitcherName} — PITCH MIX EXPLOITATION</div>
+        {isPriorYear && <div className="aei-data-year-warn">⚠ {dataYear} DATA — PITCHER HAS NO {new Date().getFullYear()} STARTS YET · ALL ARSENAL STATS ARE PRIOR SEASON</div>}
       </div>
 
       <div className="aei-grid">
@@ -1469,7 +1485,7 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false, isJi
               <div className="aei-tblwrap__cap">{pLast} ARSENAL VS {batHand || "?"}HB</div>
               <div className="aei-ars">
                 <div className="aei-ars__hd">
-                  <span>PITCH</span><span>USAGE</span><span>VELO</span><span>WHIFF</span><span>HR/PA</span><span>K%</span><span>HH%</span>
+                  <span>PITCH</span><span>USAGE</span><span>VELO</span><span>WHIFF</span><span>HR/PA</span><span>K%</span><span>HH%</span><span>PA</span>
                 </div>
                 {fetchState === "loading" && <div className="aei-empty">Loading arsenal…</div>}
                 {fetchState === "no-pitcher" && <div className="aei-empty">Pitcher TBD — no detail available</div>}
@@ -1486,6 +1502,8 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false, isJi
                     : (ps.hr != null && ps.pa != null && ps.pa >= 10) ? (ps.hr/ps.pa*100).toFixed(1)+"%" : "—";
                   const kPct  = ps.k_pct != null ? (Number(ps.k_pct)*100).toFixed(0)+"%" : "—";
                   const hhPct = ps.display_hh != null ? (Number(ps.display_hh)*100).toFixed(0)+"%" : "—";
+                  const paVal = ps.pa != null ? ps.pa : null;
+                  const paSmall = paVal != null && paVal < 10;
                   const barW  = Math.min(100, (p.usage ?? 0) * 2) + "%";
                   return (
                     <div key={p.code} className={"aei-ars__row" + (isKey ? " aei-ars__row--key" : "")}>
@@ -1505,9 +1523,13 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false, isJi
                       <span className={"aei-c" + (hrPa !== "—" && parseFloat(hrPa) >= 3 ? " aei-c--hg" : "")}>{hrPa}</span>
                       <span className="aei-c">{kPct}</span>
                       <span className="aei-c">{hhPct}</span>
+                      <span className="aei-c" style={paSmall ? {color:"var(--amber)"} : {color:"var(--fg-3)"}} title={paSmall ? "Small sample (<10 PA)" : "PA vs this batter hand"}>{paVal != null ? paVal + (paSmall ? "*" : "") : "—"}</span>
                     </div>
                   );
                 })}
+                {arsorted.some(p => { const pa = (pitchStats[p.code] || {}).pa; return pa != null && pa < 10; }) && (
+                  <div className="aei-pt__note">* &lt;10 PA — small sample, treat with caution</div>
+                )}
               </div>
             </div>
           </div>

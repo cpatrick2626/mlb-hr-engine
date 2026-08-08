@@ -3768,9 +3768,9 @@ button.fsm-tier { appearance: none; text-decoration: none; }
 .fsm-pt__grid { padding: 2px 7px 7px; }
 .fsm-pt__hd, .fsm-pt__row { display: grid; gap: 5px; align-items: center; }
 .fsm-pt--arsenal .fsm-pt__hd,
-.fsm-pt--arsenal .fsm-pt__row { grid-template-columns: 1.6fr 1.2fr 0.65fr 0.75fr 0.45fr 0.7fr 0.75fr; }
+.fsm-pt--arsenal .fsm-pt__row { grid-template-columns: 1.6fr 1.2fr 0.65fr 0.75fr 0.55fr 0.45fr 0.7fr 0.75fr; }
 .fsm-pt--bvp .fsm-pt__hd,
-.fsm-pt--bvp .fsm-pt__row { grid-template-columns: 1.6fr 0.55fr 0.85fr 0.85fr 0.45fr 0.7fr; }
+.fsm-pt--bvp .fsm-pt__row { grid-template-columns: 1.4fr 0.5fr 0.65fr 0.65fr 0.65fr 0.45fr 0.65fr 0.65fr; }
 .fsm-pt__hd { padding: 8px 3px 6px; border-bottom: 1px solid rgba(180,220,200,0.1); }
 .fsm-pt__hd span { font-family: var(--font-display); font-weight: 700; font-size: 9px; letter-spacing: 0.06em; color: var(--fg-3); text-transform: uppercase; text-align: right; }
 .fsm-pt__hd span:first-child { text-align: left; }
@@ -4352,7 +4352,7 @@ button.fsm-tier { appearance: none; text-decoration: none; }
 .aei-ars { display: flex; flex-direction: column; }
 .aei-ars__hd {
   display: grid;
-  grid-template-columns: 1.2fr 1.7fr 0.6fr 0.65fr 0.6fr 0.58fr 0.62fr;
+  grid-template-columns: 1.2fr 1.7fr 0.6fr 0.65fr 0.6fr 0.58fr 0.62fr 0.5fr;
   padding: 5px 11px;
   border-bottom: 1px solid var(--border-1);
 }
@@ -4368,7 +4368,7 @@ button.fsm-tier { appearance: none; text-decoration: none; }
 .aei-ars__hd span:nth-child(2) { text-align: left; }
 .aei-ars__row {
   display: grid;
-  grid-template-columns: 1.2fr 1.7fr 0.6fr 0.65fr 0.6fr 0.58fr 0.62fr;
+  grid-template-columns: 1.2fr 1.7fr 0.6fr 0.65fr 0.6fr 0.58fr 0.62fr 0.5fr;
   align-items: center;
   padding: 0 11px;
   border-bottom: 1px solid var(--border-1);
@@ -4439,6 +4439,19 @@ button.fsm-tier { appearance: none; text-decoration: none; }
   margin-top: 3px;
 }
 .aei-ars__row--key .aei-usage__lbl { color: var(--orange); }
+.aei-data-year-warn {
+  margin: 6px 11px 2px;
+  padding: 5px 10px;
+  background: rgba(255,176,32,0.08);
+  border: 1px solid rgba(255,176,32,0.4);
+  border-radius: 5px;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #ffb020;
+}
 
 /* stat cells */
 .aei-c {
