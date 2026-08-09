@@ -782,8 +782,8 @@ def render_text(report: dict) -> str:
         corr_str = f"{corr:.3f}" if corr is not None else "--"
         lines.extend([
             f"  Pearson r (jigScore vs model_prob): {corr_str}",
-            f"  AUC MAIN alone               : {rd['auc_main_alone']:.4f if rd.get('auc_main_alone') is not None else '--'}",
-            f"  AUC MAIN + JIG blend         : {rd['auc_main_plus_jig_blend']:.4f if rd.get('auc_main_plus_jig_blend') is not None else '--'}",
+            f"  AUC MAIN alone               : {format(rd['auc_main_alone'], '.4f') if rd.get('auc_main_alone') is not None else '--'}",
+            f"  AUC MAIN + JIG blend         : {format(rd['auc_main_plus_jig_blend'], '.4f') if rd.get('auc_main_plus_jig_blend') is not None else '--'}",
         ])
         dp = rd.get("delta_auc_point")
         dl = rd.get("delta_auc_ci_low")

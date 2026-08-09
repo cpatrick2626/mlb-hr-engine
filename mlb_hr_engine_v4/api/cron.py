@@ -27,7 +27,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from dotenv import load_dotenv
 load_dotenv()
 
-from pipeline import load_game_data, serializable
+from pipeline import load_game_data, serializable, schedule_jig_stat_capture
 from api.cache import store_picks, insert_picks, today_et
 
 MODEL_VERSION = "v4"
@@ -130,6 +130,16 @@ def run(target_date: str = None) -> dict:
         print(f"[cron] slate_cache built — {len(payload['slate_cache'].get('leaderboard_rows', []))} rows")
     except Exception as e:
         print(f"[cron] slate_cache build failed (payload stored without it): {e}")
+
+    # JIG warehouse secondary capture — fire-and-forget after jigScore is computed.
+    # Inserts new batter_stat_history rows (distinct run_ts from MAIN capture) so
+    # warehouse_backfill can label them with hr_outcome. Non-fatal if it fails.
+    try:
+        jig_rows = (payload.get("slate_cache") or {}).get("leaderboard_rows_jig") or []
+        schedule_jig_stat_capture(target_date, jig_rows, data.get("all_players", []))
+        print(f"[cron] JIG warehouse capture scheduled — {len(jig_rows)} rows")
+    except Exception as e:
+        print(f"[cron] JIG warehouse capture scheduling failed (non-fatal): {e}")
 
     store_picks(target_date, payload)
 
