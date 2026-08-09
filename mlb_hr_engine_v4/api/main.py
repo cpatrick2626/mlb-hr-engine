@@ -646,7 +646,7 @@ def _true_matchup_score(row: dict) -> int | None:
     return int(round(_clamp(score, 0.0, 100.0)))
 
 
-def _jig_score(player: dict, arsenal_data: dict | None = None) -> float:
+def _jig_score(player: dict, arsenal_data: dict | None = None) -> tuple[float, float]:
     """
     JIG tactical exploit score.
     Inputs: raw Statcast contact/power profile + optional
@@ -684,9 +684,10 @@ def _jig_score(player: dict, arsenal_data: dict | None = None) -> float:
     hr_term = min(hrpa / 0.08, 1.0) * 0.10
 
     # --- Tactical signals (0.22 weight) ---
-    arsenal_signal  = 0.0
+    arsenal_signal   = 0.0
     pitch_dmg_signal = 0.0
-    pitch_mix_signal = 0.0
+    pitch_mix_signal = 0.0  # live: dormant — not yet validated against outcomes
+    pitch_mix_shadow = 0.0  # shadow: rv_per100 candidate, accumulating for backtest
 
     pitcher_id  = player.get("pitcher_id")
     batter_id   = player.get("batter_id") or player.get("player_id")
@@ -730,11 +731,8 @@ def _jig_score(player: dict, arsenal_data: dict | None = None) -> float:
             pitch_dmg_signal = 0.0
 
         try:
-            # Pitch-mix weakness: pitcher's rv_per100 weighted by usage.
-            # rv_per100 > 0 = pitch allows runs (hittable) = exploit signal for batter.
-            # rv_per100 < 0 = pitch suppresses runs (dominant) = clamped to 0.
-            # Source: arsenal_data (get_pitcher_arsenal()) carries real Savant RV values;
-            # get_pitcher_pitch_stats() never included rv_per100 in its output schema.
+            # Shadow: rv_per100 from arsenal_data (positive = hittable pitch).
+            # Not folded into live tactical until validated against hr_outcome.
             pitcher_arsenal = (arsenal_data or {}).get(pitcher_id, [])
             weakness = 0.0
             total_pct = 0.0
@@ -745,15 +743,17 @@ def _jig_score(player: dict, arsenal_data: dict | None = None) -> float:
                 total_pct += usage
             if total_pct > 0:
                 weakness /= total_pct
-            # Normalize: cap at rv_per100 of 3.0
-            pitch_mix_signal = min(weakness / 3.0, 1.0) * 0.04
+            pitch_mix_shadow = min(weakness / 3.0, 1.0) * 0.04
         except Exception as e:
-            log.warning("JIG pitch_mix_signal fallback | player=%s pitcher=%s err=%s",
+            log.warning("JIG pitch_mix_shadow fallback | player=%s pitcher=%s err=%s",
                 player.get("player_name", "?"), pitcher_id, e)
-            pitch_mix_signal = 0.0
+            pitch_mix_shadow = 0.0
 
-    tactical = arsenal_signal + pitch_dmg_signal + pitch_mix_signal
-    return round(((base_score + hr_term) * stab + tactical) * 100, 2)
+    tactical        = arsenal_signal + pitch_dmg_signal + pitch_mix_signal
+    tactical_shadow = arsenal_signal + pitch_dmg_signal + pitch_mix_shadow
+    live_score   = round(((base_score + hr_term) * stab + tactical) * 100, 2)
+    shadow_score = round(((base_score + hr_term) * stab + tactical_shadow) * 100, 2)
+    return live_score, shadow_score
 
 
 # ── Full Slate ─────────────────────────────────────────────────────────────────
@@ -999,7 +999,7 @@ def _build_slate_payload(data: dict, odds_pending: bool = False, odds_pending_st
             p = players_by_id.get((r.get("id"), r.get("game_pk")))
             if p is None:
                 p = players_by_id_fallback.get(r.get("id"), {})
-            r["jigScore"] = _jig_score(p, arsenal_data=_arsenal_data)
+            r["jigScore"], r["jigScore_shadow"] = _jig_score(p, arsenal_data=_arsenal_data)
             try:
                 r["hvy_modifier"] = load_hvy_context(
                     p, arsenal_data=_arsenal_data
