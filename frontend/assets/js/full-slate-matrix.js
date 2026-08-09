@@ -1767,7 +1767,7 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false, isJi
             </div>
 
             <div className="aei-tblwrap">
-              <div className="aei-tblwrap__cap">LAST 5 GAMES</div>
+              <div className="aei-tblwrap__cap">LAST 5 APPEARANCES</div>
               <div className="aei-bt aei-bt--scroll">
                 <div className="aei-bt__hd" style={{ gridTemplateColumns: recentGridTemplate, minWidth: recentGridMinWidth }}>
                   <span>DATE</span><span>HR</span><span>AVG</span><span>SLG</span><span>PA</span>

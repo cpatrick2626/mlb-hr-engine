@@ -585,9 +585,9 @@ function BatterDetailCard({ row, onClose, onPitch, builderMode = false }) {
       {/* RECENT FORM */}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
 
-        {/* BATTER: LAST 5 GAMES */}
+        {/* BATTER: LAST 5 APPEARANCES */}
         <Mod>
-          <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:10}}><Ttl>RECENT FORM · LAST 5 GAMES</Ttl><Eyebrow style={{marginLeft:"auto",color:T.fg3}}>≥1 PA ONLY</Eyebrow></div>
+          <div style={{display:"flex",alignItems:"center",gap:7,marginBottom:10}}><Ttl>RECENT FORM · LAST 5 APPEARANCES</Ttl><Eyebrow style={{marginLeft:"auto",color:T.fg3}}>≥1 PA ONLY</Eyebrow></div>
           {recentRaw._meta?.availability?.batter_games === "Live"
             ? batterGames.length===0
               ? <Eyebrow style={{color:T.fg3}}>No games with ≥1 PA found</Eyebrow>
