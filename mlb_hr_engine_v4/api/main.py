@@ -730,16 +730,18 @@ def _jig_score(player: dict, arsenal_data: dict | None = None) -> float:
             pitch_dmg_signal = 0.0
 
         try:
-            # Pitch-mix weakness: pitcher's worst rv_per100 pitches
-            # weighted by usage vs this batter side
-            pitcher_pitches = get_pitcher_pitch_stats(pitcher_id, batter_side)
+            # Pitch-mix weakness: pitcher's rv_per100 weighted by usage.
+            # rv_per100 > 0 = pitch allows runs (hittable) = exploit signal for batter.
+            # rv_per100 < 0 = pitch suppresses runs (dominant) = clamped to 0.
+            # Source: arsenal_data (get_pitcher_arsenal()) carries real Savant RV values;
+            # get_pitcher_pitch_stats() never included rv_per100 in its output schema.
+            pitcher_arsenal = (arsenal_data or {}).get(pitcher_id, [])
             weakness = 0.0
             total_pct = 0.0
-            for pdata in pitcher_pitches.values():
-                usage  = pdata.get("pitch_pct", 0)
-                rv     = pdata.get("rv_per100", 0) or 0
-                # Higher rv_per100 = worse for pitcher = exploit signal
-                weakness += usage * max(rv, 0)
+            for pdata in pitcher_arsenal:
+                usage = pdata.get("pitch_pct", 0) or 0
+                rv    = pdata.get("rv_per100") or 0
+                weakness  += usage * max(rv, 0)
                 total_pct += usage
             if total_pct > 0:
                 weakness /= total_pct
