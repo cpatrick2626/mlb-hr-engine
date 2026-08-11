@@ -1939,10 +1939,7 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
   const cohortCount = React.useMemo(() => pool.filter(fsmBestCohort).length, [pool]);
   const displayPool = React.useMemo(() => {
     if (!bestCohortOn) return pool;
-    const matching = [], rest = [];
-    for (const r of pool) { (fsmBestCohort(r) ? matching : rest).push(r); }
-    matching.sort((a, b) => (b.model_prob ?? 0) - (a.model_prob ?? 0));
-    return [...matching, ...rest];
+    return pool.filter(fsmBestCohort);
   }, [pool, bestCohortOn]);
   const gamesToShow = selGame === "all" ? getFSMGames() : getFSMGames().filter((g) => g.id === selGame);
   const title = builderMode ? "JIG BUILDER WORKSPACE" : "FULL SLATE INTELLIGENCE MATRIX";
@@ -2097,7 +2094,7 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
             <button
               className={"fsm-rg__opt" + (bestCohortOn ? " is-on" : "")}
               style={bestCohortOn ? { color: "#ffe066", borderColor: "rgba(255,224,102,0.5)", background: "rgba(255,224,102,0.08)" } : undefined}
-              title={"BEST COHORT — Floats players meeting all three study thresholds to the top, sorted by model HR% descending. Thresholds: Expected PA ≥4.2 (lineup spots 1–3), Season HR/PA ≥4.35%, vs-hand SLG ≥.440. Non-matching players remain visible below. Display-only — no scoring change."}
+              title={"BEST COHORT — Shows ONLY players meeting all three study thresholds, in the board's active sort order. Thresholds: Expected PA ≥4.2 (lineup spots 1–3), Season HR/PA ≥4.35%, vs-hand SLG ≥.440. Toggle OFF to restore the full slate. Display-only — no scoring change."}
               onClick={() => setBestCohortOn(v => !v)}>
               BEST COHORT{bestCohortOn ? " · " + cohortCount : ""}
             </button>
