@@ -525,7 +525,7 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, i
           </span>
         )}
       </td>
-      <td className="fsm-player" style={{position:'relative'}}>
+      <td className="fsm-player">
         <button type="button" className="fsm-player__in" onClick={() => onBatter(row)} title={`Open ${row.name} batter card`}>
           <span className="fsm-player__dot" title={row.pitcherVuln === "TARGET" ? `BATTER THREAT: ${row.quality || "—"} — batter HR-threat tier (model probability + barrel quality) · GLOW: TARGET pitcher allows 2.2+ HR/9 (separate pitcher-vulnerability signal)` : `BATTER THREAT: ${row.quality || "—"} — batter HR-threat tier based on model probability + barrel quality`} style={{ background: (FSM_MATCHUP[row.quality] || { color: "#6b7872" }).color, boxShadow: row.pitcherVuln === "TARGET" ? "0 0 0 2px #1aff66, 0 0 6px rgba(26,255,102,0.85)" : undefined }} />
           <span className="fsm-player__col">
@@ -536,7 +536,6 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, i
         : (row.gameStartUtc || row.pitcher_name) && <span className="fsm-player__game"><span className="fsm-player__gm--time">{fsmFmtEt(row.gameStartUtc)}</span>{row.gameStartUtc && row.pitcher_name && <i className="fsm-player__bar">·</i>}{row.pitcher_name && <span className="fsm-player__gm--pitcher">{row.pitcher_name}</span>}</span>}
           </span>
         </button>
-        <button type="button" style={{position:'absolute',top:3,right:3,padding:'3px 8px',background:'rgba(255,176,32,0.14)',border:'1.5px solid rgba(255,176,32,0.60)',borderRadius:999,color:'#ffb020',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:9.5,letterSpacing:'0.08em',textTransform:'uppercase',cursor:'pointer',lineHeight:1,minHeight:22,display:'inline-flex',alignItems:'center',justifyContent:'center',whiteSpace:'nowrap'}} title={`Export full intel card for ${row.name}`} onClick={(e)=>{e.stopPropagation();window.fsmShareCard&&window.fsmShareCard(row);}}>SHARE</button>
       </td>
       <td className="fsm-matchup">
         <button type="button" className="fsm-matchup__in" onClick={() => onPitch(row)} title="Open Arsenal Edge Intel">
@@ -558,15 +557,14 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, i
               {isDualHR && <span className="fsm-matchup__proj">▸{hrProj.toFixed(1)}%</span>}
             </span>
             <span className="fsm-matchup__metric fsm-matchup__metric--single">
-              <span className="fsm-matchup__lbl">BATTER EDGE</span>
-              <span className="fsm-matchup__val">{row.arsenal_edge_score != null ? Number(row.arsenal_edge_score).toFixed(1) : "—"}</span>
-            </span>
-            <span className="fsm-matchup__metric fsm-matchup__metric--single">
               <span className="fsm-matchup__lbl">SIGNAL</span>
               <span className="fsm-matchup__val">{row.arsenal_edge_confidence != null ? Math.round(Number(row.arsenal_edge_confidence) * 100) + "%" : "—"}</span>
             </span>
           </span>
         </button>
+      </td>
+      <td className="fsm-cell fsm-share-col" data-label="SHARE" style={{textAlign:'center',padding:'4px 2px',verticalAlign:'middle'}}>
+        <button type="button" style={{padding:'4px 10px',background:'rgba(255,176,32,0.14)',border:'1.5px solid rgba(255,176,32,0.60)',borderRadius:999,color:'#ffb020',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:10,letterSpacing:'0.08em',textTransform:'uppercase',cursor:'pointer',lineHeight:1,minHeight:28,display:'inline-flex',alignItems:'center',justifyContent:'center',whiteSpace:'nowrap'}} title={`Export full intel card for ${row.name}`} onClick={(e)=>{e.stopPropagation();window.fsmShareCard&&window.fsmShareCard(row);}}>SHARE</button>
       </td>
       {cols.map((c, ci) => <FsmCell key={c.key} col={c} row={row} extra={ci >= 12} />)}
       <td className="fsm-cell fsm-cell--slip" style={{ textAlign: 'center', padding: '0 4px' }}>
@@ -726,13 +724,13 @@ function FsmTable({ rows, cols, showGame, onBatter, onPitch, onReorder, onFront,
   return (
     <table className="fsm-table">
       <colgroup>
-        <col style={{ width: "72px" }} /><col style={{ width: "128px" }} /><col style={{ width: "220px" }} />
+        <col style={{ width: "72px" }} /><col style={{ width: "128px" }} /><col style={{ width: "220px" }} /><col style={{ width: "80px" }} />
         {cols.map((c) => <col key={c.key} style={{ width: c.key === "pa" ? "46px" : "60px" }} />)}
         <col style={{ width: "36px" }} />
       </colgroup>
       <thead>
         <tr className="fsm-grouprow">
-          <th className="fsm-gband fsm-gband--id" colSpan={3}>BATTER</th>
+          <th className="fsm-gband fsm-gband--id" colSpan={4}>BATTER</th>
           {bands.map((b, i) => <th key={i} className={"fsm-gband fsm-gband--" + b.label.toLowerCase()} colSpan={b.span}>{b.label}</th>)}
           <th className="fsm-gband" style={{ width: "36px" }} />
         </tr>
@@ -740,6 +738,7 @@ function FsmTable({ rows, cols, showGame, onBatter, onPitch, onReorder, onFront,
           <th className="fsm-th-tier">{isJigContext ? "JIG TIER" : builderMode ? "MODEL TIER" : "TIER"}</th>
           <th className="fsm-th-player">PLAYER</th>
           <th className="fsm-th-matchup">MATCHUP</th>
+          <th className="fsm-th-stat" style={{width:"80px",textAlign:"center",cursor:"default"}} title="Export full intel card">SHARE</th>
           {cols.map((c) =>
           <th key={c.key} className={"fsm-th-stat" + (c.danger ? " fsm-th-danger" : "") + (sortState && sortState.key === c.key ? " is-sorted" : "")} {...thProps(c)}><button type="button" className="fsm-statfront" onClick={(e) => { e.stopPropagation(); onFront(c.key); }} title={c.title} aria-label={`Move ${c.head} to the first stat column`}>{c.head}</button>{arrow(c)}{c.scope === "hand" ? (splitScope === 'vs_hand' ? <span className="fsm-th-scope fsm-th-scope--hand">VS HAND</span> : <span className="fsm-th-scope">SZN</span>) : c.scope === "season" ? <span className="fsm-th-scope">SZN</span> : null}</th>
           )}
