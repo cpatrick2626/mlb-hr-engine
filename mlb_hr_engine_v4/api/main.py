@@ -15,13 +15,15 @@ POST /api/invite/redeem           — redeem invite code (auth required)
 POST /api/tickets/leg             — add leg to ticket; null ticket_id opens new ticket (JWT required — Phase 1)
 POST /api/tickets/leg/remove      — soft-delete a leg (sets removed=true); ownership-checked (JWT required — Phase A)
 POST /api/tickets/complete        — finalize ticket, set fd_deployed=true (JWT required — Phase 1)
+GET  /api/tickets/{id}/analysis   — honest per-leg/combined probability + EV analysis (JWT owner only)
 POST /api/fd-event                — record a FanDuel handoff click (JWT required)
 GET  /api/ledger?lane=main|jig    — settled/void legs + hit-rate buckets, per user per lane (JWT required — Phase S2/D5)
 GET  /api/my-tickets              — caller's tickets + legs + game linescores (JWT required)
 GET  /api/profile                 — caller's public community identity (JWT required)
 PATCH /api/profile/username       — edit caller's username only (JWT required)
 POST /api/community/posts         — publish caller's completed ticket (JWT required)
-GET  /api/community/posts         — community slips grouped by public identity (JWT required)
+GET  /api/community/posts         — community slips grouped by public identity (open read)
+DELETE /api/community/posts/{id}  — un-publish caller's post; ticket remains intact (JWT required)
 GET  /api/builds                  — list caller's named TCC builds (JWT required)
 POST /api/builds                  — create/update caller's named TCC build (JWT required)
 DELETE /api/builds/{build_id}     — delete caller's own TCC build (JWT required)
@@ -287,7 +289,15 @@ async def ticket_complete(body: dict, user=Depends(require_auth)):
     raw_stake = body.get("stake")
     stake = float(raw_stake) if raw_stake is not None else None
     result = complete_ticket(ticket_id, user_id=user.get("sub"), stake=stake)
-    return {"status": "ok", **result}
+    return {
+        "status": "ok",
+        **result,
+        # Explicit lifecycle contract for Pass 2: the completed ticket is no
+        # longer the active building slip. The next add, with no ticket_id,
+        # opens a fresh ticket rather than creating an empty ticket here.
+        "reset_slip": True,
+        "active_ticket_id": None,
+    }
 
 
 # ── FanDuel handoff capture (Phase 1) ─────────────────────────────────────
@@ -474,7 +484,271 @@ _COMMUNITY_TICKET_COLUMNS = (
     "model_prob,tier,model_tier_rank,engine_generated_at,market_odds_american,"
     "market_prob,signal_snapshot,removed)"
 )
+_TICKET_ANALYSIS_COLUMNS = (
+    "ticket_id,user_id,odds_american,"
+    "legs(leg_id,player_name,model_prob,market_odds_american,signal_snapshot,removed)"
+)
 _USERNAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 _-]{2,29}$")
+
+
+def _probability(value) -> float | None:
+    """Return a valid decimal probability without correcting or replacing it."""
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        probability = float(value)
+    except (TypeError, ValueError):
+        return None
+    return probability if 0.0 <= probability <= 1.0 else None
+
+
+def _american_odds_math(value) -> dict | None:
+    """Use the same American implied-probability/EV basis as the board."""
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        american = int(value)
+    except (TypeError, ValueError):
+        return None
+    if american == 0:
+        return None
+    if american > 0:
+        implied_probability = 100.0 / (american + 100.0)
+        decimal_odds = 1.0 + american / 100.0
+    else:
+        absolute = abs(american)
+        implied_probability = absolute / (absolute + 100.0)
+        decimal_odds = 1.0 + 100.0 / absolute
+    return {
+        "american": american,
+        "implied_probability": implied_probability,
+        "decimal_odds": decimal_odds,
+    }
+
+
+def _leg_sample_evidence(signal_snapshot) -> dict:
+    """Read frozen sample evidence only; never fetch or invent a replacement."""
+    if not isinstance(signal_snapshot, dict):
+        return {"pa": None, "basis": "not_captured", "quality": "unknown"}
+
+    candidates = (
+        (signal_snapshot.get("vs_hand_pa"), "vs_hand_pa"),
+        ((signal_snapshot.get("data_quality") or {}).get("vs_hand_pa"), "vs_hand_pa"),
+        (
+            (((signal_snapshot.get("aei") or {}).get("batter_vs_top_pitch") or {}).get("pa")),
+            "batter_vs_top_pitch_pa",
+        ),
+    )
+    for raw_pa, basis in candidates:
+        if raw_pa is None or isinstance(raw_pa, bool):
+            continue
+        try:
+            pa = int(raw_pa)
+        except (TypeError, ValueError):
+            continue
+        if pa < 0:
+            continue
+        quality = "thin" if pa < 10 else "limited" if pa < 30 else "adequate"
+        return {"pa": pa, "basis": basis, "quality": quality}
+    return {"pa": None, "basis": "not_captured", "quality": "unknown"}
+
+
+def _ev_grade(ev_pct: float | None) -> dict:
+    """Grade only combined EV; leg count, probability, and vibes never boost it."""
+    if ev_pct is None:
+        return {
+            "status": "pending",
+            "letter": None,
+            "label": "PENDING",
+            "color": None,
+            "driver": "combined_ev_pct",
+        }
+    if ev_pct >= 10.0:
+        letter = "A"
+    elif ev_pct >= 5.0:
+        letter = "B"
+    elif ev_pct > 0.0:
+        letter = "C+"
+    elif ev_pct == 0.0:
+        letter = "C"
+    elif ev_pct >= -10.0:
+        letter = "D"
+    else:
+        letter = "F"
+    label = "GOOD" if ev_pct > 0.0 else "NEUTRAL" if ev_pct == 0.0 else "POOR"
+    color = "green" if ev_pct > 0.0 else "amber" if ev_pct == 0.0 else "red"
+    return {
+        "status": "complete",
+        "letter": letter,
+        "label": label,
+        "color": color,
+        "driver": "combined_ev_pct",
+    }
+
+
+def _ticket_analysis(ticket: dict) -> dict:
+    """Derive honest ticket math from frozen calibrated model_prob + real odds."""
+    source_legs = [leg for leg in (ticket.get("legs") or []) if not leg.get("removed", False)]
+    analyzed_legs: list[dict] = []
+    probability_product = 1.0
+    model_probabilities_complete = bool(source_legs)
+    leg_odds_complete = bool(source_legs)
+    leg_decimal_product = 1.0
+    raw_single_evs: list[tuple[str | None, float]] = []
+    confidence_reasons: set[str] = set()
+    sample_qualities: list[str] = []
+
+    if not source_legs:
+        confidence_reasons.add("no_active_legs")
+
+    for leg in source_legs:
+        model_probability = _probability(leg.get("model_prob"))
+        odds_math = _american_odds_math(leg.get("market_odds_american"))
+        sample = _leg_sample_evidence(leg.get("signal_snapshot"))
+        sample_qualities.append(sample["quality"])
+
+        if model_probability is None:
+            model_probabilities_complete = False
+            confidence_reasons.add("invalid_or_missing_model_prob")
+        else:
+            probability_product *= model_probability
+
+        pending_reasons: list[str] = []
+        if odds_math is None:
+            leg_odds_complete = False
+            pending_reasons.append(
+                "missing_odds" if leg.get("market_odds_american") is None else "invalid_odds"
+            )
+            confidence_reasons.add(pending_reasons[-1])
+        else:
+            leg_decimal_product *= odds_math["decimal_odds"]
+
+        if sample["quality"] == "unknown":
+            confidence_reasons.add("sample_size_not_captured")
+        elif sample["quality"] == "thin":
+            confidence_reasons.add("thin_sample_under_10_pa")
+
+        implied_probability = odds_math["implied_probability"] if odds_math else None
+        edge = (
+            model_probability - implied_probability
+            if model_probability is not None and implied_probability is not None
+            else None
+        )
+        raw_ev = (
+            model_probability * (odds_math["decimal_odds"] - 1.0) - (1.0 - model_probability)
+            if model_probability is not None and odds_math is not None
+            else None
+        )
+        if raw_ev is not None:
+            raw_single_evs.append((leg.get("leg_id"), raw_ev * 100.0))
+
+        analyzed_legs.append({
+            "leg_id": leg.get("leg_id"),
+            "player_name": leg.get("player_name"),
+            "status": "pending" if pending_reasons or model_probability is None else "complete",
+            "pending_reasons": pending_reasons + (
+                ["invalid_or_missing_model_prob"] if model_probability is None else []
+            ),
+            "model_prob": round(model_probability, 6) if model_probability is not None else None,
+            "american_odds": odds_math["american"] if odds_math else None,
+            "decimal_odds": round(odds_math["decimal_odds"], 4) if odds_math else None,
+            "implied_prob": round(implied_probability, 4) if implied_probability is not None else None,
+            "edge": round(edge, 4) if edge is not None else None,
+            "ev_pct": round(raw_ev * 100.0, 2) if raw_ev is not None else None,
+            "data_quality": sample,
+        })
+
+    combined_probability = probability_product if model_probabilities_complete else None
+    ticket_odds_value = ticket.get("odds_american")
+    ticket_odds_math = _american_odds_math(ticket_odds_value)
+    invalid_ticket_odds = ticket_odds_value is not None and ticket_odds_math is None
+    combined_pending_reasons: list[str] = []
+    if not source_legs:
+        combined_pending_reasons.append("no_active_legs")
+    if not model_probabilities_complete:
+        combined_pending_reasons.append("invalid_or_missing_model_prob")
+    if not leg_odds_complete:
+        combined_pending_reasons.append("one_or_more_legs_missing_odds")
+    if invalid_ticket_odds:
+        combined_pending_reasons.append("invalid_ticket_odds")
+
+    combined_decimal_odds = None
+    odds_source = None
+    if not combined_pending_reasons:
+        if ticket_odds_math is not None:
+            combined_decimal_odds = ticket_odds_math["decimal_odds"]
+            odds_source = "ticket_actual"
+        else:
+            combined_decimal_odds = leg_decimal_product
+            odds_source = "leg_product"
+
+    raw_combined_ev_pct = (
+        (combined_probability * combined_decimal_odds - 1.0) * 100.0
+        if combined_probability is not None and combined_decimal_odds is not None
+        else None
+    )
+    combined_ev_pct = round(raw_combined_ev_pct, 2) if raw_combined_ev_pct is not None else None
+    best_single = max(raw_single_evs, key=lambda item: item[1]) if raw_single_evs else None
+    singles_better = (
+        raw_combined_ev_pct < best_single[1]
+        if raw_combined_ev_pct is not None and best_single is not None
+        else None
+    )
+
+    if confidence_reasons:
+        confidence_label = "LOW"
+    elif any(quality == "limited" for quality in sample_qualities):
+        confidence_label = "MEDIUM"
+    else:
+        confidence_label = "HIGH"
+
+    return {
+        "ticket_id": ticket.get("ticket_id"),
+        "status": "pending" if combined_pending_reasons else "complete",
+        "legs": analyzed_legs,
+        "combined": {
+            "status": "pending" if combined_pending_reasons else "complete",
+            "partial": bool(combined_pending_reasons),
+            "pending_reasons": combined_pending_reasons,
+            "probability": round(combined_probability, 6) if combined_probability is not None else None,
+            "decimal_odds": round(combined_decimal_odds, 4) if combined_decimal_odds is not None else None,
+            "odds_source": odds_source,
+            "ticket_american_odds": ticket_odds_math["american"] if ticket_odds_math else None,
+            "ev_pct": combined_ev_pct,
+            "assumption": "independent_legs_probability_product",
+            "correlation_adjusted": False,
+        },
+        "grade": _ev_grade(combined_ev_pct),
+        "confidence": {
+            "label": confidence_label,
+            "meaning": "data_reliability_not_win_probability",
+            "reasons": sorted(confidence_reasons),
+        },
+        "honest_read": {
+            "singles_would_be_better": singles_better,
+            "best_single_leg_id": best_single[0] if best_single else None,
+            "best_single_ev_pct": round(best_single[1], 2) if best_single else None,
+        },
+    }
+
+
+@app.get("/api/tickets/{ticket_id}/analysis")
+async def get_ticket_analysis(ticket_id: str, user=Depends(require_auth)):
+    """Return derived ticket math only when the ticket belongs to the JWT caller."""
+    result = (
+        supabase_client()
+        .table("tickets")
+        .select(_TICKET_ANALYSIS_COLUMNS)
+        .eq("ticket_id", ticket_id)
+        .limit(1)
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    ticket = result.data[0]
+    if ticket.get("user_id") != user.get("sub"):
+        raise HTTPException(status_code=403, detail="Not authorized for this ticket")
+    return {"analysis": _ticket_analysis(ticket)}
 
 
 def _profile_for_user(user_id: str) -> dict:
@@ -511,7 +785,8 @@ def _public_ticket(ticket: dict) -> dict:
             }
             for leg in (ticket.get("legs") or [])
             if not leg.get("removed", False)
-        ]
+        ],
+        "analysis": _ticket_analysis(ticket),
     }
 
 
@@ -590,6 +865,32 @@ async def post_ticket_to_community(body: dict, user=Depends(require_auth)):
         "ticket_id": post["ticket_id"],
         "posted_at": post["posted_at"],
     }}
+
+
+@app.delete("/api/community/posts/{post_id}")
+async def remove_community_post(post_id: str, user=Depends(require_auth)):
+    """Un-publish the caller's post while preserving its ticket and legs."""
+    result = (
+        supabase_client()
+        .table("community_posts")
+        .select("post_id,ticket_id,user_id")
+        .eq("post_id", post_id)
+        .limit(1)
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Community post not found")
+    post = result.data[0]
+    if post.get("user_id") != user.get("sub"):
+        raise HTTPException(status_code=403, detail="Not authorized for this community post")
+    supabase_client().table("community_posts").delete().eq("post_id", post_id).execute()
+    return {
+        "status": "ok",
+        "post_id": post["post_id"],
+        "ticket_id": post["ticket_id"],
+        "removed": True,
+        "ticket_preserved": True,
+    }
 
 
 @app.get("/api/community/posts")

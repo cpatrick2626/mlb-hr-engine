@@ -14,6 +14,7 @@ class _Query:
     def __init__(self, db, table):
         self.db, self.table, self.filters = db, table, []
         self.payload = None
+        self.delete_requested = False
 
     def select(self, _columns): return self
     def eq(self, field, value): self.filters.append((field, value)); return self
@@ -22,6 +23,7 @@ class _Query:
     def limit(self, *_args): return self
     def insert(self, payload): self.payload = payload; return self
     def update(self, payload): self.payload = payload; return self
+    def delete(self): self.delete_requested = True; return self
 
     def execute(self):
         rows = self.db.rows[self.table]
@@ -31,6 +33,9 @@ class _Query:
                 for field, value in self.filters
             )
         matching = [row for row in rows if matches(row)]
+        if self.delete_requested:
+            self.db.rows[self.table] = [row for row in rows if not matches(row)]
+            return SimpleNamespace(data=copy.deepcopy(matching))
         if self.payload is not None and self.table == "community_posts" and "post_id" not in self.payload:
             row = {**self.payload, "post_id": "post-1", "posted_at": "2026-08-11T12:00:00Z"}
             rows.append(row)
@@ -78,10 +83,12 @@ class CommunityPostsContractTests(unittest.TestCase):
         self.api_main.app.dependency_overrides[self.require_auth] = lambda: {"sub": user_id}
         return TestClient(self.api_main.app)
 
-    def test_post_and_feed_are_auth_gated(self):
+    def test_feed_is_public_while_post_and_delete_are_auth_gated(self):
         client = TestClient(self.api_main.app)
+        with mock.patch.object(self.api_main, "supabase_client", return_value=self.db):
+            self.assertEqual(client.get("/api/community/posts").status_code, 200)
         self.assertEqual(client.post("/api/community/posts", json={"ticket_id": "ticket-a"}).status_code, 401)
-        self.assertEqual(client.get("/api/community/posts").status_code, 401)
+        self.assertEqual(client.delete("/api/community/posts/post-1").status_code, 401)
 
     def test_owner_can_post_and_feed_groups_by_stable_user_not_mutable_username(self):
         with mock.patch.object(self.api_main, "supabase_client", return_value=self.db):
@@ -103,6 +110,9 @@ class CommunityPostsContractTests(unittest.TestCase):
         self.assertEqual(payload["users"][0]["app_number"], 1)
         self.assertEqual(payload["users"][0]["posts"][0]["slip"]["ticket_id"], "ticket-a")
         self.assertEqual(payload["users"][0]["posts"][0]["slip"]["legs"][0]["market_odds_american"], 450)
+        self.assertEqual(payload["users"][0]["posts"][0]["slip"]["analysis"]["combined"]["probability"], 0.2)
+        self.assertEqual(payload["users"][0]["posts"][0]["slip"]["analysis"]["combined"]["ev_pct"], 60.0)
+        self.assertEqual(payload["users"][0]["posts"][0]["slip"]["analysis"]["grade"]["letter"], "A")
         self.assertNotIn("user_id", str(payload))
         self.assertNotIn("email", str(payload).lower())
 
@@ -115,6 +125,24 @@ class CommunityPostsContractTests(unittest.TestCase):
         with mock.patch.object(self.api_main, "supabase_client", return_value=self.db):
             response = self._client_for("user-a").post("/api/community/posts", json={"ticket_id": "ticket-b"})
         self.assertEqual(response.status_code, 403)
+
+    def test_owner_can_unpost_without_deleting_ticket_and_non_owner_is_rejected(self):
+        self.db.rows["community_posts"].append({
+            "post_id": "post-1",
+            "ticket_id": "ticket-a",
+            "user_id": "user-a",
+            "posted_at": "2026-08-11T12:00:00Z",
+        })
+        with mock.patch.object(self.api_main, "supabase_client", return_value=self.db):
+            forbidden = self._client_for("user-b").delete("/api/community/posts/post-1")
+            self.assertEqual(forbidden.status_code, 403)
+            response = self._client_for("user-a").delete("/api/community/posts/post-1")
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["ticket_preserved"], True)
+        self.assertEqual(self.db.rows["community_posts"], [])
+        self.assertEqual(len(self.db.rows["tickets"]), 2)
+        self.assertNotIn("user_id", response.text)
+        self.assertNotIn("email", response.text.lower())
 
 
 if __name__ == "__main__":
