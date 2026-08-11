@@ -536,7 +536,7 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, i
         : (row.gameStartUtc || row.pitcher_name) && <span className="fsm-player__game"><span className="fsm-player__gm--time">{fsmFmtEt(row.gameStartUtc)}</span>{row.gameStartUtc && row.pitcher_name && <i className="fsm-player__bar">·</i>}{row.pitcher_name && <span className="fsm-player__gm--pitcher">{row.pitcher_name}</span>}</span>}
           </span>
         </button>
-        <button type="button" style={{position:'absolute',bottom:3,right:4,padding:'1px 5px',background:'none',border:'1px solid rgba(0,217,255,0.20)',borderRadius:3,color:'rgba(0,217,255,0.50)',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:8,letterSpacing:'0.08em',textTransform:'uppercase',cursor:'pointer',lineHeight:1.5}} title={`Export ${row.name} card`} onClick={(e)=>{e.stopPropagation();window.fsmShareCard&&window.fsmShareCard(row);}}>SHARE</button>
+        <button type="button" style={{position:'absolute',top:3,right:3,padding:'3px 8px',background:'rgba(255,176,32,0.14)',border:'1.5px solid rgba(255,176,32,0.60)',borderRadius:999,color:'#ffb020',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:9.5,letterSpacing:'0.08em',textTransform:'uppercase',cursor:'pointer',lineHeight:1,minHeight:22,display:'inline-flex',alignItems:'center',justifyContent:'center',whiteSpace:'nowrap'}} title={`Export full intel card for ${row.name}`} onClick={(e)=>{e.stopPropagation();window.fsmShareCard&&window.fsmShareCard(row);}}>SHARE</button>
       </td>
       <td className="fsm-matchup">
         <button type="button" className="fsm-matchup__in" onClick={() => onPitch(row)} title="Open Arsenal Edge Intel">
