@@ -196,6 +196,10 @@ const Stage = ({ engine, lens, ccOpen, onCloseCC, appliedFilters, roomFilters, o
         <ArsenalEdgeExploit rows={applyRoomFilters(arsenalRows, appliedFilters)} />
       </div>
     );
+  } else if (engine.id === "community" && (!lens || lens.id === "betSlips")) {
+    body = <CommunityBoard />;
+  } else if (engine.id === "community" && lens && lens.id === "profile") {
+    body = <CommunityProfile />;
   } else {
     body = <RadarScope engineName={engine.name + (engine.suffix ? " " + engine.suffix : "")} lensName={lens ? lens.name : "Overview"} accent={engine.color} />;
   }

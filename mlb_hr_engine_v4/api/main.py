@@ -593,11 +593,8 @@ async def post_ticket_to_community(body: dict, user=Depends(require_auth)):
 
 
 @app.get("/api/community/posts")
-async def get_community_posts(user=Depends(require_auth)):
-    """Return public slips grouped internally by immutable user_id, never username."""
-    # Depend on a valid profile too: a signed-in user without the migration's
-    # auth-user trigger must not get a partial community surface.
-    _profile_for_user(user.get("sub"))
+async def get_community_posts():
+    """Return public slips grouped by stable identity (app_number). Open read — no auth."""
     posts = (
         supabase_client()
         .table("community_posts")

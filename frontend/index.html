@@ -6316,6 +6316,83 @@ button.fsm-tier { appearance: none; text-decoration: none; }
   .fsm-expandbtn:active { background: rgba(0,217,255,0.14); }
 }
 </style>
+  <style>/* HR Engine — Community Board + Profile + Ticket Community Banner */
+
+/* ===== COMMUNITY BOARD ===== */
+.comm-board { display: flex; flex-direction: column; gap: 16px; padding: 16px; }
+.comm-board__head { display: flex; flex-direction: column; gap: 4px; }
+.comm-board__title { font-family: var(--font-display); font-weight: 800; font-size: 18px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg-1); }
+.comm-board__meta { font-family: var(--font-body); font-size: 12px; color: var(--fg-3); }
+.comm-board__grid { display: flex; flex-direction: column; gap: 12px; }
+.comm-board__empty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 48px 24px; text-align: center; }
+.comm-board__empty-icon { font-size: 32px; color: var(--fg-4); }
+.comm-board__empty-lbl { font-family: var(--font-display); font-weight: 700; font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg-3); }
+.comm-board__empty-sub { font-family: var(--font-body); font-size: 12px; color: var(--fg-4); max-width: 320px; }
+
+/* User box */
+.comm-box { background: var(--bg-raised); border: 1px solid var(--border-2); border-radius: var(--r-md); overflow: hidden; }
+.comm-box__header { display: flex; align-items: center; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--border-1); background: rgba(155,89,245,0.04); }
+.comm-box__username { display: inline-flex; align-items: center; gap: 8px; cursor: default; }
+.comm-box__uname-text { font-family: var(--font-display); font-weight: 800; font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; color: #9b59f5; }
+.comm-box__appnum { font-family: var(--font-mono); font-size: 10px; color: var(--fg-3); background: var(--bg-elevated); border: 1px solid var(--border-2); border-radius: var(--r-sm); padding: 1px 6px; letter-spacing: 0.06em; }
+.comm-box__count { font-family: var(--font-display); font-weight: 600; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg-4); }
+.comm-box__slips { display: flex; flex-direction: column; }
+
+/* Slip card */
+.comm-slip { padding: 10px 14px; border-bottom: 1px solid var(--border-1); display: flex; flex-direction: column; gap: 6px; }
+.comm-slip:last-child { border-bottom: none; }
+.comm-slip__meta { display: flex; align-items: center; gap: 8px; }
+.comm-slip__date { font-family: var(--font-mono); font-size: 10px; color: var(--fg-3); }
+.comm-slip__type { font-family: var(--font-display); font-weight: 600; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg-4); background: var(--bg-elevated); border-radius: 3px; padding: 1px 5px; }
+.comm-slip__odds { font-family: var(--font-mono); font-size: 11px; color: #1aff66; font-weight: 600; }
+.comm-slip__legs { display: flex; flex-direction: column; gap: 4px; }
+.comm-slip__leg { display: flex; align-items: center; gap: 7px; font-size: 12px; }
+.comm-slip__leg--empty { color: var(--fg-4); }
+.comm-slip__leg-dot { width: 5px; height: 5px; border-radius: 50%; background: rgba(155,89,245,0.6); flex-shrink: 0; }
+.comm-slip__leg-name { font-family: var(--font-body); font-weight: 600; color: var(--fg-1); flex: 1; }
+.comm-slip__leg-team { font-family: var(--font-mono); font-size: 10px; color: var(--fg-3); }
+.comm-slip__leg-tier { font-family: var(--font-display); font-weight: 700; font-size: 9px; letter-spacing: 0.1em; text-transform: uppercase; padding: 1px 5px; border-radius: 3px; }
+.comm-slip__leg-tier--apex  { color: #ff3344; background: rgba(255,51,68,0.12); }
+.comm-slip__leg-tier--elite { color: #ffb020; background: rgba(255,176,32,0.12); }
+.comm-slip__leg-tier--edge  { color: #1aff66; background: rgba(26,255,102,0.10); }
+.comm-slip__leg-prob { font-family: var(--font-mono); font-size: 10px; color: var(--fg-3); margin-left: auto; }
+
+/* ===== COMMUNITY PROFILE ===== */
+.comm-profile { padding: 24px; display: flex; flex-direction: column; gap: 20px; max-width: 520px; }
+.comm-profile__head { display: flex; flex-direction: column; gap: 8px; }
+.comm-profile__title { font-family: var(--font-display); font-weight: 800; font-size: 18px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg-1); }
+.comm-profile__idrow { display: flex; align-items: center; gap: 8px; }
+.comm-profile__id-lbl { font-family: var(--font-display); font-weight: 600; font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg-3); }
+.comm-profile__id { font-family: var(--font-mono); font-size: 13px; color: #9b59f5; font-weight: 700; background: rgba(155,89,245,0.08); border: 1px solid rgba(155,89,245,0.25); border-radius: var(--r-sm); padding: 2px 8px; }
+.comm-profile__form { display: flex; flex-direction: column; gap: 8px; }
+.comm-profile__fieldlbl { font-family: var(--font-body); font-weight: 600; font-size: 12px; color: var(--fg-2); }
+.comm-profile__inputrow { display: flex; gap: 8px; }
+.comm-profile__input { flex: 1; background: var(--bg-elevated); border: 1px solid rgba(180,220,200,0.14); border-radius: var(--r-sm); color: var(--fg-1); font-family: var(--font-mono); font-size: 13px; padding: 8px 10px; outline: none; }
+.comm-profile__input:focus { border-color: #9b59f5; box-shadow: 0 0 0 1px #9b59f5, 0 0 10px rgba(155,89,245,0.18); }
+.comm-profile__savebtn { background: rgba(155,89,245,0.12); border: 1px solid rgba(155,89,245,0.4); border-radius: var(--r-sm); color: #9b59f5; font-family: var(--font-display); font-weight: 700; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; padding: 8px 16px; cursor: pointer; white-space: nowrap; }
+.comm-profile__savebtn:disabled { opacity: 0.4; cursor: default; }
+.comm-profile__err { font-family: var(--font-body); font-size: 11px; color: var(--red-500); }
+.comm-profile__ok  { font-family: var(--font-body); font-size: 11px; color: #1aff66; }
+.comm-profile__hint { font-family: var(--font-body); font-size: 11px; color: var(--fg-4); }
+.comm-profile__empty { font-family: var(--font-body); font-size: 14px; color: var(--fg-3); padding: 48px 24px; text-align: center; }
+
+/* ===== TICKET COMMAND — COMMUNITY POST BANNER ===== */
+.tcs-comm-banner { background: rgba(155,89,245,0.06); border-top: 1px solid rgba(155,89,245,0.22); padding: 12px 20px; }
+.tcs-comm-banner__row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.tcs-comm-banner__check { font-family: var(--font-display); font-weight: 800; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #1aff66; }
+.tcs-comm-banner__ok    { font-family: var(--font-display); font-weight: 800; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #9b59f5; }
+.tcs-comm-banner__msg   { font-family: var(--font-body); font-size: 12px; color: var(--fg-2); }
+.tcs-comm-banner__post  { background: rgba(155,89,245,0.14); border: 1px solid rgba(155,89,245,0.45); border-radius: 4px; color: #9b59f5; font-family: var(--font-display); font-weight: 700; font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; padding: 5px 12px; cursor: pointer; }
+.tcs-comm-banner__post:disabled { opacity: 0.45; cursor: default; }
+.tcs-comm-banner__skip  { background: transparent; border: 1px solid rgba(180,220,200,0.18); border-radius: 4px; color: var(--fg-3); font-family: var(--font-display); font-weight: 700; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; padding: 5px 10px; cursor: pointer; }
+.tcs-comm-banner__close { margin-left: auto; background: transparent; border: 1px solid rgba(180,220,200,0.18); border-radius: 4px; color: var(--fg-3); font-family: var(--font-display); font-weight: 700; font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; padding: 5px 12px; cursor: pointer; }
+.tcs-comm-banner__prompt-wrap { display: flex; flex-direction: column; gap: 8px; }
+.tcs-comm-banner__prompt-lbl { font-family: var(--font-body); font-size: 12px; color: var(--fg-2); }
+.tcs-comm-banner__prompt-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.tcs-comm-banner__input { flex: 1; min-width: 140px; background: var(--bg-elevated); border: 1px solid rgba(155,89,245,0.3); border-radius: 4px; color: var(--fg-1); font-family: var(--font-mono); font-size: 12px; padding: 5px 8px; outline: none; }
+.tcs-comm-banner__input:focus { border-color: #9b59f5; }
+.tcs-comm-banner__err { font-family: var(--font-body); font-size: 11px; color: var(--red-500); }
+</style>
 </head>
 <body>
   <div id="root"></div>
@@ -6352,6 +6429,7 @@ button.fsm-tier { appearance: none; text-decoration: none; }
   <script type="text/babel" src="assets/js/command-tab.js"></script>
   <script type="text/babel" src="assets/js/cfdd4178-a139-4f84-b282-b84f76971c49.js"></script>
   <script type="text/babel" src="assets/js/a6cd8ef6-2b53-4016-a340-66b69a8928bd.js"></script>
+  <script type="text/babel" src="assets/js/community-board.js"></script>
   <script type="text/babel" src="assets/js/auth.js"></script>
 
 

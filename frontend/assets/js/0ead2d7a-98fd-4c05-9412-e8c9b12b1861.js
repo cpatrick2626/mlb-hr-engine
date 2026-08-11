@@ -77,6 +77,15 @@ window.ENGINES = [
     color: "#ff8a93", glow: "rgba(255,138,147,0.2)", tint: "rgba(255,138,147,0.05)",
     desc: "Tactical overview · MAIN / JIG",
   },
+  {
+    id: "community", name: "COMMUNITY", suffix: "", icon: "users",
+    color: "#9b59f5", glow: "rgba(155,89,245,0.2)", tint: "rgba(155,89,245,0.05)",
+    expandable: true,
+    subs: [
+      { id: "betSlips", name: "Bet Slips", tag: "DEFAULT" },
+      { id: "profile",  name: "Profile" },
+    ],
+  },
 ];
 
 /* ---- Room filters: how Tactical Command Center values affect a room ---- */

@@ -244,6 +244,7 @@ function MasterDashboard() {
     { type: "tcc" },
     { type: "engine", id: "strategy" },
     { type: "engine", id: "performance" },
+    { type: "engine", id: "community" },
   ];
 
   const topBar = (

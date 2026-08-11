@@ -329,8 +329,12 @@ function TcDeployBar({ legs, ticketId, stake, setStake, onSubmit, submitState, m
 
 /* ---- Main overlay component ---- */
 function TicketCommandSlip({ legs, ticketId, onClose, onRemoveLeg }) {
-  const [stake, setStake]           = React.useState('5.00');
-  const [submitState, setSubmitState] = React.useState('idle');
+  const [stake, setStake]               = React.useState('5.00');
+  const [submitState, setSubmitState]   = React.useState('idle');
+  const [postState, setPostState]       = React.useState('idle'); // idle|loading|done|error|noauth
+  const [showUsernamePrompt, setShowUsernamePrompt] = React.useState(false);
+  const [commUsername, setCommUsername] = React.useState('');
+  const [commUsernameError, setCommUsernameError]   = React.useState('');
 
   const handleSubmit = async () => {
     if (!ticketId || legs.length === 0) return;
@@ -351,16 +355,111 @@ function TicketCommandSlip({ legs, ticketId, onClose, onRemoveLeg }) {
       if (res._noAuth) { setSubmitState('noauth'); return; }
       if (!res.ok)     { setSubmitState('error');  return; }
       setSubmitState('done');
-      setTimeout(function () {
-        window.__hrSlip.resetSlip();
-        onClose();
-      }, 1200);
+      // No auto-close: user explicitly closes or posts to community first.
     } catch (_) {
       setSubmitState('error');
     }
   };
 
+  const handleClose = () => {
+    window.__hrSlip.resetSlip();
+    onClose();
+  };
+
+  const doPostToCommunity = async (usernameToSet) => {
+    if (usernameToSet && usernameToSet.trim().length >= 3) {
+      const saveRes = await window.__hrAuth.authFetch(`${TC_API}/api/profile/username`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: usernameToSet.trim() }),
+      }).catch(() => null);
+      if (saveRes && saveRes.status === 409) {
+        setCommUsernameError('That username is already taken.');
+        return;
+      }
+    }
+    setShowUsernamePrompt(false);
+    setCommUsernameError('');
+    setPostState('loading');
+    const res = await window.__hrAuth.authFetch(`${TC_API}/api/community/posts`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ticket_id: ticketId }),
+    }).catch(() => null);
+    if (!res || res._noAuth) { setPostState('noauth'); return; }
+    if (res.status === 409) { setPostState('done'); return; } // already posted = ok
+    if (!res.ok) { setPostState('error'); return; }
+    setPostState('done');
+  };
+
+  const handlePostToCommunity = async () => {
+    if (!window.__hrAuth?.authFetch) { setPostState('noauth'); return; }
+    if (showUsernamePrompt) { await doPostToCommunity(commUsername); return; }
+    const profileRes = await window.__hrAuth.authFetch(`${TC_API}/api/profile`).catch(() => null);
+    if (!profileRes || profileRes._noAuth) { setPostState('noauth'); return; }
+    const profileData = await profileRes.json().catch(() => ({}));
+    const currentUsername = profileData?.profile?.username || '';
+    if (/^user-\d+$/.test(currentUsername)) {
+      setCommUsername('');
+      setShowUsernamePrompt(true);
+      return;
+    }
+    await doPostToCommunity(null);
+  };
+
   const n = legs.length;
+
+  const communityBanner = submitState === 'done' ? (
+    <div className="tcs-comm-banner">
+      {postState === 'done' ? (
+        <div className="tcs-comm-banner__row">
+          <span className="tcs-comm-banner__ok">✓ Posted to Community</span>
+          <button className="tcs-comm-banner__close" onClick={handleClose}>Close</button>
+        </div>
+      ) : showUsernamePrompt ? (
+        <div className="tcs-comm-banner__prompt-wrap">
+          <div className="tcs-comm-banner__prompt-lbl">Choose a display name (optional)</div>
+          <div className="tcs-comm-banner__prompt-row">
+            <input
+              className="tcs-comm-banner__input"
+              type="text"
+              placeholder="Display name (3–30 chars)"
+              value={commUsername}
+              onChange={e => { setCommUsername(e.target.value); setCommUsernameError(''); }}
+              maxLength={30}
+            />
+            <button
+              className="tcs-comm-banner__post"
+              onClick={() => doPostToCommunity(commUsername)}
+              disabled={postState === 'loading' || (commUsername.trim().length > 0 && commUsername.trim().length < 3)}>
+              {postState === 'loading' ? '…' : 'Set & Post'}
+            </button>
+            <button className="tcs-comm-banner__skip" onClick={() => doPostToCommunity(null)} disabled={postState === 'loading'}>Skip</button>
+            <button className="tcs-comm-banner__close" onClick={handleClose}>Close</button>
+          </div>
+          {commUsernameError && <div className="tcs-comm-banner__err">{commUsernameError}</div>}
+        </div>
+      ) : (
+        <div className="tcs-comm-banner__row">
+          <span className="tcs-comm-banner__check">✓ Submitted</span>
+          {postState === 'noauth' ? (
+            <span className="tcs-comm-banner__msg">Sign in to post to Community</span>
+          ) : postState === 'error' ? (
+            <><span className="tcs-comm-banner__msg">Post failed —</span>
+            <button className="tcs-comm-banner__post" onClick={handlePostToCommunity}>Retry</button></>
+          ) : (
+            <><span className="tcs-comm-banner__msg">Share to Community?</span>
+            <button className="tcs-comm-banner__post" onClick={handlePostToCommunity} disabled={postState === 'loading'}>
+              {postState === 'loading' ? '…' : 'Post'}
+            </button></>
+          )}
+          <button className="tcs-comm-banner__close" onClick={handleClose}>
+            {(postState === 'noauth' || postState === 'error') ? 'Close' : 'Not Now'}
+          </button>
+        </div>
+      )}
+    </div>
+  ) : null;
 
   const overlay = (
     <div className="tcs-overlay" role="dialog" aria-label="Ticket Command Slip">
@@ -427,6 +526,7 @@ function TicketCommandSlip({ legs, ticketId, onClose, onRemoveLeg }) {
 
         <TcDeployBar legs={legs} ticketId={ticketId} stake={stake} setStake={setStake}
           onSubmit={handleSubmit} submitState={submitState} mode="pc" />
+        {communityBanner}
       </div>
 
       {/* ===== MOBILE LAYOUT ===== */}
@@ -502,6 +602,7 @@ function TicketCommandSlip({ legs, ticketId, onClose, onRemoveLeg }) {
 
         <TcDeployBar legs={legs} ticketId={ticketId} stake={stake} setStake={setStake}
           onSubmit={handleSubmit} submitState={submitState} mode="mobile" />
+        {communityBanner}
       </div>
     </div>
   );
