@@ -1,38 +1,50 @@
 /* HR Engine — Ticket Command Slip
-   Full-screen overlay: PC two-column layout + mobile single-column.
-   LIVE: legs list (name/team/tier/hrProb/barrel/hh/pitcher), stake input, submit.
-   PREVIEW (engine pending): combined prob, grade, confidence, recommendations, payout.
-   Never computes combinedProb or grade — those are clearly labeled placeholders. */
+   Pass 2: real grade/EV/confidence displayed; auto-post on submit; stale-slip fixed;
+   clickable View Card per leg. Never computes grade — displays backend values only. */
 
 const TC_API = 'https://mlb-hr-api.fly.dev';
 const TC_FD_URL = 'https://sportsbook.fanduel.com/baseball';
 
-/* ---- icons (inline SVG strings rendered via dangerouslySetInnerHTML) ---- */
-const TC_SEND_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/></svg>';
-const TC_FAN_SVG  = '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l10 10-10 10L2 12z"/></svg>';
-const TC_TAG_SVG  = '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M3 11V4h7l11 11-7 7z"/><circle cx="7.5" cy="7.5" r="1.6" fill="currentColor"/></svg>';
-const TC_EXT_SVG  = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 5h10v10M19 5L9 15M15 13v6H5V9h6"/></svg>';
-const TC_BULB_SVG = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 1 4 10.5c-.7.6-1 1.2-1 2.5H9c0-1.3-.3-1.9-1-2.5A6 6 0 0 1 12 3z"/></svg>';
+const TC_SEND_SVG   = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/></svg>';
+const TC_FAN_SVG    = '<svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2l10 10-10 10L2 12z"/></svg>';
+const TC_TAG_SVG    = '<svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M3 11V4h7l11 11-7 7z"/><circle cx="7.5" cy="7.5" r="1.6" fill="currentColor"/></svg>';
+const TC_EXT_SVG    = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 5h10v10M19 5L9 15M15 13v6H5V9h6"/></svg>';
+const TC_BULB_SVG   = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 1 4 10.5c-.7.6-1 1.2-1 2.5H9c0-1.3-.3-1.9-1-2.5A6 6 0 0 1 12 3z"/></svg>';
 const TC_SHIELD_SVG = '<svg viewBox="0 0 24 28" width="40" height="46" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M12 2l9 3.5v8C21 20 17 24.5 12 26 7 24.5 3 20 3 13.5v-8z" fill="rgba(26,255,102,.08)"/><path d="M8 14l3 3 5-6" stroke-width="2" stroke-linecap="round"/></svg>';
 
 function tcFmt(v) {
   return v != null ? Number(v).toFixed(1) + '%' : '—';
 }
 
-function TcPreviewTag() {
-  return <span className="tcs-pv-tag">SAMPLE</span>;
+function tcGradeColor(colorStr) {
+  if (colorStr === 'green') return '#1aff66';
+  if (colorStr === 'red')   return '#ff3344';
+  if (colorStr === 'amber') return '#ffb020';
+  return 'var(--fg-2, #e0e8ff)';
+}
+
+function tcConfColor(label) {
+  if (label === 'HIGH')   return '#1aff66';
+  if (label === 'LOW')    return '#ff3344';
+  if (label === 'MEDIUM') return '#ffb020';
+  return 'var(--fg-3, #9aa0ac)';
 }
 
 /* ---- Leg card ---- */
-function TcLegCard({ leg, onRemove }) {
-  const prob    = tcFmt(leg.hrprob);
-  const barrel  = tcFmt(leg.barrel);
-  const hh      = tcFmt(leg.hh);
-  const tier    = leg.tier || '—';
+function TcLegCard({ leg, onRemove, onViewCard, analysisLeg }) {
+  const prob   = tcFmt(leg.hrprob);
+  const barrel = tcFmt(leg.barrel);
+  const hh     = tcFmt(leg.hh);
+  const tier   = leg.tier || '—';
   const tierCls = tier === 'APEX' ? 'tcs-tier--apex'
     : tier === 'ELITE' ? 'tcs-tier--elite'
     : tier === 'EDGE'  ? 'tcs-tier--edge'
     : 'tcs-tier--other';
+
+  const evPct = analysisLeg?.ev_pct;
+  const evStr = evPct != null ? (evPct > 0 ? '+' : '') + evPct.toFixed(1) + '%' : null;
+  const evColor = evPct != null ? tcGradeColor(evPct > 0 ? 'green' : evPct < 0 ? 'red' : 'amber') : null;
+  const isPending = analysisLeg?.status === 'pending';
 
   return (
     <div className="tcs-leg">
@@ -55,7 +67,9 @@ function TcLegCard({ leg, onRemove }) {
             <span dangerouslySetInnerHTML={{__html: TC_FAN_SVG}} /> FANDUEL
             <span dangerouslySetInnerHTML={{__html: TC_EXT_SVG}} />
           </a>
-          <button className="tcs-btn" disabled title="Player card view coming soon">View Card</button>
+          <button className="tcs-btn" onClick={() => onViewCard && onViewCard(leg)}>
+            View Card
+          </button>
           <button className="tcs-linkbtn" onClick={() => onRemove(leg.n)}>Remove</button>
         </div>
       </div>
@@ -77,14 +91,36 @@ function TcLegCard({ leg, onRemove }) {
           <div className="tcs-sk">Hard-Hit %</div>
           <div className="tcs-sv">{hh}</div>
         </div>
+        {analysisLeg && (
+          <div className="tcs-leg__stat">
+            <div className="tcs-sk">EV</div>
+            <div className="tcs-sv tcs-mono" style={{color: evColor || undefined}}>
+              {isPending ? 'pending' : evStr || '—'}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-/* ---- Summary strip ---- */
-function TcSumStrip({ legs, stake }) {
-  const n = legs.length;
+/* ---- Summary strip — real grade values from backend analysis ---- */
+function TcSumStrip({ legs, stake, analysis }) {
+  const n          = legs.length;
+  const grade      = analysis?.grade;
+  const combined   = analysis?.combined;
+  const confidence = analysis?.confidence;
+
+  const gradeLabel = grade?.letter || '—';
+  const gradeColor = grade?.color ? tcGradeColor(grade.color) : undefined;
+  const probStr = combined?.probability != null
+    ? (combined.probability * 100).toFixed(1) + '%' : '—';
+  const evPct   = combined?.ev_pct;
+  const evStr   = evPct != null ? (evPct > 0 ? '+' : '') + evPct.toFixed(1) + '%' : '—';
+  const evColor = evPct != null ? tcGradeColor(evPct > 0 ? 'green' : evPct < 0 ? 'red' : 'amber') : undefined;
+  const confLabel = confidence?.label || '—';
+  const confColor = tcConfColor(confLabel);
+
   return (
     <div className="tcs-sumstrip">
       <div className="tcs-sumcell">
@@ -93,92 +129,190 @@ function TcSumStrip({ legs, stake }) {
       </div>
       <div className="tcs-sumcell">
         <div className="tcs-sk">Grade</div>
-        <div className="tcs-sv tcs-pos">—</div>
-        <TcPreviewTag />
+        <div className="tcs-sv" style={{color: gradeColor}}>{gradeLabel}</div>
       </div>
       <div className="tcs-sumcell">
         <div className="tcs-sk">Combined Prob</div>
-        <div className="tcs-sv tcs-pos tcs-mono">—</div>
-        <TcPreviewTag />
+        <div className="tcs-sv tcs-mono">{probStr}</div>
+      </div>
+      <div className="tcs-sumcell">
+        <div className="tcs-sk">Combined EV</div>
+        <div className="tcs-sv tcs-mono" style={{color: evColor}}>{evStr}</div>
       </div>
       <div className="tcs-sumcell">
         <div className="tcs-sk">Confidence</div>
-        <div className="tcs-sv tcs-warn" style={{fontSize:'15px'}}>—</div>
-        <TcPreviewTag />
+        <div className="tcs-sv" style={{fontSize:'15px', color: confColor}}>{confLabel}</div>
       </div>
       <div className="tcs-sumcell">
         <div className="tcs-sk">Stake</div>
         <div className="tcs-sv tcs-mono">${parseFloat(stake || 0).toFixed(2)}</div>
       </div>
-      <div className="tcs-sumcell">
-        <div className="tcs-sk">Potential Return</div>
-        <div className="tcs-sv tcs-pos tcs-mono">—</div>
-        <TcPreviewTag />
-      </div>
     </div>
   );
 }
 
-/* ---- Preview panels (engine / grade / recs) ---- */
-function TcEnginePanel() {
-  return (
-    <div className="tcs-panel">
-      <div className="tcs-panel__hd">
-        <h2 className="tcs-panel__title">Ticket Probability Engine</h2>
-        <TcPreviewTag />
-      </div>
-      <div className="tcs-panel__bd">
-        <div className="tcs-pv-block">
-          <div className="tcs-pv-block__title">Engine Pending</div>
-          <div className="tcs-pv-block__body">
-            Correlation-adjusted combined probability, adjustment factors, and confidence score appear here after the probability engine build. Raw per-leg probabilities are available above.
+/* ---- Honest analysis panel — replaces Engine + Grade preview panels ---- */
+function TcAnalysisPanel({ analysis }) {
+  if (!analysis) {
+    return (
+      <div className="tcs-panel">
+        <div className="tcs-panel__hd">
+          <h2 className="tcs-panel__title">Ticket Analysis</h2>
+        </div>
+        <div className="tcs-panel__bd">
+          <div className="tcs-pv-block">
+            <div className="tcs-pv-block__title" style={{color:'var(--tcs-ink3)'}}>Loading analysis…</div>
           </div>
         </div>
       </div>
-    </div>
-  );
-}
+    );
+  }
 
-function TcGradePanel() {
+  const grade      = analysis.grade || {};
+  const combined   = analysis.combined || {};
+  const confidence = analysis.confidence || {};
+  const honestRead = analysis.honest_read || {};
+  const analyzed   = analysis.legs || [];
+
+  const gradeColor = tcGradeColor(grade.color);
+  const probPct = combined.probability != null
+    ? (combined.probability * 100).toFixed(1) + '%' : '—';
+  const evPct = combined.ev_pct;
+  const evStr = evPct != null ? (evPct > 0 ? '+' : '') + evPct.toFixed(2) + '%' : '—';
+  const evColor = evPct != null ? tcGradeColor(evPct > 0 ? 'green' : evPct < 0 ? 'red' : 'amber') : undefined;
+
   return (
     <div className="tcs-panel">
       <div className="tcs-panel__hd">
-        <h2 className="tcs-panel__title">Ticket Grade Breakdown</h2>
-        <TcPreviewTag />
+        <h2 className="tcs-panel__title">Ticket Analysis</h2>
+        {grade.status === 'complete' && (
+          <span style={{
+            fontFamily: 'var(--font-display)', fontWeight: 800, fontSize: '11px',
+            letterSpacing: '0.1em', textTransform: 'uppercase',
+            color: gradeColor, border: `1px solid ${gradeColor}55`,
+            borderRadius: '3px', padding: '2px 7px', marginLeft: 'auto',
+          }}>
+            {grade.letter} · {grade.label}
+          </span>
+        )}
       </div>
       <div className="tcs-panel__bd">
-        <div className="tcs-pv-block">
-          <div className="tcs-pv-block__title">Grade Pending</div>
-          <div className="tcs-pv-block__body">
-            Overall grade, per-category scores (probability, tiers, matchup, park, certainty, risk), and grade circle appear here after the grade engine build.
+
+        {/* Grade stats row */}
+        <div style={{display:'flex',gap:'16px',flexWrap:'wrap',marginBottom:'10px'}}>
+          <div>
+            <div className="tcs-sk">Combined Prob</div>
+            <div className="tcs-sv tcs-mono">{probPct}</div>
+          </div>
+          <div>
+            <div className="tcs-sk">Combined EV</div>
+            <div className="tcs-sv tcs-mono" style={{color: evColor}}>{evStr}</div>
+          </div>
+          <div>
+            <div className="tcs-sk">Confidence</div>
+            <div className="tcs-sv" style={{color: tcConfColor(confidence.label)}}>
+              {confidence.label || '—'}
+            </div>
           </div>
         </div>
+
+        {/* Honest singles-better note */}
+        {honestRead.singles_would_be_better && (
+          <div className="tcs-pv-block" style={{borderLeft:'2px solid #ffb020',paddingLeft:'8px',marginBottom:'10px'}}>
+            <div className="tcs-pv-block__title" style={{color:'#ffb020'}}>Singles Would Be Better</div>
+            <div className="tcs-pv-block__body">
+              Parlay EV: {evStr} · Best single: +{(honestRead.best_single_ev_pct || 0).toFixed(1)}%.
+              Consider a straight bet on your strongest leg instead.
+            </div>
+          </div>
+        )}
+
+        {/* Per-leg EV breakdown */}
+        {analyzed.length > 0 && (
+          <div className="tcs-pv-block">
+            <div className="tcs-pv-block__title" style={{marginBottom:'4px'}}>Per-Leg EV</div>
+            {analyzed.map((al, i) => {
+              const legEv = al.ev_pct;
+              const legEvStr = legEv != null ? (legEv > 0 ? '+' : '') + legEv.toFixed(1) + '%' : '—';
+              const legEvColor = legEv != null ? tcGradeColor(legEv > 0 ? 'green' : legEv < 0 ? 'red' : 'amber') : undefined;
+              const pending = al.status === 'pending';
+              return (
+                <div key={al.leg_id || i} style={{
+                  display:'flex', justifyContent:'space-between',
+                  padding:'3px 0', fontSize:'11px',
+                  borderBottom:'1px solid rgba(59,111,255,0.1)',
+                }}>
+                  <span style={{color:'var(--tcs-ink3)'}}>{al.player_name || `Leg ${i + 1}`}</span>
+                  <span className="tcs-mono" style={{color: pending ? 'var(--tcs-ink3)' : legEvColor}}>
+                    {pending ? 'pending odds' : legEvStr}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Low-confidence reasons */}
+        {(confidence.reasons || []).length > 0 && (
+          <div style={{fontSize:'10px',color:'var(--tcs-ink3)',marginTop:'6px',fontFamily:'var(--font-mono)'}}>
+            Low confidence: {confidence.reasons.join(', ')}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-function TcRecsPanel() {
+/* ---- Recommendations panel — shows singles-better call-to-action or EV summary ---- */
+function TcRecsPanel({ analysis }) {
+  const honestRead = analysis?.honest_read;
+  const grade      = analysis?.grade;
+  const evPct      = analysis?.combined?.ev_pct;
+
   return (
     <div className="tcs-panel">
       <div className="tcs-panel__hd">
         <span style={{color:'var(--tcs-gold)'}} dangerouslySetInnerHTML={{__html: TC_BULB_SVG}} />
         <h2 className="tcs-panel__title">Engine Recommendations</h2>
-        <TcPreviewTag />
       </div>
       <div className="tcs-panel__bd">
-        <div className="tcs-pv-block">
-          <div className="tcs-pv-block__title">Recommendations Pending</div>
-          <div className="tcs-pv-block__body">
-            Upgrade suggestions, add candidates, and risk advisories appear here after the recommendation engine build.
+        {!analysis ? (
+          <div className="tcs-pv-block">
+            <div className="tcs-pv-block__title" style={{color:'var(--tcs-ink3)'}}>Loading…</div>
           </div>
-        </div>
+        ) : honestRead?.singles_would_be_better ? (
+          <div className="tcs-pv-block" style={{borderLeft:'2px solid #ffb020',paddingLeft:'8px'}}>
+            <div className="tcs-pv-block__title" style={{color:'#ffb020'}}>Consider a Single</div>
+            <div className="tcs-pv-block__body">
+              This parlay grades <strong style={{color: tcGradeColor(grade?.color)}}>{grade?.letter || '—'} ({grade?.label || '—'})</strong>.
+              Best single EV: +{(honestRead.best_single_ev_pct || 0).toFixed(1)}% outperforms the combined ticket.
+              Pull your strongest pick as a straight bet.
+            </div>
+          </div>
+        ) : evPct != null && evPct > 0 ? (
+          <div className="tcs-pv-block">
+            <div className="tcs-pv-block__title" style={{color:'#1aff66'}}>Positive EV Ticket</div>
+            <div className="tcs-pv-block__body">
+              This ticket grades <strong style={{color: tcGradeColor(grade?.color)}}>{grade?.letter}</strong> with {evPct > 0 ? '+' : ''}{evPct.toFixed(1)}% combined EV.
+              Review per-leg data above before deploying.
+            </div>
+          </div>
+        ) : (
+          <div className="tcs-pv-block">
+            <div className="tcs-pv-block__title">
+              {grade?.letter ? `Grade: ${grade.letter} (${grade.label})` : 'Review above'}
+            </div>
+            <div className="tcs-pv-block__body">
+              Review per-leg data and EV breakdown before deploying.
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-/* ---- Summary report (real legs, no computed scores) ---- */
+/* ---- Summary report ---- */
 function TcReportPanel({ legs }) {
   const n = legs.length;
   const names = legs.map(l => l.name || '—').join(', ');
@@ -191,10 +325,10 @@ function TcReportPanel({ legs }) {
         <div className="tcs-report">
           <div className="tcs-report__shield" dangerouslySetInnerHTML={{__html: TC_SHIELD_SVG}} />
           <div className="tcs-report__body">
-            <p>{n}-leg HR ticket: {names}. Per-leg barrel%, hard-hit%, HR probability, and tier are live above. Probability engine, grade, and qualitative analysis are engine-pending.</p>
+            <p>{n}-leg HR ticket: {names}. Per-leg barrel%, hard-hit%, HR probability, tier, and EV are live above.</p>
             <div className="tcs-report__blk"><b>Strengths:</b> Per-leg stats available above (barrel %, hard-hit %, tier).</div>
             <div className="tcs-report__blk"><b>Risks:</b> Multi-leg variance increases with each added leg.</div>
-            <div className="tcs-report__blk"><b>Overall:</b> Review per-leg data above before deploying.</div>
+            <div className="tcs-report__blk"><b>Overall:</b> Review the grade and EV analysis before deploying.</div>
           </div>
         </div>
       </div>
@@ -202,7 +336,7 @@ function TcReportPanel({ legs }) {
   );
 }
 
-/* ---- Deploy bar (shared between PC footer + mobile) ---- */
+/* ---- Deploy bar ---- */
 function TcDeployBar({ legs, ticketId, stake, setStake, onSubmit, submitState, mode }) {
   const n = legs.length;
   const slipType = `${n}-LEG POWER`;
@@ -218,7 +352,7 @@ function TcDeployBar({ legs, ticketId, stake, setStake, onSubmit, submitState, m
     : submitState === 'error'  ? 'Error — Retry'
     : submitState === 'noauth' ? 'Sign In First'
     : isMobile ? 'Submit →'
-    : `Submit Slip `;
+    : 'Submit Slip ';
 
   if (isMobile) {
     return (
@@ -228,16 +362,9 @@ function TcDeployBar({ legs, ticketId, stake, setStake, onSubmit, submitState, m
             <span className="tcs-deploy-icon" dangerouslySetInnerHTML={{__html: TC_SEND_SVG}} />
             Deployment
           </div>
-          <div className="tcs-m-deploy__ret">
-            <div className="tcs-sv tcs-pos">—</div>
-            <div className="tcs-mono" style={{fontSize:'9px',color:'var(--tcs-ink3)'}}>Pot. Return</div>
-            <TcPreviewTag />
-          </div>
         </div>
         <div className="tcs-m-deploy__row">
-          <div className="tcs-m-deploy__meta">
-            <div className="tcs-dk">Stake</div>
-          </div>
+          <div className="tcs-m-deploy__meta"><div className="tcs-dk">Stake</div></div>
           <div className="tcs-stepper">
             <span className="tcs-stepper__pre">$</span>
             <input className="tcs-stepper__input" value={stake} inputMode="decimal"
@@ -300,11 +427,6 @@ function TcDeployBar({ legs, ticketId, stake, setStake, onSubmit, submitState, m
             <span dangerouslySetInnerHTML={{__html: TC_FAN_SVG}} /> FANDUEL
           </div>
         </div>
-        <div className="tcs-deploy-field">
-          <div className="tcs-dk">Potential Return</div>
-          <div className="tcs-dv tcs-pos">—</div>
-          <TcPreviewTag />
-        </div>
         <div className="tcs-deploy-actions">
           <div className="tcs-deploy-action-col">
             <a className="tcs-btn tcs-btn--lg tcs-btn--fan"
@@ -319,7 +441,7 @@ function TcDeployBar({ legs, ticketId, stake, setStake, onSubmit, submitState, m
               {submitLabel}
               {submitState === 'idle' && <span dangerouslySetInnerHTML={{__html: TC_SEND_SVG}} />}
             </button>
-            <div className="tcs-deploy-note">Ticket marked as submitted in Supabase.</div>
+            <div className="tcs-deploy-note">Auto-posts to community on submit.</div>
           </div>
         </div>
       </div>
@@ -329,12 +451,21 @@ function TcDeployBar({ legs, ticketId, stake, setStake, onSubmit, submitState, m
 
 /* ---- Main overlay component ---- */
 function TicketCommandSlip({ legs, ticketId, onClose, onRemoveLeg }) {
-  const [stake, setStake]               = React.useState('5.00');
-  const [submitState, setSubmitState]   = React.useState('idle');
-  const [postState, setPostState]       = React.useState('idle'); // idle|loading|done|error|noauth
-  const [showUsernamePrompt, setShowUsernamePrompt] = React.useState(false);
-  const [commUsername, setCommUsername] = React.useState('');
-  const [commUsernameError, setCommUsernameError]   = React.useState('');
+  const [stake, setStake]             = React.useState('5.00');
+  const [submitState, setSubmitState] = React.useState('idle');
+  const [analysis, setAnalysis]       = React.useState(null);
+  const [cardRow, setCardRow]         = React.useState(null);
+
+  // Fetch analysis whenever ticketId is available
+  React.useEffect(() => {
+    if (!ticketId || !window.__hrAuth?.authFetch) return;
+    let cancelled = false;
+    window.__hrAuth.authFetch(`${TC_API}/api/tickets/${ticketId}/analysis`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (!cancelled && d?.analysis) setAnalysis(d.analysis); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [ticketId]);
 
   const handleSubmit = async () => {
     if (!ticketId || legs.length === 0) return;
@@ -346,16 +477,21 @@ function TicketCommandSlip({ legs, ticketId, onClose, onRemoveLeg }) {
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ticket_id: ticketId,
-            stake: parseFloat(stake) || null,
-          }),
+          body: JSON.stringify({ ticket_id: ticketId, stake: parseFloat(stake) || null }),
         }
       );
       if (res._noAuth) { setSubmitState('noauth'); return; }
       if (!res.ok)     { setSubmitState('error');  return; }
-      setSubmitState('done');
-      // No auto-close: user explicitly closes or posts to community first.
+      const data = await res.json();
+      // Auto-post to community for signed-in users (fire-and-forget)
+      window.__hrAuth.authFetch(`${TC_API}/api/community/posts`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ticket_id: ticketId }),
+      }).catch(() => {});
+      // Consume reset_slip: clear state immediately, then close
+      if (data.reset_slip) window.__hrSlip.resetSlip();
+      onClose();
     } catch (_) {
       setSubmitState('error');
     }
@@ -366,109 +502,38 @@ function TicketCommandSlip({ legs, ticketId, onClose, onRemoveLeg }) {
     onClose();
   };
 
-  const doPostToCommunity = async (usernameToSet) => {
-    if (usernameToSet && usernameToSet.trim().length >= 3) {
-      const saveRes = await window.__hrAuth.authFetch(`${TC_API}/api/profile/username`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: usernameToSet.trim() }),
-      }).catch(() => null);
-      if (saveRes && saveRes.status === 409) {
-        setCommUsernameError('That username is already taken.');
-        return;
-      }
-    }
-    setShowUsernamePrompt(false);
-    setCommUsernameError('');
-    setPostState('loading');
-    const res = await window.__hrAuth.authFetch(`${TC_API}/api/community/posts`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ticket_id: ticketId }),
-    }).catch(() => null);
-    if (!res || res._noAuth) { setPostState('noauth'); return; }
-    if (res.status === 409) { setPostState('done'); return; } // already posted = ok
-    if (!res.ok) { setPostState('error'); return; }
-    setPostState('done');
-  };
-
-  const handlePostToCommunity = async () => {
-    if (!window.__hrAuth?.authFetch) { setPostState('noauth'); return; }
-    if (showUsernamePrompt) { await doPostToCommunity(commUsername); return; }
-    const profileRes = await window.__hrAuth.authFetch(`${TC_API}/api/profile`).catch(() => null);
-    if (!profileRes || profileRes._noAuth) { setPostState('noauth'); return; }
-    const profileData = await profileRes.json().catch(() => ({}));
-    const currentUsername = profileData?.profile?.username || '';
-    if (/^user-\d+$/.test(currentUsername)) {
-      setCommUsername('');
-      setShowUsernamePrompt(true);
-      return;
-    }
-    await doPostToCommunity(null);
+  const handleViewCard = (leg) => {
+    setCardRow({ id: leg.id, name: leg.name, teamAbbr: leg.teamAbbr, pitcher_name: leg.pitcher_name });
   };
 
   const n = legs.length;
 
-  const communityBanner = submitState === 'done' ? (
-    <div className="tcs-comm-banner">
-      {postState === 'done' ? (
-        <div className="tcs-comm-banner__row">
-          <span className="tcs-comm-banner__ok">✓ Posted to Community</span>
-          <button className="tcs-comm-banner__close" onClick={handleClose}>Close</button>
-        </div>
-      ) : showUsernamePrompt ? (
-        <div className="tcs-comm-banner__prompt-wrap">
-          <div className="tcs-comm-banner__prompt-lbl">Choose a display name (optional)</div>
-          <div className="tcs-comm-banner__prompt-row">
-            <input
-              className="tcs-comm-banner__input"
-              type="text"
-              placeholder="Display name (3–30 chars)"
-              value={commUsername}
-              onChange={e => { setCommUsername(e.target.value); setCommUsernameError(''); }}
-              maxLength={30}
-            />
-            <button
-              className="tcs-comm-banner__post"
-              onClick={() => doPostToCommunity(commUsername)}
-              disabled={postState === 'loading' || (commUsername.trim().length > 0 && commUsername.trim().length < 3)}>
-              {postState === 'loading' ? '…' : 'Set & Post'}
-            </button>
-            <button className="tcs-comm-banner__skip" onClick={() => doPostToCommunity(null)} disabled={postState === 'loading'}>Skip</button>
-            <button className="tcs-comm-banner__close" onClick={handleClose}>Close</button>
-          </div>
-          {commUsernameError && <div className="tcs-comm-banner__err">{commUsernameError}</div>}
-        </div>
-      ) : (
-        <div className="tcs-comm-banner__row">
-          <span className="tcs-comm-banner__check">✓ Submitted</span>
-          {postState === 'noauth' ? (
-            <span className="tcs-comm-banner__msg">Sign in to post to Community</span>
-          ) : postState === 'error' ? (
-            <><span className="tcs-comm-banner__msg">Post failed —</span>
-            <button className="tcs-comm-banner__post" onClick={handlePostToCommunity}>Retry</button></>
-          ) : (
-            <><span className="tcs-comm-banner__msg">Share to Community?</span>
-            <button className="tcs-comm-banner__post" onClick={handlePostToCommunity} disabled={postState === 'loading'}>
-              {postState === 'loading' ? '…' : 'Post'}
-            </button></>
-          )}
-          <button className="tcs-comm-banner__close" onClick={handleClose}>
-            {(postState === 'noauth' || postState === 'error') ? 'Close' : 'Not Now'}
-          </button>
-        </div>
-      )}
-    </div>
-  ) : null;
+  // Index analyzed legs by player_name for EV display in TcLegCard
+  const analysisLegByName = {};
+  (analysis?.legs || []).forEach(al => {
+    if (al.player_name) analysisLegByName[al.player_name] = al;
+  });
 
   const overlay = (
     <div className="tcs-overlay" role="dialog" aria-label="Ticket Command Slip">
 
+      {/* Batter card modal */}
+      {cardRow && window.BatterDetailCard && (
+        <div style={{
+          position: 'fixed', inset: 0, zIndex: 10010,
+          background: 'rgba(0,0,0,0.78)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }} onClick={() => setCardRow(null)}>
+          <div style={{maxWidth:'900px',width:'100%',maxHeight:'90vh',overflow:'auto',borderRadius:'10px'}}
+               onClick={e => e.stopPropagation()}>
+            {React.createElement(window.BatterDetailCard, { row: cardRow, onClose: () => setCardRow(null) })}
+          </div>
+        </div>
+      )}
+
       {/* ===== PC LAYOUT ===== */}
       <div className="tcs-pc">
         <div className="tcs-wrap">
-
-          {/* Header */}
           <header className="tcs-header">
             <div className="tcs-logo">
               <span dangerouslySetInnerHTML={{__html: TC_TAG_SVG}} />
@@ -485,10 +550,8 @@ function TicketCommandSlip({ legs, ticketId, onClose, onRemoveLeg }) {
             </div>
           </header>
 
-          {/* Summary strip */}
-          <TcSumStrip legs={legs} stake={stake} />
+          <TcSumStrip legs={legs} stake={stake} analysis={analysis} />
 
-          {/* Two-column grid */}
           <div className="tcs-grid">
             <div className="tcs-col">
               <div className="tcs-ticket-hd">
@@ -504,7 +567,9 @@ function TicketCommandSlip({ legs, ticketId, onClose, onRemoveLeg }) {
                 <div className="tcs-empty">No legs in ticket. Add players from the board.</div>
               ) : (
                 legs.map(leg => (
-                  <TcLegCard key={leg.n} leg={leg} onRemove={onRemoveLeg} />
+                  <TcLegCard key={leg.n} leg={leg} onRemove={onRemoveLeg}
+                    onViewCard={handleViewCard}
+                    analysisLeg={analysisLegByName[leg.name]} />
                 ))
               )}
 
@@ -513,12 +578,11 @@ function TicketCommandSlip({ legs, ticketId, onClose, onRemoveLeg }) {
                 <div className="tcs-addrow__s">Return to board and use + on any HR Threat card.</div>
               </div>
 
-              <TcRecsPanel />
+              <TcRecsPanel analysis={analysis} />
             </div>
 
             <div className="tcs-col">
-              <TcEnginePanel />
-              <TcGradePanel />
+              <TcAnalysisPanel analysis={analysis} />
               <TcReportPanel legs={legs} />
             </div>
           </div>
@@ -526,7 +590,6 @@ function TicketCommandSlip({ legs, ticketId, onClose, onRemoveLeg }) {
 
         <TcDeployBar legs={legs} ticketId={ticketId} stake={stake} setStake={setStake}
           onSubmit={handleSubmit} submitState={submitState} mode="pc" />
-        {communityBanner}
       </div>
 
       {/* ===== MOBILE LAYOUT ===== */}
@@ -544,37 +607,46 @@ function TicketCommandSlip({ legs, ticketId, onClose, onRemoveLeg }) {
         </div>
 
         <div className="tcs-m-scroll">
-          {/* Mobile 3×2 summary grid */}
-          <div className="tcs-m-sumgrid">
-            <div className="tcs-m-sumcell">
-              <div className="tcs-sk">Legs</div>
-              <div className="tcs-sv tcs-sv--num">{n}</div>
-            </div>
-            <div className="tcs-m-sumcell">
-              <div className="tcs-sk">Grade</div>
-              <div className="tcs-sv tcs-pos">—</div>
-              <span className="tcs-m-pvmini">SAMPLE</span>
-            </div>
-            <div className="tcs-m-sumcell">
-              <div className="tcs-sk">Combined Prob</div>
-              <div className="tcs-sv tcs-pos tcs-mono">—</div>
-              <span className="tcs-m-pvmini">SAMPLE</span>
-            </div>
-            <div className="tcs-m-sumcell">
-              <div className="tcs-sk">Confidence</div>
-              <div className="tcs-sv tcs-warn" style={{fontSize:'14px'}}>—</div>
-              <span className="tcs-m-pvmini">SAMPLE</span>
-            </div>
-            <div className="tcs-m-sumcell">
-              <div className="tcs-sk">Stake</div>
-              <div className="tcs-sv tcs-mono">${parseFloat(stake||0).toFixed(2)}</div>
-            </div>
-            <div className="tcs-m-sumcell">
-              <div className="tcs-sk">Return</div>
-              <div className="tcs-sv tcs-pos tcs-mono">—</div>
-              <span className="tcs-m-pvmini">SAMPLE</span>
-            </div>
-          </div>
+          {/* Mobile summary grid — real grade values */}
+          {(() => {
+            const grade    = analysis?.grade;
+            const combined = analysis?.combined;
+            const conf     = analysis?.confidence;
+            const gc       = grade?.color ? tcGradeColor(grade.color) : undefined;
+            const probStr  = combined?.probability != null ? (combined.probability * 100).toFixed(1) + '%' : '—';
+            const evPct    = combined?.ev_pct;
+            const evStr    = evPct != null ? (evPct > 0 ? '+' : '') + evPct.toFixed(1) + '%' : '—';
+            const ec       = evPct != null ? tcGradeColor(evPct > 0 ? 'green' : evPct < 0 ? 'red' : 'amber') : undefined;
+            const confLabel = conf?.label || '—';
+            return (
+              <div className="tcs-m-sumgrid">
+                <div className="tcs-m-sumcell">
+                  <div className="tcs-sk">Legs</div>
+                  <div className="tcs-sv tcs-sv--num">{n}</div>
+                </div>
+                <div className="tcs-m-sumcell">
+                  <div className="tcs-sk">Grade</div>
+                  <div className="tcs-sv" style={{color: gc}}>{grade?.letter || '—'}</div>
+                </div>
+                <div className="tcs-m-sumcell">
+                  <div className="tcs-sk">Combined Prob</div>
+                  <div className="tcs-sv tcs-mono">{probStr}</div>
+                </div>
+                <div className="tcs-m-sumcell">
+                  <div className="tcs-sk">Combined EV</div>
+                  <div className="tcs-sv tcs-mono" style={{color: ec}}>{evStr}</div>
+                </div>
+                <div className="tcs-m-sumcell">
+                  <div className="tcs-sk">Confidence</div>
+                  <div className="tcs-sv" style={{fontSize:'14px',color:tcConfColor(confLabel)}}>{confLabel}</div>
+                </div>
+                <div className="tcs-m-sumcell">
+                  <div className="tcs-sk">Stake</div>
+                  <div className="tcs-sv tcs-mono">${parseFloat(stake || 0).toFixed(2)}</div>
+                </div>
+              </div>
+            );
+          })()}
 
           <div className="tcs-m-secttl">
             <h2 className="tcs-m-h2">Your Ticket <span>({n})</span></h2>
@@ -585,7 +657,9 @@ function TicketCommandSlip({ legs, ticketId, onClose, onRemoveLeg }) {
             <div className="tcs-empty">No legs. Add from board.</div>
           ) : (
             legs.map(leg => (
-              <TcLegCard key={leg.n} leg={leg} onRemove={onRemoveLeg} />
+              <TcLegCard key={leg.n} leg={leg} onRemove={onRemoveLeg}
+                onViewCard={handleViewCard}
+                analysisLeg={analysisLegByName[leg.name]} />
             ))
           )}
 
@@ -594,15 +668,13 @@ function TicketCommandSlip({ legs, ticketId, onClose, onRemoveLeg }) {
             <div className="tcs-addrow__s">Return to board and use + on any HR Threat card.</div>
           </div>
 
-          <TcEnginePanel />
-          <TcGradePanel />
+          <TcAnalysisPanel analysis={analysis} />
           <TcReportPanel legs={legs} />
-          <TcRecsPanel />
+          <TcRecsPanel analysis={analysis} />
         </div>
 
         <TcDeployBar legs={legs} ticketId={ticketId} stake={stake} setStake={setStake}
           onSubmit={handleSubmit} submitState={submitState} mode="mobile" />
-        {communityBanner}
       </div>
     </div>
   );

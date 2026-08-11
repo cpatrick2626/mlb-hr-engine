@@ -89,6 +89,9 @@ function fdSearchName(displayName) {
         : "—";
     const authed = dpIsAuthed();
 
+    // Current slip players — read once at render (picker is ephemeral)
+    const currentLegs = (window.__hrSlip ? window.__hrSlip.getState().legs : []);
+
     // Option 1: FD only — no auth required
     const handleFDOnly = () => {
       dpOpenFD(name);   // SYNC — popup-safe
@@ -108,6 +111,30 @@ function fdSearchName(displayName) {
       if (!authed) { onClose(); dpOpenAuth(); return; }
       window.__hrSlip.addLeg(row);   // async internally; fires, _notify updates surfaces
       onClose();
+    };
+
+    // Option 4: FD + Add to Slip + Submit Slip — opens FD, adds leg, submits whole slip, auto-posts
+    const handleFDAddSubmit = async () => {
+      dpOpenFD(name);   // SYNC — must be first
+      if (!authed) { onClose(); dpOpenAuth(); return; }
+      onClose();
+      await window.__hrSlip.addLeg(row);
+      const { ticketId } = window.__hrSlip.getState();
+      if (!ticketId) return;
+      try {
+        const res = await window.__hrAuth.authFetch(
+          "https://mlb-hr-api.fly.dev/api/tickets/complete",
+          { method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ticket_id: ticketId }) }
+        );
+        if (res.ok) {
+          window.__hrAuth.authFetch("https://mlb-hr-api.fly.dev/api/community/posts", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ticket_id: ticketId }),
+          }).catch(() => {});
+          window.__hrSlip.resetSlip();
+        }
+      } catch (_) {}
     };
 
     const opt2c = authed ? "#1aff66" : "#ffb020";
@@ -184,6 +211,36 @@ function fdSearchName(displayName) {
             SELECT DESTINATION
           </div>
 
+          {/* Current slip players */}
+          {currentLegs.length > 0 && (
+            <div style={{
+              padding: "4px 16px 6px",
+              borderBottom: "1px solid rgba(59,111,255,0.15)",
+              marginBottom: "2px",
+            }}>
+              <div style={{
+                ...DP_FONT, fontSize: "8px", fontWeight: 700, letterSpacing: "0.18em",
+                textTransform: "uppercase", color: "rgba(59,111,255,0.55)", marginBottom: "4px",
+              }}>
+                Current Slip
+              </div>
+              {currentLegs.map((l, i) => (
+                <div key={i} style={{
+                  ...DP_FONT, fontSize: "10px", color: "rgba(224,232,255,0.7)",
+                  padding: "1px 0", display: "flex", gap: "6px", alignItems: "center",
+                }}>
+                  <span style={{color:"rgba(26,255,102,0.5)",fontSize:"8px"}}>▸</span>
+                  {l.name || "—"}
+                  {l.tier && (
+                    <span style={{fontSize:"8px",color:DP_TIER_COLOR[l.tier]||"#6b7872"}}>
+                      {l.tier}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
           <div style={{ padding: "4px 12px 14px", display: "flex", flexDirection: "column", gap: "6px" }}>
 
             {/* Option 1 — FD only, works signed-out */}
@@ -214,10 +271,16 @@ function fdSearchName(displayName) {
               </span>
             </DpOptBtn>
 
-            {/* Option 4 — disabled; Phase C only */}
-            <DpOptBtn color="#6b7872" border="rgba(107,120,114,0.25)" disabled>
-              <span style={titleSt("#6b7872")}>FD + CONFIRM SLIP + START NEW</span>
-              <span style={descSt} title="requires slip confirm flow — Phase C">Requires slip confirm flow — Phase C.</span>
+            {/* Option 4 — FD + Add + Submit Slip (enabled; needs auth) */}
+            <DpOptBtn onClick={handleFDAddSubmit} color={opt2c} border={opt2b} disabled={!authed}>
+              <span style={titleSt(authed ? opt2c : "#6b7872")}>
+                {authed ? "FD + ADD TO SLIP + SUBMIT SLIP" : "⚿ FD + ADD TO SLIP + SUBMIT SLIP"}
+              </span>
+              <span style={descSt}>
+                {authed
+                  ? "Opens FD, adds to slip, submits and auto-posts."
+                  : "Sign in to use this option."}
+              </span>
             </DpOptBtn>
 
           </div>
