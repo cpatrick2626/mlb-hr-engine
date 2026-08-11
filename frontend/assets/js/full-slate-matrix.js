@@ -147,6 +147,19 @@ FSM_COLS.forEach((c) => { c.scope = FSM_SCOPE_HAND_KEYS.includes(c.key) ? "hand"
 const FSM_VS_HAND_SRC = { avg: "vs_hand_avg", slg: "vs_hand_slg", iso: "vs_hand_iso", hrpa: "vs_hand_hr_pa" };
 const FSM_VS_HAND_MIN_PA = 30; // matches the backend's reliable-sample gate
 
+/* BEST COHORT filter — mirrors config.py LINEUP_PA / DEFAULT_PA */
+const FSM_LINEUP_PA = {1:4.5, 2:4.3, 3:4.2, 4:4.1, 5:3.9, 6:3.7, 7:3.6, 8:3.4, 9:3.2};
+const FSM_DEFAULT_PA = 3.8;
+
+function fsmBestCohort(row) {
+  const raw = row._raw || row;
+  const slot = raw.lineup_spot;
+  const expPa = (slot != null && FSM_LINEUP_PA[slot] != null) ? FSM_LINEUP_PA[slot] : FSM_DEFAULT_PA;
+  const hrpa = raw.hrpa;
+  const vsSlg = raw.vs_hand_slg;
+  return expPa >= 4.2 && hrpa != null && hrpa >= 0.0435 && vsSlg != null && vsSlg >= 0.440;
+}
+
 /* Overlay REAL vs-hand splits onto the AVG/SLG/ISO/HR-PA display keys.
    Display-only: `_raw` keeps the untouched row for the batter-card hero and
    slip capture. `_vsScope[key]` records, per column, whether the shown number
@@ -1855,6 +1868,7 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
   const [sortState, setSortState] = React.useState({ key: '_board_metric', dir: 'desc' });
   const [splitScope, setSplitScope] = React.useState('vs_hand');
   const [dataVersion, setDataVersion] = React.useState(0);
+  const [bestCohortOn, setBestCohortOn] = React.useState(false);
   React.useEffect(() => {
     const handler = () => setDataVersion(v => v + 1);
     window.addEventListener("hrEngineDataLoaded", handler);
@@ -1922,6 +1936,14 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
   const passMetric = (_r) => true;
 
   const pool = sorted.filter((r) => (selGame === "all" || r.gameId === selGame) && passGroup(r) && passFocus(r) && passRole(r) && passMetric(r));
+  const cohortCount = React.useMemo(() => pool.filter(fsmBestCohort).length, [pool]);
+  const displayPool = React.useMemo(() => {
+    if (!bestCohortOn) return pool;
+    const matching = [], rest = [];
+    for (const r of pool) { (fsmBestCohort(r) ? matching : rest).push(r); }
+    matching.sort((a, b) => (b.model_prob ?? 0) - (a.model_prob ?? 0));
+    return [...matching, ...rest];
+  }, [pool, bestCohortOn]);
   const gamesToShow = selGame === "all" ? getFSMGames() : getFSMGames().filter((g) => g.id === selGame);
   const title = builderMode ? "JIG BUILDER WORKSPACE" : "FULL SLATE INTELLIGENCE MATRIX";
   const subtitle = builderMode ?
@@ -1938,6 +1960,7 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
   if (focus !== "all") noteBits.push("FOCUS " + focus.toUpperCase());
   if (selGame !== "all") noteBits.push("1 GAME");
   if (projSortOn && sortState && sortState.key === '_board_metric') noteBits.push((!isJigContext && !builderMode) ? "SORT: TM PROJECTED" : "SORT: JIG PROJECTED");
+  if (bestCohortOn) noteBits.push("BEST COHORT · " + cohortCount);
   const note = noteBits.length ? noteBits.join(" · ") : filterNote || "NO ACTIVE FILTERS";
 
   const openBatter = (row) => setModal({ type: "batter", row });
@@ -1959,7 +1982,7 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
         </div>
         <div className="fsm-topbar__status">
           <span className="fsm-live"><i className="fsm-live__dot" />LIVE</span>
-          <span className="fsm-stat-pill">{pool.length} / {total} BATTERS</span>
+          <span className="fsm-stat-pill">{displayPool.length} / {total} BATTERS</span>
           <span className="fsm-stat-pill">{getFSMGames().length} GAMES</span>
           <span className="fsm-clock">UPD {timer} AGO</span>
         </div>
@@ -2067,6 +2090,19 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
         <FsmRadioGroup label="FOCUS" value={focus} onChange={setFocus} options={FSM_FOCUS_OPTS} />
         <span className="fsm-filters__div" />
         <FsmRoleFilter selRoles={selRoles} onToggle={toggleRole} />
+        <span className="fsm-filters__div" />
+        <div className="fsm-rg">
+          <span className="fsm-rg__label">COHORT</span>
+          <div className="fsm-rg__opts">
+            <button
+              className={"fsm-rg__opt" + (bestCohortOn ? " is-on" : "")}
+              style={bestCohortOn ? { color: "#ffe066", borderColor: "rgba(255,224,102,0.5)", background: "rgba(255,224,102,0.08)" } : undefined}
+              title={"BEST COHORT — Floats players meeting all three study thresholds to the top, sorted by model HR% descending. Thresholds: Expected PA ≥4.2 (lineup spots 1–3), Season HR/PA ≥4.35%, vs-hand SLG ≥.440. Non-matching players remain visible below. Display-only — no scoring change."}
+              onClick={() => setBestCohortOn(v => !v)}>
+              BEST COHORT{bestCohortOn ? " · " + cohortCount : ""}
+            </button>
+          </div>
+        </div>
       </div>
       <div className="fsm-sortbar">
         <span className="fsm-sortbar__lbl">SORT</span>
@@ -2093,16 +2129,16 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
       }
 
       {/* BODY */}
-      {pool.length === 0 ?
+      {displayPool.length === 0 ?
       <div className="fsm-metric-empty">
         <span className="fsm-metric-empty__icon">—</span>
         <span className="fsm-metric-empty__msg">No players on today's slate.</span>
       </div> :
       view === "player" ?
-      <div className="fsm-tablewrap fsm-scroll-container"><FsmTable rows={pool} cols={activeCols} showGame={true} onBatter={openBatter} onPitch={openPitch} onReorder={onReorder} onFront={(key) => { const first = activeCols[0]; if (first && first.key !== key) onReorder(key, first.key); }} onSort={onSort} sortState={sortState} builderMode={builderMode} isJigContext={isJigContext} splitScope={splitScope} editMode={editMode} /></div> :
+      <div className="fsm-tablewrap fsm-scroll-container"><FsmTable rows={displayPool} cols={activeCols} showGame={true} onBatter={openBatter} onPitch={openPitch} onReorder={onReorder} onFront={(key) => { const first = activeCols[0]; if (first && first.key !== key) onReorder(key, first.key); }} onSort={onSort} sortState={sortState} builderMode={builderMode} isJigContext={isJigContext} splitScope={splitScope} editMode={editMode} /></div> :
 
       gamesToShow.map((game) => {
-        const gameRows = pool.filter((r) => r.gameId === game.id);
+        const gameRows = displayPool.filter((r) => r.gameId === game.id);
         if (!gameRows.length) return null;
         return (
           <div className="fsm-gameblock" key={game.id} id={`fsm-game-${game.id}`}>
