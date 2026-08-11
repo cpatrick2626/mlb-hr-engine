@@ -18,6 +18,10 @@ POST /api/tickets/complete        — finalize ticket, set fd_deployed=true (JWT
 POST /api/fd-event                — record a FanDuel handoff click (JWT required)
 GET  /api/ledger?lane=main|jig    — settled/void legs + hit-rate buckets, per user per lane (JWT required — Phase S2/D5)
 GET  /api/my-tickets              — caller's tickets + legs + game linescores (JWT required)
+GET  /api/profile                 — caller's public community identity (JWT required)
+PATCH /api/profile/username       — edit caller's username only (JWT required)
+POST /api/community/posts         — publish caller's completed ticket (JWT required)
+GET  /api/community/posts         — community slips grouped by public identity (JWT required)
 GET  /api/builds                  — list caller's named TCC builds (JWT required)
 POST /api/builds                  — create/update caller's named TCC build (JWT required)
 DELETE /api/builds/{build_id}     — delete caller's own TCC build (JWT required)
@@ -36,6 +40,7 @@ import os
 import copy
 import json
 import logging
+import re
 from datetime import date, datetime, timezone
 
 from dotenv import load_dotenv
@@ -455,6 +460,184 @@ def my_tickets(user=Depends(require_auth)):
     if not user_id:
         raise HTTPException(status_code=401, detail="Authenticated token is missing sub")
     return {"tickets": get_my_tickets(supabase_client(), user_id)}
+
+
+# ── Community Bet Slips (Phase 1 backend/data foundation) ────────────────────
+# Social/capture layer only. It references frozen tickets/legs but never writes
+# to engine, scoring, probability, tiers, JIG, pipeline, or slate data.
+
+_PROFILE_COLUMNS = "user_id,app_number,username"
+_COMMUNITY_TICKET_COLUMNS = (
+    "ticket_id,date,board,ticket_type,num_legs,stake,odds_american,sportsbook,"
+    "status,fd_deployed,created_at,completed_at,"
+    "legs(leg_id,leg_date,player_name,player_id,team,opponent,pitcher,"
+    "model_prob,tier,model_tier_rank,engine_generated_at,market_odds_american,"
+    "market_prob,signal_snapshot,removed)"
+)
+_USERNAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 _-]{2,29}$")
+
+
+def _profile_for_user(user_id: str) -> dict:
+    result = (
+        supabase_client()
+        .table("profiles")
+        .select(_PROFILE_COLUMNS)
+        .eq("user_id", user_id)
+        .limit(1)
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Community profile not found; complete profile migration first")
+    return result.data[0]
+
+
+def _public_ticket(ticket: dict) -> dict:
+    """Return an allowlisted ticket snapshot; never leak ticket.user_id or email."""
+    return {
+        key: ticket.get(key)
+        for key in (
+            "ticket_id", "date", "board", "ticket_type", "num_legs", "stake",
+            "odds_american", "sportsbook", "status", "fd_deployed", "created_at", "completed_at",
+        )
+    } | {
+        "legs": [
+            {
+                key: leg.get(key)
+                for key in (
+                    "leg_id", "leg_date", "player_name", "player_id", "team", "opponent", "pitcher",
+                    "model_prob", "tier", "model_tier_rank", "engine_generated_at",
+                    "market_odds_american", "market_prob", "signal_snapshot",
+                )
+            }
+            for leg in (ticket.get("legs") or [])
+            if not leg.get("removed", False)
+        ]
+    }
+
+
+@app.get("/api/profile")
+async def get_profile(user=Depends(require_auth)):
+    """Return only the JWT caller's public identity; app_number is read-only."""
+    return {"profile": _profile_for_user(user.get("sub"))}
+
+
+@app.patch("/api/profile/username")
+async def update_username(body: dict, user=Depends(require_auth)):
+    """Edit the caller's username. app_number has no mutation endpoint."""
+    username = str(body.get("username") or "").strip()
+    if not _USERNAME_RE.fullmatch(username):
+        raise HTTPException(
+            status_code=422,
+            detail="username must be 3-30 characters: letters, numbers, spaces, _ or -",
+        )
+    user_id = user.get("sub")
+    _profile_for_user(user_id)
+    try:
+        result = (
+            supabase_client()
+            .table("profiles")
+            .update({"username": username})
+            .eq("user_id", user_id)
+            .execute()
+        )
+    except Exception as exc:
+        if "profiles_username_lower_unique" in str(exc) or "duplicate key" in str(exc).lower():
+            raise HTTPException(status_code=409, detail="Username is already taken") from exc
+        raise
+    return {"status": "ok", "profile": result.data[0] if result.data else _profile_for_user(user_id)}
+
+
+@app.post("/api/community/posts")
+async def post_ticket_to_community(body: dict, user=Depends(require_auth)):
+    """Publish a completed ticket only when it belongs to the JWT caller."""
+    ticket_id = body.get("ticket_id")
+    if not ticket_id:
+        raise HTTPException(status_code=400, detail="ticket_id is required")
+    user_id = user.get("sub")
+    ticket_result = (
+        supabase_client()
+        .table("tickets")
+        .select("ticket_id,user_id,completed_at,fd_deployed")
+        .eq("ticket_id", ticket_id)
+        .limit(1)
+        .execute()
+    )
+    if not ticket_result.data:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    ticket = ticket_result.data[0]
+    if ticket.get("user_id") != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized for this ticket")
+    if not ticket.get("completed_at") or not ticket.get("fd_deployed"):
+        raise HTTPException(status_code=409, detail="Only submitted tickets can be posted to community")
+    _profile_for_user(user_id)
+    existing = (
+        supabase_client()
+        .table("community_posts")
+        .select("post_id,ticket_id,posted_at")
+        .eq("ticket_id", ticket_id)
+        .limit(1)
+        .execute()
+    )
+    if existing.data:
+        raise HTTPException(status_code=409, detail="Ticket is already posted to community")
+    result = supabase_client().table("community_posts").insert({
+        "ticket_id": ticket_id,
+        "user_id": user_id,
+    }).execute()
+    post = result.data[0]
+    return {"status": "ok", "post": {
+        "post_id": post["post_id"],
+        "ticket_id": post["ticket_id"],
+        "posted_at": post["posted_at"],
+    }}
+
+
+@app.get("/api/community/posts")
+async def get_community_posts(user=Depends(require_auth)):
+    """Return public slips grouped internally by immutable user_id, never username."""
+    # Depend on a valid profile too: a signed-in user without the migration's
+    # auth-user trigger must not get a partial community surface.
+    _profile_for_user(user.get("sub"))
+    posts = (
+        supabase_client()
+        .table("community_posts")
+        .select("post_id,ticket_id,user_id,posted_at")
+        .order("posted_at", desc=True)
+        .execute()
+        .data or []
+    )
+    if not posts:
+        return {"users": []}
+    user_ids = list({post["user_id"] for post in posts})
+    ticket_ids = list({post["ticket_id"] for post in posts})
+    profiles = (
+        supabase_client().table("profiles").select(_PROFILE_COLUMNS).in_("user_id", user_ids).execute().data or []
+    )
+    tickets = (
+        supabase_client().table("tickets").select(_COMMUNITY_TICKET_COLUMNS).in_("ticket_id", ticket_ids).execute().data or []
+    )
+    profiles_by_user = {profile["user_id"]: profile for profile in profiles}
+    tickets_by_id = {ticket["ticket_id"]: ticket for ticket in tickets}
+    grouped: dict[str, dict] = {}
+    for post in posts:
+        profile = profiles_by_user.get(post["user_id"])
+        ticket = tickets_by_id.get(post["ticket_id"])
+        if not profile or not ticket:
+            log.warning("[community] skipping post %s with missing profile or ticket", post.get("post_id"))
+            continue
+        # user_id is the internal immutable grouping key and intentionally is
+        # not returned; app_number is the public permanent identity.
+        group = grouped.setdefault(post["user_id"], {
+            "username": profile["username"],
+            "app_number": profile["app_number"],
+            "posts": [],
+        })
+        group["posts"].append({
+            "post_id": post["post_id"],
+            "posted_at": post["posted_at"],
+            "slip": _public_ticket(ticket),
+        })
+    return {"users": list(grouped.values())}
 
 
 # ── TCC build persistence ──────────────────────────────────────────────────────
