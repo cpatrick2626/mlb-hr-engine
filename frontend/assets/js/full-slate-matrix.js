@@ -93,6 +93,9 @@ const fdeg = (v) => v.toFixed(1) + "°";
 /* column defs — bucketsHi = higher is better (4 cuts), bucketsLo = lower is better */
 const FSM_COLS = [
 { key: "odds", head: "ODDS", title: "HR prop odds (American)", group: "STATS", mode: "odds", fmt: (v) => String(v) },
+{ key: "implied_prob", head: "IMP%", title: "Market implied HR probability from FanDuel American odds (vig-inclusive). Positive +X → 100/(X+100); negative −X → X/(X+100). '—' = no line posted.", group: "EV", mode: "neutral", fmt: (v) => (v * 100).toFixed(1) + "%" },
+{ key: "edge", head: "EDGE", title: "Model HR probability minus market implied probability (pp). Positive = +EV: model rates this more likely than the market. Sort ▼ to surface +EV single bets. '—' = no line posted.", group: "EV", mode: "ev_flag", fmt: (v) => (v >= 0 ? "+" : "") + (v * 100).toFixed(1) + "pp" },
+{ key: "ev_pct", head: "EV%", title: "Expected value per $1 staked × 100. Formula: (model_prob × decimal_payout) − (1 − model_prob). Positive = profitable long-run. Sort ▼ to surface +EV singles. '—' = no line posted.", group: "EV", mode: "ev_flag", fmt: (v) => (v >= 0 ? "+" : "") + v.toFixed(1) + "%" },
 { key: "hr", head: "HR", title: "Home runs — REAL vs-hand split count in VS HAND mode (PA always shown; thin <30 PA tagged amber); season total in SEASON mode", group: "STATS", bucketsHi: [28, 18, 10, 5], fmt: (v) => String(v) },
 { key: "barrel", head: "BARREL%", title: "Barrel rate (Savant brl_pa: barrels per plate appearance, not per batted-ball event) — optimal EV + launch-angle contact, the best HR predictor", group: "STATCAST", bucketsHi: [8, 6, 4.5, 3], fmt: fp },
 { key: "xslg", head: "xSLG", title: "Expected slugging from quality of contact", group: "STATS", bucketsHi: [0.520, 0.450, 0.400, 0.350], fmt: f3d },
@@ -324,6 +327,10 @@ function FsmCell({ col, row, extra }) {
   if (col.mode === "odds") return <td className={`fsm-cell fsm-cell--odds${xc}`} data-label={lbl}>{v == null ? na : col.fmt(v)}</td>;
   if (col.mode === "headline") return <td className={`fsm-cell fsm-cell--headline${xc}`} data-label={lbl}>{v == null ? na : col.fmt(v)}{tag}</td>;
   if (col.mode === "neutral") return <td className={`fsm-cell fsm-cell--neutral${xc}`} data-label={lbl}>{v == null ? na : col.fmt(v)}</td>;
+  if (col.mode === "ev_flag") {
+    const cls = v == null ? "" : v >= 0 ? " fsm-cell--ev-pos" : " fsm-cell--ev-neg";
+    return <td className={`fsm-cell${cls}${xc}`} data-label={lbl}>{v == null ? "—" : col.fmt(v)}</td>;
+  }
   /* HR column in VS HAND mode: show "N HR" as value for clarity (PA in scope tag) */
   if (col.key === "hr" && scope && scope.scope === "hand") {
     const b = fsmBucket(col, v);

@@ -839,6 +839,24 @@ def _build_slate_payload(data: dict, odds_pending: bool = False, odds_pending_st
         odds = (f"+{fd_raw}" if fd_raw and fd_raw > 0
                 else str(fd_raw) if fd_raw else None)
 
+        # EV surface: implied_prob, edge, ev_pct — computed only when a real HR line exists.
+        # Uses calibrated model_prob (honest scale). Never fabricated from missing odds.
+        if fd_raw is not None:
+            if fd_raw > 0:
+                _impl = 100.0 / (fd_raw + 100.0)
+                _dec_payout = fd_raw / 100.0
+            else:
+                _abs = abs(fd_raw)
+                _impl = _abs / (_abs + 100.0)
+                _dec_payout = 100.0 / _abs
+            implied_prob = round(_impl, 4)
+            edge = round(model_prob - _impl, 4)
+            ev_pct = round((model_prob * _dec_payout - (1.0 - model_prob)) * 100.0, 2)
+        else:
+            implied_prob = None
+            edge = None
+            ev_pct = None
+
         home = (p.get("home_team") or p.get("team") or "home").upper()
         _own = (p.get("team") or "").upper()
         _opp = (p.get("opponent") or "").upper()
@@ -887,6 +905,9 @@ def _build_slate_payload(data: dict, odds_pending: bool = False, odds_pending_st
             "wind_mph": game_weather.get("wind_mph"),
             "wind_deg": game_weather.get("wind_deg"),
             "odds":     odds,
+            "implied_prob": implied_prob,
+            "edge":     edge,
+            "ev_pct":   ev_pct,
             # FanDuel deep links (display/handoff only — additive passthrough)
             "fd_event_link": p.get("fd_event_link"),
             "fd_bet_link":   p.get("fd_bet_link"),
