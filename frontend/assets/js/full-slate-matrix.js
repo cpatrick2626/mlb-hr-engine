@@ -525,7 +525,7 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, i
           </span>
         )}
       </td>
-      <td className="fsm-player">
+      <td className="fsm-player" style={{position:'relative'}}>
         <button type="button" className="fsm-player__in" onClick={() => onBatter(row)} title={`Open ${row.name} batter card`}>
           <span className="fsm-player__dot" title={row.pitcherVuln === "TARGET" ? `BATTER THREAT: ${row.quality || "—"} — batter HR-threat tier (model probability + barrel quality) · GLOW: TARGET pitcher allows 2.2+ HR/9 (separate pitcher-vulnerability signal)` : `BATTER THREAT: ${row.quality || "—"} — batter HR-threat tier based on model probability + barrel quality`} style={{ background: (FSM_MATCHUP[row.quality] || { color: "#6b7872" }).color, boxShadow: row.pitcherVuln === "TARGET" ? "0 0 0 2px #1aff66, 0 0 6px rgba(26,255,102,0.85)" : undefined }} />
           <span className="fsm-player__col">
@@ -536,6 +536,7 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, i
         : (row.gameStartUtc || row.pitcher_name) && <span className="fsm-player__game"><span className="fsm-player__gm--time">{fsmFmtEt(row.gameStartUtc)}</span>{row.gameStartUtc && row.pitcher_name && <i className="fsm-player__bar">·</i>}{row.pitcher_name && <span className="fsm-player__gm--pitcher">{row.pitcher_name}</span>}</span>}
           </span>
         </button>
+        <button type="button" style={{position:'absolute',bottom:3,right:4,padding:'1px 5px',background:'none',border:'1px solid rgba(0,217,255,0.20)',borderRadius:3,color:'rgba(0,217,255,0.50)',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:700,fontSize:8,letterSpacing:'0.08em',textTransform:'uppercase',cursor:'pointer',lineHeight:1.5}} title={`Export ${row.name} card`} onClick={(e)=>{e.stopPropagation();window.fsmShareCard&&window.fsmShareCard(row);}}>SHARE</button>
       </td>
       <td className="fsm-matchup">
         <button type="button" className="fsm-matchup__in" onClick={() => onPitch(row)} title="Open Arsenal Edge Intel">
