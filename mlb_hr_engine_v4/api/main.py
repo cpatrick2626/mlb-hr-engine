@@ -23,6 +23,7 @@ POST /api/builds                  — create/update caller's named TCC build (JW
 DELETE /api/builds/{build_id}     — delete caller's own TCC build (JWT required)
 GET  /api/layout/{layout_key}     — return caller's column layout for key, or null (JWT required)
 POST /api/layout/{layout_key}     — upsert caller's column layout for key (JWT required)
+GET  /api/slate/export            — full-slate CSV/JSON export: all players, all fields (no auth)
 
 The pipeline is normally triggered by GitHub Actions cron (see api/cron.py).
 The /api/pipeline/run endpoint is a manual fallback; it runs in a background
@@ -40,7 +41,8 @@ from datetime import date, datetime, timezone
 from dotenv import load_dotenv
 load_dotenv()
 
-from fastapi import FastAPI, Depends, HTTPException, Query, Request, BackgroundTasks
+from fastapi import FastAPI, Depends, HTTPException, Query, Request, BackgroundTasks, Response
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.auth import require_auth, require_beta
@@ -1256,6 +1258,246 @@ async def get_slate():
         "from_cache":           False,
         "stale":                True,
     }
+
+
+@app.get("/api/slate/export")
+async def export_slate(
+    format: str = Query("csv"),
+    date_str: str = Query(None, alias="date"),
+):
+    """
+    Full-slate data export — every player, all fields, as CSV or JSON.
+    Reads the same cached slate as /api/slate. No recompute, no extra fetches.
+    CSV: one row per player, all field groups (MAIN + JIG + EV + Statcast +
+         vs-hand splits with PA counts + pitcher + arsenal edge summary + context).
+    JSON: structured equivalent.
+    format=csv (default) | format=json
+    """
+    import io
+    import csv as _csv
+
+    if format not in ("csv", "json"):
+        raise HTTPException(status_code=400, detail="format must be 'csv' or 'json'")
+
+    if date_str:
+        try:
+            date.fromisoformat(date_str)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Use YYYY-MM-DD format.")
+        target_date = date_str
+    else:
+        target_date = today_et().strftime("%Y-%m-%d")
+
+    # Same cache-first path as /api/slate — never rebuild in-request.
+    sc = None
+    stale = False
+    try:
+        cached = get_picks(target_date)
+        if cached and "slate_cache" in cached:
+            _sc = cached["slate_cache"]
+            if _sc.get("date") == target_date:
+                sc = _sc
+    except Exception as e:
+        log.warning("[/api/slate/export] cache lookup failed: %s", e)
+
+    if sc is None:
+        try:
+            latest = get_latest_picks()
+            if latest and "slate_cache" in latest:
+                sc = latest["slate_cache"]
+                stale = True
+        except Exception as e:
+            log.warning("[/api/slate/export] latest cache lookup failed: %s", e)
+
+    if not sc:
+        raise HTTPException(
+            status_code=404,
+            detail="No slate data available. Pipeline has not run yet.",
+        )
+
+    main_rows = sc.get("leaderboard_rows") or []
+    jig_rows_list = sc.get("leaderboard_rows_jig") or []
+    slate_date = sc.get("date", target_date)
+    generated_at = sc.get("generated_at", "")
+    odds_pending = sc.get("odds_pending", False)
+    odds_pending_stale = sc.get("odds_pending_stale", False)
+
+    # Build JIG lookup by (id, game_pk); fall back to id-only for missing game_pk.
+    _jig_by_id_gpk = {}
+    _jig_by_id = {}
+    for r in jig_rows_list:
+        _jig_by_id_gpk[(r.get("id"), r.get("game_pk"))] = r
+        _jig_by_id.setdefault(r.get("id"), r)
+
+    def _jig_for(row):
+        return (
+            _jig_by_id_gpk.get((row.get("id"), row.get("game_pk")))
+            or _jig_by_id.get(row.get("id"))
+            or {}
+        )
+
+    def _v(val):
+        return "" if val is None else val
+
+    def _build_export_row(mr):
+        jig = _jig_for(mr)
+        return {
+            # IDENTITY
+            "name":             _v(mr.get("name")),
+            "team":             _v(mr.get("teamAbbr")),
+            "bats":             _v(mr.get("bats")),
+            "batter_id":        _v(mr.get("id")),
+            "gameId":           _v(mr.get("gameId")),
+            "game_pk":          _v(mr.get("game_pk")),
+            "game_time":        _v(mr.get("gameStartUtc")),
+            "game_status":      _v(mr.get("gameStatus")),
+            "pitcher_name":     _v(mr.get("pitcher_name")),
+            "pitcher_hand":     _v(mr.get("pitcher_hand")),
+            "pitcher_id":       _v(mr.get("pitcher_id")),
+            # MAIN
+            "model_prob":       _v(mr.get("model_prob")),
+            "hrprob":           _v(mr.get("hrprob")),
+            "tier":             _v(mr.get("tier")),
+            "model_tier_rank":  _v(mr.get("model_tier_rank")),
+            # JIG
+            "jigScore":         _v(jig.get("jigScore")),
+            "jigTier":          _v(jig.get("jigTier")),
+            "jigScore_shadow":  _v(jig.get("jigScore_shadow")),
+            # EV
+            "odds":             _v(mr.get("odds")),
+            "implied_prob":     _v(mr.get("implied_prob")),
+            "edge":             _v(mr.get("edge")),
+            "ev_pct":           _v(mr.get("ev_pct")),
+            # PROJECTIONS
+            "model_prob_projected": _v(mr.get("model_prob_projected")),
+            "hrprob_projected":     _v(mr.get("hrprob_projected")),
+            "jigscore_projected":   _v(jig.get("jigscore_projected")),
+            "tm_projected":         _v(mr.get("tm_projected")),
+            # ROLES
+            "prime":            _v(mr.get("prime")),
+            "explosive":        _v(mr.get("explosive")),
+            "advantage":        _v(mr.get("advantage")),
+            "wildcard":         _v(mr.get("wildcard")),
+            "hvy_score":        _v(jig.get("hvy_score")),
+            "true_matchup_score": _v(mr.get("true_matchup_score")),
+            # STATCAST
+            "barrel_pct":       _v(mr.get("barrel")),
+            "hh_pct":           _v(mr.get("hh")),
+            "xiso":             _v(mr.get("iso")),
+            "xslg":             _v(mr.get("xslg")),
+            "slg":              _v(mr.get("slg")),
+            "ev":               _v(mr.get("ev")),
+            "maxev":            _v(mr.get("maxev")),
+            "blast_pct":        _v(mr.get("blast")),
+            "squp_pct":         _v(mr.get("squp")),
+            "pullair_pct":      _v(mr.get("pullair")),
+            "la":               _v(mr.get("la")),
+            "fast_pct":         _v(mr.get("fast")),
+            "xwoba":            _v(mr.get("xwoba")),
+            "obp":              _v(mr.get("obp")),
+            "avg":              _v(mr.get("avg")),
+            "fb_pct":           _v(mr.get("fb")),
+            "sweet_pct":        _v(mr.get("sweet")),
+            "hrfb":             _v(mr.get("hrfb")),
+            "hr_season":        _v(mr.get("hr")),
+            "hrpa":             _v(mr.get("hrpa")),
+            "pa_season":        _v(mr.get("pa")),
+            "bbpct":            _v(mr.get("bbpct")),
+            "kpct":             _v(mr.get("kpct")),
+            "pull_pct":         _v(mr.get("pull")),
+            # vs-HAND (PA counts included so thin samples are visible)
+            "vs_hand":          _v(mr.get("vs_hand")),
+            "vs_hand_avg":      _v(mr.get("vs_hand_avg")),
+            "vs_hand_iso":      _v(mr.get("vs_hand_iso")),
+            "vs_hand_slg":      _v(mr.get("vs_hand_slg")),
+            "vs_hand_hr":       _v(mr.get("vs_hand_hr")),
+            "vs_hand_pa":       _v(mr.get("vs_hand_pa")),
+            "vs_hand_hr_pa":    _v(mr.get("vs_hand_hr_pa")),
+            "vs_lhp_avg":       _v(mr.get("vs_lhp_avg")),
+            "vs_lhp_slg":       _v(mr.get("vs_lhp_slg")),
+            "vs_lhp_iso":       _v(mr.get("vs_lhp_iso")),
+            "vs_lhp_hr":        _v(mr.get("vs_lhp_hr")),
+            "vs_lhp_pa":        _v(mr.get("vs_lhp_pa")),
+            "vs_lhp_hr_pa":     _v(mr.get("vs_lhp_hr_pa")),
+            "vs_rhp_avg":       _v(mr.get("vs_rhp_avg")),
+            "vs_rhp_slg":       _v(mr.get("vs_rhp_slg")),
+            "vs_rhp_iso":       _v(mr.get("vs_rhp_iso")),
+            "vs_rhp_hr":        _v(mr.get("vs_rhp_hr")),
+            "vs_rhp_pa":        _v(mr.get("vs_rhp_pa")),
+            "vs_rhp_hr_pa":     _v(mr.get("vs_rhp_hr_pa")),
+            # PITCHER
+            "pitcher_era":              _v(mr.get("pitcher_era")),
+            "pitcher_hr9":              _v(mr.get("pitcher_hr9")),
+            "pitcher_whip":             _v(mr.get("pitcher_whip")),
+            "pitcher_k_pct":            _v(mr.get("pitcher_k_pct")),
+            "pitcher_bb_pct":           _v(mr.get("pitcher_bb_pct")),
+            "pitcher_barrel_allowed":   _v(mr.get("pitcher_barrel_allowed")),
+            "pitcher_hh_allowed":       _v(mr.get("pitcher_hh_allowed")),
+            "pitcher_fb_allowed":       _v(mr.get("pitcher_fb_allowed")),
+            "pitcher_hr_allowed":       _v(mr.get("pitcher_hr_allowed")),
+            "pitcher_confirmed":        _v(mr.get("pitcher_confirmed")),
+            # ARSENAL EDGE SUMMARY
+            "arsenal_edge_score":       _v(mr.get("arsenal_edge_score")),
+            "arsenal_edge_label":       _v(mr.get("arsenal_edge_label")),
+            "arsenal_edge_key_pitch":   _v(mr.get("arsenal_edge_key_pitch")),
+            "arsenal_edge_confidence":  _v(mr.get("arsenal_edge_confidence")),
+            "arsenal_edge_sample_flag": _v(mr.get("arsenal_edge_sample_flag")),
+            # CONTEXT
+            "h2h_factor":       _v(mr.get("h2h_factor")),
+            "streak_factor":    _v(mr.get("streak_factor")),
+            "short_form_hr":    _v(mr.get("short_form_hr")),
+            "temp_f":           _v(mr.get("temp_f")),
+            "wind_mph":         _v(mr.get("wind_mph")),
+            "wind_deg":         _v(mr.get("wind_deg")),
+            "lineup_confirmed": _v(mr.get("lineup_confirmed")),
+            "lineup_spot":      _v(mr.get("lineup_spot")),
+        }
+
+    export_rows = [_build_export_row(r) for r in main_rows]
+
+    context_flags = []
+    if stale:
+        context_flags.append("stale=true")
+    if odds_pending:
+        context_flags.append("odds_pending=true (EV fields blank)")
+    if odds_pending_stale:
+        context_flags.append("odds_pending_stale=true")
+
+    if format == "json":
+        return JSONResponse(
+            content={
+                "slate_date":        slate_date,
+                "generated_at":      generated_at,
+                "stale":             stale,
+                "odds_pending":      odds_pending,
+                "odds_pending_stale": odds_pending_stale,
+                "player_count":      len(export_rows),
+                "players":           export_rows,
+            },
+            headers={
+                "Content-Disposition": f'attachment; filename="slate_{slate_date}.json"',
+            },
+        )
+
+    # CSV
+    columns = list(export_rows[0].keys()) if export_rows else []
+    buf = io.StringIO()
+    context_str = " | ".join(context_flags) if context_flags else "fresh"
+    buf.write(
+        f"# slate_date={slate_date} | generated_at={generated_at}"
+        f" | {context_str} | players={len(export_rows)}\n"
+    )
+    writer = _csv.DictWriter(buf, fieldnames=columns, lineterminator="\n")
+    writer.writeheader()
+    writer.writerows(export_rows)
+
+    return Response(
+        content=buf.getvalue().encode("utf-8"),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="slate_{slate_date}.csv"',
+        },
+    )
 
 
 @app.get("/api/pitcher-detail")
