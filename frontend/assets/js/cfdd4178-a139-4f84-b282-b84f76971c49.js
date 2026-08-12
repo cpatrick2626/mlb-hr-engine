@@ -159,9 +159,10 @@ const Stage = ({ engine, lens, ccOpen, onCloseCC, appliedFilters, roomFilters, o
         </div>;
       } else {
         body = <React.Fragment>
-          <HRThreatZone rows={rows} isJigContext={engine.id === "jig"} />
-          <PitcherVulnerabilityStrip rows={rows} isJigContext={engine.id === "jig"} />
-          <EscalationFeed rows={rows} isJigContext={engine.id === "jig"} />
+          {/* HIDDEN — PRIMARY HR THREAT ZONE, PITCHER VULNERABILITY, ESCALATION FEED relocated to Strategy engine in future task */}
+          {/* <HRThreatZone rows={rows} isJigContext={engine.id === "jig"} /> */}
+          {/* <PitcherVulnerabilityStrip rows={rows} isJigContext={engine.id === "jig"} /> */}
+          {/* <EscalationFeed rows={rows} isJigContext={engine.id === "jig"} /> */}
           <div className="md-room">
             <FullSlateMatrix
             rows={rows}
