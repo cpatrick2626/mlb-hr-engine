@@ -337,12 +337,25 @@ function fdSearchName(displayName) {
                   ))}
                 </div>
 
-                {/* Selected leg rows — hrprob only; TM/Signal/Edge/Conf not stored on legs */}
+                {/* Selected leg rows — scores snapshotted at add time */}
                 {currentLegs.map((leg, i) => {
                   const legHR = Number.isFinite(Number(leg.hrprob))
                     ? Number(leg.hrprob).toFixed(1) + "%"
                     : "—";
-                  const legTierC = DP_TIER_COLOR[leg.tier] || "#6b7872";
+                  const legTierC       = DP_TIER_COLOR[leg.tier] || "#6b7872";
+                  const legIsJig       = leg.board === 'jig';
+                  const legTmRaw       = legIsJig
+                    ? (leg.jig_score != null && Number.isFinite(Number(leg.jig_score)) ? Number(leg.jig_score) : null)
+                    : (leg.true_matchup_score != null && Number.isFinite(Number(leg.true_matchup_score)) ? Number(leg.true_matchup_score) : null);
+                  const legTmDisplay   = legTmRaw   != null ? String(Math.round(legTmRaw)) : "—";
+                  const legTmColor     = dpTmColor(legTmRaw);
+                  const legSigRaw      = leg.arsenal_edge_score != null && Number.isFinite(Number(leg.arsenal_edge_score)) ? Number(leg.arsenal_edge_score) : null;
+                  const legSigDisplay  = legSigRaw  != null ? legSigRaw.toFixed(1) : "—";
+                  const legEdgeRaw     = leg.edge != null && Number.isFinite(Number(leg.edge)) ? Number(leg.edge) : null;
+                  const legEdgeDisplay = legEdgeRaw != null ? (legEdgeRaw >= 0 ? "+" : "") + (legEdgeRaw * 100).toFixed(1) + "pp" : "—";
+                  const legEdgeColor   = legEdgeRaw != null ? (legEdgeRaw >= 0 ? "#1aff66" : "#ffb020") : "#6b7872";
+                  const legConfRaw     = leg.arsenal_edge_confidence != null && Number.isFinite(Number(leg.arsenal_edge_confidence)) ? Number(leg.arsenal_edge_confidence) : null;
+                  const legConfDisplay = legConfRaw != null ? Math.round(legConfRaw * 100) + "%" : "—";
                   return (
                     <div key={i} style={{
                       display: "flex", alignItems: "center",
@@ -354,11 +367,15 @@ function fdSearchName(displayName) {
                         <span style={nameSt()}>{leg.name || "—"}</span>
                         {leg.tier && <span style={subSt(legTierC)}>{leg.tier}</span>}
                       </div>
-                      {["—", legHR, "—", "—", "—"].map((val, j) => (
+                      {[
+                        { val: legTmDisplay,   color: legTmRaw   != null ? legTmColor  : "#6b7872" },
+                        { val: legHR,           color: legHR      !== "—"  ? legTierC   : "#6b7872" },
+                        { val: legSigDisplay,   color: legSigRaw  != null  ? legTierC   : "#6b7872" },
+                        { val: legEdgeDisplay,  color: legEdgeColor },
+                        { val: legConfDisplay,  color: legConfRaw != null  ? legTierC   : "#6b7872" },
+                      ].map((cell, j) => (
                         <div key={j} style={{ flex: 1, textAlign: "center" }}>
-                          <span style={valSt(j === 1 && val !== "—" ? legTierC : "#6b7872")}>
-                            {val}
-                          </span>
+                          <span style={valSt(cell.color)}>{cell.val}</span>
                         </div>
                       ))}
                     </div>

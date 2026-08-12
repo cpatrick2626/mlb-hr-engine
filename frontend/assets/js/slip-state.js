@@ -113,16 +113,22 @@
       if (!_state.ticketId) _state.ticketId = data.ticket_id;
       var n = _state.legs.length + 1;
       _state.legs = _state.legs.concat([{
-        n:            n,
-        leg_id:       data.leg_id,
-        name:         row.name,
-        teamAbbr:     row.teamAbbr,
-        tier:         row.tier,
-        hrprob:       row.hrprob,
-        barrel:       row.barrel,
-        hh:           row.hh,
-        pitcher_name: row.pitcher_name,
-        id:           row.player_id,
+        n:                       n,
+        leg_id:                  data.leg_id,
+        name:                    row.name,
+        teamAbbr:                row.teamAbbr,
+        tier:                    row.tier,
+        board:                   row.board                   != null ? row.board                   : null,
+        hrprob:                  row.hrprob,
+        barrel:                  row.barrel,
+        hh:                      row.hh,
+        pitcher_name:            row.pitcher_name,
+        id:                      row.player_id,
+        true_matchup_score:      row.true_matchup_score      != null ? row.true_matchup_score      : null,
+        jig_score:               row.jig_score               != null ? row.jig_score               : null,
+        edge:                    row.edge                    != null ? row.edge                    : null,
+        arsenal_edge_score:      row.arsenal_edge_score      != null ? row.arsenal_edge_score      : null,
+        arsenal_edge_confidence: row.arsenal_edge_confidence != null ? row.arsenal_edge_confidence : null,
       }]);
       _state.cardStatus = Object.assign({}, _state.cardStatus, { [key]: 'added' });
       _notify();
