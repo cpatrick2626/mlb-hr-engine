@@ -271,10 +271,10 @@ function fdSearchName(displayName) {
               ? edgeDisplay
               : "—";
 
-            const NAME_W = 56;
+            const NAME_W = 80;
 
             const colHdrSt = (laneColor) => ({
-              ...DP_FONT, fontSize: "7px", fontWeight: 700, letterSpacing: "0.12em",
+              ...DP_FONT, fontSize: "9px", fontWeight: 700, letterSpacing: "0.12em",
               textTransform: "uppercase", color: laneColor, whiteSpace: "nowrap",
             });
             const valSt = (color, fs) => ({
@@ -282,22 +282,22 @@ function fdSearchName(displayName) {
               letterSpacing: "0.02em", lineHeight: 1, color,
             });
             const nameSt = (color) => ({
-              ...DP_FONT, fontSize: "8px", fontWeight: 700, letterSpacing: "0.04em",
-              textTransform: "uppercase", color: color || "rgba(224,232,255,0.7)",
+              ...DP_FONT, fontSize: "12px", fontWeight: 800, letterSpacing: "0.04em",
+              textTransform: "uppercase", color: color || "rgba(224,232,255,0.9)",
               display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
             });
             const subSt = (color) => ({
-              ...DP_FONT, fontSize: "6px", fontWeight: 600, letterSpacing: "0.1em",
-              textTransform: "uppercase", color: color || "rgba(224,232,255,0.32)",
+              ...DP_FONT, fontSize: "9px", fontWeight: 600, letterSpacing: "0.1em",
+              textTransform: "uppercase", color: color || "rgba(224,232,255,0.55)",
               display: "block",
             });
 
             const cols = [
-              { label: "TM/JIG", laneColor: "rgba(255,138,147,0.75)" },
-              { label: "HR%",    laneColor: "rgba(59,111,255,0.65)"  },
-              { label: "SIGNAL", laneColor: "rgba(59,111,255,0.65)"  },
-              { label: "EDGE",   laneColor: "rgba(59,111,255,0.65)"  },
-              { label: "CONF",   laneColor: "rgba(59,111,255,0.65)"  },
+              { label: "TM/JIG", laneColor: "rgba(255,138,147,0.92)" },
+              { label: "HR%",    laneColor: "rgba(59,111,255,0.88)"  },
+              { label: "SIGNAL", laneColor: "rgba(59,111,255,0.88)"  },
+              { label: "EDGE",   laneColor: "rgba(59,111,255,0.88)"  },
+              { label: "CONF",   laneColor: "rgba(59,111,255,0.88)"  },
             ];
 
             return (
