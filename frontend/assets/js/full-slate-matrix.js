@@ -1451,7 +1451,7 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false, isJi
       fd_bet_link:     row.fd_bet_link,
       fd_event_link:   row.fd_event_link,
       signal_snapshot: fsmBuildSnapshot(row, aeiBoard, null),
-    });
+    }, onClose);
   };
 
   return (

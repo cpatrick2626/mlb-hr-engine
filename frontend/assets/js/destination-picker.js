@@ -45,7 +45,7 @@ function fdSearchName(displayName) {
 
   // Imperative controller — setRow is assigned on every PickerPortal render.
   // React guarantees useState setters are stable references so this is safe.
-  const _ctrl = { setRow: null };
+  const _ctrl = { setRow: null, onParentClose: null };
 
   // Defined at IIFE scope so React never unmounts/remounts it between renders.
   function DpOptBtn({ onClick, color, border, disabled, children }) {
@@ -88,6 +88,8 @@ function fdSearchName(displayName) {
         ? (Number(row.model_prob) * 100).toFixed(1) + "%"
         : "—";
     const authed = dpIsAuthed();
+    // Captured once at render; called after picker closes to also dismiss the parent card.
+    const onParentClose = _ctrl.onParentClose;
 
     // Current slip players — read once at render (picker is ephemeral)
     const currentLegs = (window.__hrSlip ? window.__hrSlip.getState().legs : []);
@@ -96,28 +98,32 @@ function fdSearchName(displayName) {
     const handleFDOnly = () => {
       dpOpenFD(name);   // SYNC — popup-safe
       onClose();
+      onParentClose && onParentClose();
     };
 
     // Option 2: Slip only — needs auth
     const handleSlipOnly = () => {
-      if (!authed) { onClose(); dpOpenAuth(); return; }
+      if (!authed) { onClose(); onParentClose && onParentClose(); dpOpenAuth(); return; }
       window.__hrSlip.addLeg(row);
       onClose();
+      onParentClose && onParentClose();
     };
 
     // Option 3: FD + Slip — FD MUST open synchronously before any async op
     const handleFDAndSlip = () => {
       dpOpenFD(name);   // SYNC — must be first; kept inside user gesture
-      if (!authed) { onClose(); dpOpenAuth(); return; }
+      if (!authed) { onClose(); onParentClose && onParentClose(); dpOpenAuth(); return; }
       window.__hrSlip.addLeg(row);   // async internally; fires, _notify updates surfaces
       onClose();
+      onParentClose && onParentClose();
     };
 
     // Option 4: FD + Add to Slip + Submit Slip — opens FD, adds leg, submits whole slip, auto-posts
     const handleFDAddSubmit = async () => {
       dpOpenFD(name);   // SYNC — must be first
-      if (!authed) { onClose(); dpOpenAuth(); return; }
+      if (!authed) { onClose(); onParentClose && onParentClose(); dpOpenAuth(); return; }
       onClose();
+      onParentClose && onParentClose();
       await window.__hrSlip.addLeg(row);
       const { ticketId } = window.__hrSlip.getState();
       if (!ticketId) return;
@@ -312,7 +318,8 @@ function fdSearchName(displayName) {
 
   // Override the stub registered in slip-state.js with the real implementation.
   if (window.__hrSlip) {
-    window.__hrSlip.requestAdd = function (row) {
+    window.__hrSlip.requestAdd = function (row, onParentClose) {
+      _ctrl.onParentClose = onParentClose || null;
       if (_ctrl.setRow) _ctrl.setRow(row);
     };
   }
