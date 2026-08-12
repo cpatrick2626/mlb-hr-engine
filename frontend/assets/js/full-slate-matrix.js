@@ -1997,17 +1997,94 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
 
       {/* CONTROLS + LEGENDS */}
       <div className="fsm-controls">
-        <div className="fsm-viewtoggle" role="tablist">
-          <button className={view === "game" ? "is-on" : ""} title="Group batters by game, each under its matchup header (park, time, weather, HR factor)." onClick={() => setView("game")}>GAME VIEW</button>
-          <button className={view === "player" ? "is-on" : ""} title={playerViewTitle} onClick={() => setView("player")}>PLAYER VIEW</button>
-        </div>
-        <div className="fsm-legends">
-          <div className="fsm-legend">
-            <span className="fsm-legend__title">TIER</span>
-            {FSM_TIER_ORDER.map((t) =>
-            <span className="fsm-tierpill" key={t} style={{ "--tc": FSM_TIERS[t].color, "--tg": FSM_TIERS[t].glow }} title={`${t} tier — ${tierDesc[t]}`}>{t}</span>
-            )}
+        <div className="fsm-ctrl-row">
+          {/* ── SORT & FILTER ── */}
+          <div className="fsm-ctrl-section">
+            <span className="fsm-ctrl-section__hd">SORT &amp; FILTER</span>
+            <div className="fsm-sortbar">
+              <span className="fsm-sortbar__lbl">SORT</span>
+              <button className={"fsm-sortbar__btn" + (!sortState ? " is-on" : "")} onClick={() => setSortState(null)} title="Default: canonical model rank order">RANK</button>
+              {!isJigContext && !builderMode ? (
+                <button className={"fsm-sortbar__btn" + (sortState && sortState.key === '_board_metric' ? " is-on" : "")} onClick={() => setSortState({ key: '_board_metric', dir: 'desc' })} title="Sort MAIN board by TM (True Matchup score) descending — HR PROB tiebreak. All players shown.">TM</button>
+              ) : (
+                <button className={"fsm-sortbar__btn" + (sortState && sortState.key === '_board_metric' ? " is-on" : "")} onClick={() => setSortState({ key: '_board_metric', dir: 'desc' })} title="Sort JIG board by jigScore descending — JIG formula, never TM. All players shown.">JIG SCORE</button>
+              )}
+              <span className="fsm-sortbar__sep" />
+              <button className={"fsm-sortbar__btn fsm-sortbar__toggle" + (projSortOn ? " is-on" : "")} onClick={() => setProjSortOn(v => !v)} title={projSortOn ? "Sorting by projected values — click for current values" : "Sorting by current values — click for projected values"}>{projSortOn ? "PROJECTION" : "CURRENT"}</button>
+            </div>
+            <div className="fsm-legend">
+              <span className="fsm-legend__title">TIER</span>
+              {FSM_TIER_ORDER.map((t) =>
+              <span className="fsm-tierpill" key={t} style={{ "--tc": FSM_TIERS[t].color, "--tg": FSM_TIERS[t].glow }} title={`${t} tier — ${tierDesc[t]}`}>{t}</span>
+              )}
+            </div>
+            <FsmRoleFilter selRoles={selRoles} onToggle={toggleRole} />
+            <div className="fsm-rg">
+              <span className="fsm-rg__label">COHORT</span>
+              <div className="fsm-rg__opts">
+                <button
+                  className={"fsm-rg__opt" + (bestCohortOn ? " is-on" : "")}
+                  style={bestCohortOn ? { color: "#ffe066", borderColor: "rgba(255,224,102,0.5)", background: "rgba(255,224,102,0.08)" } : undefined}
+                  title={"BEST COHORT — Shows ONLY players meeting all three study thresholds, in the board's active sort order. Thresholds: Expected PA ≥4.2 (lineup spots 1–3), Season HR/PA ≥4.35%, vs-hand SLG ≥.440. Toggle OFF to restore the full slate. Display-only — no scoring change."}
+                  onClick={() => setBestCohortOn(v => !v)}>
+                  BEST COHORT{bestCohortOn ? " · " + cohortCount : ""}
+                </button>
+              </div>
+            </div>
           </div>
+          <span className="fsm-ctrl-divider" />
+          {/* ── SCOPE ── */}
+          <div className="fsm-ctrl-section">
+            <span className="fsm-ctrl-section__hd">SCOPE</span>
+            <div className="fsm-viewtoggle" role="tablist">
+              <button className={view === "game" ? "is-on" : ""} title="Group batters by game, each under its matchup header (park, time, weather, HR factor)." onClick={() => setView("game")}>GAME VIEW</button>
+              <button className={view === "player" ? "is-on" : ""} title={playerViewTitle} onClick={() => setView("player")}>PLAYER VIEW</button>
+            </div>
+            <div className="fsm-pitchbar">
+              <span className="fsm-pitchbar__lbl">SPLIT SCOPE</span>
+              <div className="fsm-rg__opts" role="radiogroup" aria-label="Split scope" style={{ display: 'inline-flex', padding: '3px', borderRadius: '8px' }}>
+                <button className={"fsm-rg__opt" + (splitScope === 'vs_hand' ? " is-on" : "")} role="radio" aria-checked={splitScope === 'vs_hand'} title="Show REAL vs-hand splits for AVG/SLG/ISO/HR-PA/HR-count — PA always shown; thin <30 PA tagged amber; Statcast stays SZN" style={{ padding: '4px 10px', gap: 0 }} onClick={() => setSplitScope('vs_hand')}>VS HAND</button>
+                <button className={"fsm-rg__opt" + (splitScope === 'season' ? " is-on" : "")} role="radio" aria-checked={splitScope === 'season'} title="Show season-blended values for AVG/SLG/ISO/HR-PA/HR-count — compare vs-hand vs season by toggling" style={{ padding: '4px 10px', gap: 0 }} onClick={() => setSplitScope('season')}>SEASON</button>
+              </div>
+              {splitScope === 'vs_hand' && <>
+                <span className="fsm-scope fsm-scope--hand fsm-scope--pill" title="Real faced-hand split — reliable sample (30+ PA); PA shown">VS R / VS L · REAL · PA</span>
+                <span className="fsm-scope fsm-scope--thin fsm-scope--pill" title="Real faced-hand split — thin sample (<30 PA); treat with caution">THIN &lt;30 PA</span>
+                <span className="fsm-scope fsm-scope--szn fsm-scope--pill" title="Season-blended fallback — no hand split or pitcher TBD">SZN FALLBACK</span>
+              </>}
+              {splitScope === 'season' && <span className="fsm-scope fsm-scope--szn fsm-scope--pill" title="All stat columns showing season-blended values">ALL SZN · AVG / SLG / ISO / HR-PA / HR</span>}
+              <span className="fsm-pitchbar__note">{splitScope === 'vs_hand' ? 'AVG · SLG · ISO · HR/PA · HR = real vs-hand when tagged (PA always shown)' : 'AVG · SLG · ISO · HR/PA · HR = season-blended'} · Statcast = season always</span>
+            </div>
+          </div>
+          <span className="fsm-ctrl-divider" />
+          {/* ── GAMES ── */}
+          <div className="fsm-ctrl-section">
+            <span className="fsm-ctrl-section__hd">GAMES</span>
+            {view === "game" &&
+            <div className="fsm-gamenav">
+              <button className={selGame === "all" ? "is-on" : ""} onClick={() => setSelGame("all")}>ALL · {getFSMGames().length}</button>
+              {getFSMGames().map((g) =>
+              <button key={g.id} className={selGame === g.id ? "is-on" : ""} onClick={() => setSelGame(g.id)}>
+                {g.away} @ {g.home}
+              </button>
+              )}
+            </div>
+            }
+            <label className="fsm-gamesel fsm-gamesel--inline">
+              <span className="fsm-gamesel__label">GAMES</span>
+              <span className="fsm-gamesel__field">
+                <select value={selGame} onChange={(e) => setSelGame(e.target.value)}>
+                  <option value="all">All games · {getFSMGames().length}</option>
+                  {getFSMGames().map((g) =>
+                  <option key={g.id} value={g.id}>{g.away} @ {g.home} · {g.time}</option>
+                  )}
+                </select>
+                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              </span>
+            </label>
+          </div>
+        </div>
+        {/* ── BATTER THREAT legend + COLUMNS/EDIT ── */}
+        <div className="fsm-ctrl-aux">
           <div className="fsm-legend">
             <span className="fsm-legend__title" title="Batter HR-threat tier: dot color shows how dangerous this hitter is for a HR (model probability + barrel quality). Green glow = TARGET pitcher (HR/9 ≥ 2.2) — a separate pitcher-vulnerability signal layered on top.">BATTER THREAT</span>
             {FSM_MATCHUP_ORDER.map((k) =>
@@ -2015,111 +2092,44 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
             )}
             <span className="fsm-mkey" key="TARGET" title={`TARGET — ${FSM_MATCHUP_DESC.TARGET}`}><i style={{ background: "#1aff66" }} />TARGET</span>
           </div>
-        </div>
-        {/* GAMES — jump straight to any game */}
-        <label className="fsm-gamesel fsm-gamesel--inline">
-          <span className="fsm-gamesel__label">GAMES</span>
-          <span className="fsm-gamesel__field">
-            <select value={selGame} onChange={(e) => setSelGame(e.target.value)}>
-              <option value="all">All games · {getFSMGames().length}</option>
-              {getFSMGames().map((g) =>
-              <option key={g.id} value={g.id}>{g.away} @ {g.home} · {g.time}</option>
-              )}
-            </select>
-            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-          </span>
-        </label>
-        {/* COLUMNS — add / remove / reorder stat columns */}
-        <div className="fsm-colmenu">
-          <button className="fsm-colbtn" onClick={() => setColOpen((o) => !o)} aria-expanded={colOpen}>
-            COLUMNS <b>{activeCols.length}</b>
-            <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-          </button>
-          <button className="fsm-colbtn" onClick={() => setEditMode((o) => !o)} title={editMode ? "EDIT mode ON — drag column headers to reorder; click to exit" : "EDIT mode — drag column headers to reorder (persists across sessions)"} style={editMode ? { borderColor: "rgba(26,255,102,0.5)", color: "#1aff66" } : undefined}>
-            EDIT{editMode ? " ✓" : ""}
-          </button>
-          {colOpen &&
-          <div className="fsm-colpop">
-            <div className="fsm-colpop__head"><span>STAT COLUMNS</span><button onClick={resetCols}>RESET</button></div>
-            <div className="fsm-colpop__hint">Hover or tap ⓘ for what each stat means</div>
-            <div className="fsm-colpop__list">
-              {colPref.order.map((k, idx) => {
-                const c = FSM_COLS.find((x) => x.key === k);
-                const on = !colPref.hidden.includes(k);
-                return (
-                  <React.Fragment key={k}>
-                  <div className="fsm-colrow" title={c.title}>
-                    <label className="fsm-colrow__lbl">
-                      <input type="checkbox" checked={on} onChange={() => toggleCol(k)} />
-                      <span>{c.head}</span>
-                    </label>
-                    <span className="fsm-colrow__mv">
-                      <button className={"fsm-colinfo" + (colInfo === k ? " is-on" : "")} onClick={() => setColInfo((x) => x === k ? null : k)} title={c.title} aria-label="What is this stat?">ⓘ</button>
-                      <button onClick={() => moveCol(idx, -1)} disabled={idx === 0} aria-label="Move up">▲</button>
-                      <button onClick={() => moveCol(idx, 1)} disabled={idx === colPref.order.length - 1} aria-label="Move down">▼</button>
-                    </span>
-                  </div>
-                  {colInfo === k && <div className="fsm-coldesc">{c.title}</div>}
-                  </React.Fragment>);
-              })}
+          <div className="fsm-colmenu">
+            <button className="fsm-colbtn" onClick={() => setColOpen((o) => !o)} aria-expanded={colOpen}>
+              COLUMNS <b>{activeCols.length}</b>
+              <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </button>
+            <button className="fsm-colbtn" onClick={() => setEditMode((o) => !o)} title={editMode ? "EDIT mode ON — drag column headers to reorder; click to exit" : "EDIT mode — drag column headers to reorder (persists across sessions)"} style={editMode ? { borderColor: "rgba(26,255,102,0.5)", color: "#1aff66" } : undefined}>
+              EDIT{editMode ? " ✓" : ""}
+            </button>
+            {colOpen &&
+            <div className="fsm-colpop">
+              <div className="fsm-colpop__head"><span>STAT COLUMNS</span><button onClick={resetCols}>RESET</button></div>
+              <div className="fsm-colpop__hint">Hover or tap ⓘ for what each stat means</div>
+              <div className="fsm-colpop__list">
+                {colPref.order.map((k, idx) => {
+                  const c = FSM_COLS.find((x) => x.key === k);
+                  const on = !colPref.hidden.includes(k);
+                  return (
+                    <React.Fragment key={k}>
+                    <div className="fsm-colrow" title={c.title}>
+                      <label className="fsm-colrow__lbl">
+                        <input type="checkbox" checked={on} onChange={() => toggleCol(k)} />
+                        <span>{c.head}</span>
+                      </label>
+                      <span className="fsm-colrow__mv">
+                        <button className={"fsm-colinfo" + (colInfo === k ? " is-on" : "")} onClick={() => setColInfo((x) => x === k ? null : k)} title={c.title} aria-label="What is this stat?">ⓘ</button>
+                        <button onClick={() => moveCol(idx, -1)} disabled={idx === 0} aria-label="Move up">▲</button>
+                        <button onClick={() => moveCol(idx, 1)} disabled={idx === colPref.order.length - 1} aria-label="Move down">▼</button>
+                      </span>
+                    </div>
+                    {colInfo === k && <div className="fsm-coldesc">{c.title}</div>}
+                    </React.Fragment>);
+                })}
+              </div>
             </div>
-          </div>
-          }
-        </div>
-      </div>
-      <div className="fsm-pitchbar">
-        <span className="fsm-pitchbar__lbl">SPLIT SCOPE</span>
-        <div className="fsm-rg__opts" role="radiogroup" aria-label="Split scope" style={{ display: 'inline-flex', padding: '3px', borderRadius: '8px' }}>
-          <button className={"fsm-rg__opt" + (splitScope === 'vs_hand' ? " is-on" : "")} role="radio" aria-checked={splitScope === 'vs_hand'} title="Show REAL vs-hand splits for AVG/SLG/ISO/HR-PA/HR-count — PA always shown; thin <30 PA tagged amber; Statcast stays SZN" style={{ padding: '4px 10px', gap: 0 }} onClick={() => setSplitScope('vs_hand')}>VS HAND</button>
-          <button className={"fsm-rg__opt" + (splitScope === 'season' ? " is-on" : "")} role="radio" aria-checked={splitScope === 'season'} title="Show season-blended values for AVG/SLG/ISO/HR-PA/HR-count — compare vs-hand vs season by toggling" style={{ padding: '4px 10px', gap: 0 }} onClick={() => setSplitScope('season')}>SEASON</button>
-        </div>
-        {splitScope === 'vs_hand' && <>
-          <span className="fsm-scope fsm-scope--hand fsm-scope--pill" title="Real faced-hand split — reliable sample (30+ PA); PA shown">VS R / VS L · REAL · PA</span>
-          <span className="fsm-scope fsm-scope--thin fsm-scope--pill" title="Real faced-hand split — thin sample (<30 PA); treat with caution">THIN &lt;30 PA</span>
-          <span className="fsm-scope fsm-scope--szn fsm-scope--pill" title="Season-blended fallback — no hand split or pitcher TBD">SZN FALLBACK</span>
-        </>}
-        {splitScope === 'season' && <span className="fsm-scope fsm-scope--szn fsm-scope--pill" title="All stat columns showing season-blended values">ALL SZN · AVG / SLG / ISO / HR-PA / HR</span>}
-        <span className="fsm-pitchbar__note">{splitScope === 'vs_hand' ? 'AVG · SLG · ISO · HR/PA · HR = real vs-hand when tagged (PA always shown)' : 'AVG · SLG · ISO · HR/PA · HR = season-blended'} · Statcast = season always</span>
-      </div>
-      <div className="fsm-filters">
-        <FsmRoleFilter selRoles={selRoles} onToggle={toggleRole} />
-        <span className="fsm-filters__div" />
-        <div className="fsm-rg">
-          <span className="fsm-rg__label">COHORT</span>
-          <div className="fsm-rg__opts">
-            <button
-              className={"fsm-rg__opt" + (bestCohortOn ? " is-on" : "")}
-              style={bestCohortOn ? { color: "#ffe066", borderColor: "rgba(255,224,102,0.5)", background: "rgba(255,224,102,0.08)" } : undefined}
-              title={"BEST COHORT — Shows ONLY players meeting all three study thresholds, in the board's active sort order. Thresholds: Expected PA ≥4.2 (lineup spots 1–3), Season HR/PA ≥4.35%, vs-hand SLG ≥.440. Toggle OFF to restore the full slate. Display-only — no scoring change."}
-              onClick={() => setBestCohortOn(v => !v)}>
-              BEST COHORT{bestCohortOn ? " · " + cohortCount : ""}
-            </button>
+            }
           </div>
         </div>
       </div>
-      <div className="fsm-sortbar">
-        <span className="fsm-sortbar__lbl">SORT</span>
-        <button className={"fsm-sortbar__btn" + (!sortState ? " is-on" : "")} onClick={() => setSortState(null)} title="Default: canonical model rank order">RANK</button>
-        {!isJigContext && !builderMode ? (
-          <button className={"fsm-sortbar__btn" + (sortState && sortState.key === '_board_metric' ? " is-on" : "")} onClick={() => setSortState({ key: '_board_metric', dir: 'desc' })} title="Sort MAIN board by TM (True Matchup score) descending — HR PROB tiebreak. All players shown.">TM</button>
-        ) : (
-          <button className={"fsm-sortbar__btn" + (sortState && sortState.key === '_board_metric' ? " is-on" : "")} onClick={() => setSortState({ key: '_board_metric', dir: 'desc' })} title="Sort JIG board by jigScore descending — JIG formula, never TM. All players shown.">JIG SCORE</button>
-        )}
-        <span className="fsm-sortbar__sep" />
-        <button className={"fsm-sortbar__btn fsm-sortbar__toggle" + (projSortOn ? " is-on" : "")} onClick={() => setProjSortOn(v => !v)} title={projSortOn ? "Sorting by projected values — click for current values" : "Sorting by current values — click for projected values"}>{projSortOn ? "PROJECTION" : "CURRENT"}</button>
-      </div>
-
-      {/* GAME-NAV CHIPS — one-click jump to each game */}
-      {view === "game" &&
-      <div className="fsm-gamenav">
-          <button className={selGame === "all" ? "is-on" : ""} onClick={() => setSelGame("all")}>ALL · {getFSMGames().length}</button>
-          {getFSMGames().map((g) =>
-        <button key={g.id} className={selGame === g.id ? "is-on" : ""} onClick={() => setSelGame(g.id)}>
-              {g.away} @ {g.home}
-            </button>
-        )}
-        </div>
-      }
 
       {/* BODY */}
       {displayPool.length === 0 ?
