@@ -29,6 +29,7 @@ POST /api/builds                  — create/update caller's named TCC build (JW
 DELETE /api/builds/{build_id}     — delete caller's own TCC build (JWT required)
 GET  /api/layout/{layout_key}     — return caller's column layout for key, or null (JWT required)
 POST /api/layout/{layout_key}     — upsert caller's column layout for key (JWT required)
+PATCH /api/tickets/{id}/stake     — update stake on caller's own ticket (JWT required)
 GET  /api/slate/export            — full-slate CSV/JSON export: all players, all fields (no auth)
 
 The pipeline is normally triggered by GitHub Actions cron (see api/cron.py).
@@ -44,6 +45,7 @@ import json
 import logging
 import re
 from datetime import date, datetime, timezone
+from math import isfinite
 
 from dotenv import load_dotenv
 load_dotenv()
@@ -445,6 +447,34 @@ async def ledger(
             "note": "logged picks; fd_deployed distinction is future work (D6).",
         },
     }
+
+
+@app.patch("/api/tickets/{ticket_id}/stake")
+async def update_ticket_stake(ticket_id: str, body: dict, user=Depends(require_auth)):
+    """Update stake on the caller's own ticket. Owner-only; auth-gated."""
+    raw_stake = body.get("stake")
+    if raw_stake is not None:
+        if isinstance(raw_stake, bool) or not isinstance(raw_stake, (int, float)):
+            raise HTTPException(status_code=422, detail="stake must be a non-negative number or null")
+        stake = float(raw_stake)
+        if stake < 0 or not isfinite(stake):
+            raise HTTPException(status_code=422, detail="stake must be a finite non-negative number")
+    else:
+        stake = None
+    result = (
+        supabase_client()
+        .table("tickets")
+        .select("ticket_id,user_id")
+        .eq("ticket_id", ticket_id)
+        .limit(1)
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    if result.data[0].get("user_id") != user.get("sub"):
+        raise HTTPException(status_code=403, detail="Not authorized for this ticket")
+    supabase_client().table("tickets").update({"stake": stake}).eq("ticket_id", ticket_id).execute()
+    return {"status": "ok", "ticket_id": ticket_id, "stake": stake}
 
 
 @app.post("/api/tickets/leg/remove")

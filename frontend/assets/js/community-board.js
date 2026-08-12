@@ -35,7 +35,11 @@ function commLegRow(leg) {
 function CommSlipCard({ post, onRemove, onOpenCard }) {
   const [confirmRemove, setConfirmRemove] = React.useState(false);
   const [removing, setRemoving]           = React.useState(false);
-  const [wager, setWager]                 = React.useState('');
+  const persistedStake = (typeof (post.slip || {}).stake === 'number' && isFinite((post.slip || {}).stake))
+    ? (post.slip || {}).stake : null;
+  const [wager, setWager]     = React.useState(persistedStake != null ? String(persistedStake) : '');
+  const [saving, setSaving]   = React.useState(false);
+  const [savedOk, setSavedOk] = React.useState(false);
 
   const slip       = post.slip || {};
   const legs       = slip.legs || [];
@@ -105,6 +109,26 @@ function CommSlipCard({ post, onRemove, onOpenCard }) {
     } catch (_) {}
     setRemoving(false);
     setConfirmRemove(false);
+  };
+
+  const isOwner  = !!onRemove;
+  const ticketId = slip.ticket_id;
+
+  const saveWager = async () => {
+    if (!isOwner || !ticketId || !window.__hrAuth?.authFetch) return;
+    const stakeVal = wager === '' ? null : parseFloat(wager);
+    if (stakeVal !== null && (!isFinite(stakeVal) || stakeVal < 0)) return;
+    setSaving(true);
+    try {
+      await window.__hrAuth.authFetch(`${COMM_API}/api/tickets/${ticketId}/stake`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stake: stakeVal }),
+      });
+      setSavedOk(true);
+      setTimeout(() => setSavedOk(false), 2000);
+    } catch (_) {}
+    setSaving(false);
   };
 
   // Wager + payout — guard every numeric op
@@ -373,21 +397,32 @@ function CommSlipCard({ post, onRemove, onOpenCard }) {
           fontSize: '9px', fontFamily: 'var(--font-display)', fontWeight: 800,
           letterSpacing: '0.12em', color: 'rgba(224,232,255,0.38)', textTransform: 'uppercase',
         }}>WAGER</span>
-        <span style={{fontSize:'11px',color:'rgba(224,232,255,0.4)',fontFamily:'var(--font-mono)'}}>$</span>
-        <input
-          type="number"
-          min="0"
-          step="1"
-          value={wager}
-          onChange={e => setWager(e.target.value)}
-          placeholder="0"
-          style={{
-            width: '64px', background: 'rgba(255,255,255,0.06)',
-            border: '1px solid rgba(224,232,255,0.15)', borderRadius: '3px',
-            color: 'rgba(224,232,255,0.85)', fontFamily: 'var(--font-mono)',
-            fontSize: '12px', padding: '3px 6px', outline: 'none',
-          }}
-        />
+        {isOwner ? (
+          <>
+            <span style={{fontSize:'11px',color:'rgba(224,232,255,0.4)',fontFamily:'var(--font-mono)'}}>$</span>
+            <input
+              type="number"
+              min="0"
+              step="1"
+              value={wager}
+              onChange={e => { setWager(e.target.value); setSavedOk(false); }}
+              onBlur={saveWager}
+              placeholder="0"
+              style={{
+                width: '64px', background: 'rgba(255,255,255,0.06)',
+                border: '1px solid rgba(224,232,255,0.15)', borderRadius: '3px',
+                color: 'rgba(224,232,255,0.85)', fontFamily: 'var(--font-mono)',
+                fontSize: '12px', padding: '3px 6px', outline: 'none',
+              }}
+            />
+            {saving && <span style={{fontSize:'9px',color:'rgba(224,232,255,0.35)',fontFamily:'var(--font-mono)'}}>saving…</span>}
+            {savedOk && <span style={{fontSize:'9px',color:'#1aff66',fontFamily:'var(--font-mono)'}}>✓</span>}
+          </>
+        ) : (
+          <span style={{fontSize:'12px',fontFamily:'var(--font-mono)',color:'rgba(224,232,255,0.55)'}}>
+            {hasWager ? '$' + wagerNum.toFixed(2) : '—'}
+          </span>
+        )}
         {payoutStr && (
           <span style={{
             fontSize: '11px', fontFamily: 'var(--font-mono)',
