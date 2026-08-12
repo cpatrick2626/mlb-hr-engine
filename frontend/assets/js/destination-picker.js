@@ -8,6 +8,21 @@
     SIGNAL: "#3b6fff", WATCH: "#ffb020", COLD: "#6b7872",
   };
 
+  /* TM score band colors — replicates TM_BANDS from full-slate-matrix.js */
+  const DP_TM_BANDS = [
+    { min: 60, color: "#4ade80" },
+    { min: 50, color: "#86efac" },
+    { min: 38, color: "#fbbf24" },
+    { min: 25, color: "#f97316" },
+    { min:  0, color: "#ef4444" },
+  ];
+  function dpTmColor(s) {
+    if (s == null || !Number.isFinite(Number(s))) return "#6b7872";
+    const n = Number(s);
+    for (const b of DP_TM_BANDS) { if (n >= b.min) return b.color; }
+    return "#ef4444";
+  }
+
   const DP_FONT = { fontFamily: 'var(--font-display, "Barlow Condensed", sans-serif)' };
 
 /* Normalize a display name for FD search URL only — strips generational suffixes
@@ -88,6 +103,23 @@ function fdSearchName(displayName) {
         ? (Number(row.model_prob) * 100).toFixed(1) + "%"
         : "—";
     const authed = dpIsAuthed();
+
+    /* Five pick-card scores — read already-forwarded values, null-guarded. */
+    const isJigLane   = row.board === 'jig' || !!(row.signal_snapshot && row.signal_snapshot.lane === 'jig');
+    const tmLabel     = isJigLane ? 'JIG' : 'TM';
+    const tmRaw       = isJigLane
+      ? (row.jig_score != null && Number.isFinite(Number(row.jig_score)) ? Number(row.jig_score) : null)
+      : (row.true_matchup_score != null && Number.isFinite(Number(row.true_matchup_score)) ? Number(row.true_matchup_score) : null);
+    const tmDisplay   = tmRaw != null ? String(Math.round(tmRaw)) : "—";
+    const tmColor     = dpTmColor(tmRaw);
+    const sigRaw      = row.arsenal_edge_score != null && Number.isFinite(Number(row.arsenal_edge_score)) ? Number(row.arsenal_edge_score) : null;
+    const sigDisplay  = sigRaw != null ? sigRaw.toFixed(1) : "—";
+    const edgeRaw     = row.edge != null && Number.isFinite(Number(row.edge)) ? Number(row.edge) : null;
+    const edgeDisplay = edgeRaw != null ? (edgeRaw >= 0 ? "+" : "") + (edgeRaw * 100).toFixed(1) + "pp" : "—";
+    const edgeColor   = edgeRaw != null ? (edgeRaw >= 0 ? "#1aff66" : "#ffb020") : "#6b7872";
+    const confRaw     = row.arsenal_edge_confidence != null && Number.isFinite(Number(row.arsenal_edge_confidence)) ? Number(row.arsenal_edge_confidence) : null;
+    const confDisplay = confRaw != null ? Math.round(confRaw * 100) + "%" : "—";
+
     // Captured once at render; called after picker closes to also dismiss the parent card.
     const onParentClose = _ctrl.onParentClose;
 
@@ -207,6 +239,42 @@ function fdSearchName(displayName) {
             <span style={{ ...DP_FONT, fontSize: "11px", fontWeight: 700, letterSpacing: "0.08em", color: tierC, flexShrink: 0 }}>
               {prob} HR
             </span>
+          </div>
+
+          {/* Score strip — TM/JIG (JIG-lane) · HR% · Signal · Edge · Conf (MAIN-lane) */}
+          <div style={{
+            padding: "7px 12px 6px",
+            borderBottom: "1px solid rgba(59,111,255,0.13)",
+            display: "flex",
+            gap: "0",
+          }}>
+            {[
+              { label: tmLabel,  val: tmDisplay,   color: tmRaw   != null ? tmColor                     : "#6b7872", laneColor: "rgba(255,138,147,0.75)" },
+              { label: "HR%",    val: prob,         color: prob    !== "—" ? tierC                       : "#6b7872", laneColor: "rgba(59,111,255,0.65)"  },
+              { label: "SIGNAL", val: sigDisplay,   color: sigRaw  != null ? tierC                       : "#6b7872", laneColor: "rgba(59,111,255,0.65)"  },
+              { label: "EDGE",   val: edgeDisplay,  color: edgeColor,                                                 laneColor: "rgba(59,111,255,0.65)"  },
+              { label: "CONF",   val: confDisplay,  color: confRaw != null ? tierC                       : "#6b7872", laneColor: "rgba(59,111,255,0.65)"  },
+            ].map((s, i) => (
+              <div key={i} style={{
+                flex: 1,
+                display: "flex", flexDirection: "column", alignItems: "center", gap: "3px",
+                padding: "0 2px",
+                borderLeft: i === 1 ? "1px solid rgba(59,111,255,0.2)" : "none",
+              }}>
+                <span style={{
+                  ...DP_FONT, fontSize: "7px", fontWeight: 700, letterSpacing: "0.12em",
+                  textTransform: "uppercase", color: s.laneColor, whiteSpace: "nowrap",
+                }}>
+                  {s.label}
+                </span>
+                <span style={{
+                  ...DP_FONT, fontSize: isMobile ? "12px" : "13px", fontWeight: 800,
+                  letterSpacing: "0.02em", lineHeight: 1, color: s.color,
+                }}>
+                  {s.val}
+                </span>
+              </div>
+            ))}
           </div>
 
           <div style={{

@@ -508,7 +508,7 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, i
           type="button"
           className="fsm-tier fsm-tier--btn"
           style={{ "--tc": t.color, "--tg": t.glow }}
-          onClick={(e) => { e.stopPropagation(); e.preventDefault(); const board = isJigContext ? 'jig' : (row._board || 'main'); const raw = row._raw || row; window.__hrSlip && window.__hrSlip.requestAdd({ player_id: raw.id, name: raw.name, teamAbbr: raw.teamAbbr, team: raw.teamAbbr, pitcher: raw.pitcher_name, pitcher_name: raw.pitcher_name, model_prob: raw.model_prob, tier: raw.tier, model_tier_rank: raw.model_tier_rank, board: board, hrprob: raw.hrprob, barrel: raw.barrel, hh: raw.hh, fd_bet_link: raw.fd_bet_link, fd_event_link: raw.fd_event_link, signal_snapshot: fsmBuildSnapshot(raw, board, sortState) }); }}
+          onClick={(e) => { e.stopPropagation(); e.preventDefault(); const board = isJigContext ? 'jig' : (row._board || 'main'); const raw = row._raw || row; window.__hrSlip && window.__hrSlip.requestAdd({ player_id: raw.id, name: raw.name, teamAbbr: raw.teamAbbr, team: raw.teamAbbr, pitcher: raw.pitcher_name, pitcher_name: raw.pitcher_name, model_prob: raw.model_prob, tier: raw.tier, model_tier_rank: raw.model_tier_rank, board: board, hrprob: raw.hrprob, barrel: raw.barrel, hh: raw.hh, fd_bet_link: raw.fd_bet_link, fd_event_link: raw.fd_event_link, true_matchup_score: raw.true_matchup_score, jig_score: raw.jigScore, edge: raw.edge, arsenal_edge_score: raw.arsenal_edge_score, arsenal_edge_confidence: raw.arsenal_edge_confidence, signal_snapshot: fsmBuildSnapshot(raw, board, sortState) }); }}
           title={fsmTierTip(row, isJigContext, jigLabel, jigRank) + " · Click: select destination"}
           aria-label={`Select destination for ${row.name}`}>
 
@@ -703,9 +703,14 @@ function FsmTable({ rows, cols, showGame, onBatter, onPitch, onReorder, onFront,
       hrprob:          raw.hrprob,
       barrel:          raw.barrel,
       hh:              raw.hh,
-      fd_bet_link:     raw.fd_bet_link,
-      fd_event_link:   raw.fd_event_link,
-      signal_snapshot: fsmBuildSnapshot(raw, board, sortState),
+      fd_bet_link:             raw.fd_bet_link,
+      fd_event_link:           raw.fd_event_link,
+      true_matchup_score:      raw.true_matchup_score,
+      jig_score:               raw.jigScore,
+      edge:                    raw.edge,
+      arsenal_edge_score:      raw.arsenal_edge_score,
+      arsenal_edge_confidence: raw.arsenal_edge_confidence,
+      signal_snapshot:         fsmBuildSnapshot(raw, board, sortState),
     });
   };
 
@@ -1448,9 +1453,14 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false, isJi
       hrprob:          row.hrprob,
       barrel:          row.barrel,
       hh:              row.hh,
-      fd_bet_link:     row.fd_bet_link,
-      fd_event_link:   row.fd_event_link,
-      signal_snapshot: fsmBuildSnapshot(row, aeiBoard, null),
+      fd_bet_link:             row.fd_bet_link,
+      fd_event_link:           row.fd_event_link,
+      true_matchup_score:      row.true_matchup_score,
+      jig_score:               row.jigScore,
+      edge:                    row.edge,
+      arsenal_edge_score:      row.arsenal_edge_score,
+      arsenal_edge_confidence: row.arsenal_edge_confidence,
+      signal_snapshot:         fsmBuildSnapshot(row, aeiBoard, null),
     }, onClose);
   };
 
