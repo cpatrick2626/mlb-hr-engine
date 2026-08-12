@@ -19,7 +19,7 @@ function commGradeColor(colorStr) {
 
 /* Maps grade subfields → plain-language verdict. Always returns { text, color }. */
 function commVerdictLine({ hasEv, evPct, numLegs, singlesBetter }) {
-  if (!hasEv) return { text: "Odds pending — can't grade EV yet.", color: 'rgba(224,232,255,0.28)' };
+  if (!hasEv) return { text: "Odds pending — can't grade EV yet.", color: 'rgba(224,232,255,0.68)' };
   if (evPct > 0) {
     if (numLegs === 1) return { text: 'Strong — +EV single, worth a look.', color: 'rgba(26,255,102,0.6)' };
     if (singlesBetter) return { text: `Positive EV — ${numLegs}-leg parlay, but singles score higher.`, color: 'rgba(255,176,32,0.6)' };
@@ -181,9 +181,10 @@ function CommSlipCard({ post, onRemove, onOpenCard }) {
   };
 
   const pillSt = {
-    fontSize: '9px', fontFamily: 'var(--font-display)', fontWeight: 800,
+    fontSize: '11px', fontFamily: 'var(--font-display)', fontWeight: 800,
     letterSpacing: '0.1em', textTransform: 'uppercase', borderRadius: '3px',
-    padding: '2px 6px', border: '1px solid', cursor: 'pointer',
+    minHeight: '36px', padding: '7px 11px', border: '1px solid', cursor: 'pointer',
+    lineHeight: 1, boxSizing: 'border-box',
   };
 
   return (
@@ -236,8 +237,8 @@ function CommSlipCard({ post, onRemove, onOpenCard }) {
         }}>
           {confLabel && (
             <span style={{
-              fontSize: '10px', fontFamily: 'var(--font-display)', fontWeight: 700,
-              letterSpacing: '0.12em', color: 'rgba(224,232,255,0.5)',
+              fontSize: '12px', fontFamily: 'var(--font-display)', fontWeight: 700,
+              letterSpacing: '0.12em', color: 'rgba(224,232,255,0.72)',
               textTransform: 'uppercase',
             }}>
               {confLabel} CONFIDENCE
@@ -245,8 +246,8 @@ function CommSlipCard({ post, onRemove, onOpenCard }) {
           )}
           {numLegs > 0 && (
             <span style={{
-              fontSize: '10px', fontFamily: 'var(--font-display)', fontWeight: 700,
-              letterSpacing: '0.1em', color: 'rgba(224,232,255,0.35)',
+              fontSize: '12px', fontFamily: 'var(--font-display)', fontWeight: 700,
+              letterSpacing: '0.1em', color: 'rgba(224,232,255,0.62)',
               textTransform: 'uppercase',
             }}>
               {numLegs}-LEG
@@ -254,8 +255,8 @@ function CommSlipCard({ post, onRemove, onOpenCard }) {
           )}
           {ticketType && (
             <span style={{
-              fontSize: '10px', fontFamily: 'var(--font-display)', fontWeight: 700,
-              letterSpacing: '0.1em', color: 'rgba(224,232,255,0.35)',
+              fontSize: '12px', fontFamily: 'var(--font-display)', fontWeight: 700,
+              letterSpacing: '0.1em', color: 'rgba(224,232,255,0.62)',
               textTransform: 'uppercase',
             }}>
               {ticketType}
@@ -273,16 +274,16 @@ function CommSlipCard({ post, onRemove, onOpenCard }) {
         {/* Row 3: confidence reasons (array joined to string — never rendered as array) */}
         {confReasons && (
           <div style={{
-            marginTop: '4px', fontSize: '9px', fontFamily: 'var(--font-mono)',
-            color: 'rgba(224,232,255,0.28)', letterSpacing: '0.03em',
+            marginTop: '6px', fontSize: '11px', fontFamily: 'var(--font-mono)',
+            color: 'rgba(224,232,255,0.62)', letterSpacing: '0.03em', lineHeight: 1.4,
           }}>
             {confReasons}
           </div>
         )}
         {/* Row 4: plain-language verdict */}
         <div style={{
-          marginTop: '6px', fontSize: '10px', fontFamily: 'var(--font-mono)',
-          color: verdict.color, letterSpacing: '0.02em',
+          marginTop: '7px', fontSize: '12px', fontFamily: 'var(--font-mono)',
+          color: verdict.color, fontWeight: 600, letterSpacing: '0.02em', lineHeight: 1.4,
         }}>
           {verdict.text}
         </div>
@@ -396,8 +397,8 @@ function CommSlipCard({ post, onRemove, onOpenCard }) {
                 onClick={() => handlePickLeg(leg)}
                 style={{
                   ...pillSt, marginLeft: 'auto', flexShrink: 0,
-                  color: '#1aff66', borderColor: 'rgba(26,255,102,0.4)',
-                  background: 'none',
+                  minWidth: '58px', color: '#1aff66', borderColor: 'rgba(26,255,102,0.55)',
+                  background: 'rgba(26,255,102,0.07)',
                 }}
                 title="Add this player to your slip"
               >
@@ -411,17 +412,17 @@ function CommSlipCard({ post, onRemove, onOpenCard }) {
       {/* ── WAGER / PAYOUT ── */}
       <div style={{
         display:'flex', gap:'8px', alignItems:'center',
-        marginTop: '10px', padding: '7px 8px',
+        marginTop: '10px', padding: '9px 10px',
         background: 'rgba(255,255,255,0.02)',
         borderRadius: '4px', flexWrap: 'wrap',
       }}>
         <span style={{
-          fontSize: '9px', fontFamily: 'var(--font-display)', fontWeight: 800,
-          letterSpacing: '0.12em', color: 'rgba(224,232,255,0.38)', textTransform: 'uppercase',
+          fontSize: '11px', fontFamily: 'var(--font-display)', fontWeight: 800,
+          letterSpacing: '0.12em', color: 'rgba(224,232,255,0.7)', textTransform: 'uppercase',
         }}>WAGER</span>
         {isOwner ? (
           <>
-            <span style={{fontSize:'11px',color:'rgba(224,232,255,0.4)',fontFamily:'var(--font-mono)'}}>$</span>
+            <span style={{fontSize:'13px',color:'rgba(224,232,255,0.65)',fontFamily:'var(--font-mono)'}}>$</span>
             <input
               type="number"
               min="0"
@@ -431,10 +432,10 @@ function CommSlipCard({ post, onRemove, onOpenCard }) {
               onBlur={saveWager}
               placeholder="0"
               style={{
-                width: '64px', background: 'rgba(255,255,255,0.06)',
-                border: '1px solid rgba(224,232,255,0.15)', borderRadius: '3px',
-                color: 'rgba(224,232,255,0.85)', fontFamily: 'var(--font-mono)',
-                fontSize: '12px', padding: '3px 6px', outline: 'none',
+                width: '78px', minHeight: '36px', background: 'rgba(255,255,255,0.08)',
+                border: '1px solid rgba(224,232,255,0.3)', borderRadius: '3px',
+                color: '#e0e8ff', fontFamily: 'var(--font-mono)', fontWeight: 700,
+                fontSize: '14px', padding: '7px 8px', outline: 'none', boxSizing: 'border-box',
               }}
             />
             {saving && <span style={{fontSize:'9px',color:'rgba(224,232,255,0.35)',fontFamily:'var(--font-mono)'}}>saving…</span>}
@@ -447,8 +448,8 @@ function CommSlipCard({ post, onRemove, onOpenCard }) {
         )}
         {payoutStr && (
           <span style={{
-            fontSize: '11px', fontFamily: 'var(--font-mono)',
-            color: hasOdds ? '#1aff66' : 'rgba(224,232,255,0.3)',
+            fontSize: '12px', fontFamily: 'var(--font-mono)',
+            color: hasOdds ? '#1aff66' : 'rgba(224,232,255,0.6)',
           }}>
             {payoutStr}
           </span>
@@ -461,8 +462,8 @@ function CommSlipCard({ post, onRemove, onOpenCard }) {
           <button
             onClick={handleCopySlip}
             style={{
-              ...pillSt, color: '#3b6fff', borderColor: 'rgba(59,111,255,0.4)',
-              background: 'none',
+              ...pillSt, color: '#6f94ff', borderColor: 'rgba(111,148,255,0.58)',
+              background: 'rgba(59,111,255,0.08)',
             }}
             title="Load all players into your active slip builder"
           >
@@ -474,7 +475,7 @@ function CommSlipCard({ post, onRemove, onOpenCard }) {
             onClick={() => setConfirmRemove(true)}
             style={{
               ...pillSt, marginLeft: 'auto', color: '#ff3344',
-              borderColor: 'rgba(255,51,68,0.35)', background: 'none',
+              borderColor: 'rgba(255,51,68,0.52)', background: 'rgba(255,51,68,0.07)',
             }}
             title="Remove this post from community"
           >

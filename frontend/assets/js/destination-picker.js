@@ -186,7 +186,7 @@ function fdSearchName(displayName) {
         >
           {/* Header: tier badge · player name · HR prob */}
           <div style={{
-            padding: "12px 16px 10px",
+            padding: "15px 16px 13px",
             borderBottom: "1px solid rgba(59,111,255,0.2)",
             display: "flex", alignItems: "center", gap: "10px",
           }}>
@@ -198,7 +198,7 @@ function fdSearchName(displayName) {
               {row.tier || "—"}
             </span>
             <span style={{
-              ...DP_FONT, fontSize: "14px", fontWeight: 800, letterSpacing: "0.06em",
+              ...DP_FONT, fontSize: "22px", fontWeight: 900, letterSpacing: "0.03em", lineHeight: 1,
               textTransform: "uppercase", color: "#e0e8ff",
               flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
             }}>
