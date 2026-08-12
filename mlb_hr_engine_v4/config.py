@@ -14,6 +14,7 @@ def _secret(key: str, default: str = "") -> str:
 
 # ── API Keys ──────────────────────────────────────────────────────────────────
 ODDS_API_KEY: str = _secret("ODDS_API_KEY")
+PROPS_LOOKAHEAD_HOURS: int = int(_secret("PROPS_LOOKAHEAD_HOURS", "6"))
 
 # ── Bankroll ──────────────────────────────────────────────────────────────────
 BANKROLL: float = float(_secret("BANKROLL", "100"))
