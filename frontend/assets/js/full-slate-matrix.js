@@ -1852,8 +1852,8 @@ function FsmDetailModal({ modal, onClose, setModal, builderMode = false, isJigCo
 function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMode = false, isJigContext = false }) {
   const [view, setView] = React.useState("game");
   const [selGame, setSelGame] = React.useState("all");
-  const [group, setGroup] = React.useState("all");
-  const [focus, setFocus] = React.useState("all");
+  const [group] = React.useState("all");
+  const [focus] = React.useState("all");
   const [selRoles, setSelRoles] = React.useState([]);
   const toggleRole = (id) => setSelRoles((prev) => prev.includes(id) ? prev.filter((r) => r !== id) : [...prev, id]);
   const [selMetrics, setSelMetrics] = React.useState([]);
@@ -1950,7 +1950,7 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
   "Builder view preserves the current JIG-side source order. Use column controls for manual inspection." :
   "Flat list of every batter on the slate, ranked by model HR probability.";
   const tierDesc = builderMode ? FSM_BUILDER_TIER_DESC : FSM_TIER_DESC;
-  const groupOpts = builderMode ? FSM_BUILDER_GROUP_OPTS : FSM_GROUP_OPTS;
+
 
   const noteBits = [];
   if (group !== "all") noteBits.push(group === "qualified" ? "QUALIFIED" : "ELITE TARGETS");
@@ -2082,10 +2082,6 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
         <span className="fsm-pitchbar__note">{splitScope === 'vs_hand' ? 'AVG · SLG · ISO · HR/PA · HR = real vs-hand when tagged (PA always shown)' : 'AVG · SLG · ISO · HR/PA · HR = season-blended'} · Statcast = season always</span>
       </div>
       <div className="fsm-filters">
-        <FsmRadioGroup label="PLAYER GROUP" value={group} onChange={setGroup} options={groupOpts} />
-        <span className="fsm-filters__div" />
-        <FsmRadioGroup label="FOCUS" value={focus} onChange={setFocus} options={FSM_FOCUS_OPTS} />
-        <span className="fsm-filters__div" />
         <FsmRoleFilter selRoles={selRoles} onToggle={toggleRole} />
         <span className="fsm-filters__div" />
         <div className="fsm-rg">
