@@ -271,6 +271,7 @@ function MasterDashboard() {
           ))}
         </div>
       )}
+      <PlayerSearch />
       <div className="md-topbar-right">
         <div id="slip-btn-root" />
         <div id="auth-root" />
