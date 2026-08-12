@@ -946,6 +946,7 @@ async def get_community_posts():
     )
     profiles_by_user = {profile["user_id"]: profile for profile in profiles}
     tickets_by_id = {ticket["ticket_id"]: ticket for ticket in tickets}
+    today_str = today_et().isoformat()  # e.g. "2026-08-12" — ET slate date, DST-aware via ZoneInfo
     grouped: dict[str, dict] = {}
     for post in posts:
         profile = profiles_by_user.get(post["user_id"])
@@ -953,6 +954,8 @@ async def get_community_posts():
         if not profile or not ticket:
             log.warning("[community] skipping post %s with missing profile or ticket", post.get("post_id"))
             continue
+        if ticket.get("date") != today_str:
+            continue  # older or null-date slips excluded from active board; retained in DB for history
         # user_id is the internal immutable grouping key and intentionally is
         # not returned; app_number is the public permanent identity.
         group = grouped.setdefault(post["user_id"], {
