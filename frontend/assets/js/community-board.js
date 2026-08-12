@@ -35,6 +35,7 @@ function commLegRow(leg) {
 function CommSlipCard({ post, onRemove, onOpenCard }) {
   const [confirmRemove, setConfirmRemove] = React.useState(false);
   const [removing, setRemoving]           = React.useState(false);
+  const [wager, setWager]                 = React.useState('');
 
   const slip       = post.slip || {};
   const legs       = slip.legs || [];
@@ -78,6 +79,25 @@ function CommSlipCard({ post, onRemove, onOpenCard }) {
     setRemoving(false);
     setConfirmRemove(false);
   };
+
+  // Wager + payout computation — guard every numeric op against null/NaN
+  const americanOdds = slip.odds_american;
+  const hasOdds = typeof americanOdds === 'number' && isFinite(americanOdds) && americanOdds !== 0;
+  const wagerNum = parseFloat(wager);
+  const hasWager = isFinite(wagerNum) && wagerNum > 0;
+  let payoutStr = null;
+  if (hasWager) {
+    if (!hasOdds) {
+      payoutStr = 'payout pending — no odds';
+    } else {
+      const decimal = americanOdds > 0
+        ? (americanOdds / 100) + 1
+        : (100 / Math.abs(americanOdds)) + 1;
+      const profit = (decimal - 1) * wagerNum;
+      const totalReturn = decimal * wagerNum;
+      payoutStr = '+$' + profit.toFixed(2) + ' profit ($' + totalReturn.toFixed(2) + ' return)';
+    }
+  }
 
   // Index analysis legs by leg_id for per-leg EV display
   const evByLegId = {};
@@ -180,6 +200,37 @@ function CommSlipCard({ post, onRemove, onOpenCard }) {
             </div>
           );
         })}
+      </div>
+
+      {/* Wager input + payout */}
+      <div style={{display:'flex',gap:'6px',alignItems:'center',marginTop:'7px',flexWrap:'wrap'}}>
+        <span style={{
+          fontSize: '9px', fontFamily: 'var(--font-display)', fontWeight: 800,
+          letterSpacing: '0.1em', color: 'rgba(224,232,255,0.4)', textTransform: 'uppercase',
+        }}>WAGER</span>
+        <span style={{fontSize:'10px',color:'rgba(224,232,255,0.45)',fontFamily:'var(--font-mono)'}}>$</span>
+        <input
+          type="number"
+          min="0"
+          step="1"
+          value={wager}
+          onChange={e => setWager(e.target.value)}
+          placeholder="0"
+          style={{
+            width: '58px', background: 'rgba(255,255,255,0.05)',
+            border: '1px solid rgba(224,232,255,0.15)', borderRadius: '3px',
+            color: 'rgba(224,232,255,0.85)', fontFamily: 'var(--font-mono)',
+            fontSize: '11px', padding: '2px 5px', outline: 'none',
+          }}
+        />
+        {payoutStr && (
+          <span style={{
+            fontSize: '10px', fontFamily: 'var(--font-mono)',
+            color: hasOdds ? '#1aff66' : 'rgba(224,232,255,0.3)',
+          }}>
+            {payoutStr}
+          </span>
+        )}
       </div>
 
       {/* Slip-level actions: Copy Slip · Remove */}
