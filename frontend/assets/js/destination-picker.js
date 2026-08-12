@@ -241,41 +241,159 @@ function fdSearchName(displayName) {
             </span>
           </div>
 
-          {/* Score strip — TM/JIG (JIG-lane) · HR% · Signal · Edge · Conf (MAIN-lane) */}
-          <div style={{
-            padding: "7px 12px 6px",
-            borderBottom: "1px solid rgba(59,111,255,0.13)",
-            display: "flex",
-            gap: "0",
-          }}>
-            {[
-              { label: tmLabel,  val: tmDisplay,   color: tmRaw   != null ? tmColor                     : "#6b7872", laneColor: "rgba(255,138,147,0.75)" },
-              { label: "HR%",    val: prob,         color: prob    !== "—" ? tierC                       : "#6b7872", laneColor: "rgba(59,111,255,0.65)"  },
-              { label: "SIGNAL", val: sigDisplay,   color: sigRaw  != null ? tierC                       : "#6b7872", laneColor: "rgba(59,111,255,0.65)"  },
-              { label: "EDGE",   val: edgeDisplay,  color: edgeColor,                                                 laneColor: "rgba(59,111,255,0.65)"  },
-              { label: "CONF",   val: confDisplay,  color: confRaw != null ? tierC                       : "#6b7872", laneColor: "rgba(59,111,255,0.65)"  },
-            ].map((s, i) => (
-              <div key={i} style={{
-                flex: 1,
-                display: "flex", flexDirection: "column", alignItems: "center", gap: "3px",
-                padding: "0 2px",
-                borderLeft: i === 1 ? "1px solid rgba(59,111,255,0.2)" : "none",
-              }}>
-                <span style={{
-                  ...DP_FONT, fontSize: "7px", fontWeight: 700, letterSpacing: "0.12em",
-                  textTransform: "uppercase", color: s.laneColor, whiteSpace: "nowrap",
+          {/* Stacked score grid — column headers · preview row · selected-leg rows · totals row */}
+          {(() => {
+            /* Combined HR% — product of all finite leg decimals including preview.
+               hrprob on legs is in % units (e.g. 14.2); divide by 100 for decimal.
+               model_prob on the preview row is already 0–1 decimal. */
+            const previewDec = Number.isFinite(Number(row.model_prob))
+              ? Number(row.model_prob)
+              : Number.isFinite(Number(row.hrprob))
+                ? Number(row.hrprob) / 100
+                : null;
+
+            let product = previewDec;
+            let partial = previewDec == null;
+
+            for (const leg of currentLegs) {
+              const p = Number.isFinite(Number(leg.hrprob)) ? Number(leg.hrprob) / 100 : null;
+              if (p != null) { product = product == null ? p : product * p; }
+              else partial = true;
+            }
+
+            const combinedHRDisplay = product != null
+              ? (product * 100).toFixed(2) + "%" + (partial ? "*" : "")
+              : "—";
+
+            /* EV total: selected legs don't store edge, so "—" whenever any are present.
+               Preview-only case (0 selected legs) shows preview edge if it exists. */
+            const evTotalDisplay = (currentLegs.length === 0 && edgeRaw != null)
+              ? edgeDisplay
+              : "—";
+
+            const NAME_W = 56;
+
+            const colHdrSt = (laneColor) => ({
+              ...DP_FONT, fontSize: "7px", fontWeight: 700, letterSpacing: "0.12em",
+              textTransform: "uppercase", color: laneColor, whiteSpace: "nowrap",
+            });
+            const valSt = (color, fs) => ({
+              ...DP_FONT, fontSize: fs || (isMobile ? "11px" : "12px"), fontWeight: 800,
+              letterSpacing: "0.02em", lineHeight: 1, color,
+            });
+            const nameSt = (color) => ({
+              ...DP_FONT, fontSize: "8px", fontWeight: 700, letterSpacing: "0.04em",
+              textTransform: "uppercase", color: color || "rgba(224,232,255,0.7)",
+              display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            });
+            const subSt = (color) => ({
+              ...DP_FONT, fontSize: "6px", fontWeight: 600, letterSpacing: "0.1em",
+              textTransform: "uppercase", color: color || "rgba(224,232,255,0.32)",
+              display: "block",
+            });
+
+            const cols = [
+              { label: "TM/JIG", laneColor: "rgba(255,138,147,0.75)" },
+              { label: "HR%",    laneColor: "rgba(59,111,255,0.65)"  },
+              { label: "SIGNAL", laneColor: "rgba(59,111,255,0.65)"  },
+              { label: "EDGE",   laneColor: "rgba(59,111,255,0.65)"  },
+              { label: "CONF",   laneColor: "rgba(59,111,255,0.65)"  },
+            ];
+
+            return (
+              <div style={{ borderBottom: "1px solid rgba(59,111,255,0.13)" }}>
+
+                {/* Column header row */}
+                <div style={{ display: "flex", alignItems: "center", padding: "5px 12px 2px" }}>
+                  <div style={{ width: NAME_W, flexShrink: 0 }} />
+                  {cols.map((c, i) => (
+                    <div key={i} style={{ flex: 1, textAlign: "center" }}>
+                      <span style={colHdrSt(c.laneColor)}>{c.label}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Preview batter row */}
+                <div style={{
+                  display: "flex", alignItems: "center",
+                  padding: "4px 12px 5px",
+                  background: "rgba(59,111,255,0.07)",
+                  borderLeft: `3px solid ${tierC}`,
                 }}>
-                  {s.label}
-                </span>
-                <span style={{
-                  ...DP_FONT, fontSize: isMobile ? "12px" : "13px", fontWeight: 800,
-                  letterSpacing: "0.02em", lineHeight: 1, color: s.color,
+                  <div style={{ width: NAME_W, flexShrink: 0, paddingRight: 4, overflow: "hidden" }}>
+                    <span style={nameSt(tierC)}>{name}</span>
+                    <span style={subSt()}>preview</span>
+                  </div>
+                  {[
+                    { val: tmDisplay,   color: tmRaw   != null ? tmColor   : "#6b7872" },
+                    { val: prob,         color: prob    !== "—" ? tierC     : "#6b7872" },
+                    { val: sigDisplay,   color: sigRaw  != null ? tierC     : "#6b7872" },
+                    { val: edgeDisplay,  color: edgeColor },
+                    { val: confDisplay,  color: confRaw != null ? tierC     : "#6b7872" },
+                  ].map((cell, i) => (
+                    <div key={i} style={{ flex: 1, textAlign: "center" }}>
+                      <span style={valSt(cell.color)}>{cell.val}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Selected leg rows — hrprob only; TM/Signal/Edge/Conf not stored on legs */}
+                {currentLegs.map((leg, i) => {
+                  const legHR = Number.isFinite(Number(leg.hrprob))
+                    ? Number(leg.hrprob).toFixed(1) + "%"
+                    : "—";
+                  const legTierC = DP_TIER_COLOR[leg.tier] || "#6b7872";
+                  return (
+                    <div key={i} style={{
+                      display: "flex", alignItems: "center",
+                      padding: "4px 12px 4px",
+                      borderTop: "1px solid rgba(59,111,255,0.08)",
+                      borderLeft: `3px solid ${legTierC}55`,
+                    }}>
+                      <div style={{ width: NAME_W, flexShrink: 0, paddingRight: 4, overflow: "hidden" }}>
+                        <span style={nameSt()}>{leg.name || "—"}</span>
+                        {leg.tier && <span style={subSt(legTierC)}>{leg.tier}</span>}
+                      </div>
+                      {["—", legHR, "—", "—", "—"].map((val, j) => (
+                        <div key={j} style={{ flex: 1, textAlign: "center" }}>
+                          <span style={valSt(j === 1 && val !== "—" ? legTierC : "#6b7872")}>
+                            {val}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
+
+                {/* Totals row — combined HR% product; EV only if no selected legs + preview has edge;
+                    TM/Signal/Conf are non-aggregable across legs → "—" (never summed) */}
+                <div style={{
+                  display: "flex", alignItems: "center",
+                  padding: "5px 12px 5px",
+                  marginTop: "3px",
+                  borderTop: "1px solid rgba(255,51,68,0.35)",
+                  background: "rgba(255,51,68,0.05)",
+                  borderLeft: "3px solid rgba(255,51,68,0.6)",
                 }}>
-                  {s.val}
-                </span>
+                  <div style={{ width: NAME_W, flexShrink: 0, paddingRight: 4, overflow: "hidden" }}>
+                    <span style={subSt("rgba(255,51,68,0.85)")}>TICKET</span>
+                  </div>
+                  {[
+                    { val: "—",              color: "#6b7872",  fs: undefined },
+                    { val: combinedHRDisplay, color: partial ? "#ffb020" : "#1aff66", fs: isMobile ? "10px" : "11px" },
+                    { val: "—",              color: "#6b7872",  fs: undefined },
+                    { val: evTotalDisplay,   color: evTotalDisplay !== "—" ? edgeColor : "#6b7872", fs: undefined },
+                    { val: "—",              color: "#6b7872",  fs: undefined },
+                  ].map((cell, i) => (
+                    <div key={i} style={{ flex: 1, textAlign: "center" }}>
+                      <span style={valSt(cell.color, cell.fs)}>{cell.val}</span>
+                    </div>
+                  ))}
+                </div>
+
               </div>
-            ))}
-          </div>
+            );
+          })()}
 
           <div style={{
             ...DP_FONT, fontSize: "9px", fontWeight: 800, letterSpacing: "0.2em",
@@ -285,35 +403,6 @@ function fdSearchName(displayName) {
             SELECT DESTINATION
           </div>
 
-          {/* Current slip players */}
-          {currentLegs.length > 0 && (
-            <div style={{
-              padding: "4px 16px 6px",
-              borderBottom: "1px solid rgba(59,111,255,0.15)",
-              marginBottom: "2px",
-            }}>
-              <div style={{
-                ...DP_FONT, fontSize: "8px", fontWeight: 700, letterSpacing: "0.18em",
-                textTransform: "uppercase", color: "rgba(59,111,255,0.55)", marginBottom: "4px",
-              }}>
-                Current Slip
-              </div>
-              {currentLegs.map((l, i) => (
-                <div key={i} style={{
-                  ...DP_FONT, fontSize: "10px", color: "rgba(224,232,255,0.7)",
-                  padding: "1px 0", display: "flex", gap: "6px", alignItems: "center",
-                }}>
-                  <span style={{color:"rgba(26,255,102,0.5)",fontSize:"8px"}}>▸</span>
-                  {l.name || "—"}
-                  {l.tier && (
-                    <span style={{fontSize:"8px",color:DP_TIER_COLOR[l.tier]||"#6b7872"}}>
-                      {l.tier}
-                    </span>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
 
           <div style={{ padding: "4px 12px 14px", display: "flex", flexDirection: "column", gap: "6px" }}>
 
