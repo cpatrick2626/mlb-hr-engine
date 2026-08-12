@@ -332,78 +332,143 @@ function CommSlipCard({ post, onRemove, onOpenCard }) {
             ? (leg.model_prob * 100).toFixed(1) + '%'
             : null;
 
+          // Detail fields confirmed available on the persisted community leg —
+          // see audit: pitcher/opponent/model_tier_rank/market_* are on the leg row,
+          // tm_score/park factor live inside signal_snapshot when captured.
+          const pitcherName = typeof leg.pitcher === 'string' && leg.pitcher ? leg.pitcher : null;
+          const opponent    = typeof leg.opponent === 'string' && leg.opponent ? leg.opponent : null;
+          const tierRank    = typeof leg.model_tier_rank === 'number' && isFinite(leg.model_tier_rank)
+            ? leg.model_tier_rank : null;
+          const snap = leg.signal_snapshot && typeof leg.signal_snapshot === 'object' ? leg.signal_snapshot : null;
+          const tmScore = snap && typeof snap.tm_score === 'number' && isFinite(snap.tm_score) ? snap.tm_score : null;
+          const parkFactor = snap && snap.environment && typeof snap.environment.park_hr_factor === 'number'
+            && isFinite(snap.environment.park_hr_factor) ? snap.environment.park_hr_factor : null;
+          const marketOdds = typeof leg.market_odds_american === 'number' && isFinite(leg.market_odds_american)
+            ? leg.market_odds_american : null;
+          const marketProb = typeof leg.market_prob === 'number' && isFinite(leg.market_prob)
+            ? (leg.market_prob * 100).toFixed(1) + '%' : null;
+          const hasDetail = pitcherName || opponent || tierRank != null || tmScore != null
+            || parkFactor != null || marketOdds != null || marketProb;
+
           return (
             <div key={i} style={{
-              display: 'flex', alignItems: 'center', gap: '7px', flexWrap: 'wrap',
               padding: '7px 8px',
               background: 'rgba(255,255,255,0.03)',
               borderRadius: '4px',
               borderLeft: `2px solid ${tc}44`,
             }}>
-              {/* Tier badge */}
-              <span style={{
-                fontSize: '9px', fontFamily: 'var(--font-display)', fontWeight: 800,
-                letterSpacing: '0.1em', color: tc,
-                background: `${tc}12`, border: `1px solid ${tc}40`,
-                borderRadius: '3px', padding: '2px 5px', flexShrink: 0,
-              }}>
-                {legTier}
-              </span>
-              {/* Clickable batter name */}
-              <button
-                style={{
-                  background: 'none', border: 'none', cursor: 'pointer',
-                  color: 'rgba(224,232,255,0.9)',
-                  fontFamily: 'var(--font-display)', fontSize: '13px',
-                  fontWeight: 700, letterSpacing: '0.02em', padding: 0,
-                  textAlign: 'left', textDecoration: 'underline',
-                  textDecorationStyle: 'dotted', textUnderlineOffset: '2px',
-                  flexShrink: 0,
-                }}
-                onClick={() => onOpenCard && onOpenCard(commLegRow(leg))}
-                title="View batter card"
-              >
-                {leg.player_name || '—'}
-              </button>
-              {/* Team */}
-              {leg.team && (
+              <div style={{display: 'flex', alignItems: 'center', gap: '7px', flexWrap: 'wrap'}}>
+                {/* Tier badge */}
                 <span style={{
-                  fontSize: '10px', color: 'rgba(224,232,255,0.38)',
-                  fontFamily: 'var(--font-mono)', flexShrink: 0,
+                  fontSize: '9px', fontFamily: 'var(--font-display)', fontWeight: 800,
+                  letterSpacing: '0.1em', color: tc,
+                  background: `${tc}12`, border: `1px solid ${tc}40`,
+                  borderRadius: '3px', padding: '2px 5px', flexShrink: 0,
                 }}>
-                  {leg.team}
+                  {legTier}
                 </span>
-              )}
-              {/* HR% */}
-              {hrPct && (
-                <span style={{
-                  fontSize: '11px', fontFamily: 'var(--font-mono)',
-                  color: 'rgba(224,232,255,0.6)', fontWeight: 600,
-                }}>
-                  {hrPct} HR
-                </span>
-              )}
-              {/* Per-leg EV (only when it's a real number) */}
-              {hasLegEv && (
-                <span style={{
+                {/* Clickable batter name */}
+                <button
+                  style={{
+                    background: 'none', border: 'none', cursor: 'pointer',
+                    color: 'rgba(224,232,255,0.9)',
+                    fontFamily: 'var(--font-display)', fontSize: '13px',
+                    fontWeight: 700, letterSpacing: '0.02em', padding: 0,
+                    textAlign: 'left', textDecoration: 'underline',
+                    textDecorationStyle: 'dotted', textUnderlineOffset: '2px',
+                    flexShrink: 0,
+                  }}
+                  onClick={() => onOpenCard && onOpenCard(commLegRow(leg))}
+                  title="View batter card"
+                >
+                  {leg.player_name || '—'}
+                </button>
+                {/* Team */}
+                {leg.team && (
+                  <span style={{
+                    fontSize: '10px', color: 'rgba(224,232,255,0.38)',
+                    fontFamily: 'var(--font-mono)', flexShrink: 0,
+                  }}>
+                    {leg.team}
+                  </span>
+                )}
+                {/* HR% */}
+                {hrPct && (
+                  <span style={{
+                    fontSize: '11px', fontFamily: 'var(--font-mono)',
+                    color: 'rgba(224,232,255,0.6)', fontWeight: 600,
+                  }}>
+                    {hrPct} HR
+                  </span>
+                )}
+                {/* Per-leg EV (only when it's a real number) */}
+                {hasLegEv && (
+                  <span style={{
+                    fontSize: '10px', fontFamily: 'var(--font-mono)',
+                    color: legEvColor, fontWeight: 700,
+                  }}>
+                    {legEvStr} EV
+                  </span>
+                )}
+                {/* PICK button */}
+                <button
+                  onClick={() => handlePickLeg(leg)}
+                  style={{
+                    ...pillSt, marginLeft: 'auto', flexShrink: 0,
+                    minWidth: '58px', color: '#1aff66', borderColor: 'rgba(26,255,102,0.55)',
+                    background: 'rgba(26,255,102,0.07)',
+                  }}
+                  title="Add this player to your slip"
+                >
+                  PICK
+                </button>
+              </div>
+              {/* Detail row — pitcher faced / opponent / matchup score / market line.
+                  Only fields confirmed present on the persisted leg (see audit); omit cleanly otherwise. */}
+              {hasDetail && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: '9px', flexWrap: 'wrap',
+                  marginTop: '5px', paddingTop: '5px',
+                  borderTop: '1px solid rgba(255,255,255,0.05)',
                   fontSize: '10px', fontFamily: 'var(--font-mono)',
-                  color: legEvColor, fontWeight: 700,
+                  color: 'rgba(224,232,255,0.5)',
                 }}>
-                  {legEvStr} EV
-                </span>
+                  {pitcherName && (
+                    <span title="Pitcher faced">
+                      <span style={{color: 'rgba(224,232,255,0.32)'}}>vs&nbsp;</span>
+                      {pitcherName}
+                    </span>
+                  )}
+                  {opponent && (
+                    <span style={{color: 'rgba(224,232,255,0.38)'}}>{opponent}</span>
+                  )}
+                  {tmScore != null && (
+                    <span title="True matchup score at pick time">
+                      <span style={{color: 'rgba(224,232,255,0.32)'}}>TM&nbsp;</span>
+                      {Math.round(tmScore)}
+                    </span>
+                  )}
+                  {tierRank != null && (
+                    <span title="Model tier rank">
+                      <span style={{color: 'rgba(224,232,255,0.32)'}}>rank&nbsp;</span>
+                      #{tierRank}
+                    </span>
+                  )}
+                  {parkFactor != null && (
+                    <span title="Park HR factor">
+                      <span style={{color: 'rgba(224,232,255,0.32)'}}>park&nbsp;</span>
+                      {parkFactor.toFixed(2)}x
+                    </span>
+                  )}
+                  {(marketOdds != null || marketProb) && (
+                    <span style={{marginLeft: 'auto'}} title="Market line at pick time">
+                      {marketOdds != null ? (marketOdds > 0 ? '+' : '') + marketOdds : ''}
+                      {marketOdds != null && marketProb ? ' · ' : ''}
+                      {marketProb || ''}
+                    </span>
+                  )}
+                </div>
               )}
-              {/* PICK button */}
-              <button
-                onClick={() => handlePickLeg(leg)}
-                style={{
-                  ...pillSt, marginLeft: 'auto', flexShrink: 0,
-                  minWidth: '58px', color: '#1aff66', borderColor: 'rgba(26,255,102,0.55)',
-                  background: 'rgba(26,255,102,0.07)',
-                }}
-                title="Add this player to your slip"
-              >
-                PICK
-              </button>
             </div>
           );
         })}
