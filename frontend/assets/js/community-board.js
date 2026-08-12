@@ -17,6 +17,19 @@ function commGradeColor(colorStr) {
   return '#9aa0ac';
 }
 
+/* Maps grade subfields → plain-language verdict. Always returns { text, color }. */
+function commVerdictLine({ hasEv, evPct, numLegs, singlesBetter }) {
+  if (!hasEv) return { text: "Odds pending — can't grade EV yet.", color: 'rgba(224,232,255,0.28)' };
+  if (evPct > 0) {
+    if (numLegs === 1) return { text: 'Strong — +EV single, worth a look.', color: 'rgba(26,255,102,0.6)' };
+    if (singlesBetter) return { text: `Positive EV — ${numLegs}-leg parlay, but singles score higher.`, color: 'rgba(255,176,32,0.6)' };
+    return { text: `Solid — ${numLegs}-leg parlay, positive EV.`, color: 'rgba(26,255,102,0.6)' };
+  }
+  if (singlesBetter) return { text: `Weak — ${numLegs}-leg parlay, −EV, singles are better.`, color: 'rgba(255,51,68,0.6)' };
+  const legPart = numLegs > 1 ? `${numLegs}-leg, ` : '';
+  return { text: `Weak — ${legPart}negative EV.`, color: 'rgba(255,51,68,0.6)' };
+}
+
 /* Build a normalized slip-state row from a community leg record. */
 function commLegRow(leg) {
   return {
@@ -81,6 +94,8 @@ function CommSlipCard({ post, onRemove, onOpenCard }) {
   // Board + ticket info
   const ticketType = typeof slip.ticket_type === 'string' ? slip.ticket_type.replace(/_/g, ' ') : '';
   const numLegs    = legs.length;
+
+  const verdict = commVerdictLine({ hasEv, evPct, numLegs, singlesBetter });
 
   const handleCopySlip = () => {
     if (!window.__hrSlip) return;
@@ -264,6 +279,13 @@ function CommSlipCard({ post, onRemove, onOpenCard }) {
             {confReasons}
           </div>
         )}
+        {/* Row 4: plain-language verdict */}
+        <div style={{
+          marginTop: '6px', fontSize: '10px', fontFamily: 'var(--font-mono)',
+          color: verdict.color, letterSpacing: '0.02em',
+        }}>
+          {verdict.text}
+        </div>
       </div>
 
       {/* ── SINGLES BETTER FLAG (only when explicitly true — not when null) ── */}
