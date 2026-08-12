@@ -42,14 +42,41 @@ function CommSlipCard({ post, onRemove, onOpenCard }) {
   const analysis   = slip.analysis || {};
   const grade      = analysis.grade || {};
   const combined   = analysis.combined || {};
+  const confidence = analysis.confidence || {};
   const honestRead = analysis.honest_read || {};
   const analyzed   = analysis.legs || [];
   const dateStr    = commFmtDate(post.posted_at);
 
-  const hasGrade = grade.status === 'complete';
-  const gradeColor = commGradeColor(grade.color);
-  const evPct = combined.ev_pct;
-  const evStr = evPct != null ? (evPct > 0 ? '+' : '') + evPct.toFixed(1) + '% EV' : null;
+  // --- Safe grade display (grade is an OBJECT — render only string subfields) ---
+  const gradeLetter  = typeof grade.letter === 'string' && grade.letter ? grade.letter : null;
+  const gradeLabel   = typeof grade.label  === 'string' && grade.label  ? grade.label  : 'PENDING';
+  const gradeDisplay = gradeLetter || gradeLabel;
+  const gradeColor   = commGradeColor(typeof grade.color === 'string' ? grade.color : null);
+
+  // --- Safe combined EV% (combined is an OBJECT — guard numeric ops) ---
+  const evPct     = combined.ev_pct;
+  const hasEv     = typeof evPct === 'number' && isFinite(evPct);
+  const evStr     = hasEv ? (evPct > 0 ? '+' : '') + evPct.toFixed(1) + '%' : null;
+  const evDisplay = evStr ? evStr + ' EV' : 'EV pending';
+  const evColor   = hasEv ? commGradeColor(evPct > 0 ? 'green' : evPct < 0 ? 'red' : 'amber') : 'rgba(224,232,255,0.35)';
+
+  // --- Safe combined probability ---
+  const combinedProb = combined.probability;
+  const probDisplay  = typeof combinedProb === 'number' && isFinite(combinedProb)
+    ? (combinedProb * 100).toFixed(2) + '%'
+    : null;
+
+  // --- Safe confidence (confidence is an OBJECT — render only string subfields) ---
+  const confLabel   = typeof confidence.label === 'string' ? confidence.label : '';
+  // confidence.reasons is an ARRAY — join to string, never render directly
+  const confReasons = Array.isArray(confidence.reasons) ? confidence.reasons.join(' · ') : '';
+
+  // --- Singles better flag (explicit true check — null means not evaluated) ---
+  const singlesBetter = honestRead.singles_would_be_better === true;
+
+  // Board + ticket info
+  const ticketType = typeof slip.ticket_type === 'string' ? slip.ticket_type.replace(/_/g, ' ') : '';
+  const numLegs    = legs.length;
 
   const handleCopySlip = () => {
     if (!window.__hrSlip) return;
@@ -80,7 +107,7 @@ function CommSlipCard({ post, onRemove, onOpenCard }) {
     setConfirmRemove(false);
   };
 
-  // Wager + payout computation — guard every numeric op against null/NaN
+  // Wager + payout — guard every numeric op
   const americanOdds = slip.odds_american;
   const hasOdds = typeof americanOdds === 'number' && isFinite(americanOdds) && americanOdds !== 0;
   const wagerNum = parseFloat(wager);
@@ -99,9 +126,20 @@ function CommSlipCard({ post, onRemove, onOpenCard }) {
     }
   }
 
-  // Index analysis legs by leg_id for per-leg EV display
+  // Index analysis legs by leg_id — only store when ev_pct is a real number
   const evByLegId = {};
-  analyzed.forEach(al => { if (al.leg_id) evByLegId[al.leg_id] = al.ev_pct; });
+  analyzed.forEach(al => {
+    if (al.leg_id && typeof al.ev_pct === 'number' && isFinite(al.ev_pct)) {
+      evByLegId[al.leg_id] = al.ev_pct;
+    }
+  });
+
+  const tierColor = (tier) => {
+    if (tier === 'ELITE') return '#1aff66';
+    if (tier === 'PRIME') return '#4fc8ff';
+    if (tier === 'CORE')  return '#ffb020';
+    return 'rgba(224,232,255,0.4)';
+  };
 
   const pillSt = {
     fontSize: '9px', fontFamily: 'var(--font-display)', fontWeight: 800,
@@ -111,81 +149,203 @@ function CommSlipCard({ post, onRemove, onOpenCard }) {
 
   return (
     <div className="comm-slip">
-      {/* Meta row: date · type · odds · grade badge */}
-      <div className="comm-slip__meta" style={{flexWrap:'wrap',gap:'4px'}}>
-        {dateStr && <span className="comm-slip__date">{dateStr}</span>}
-        {slip.ticket_type && <span className="comm-slip__type">{slip.ticket_type.replace(/_/g, ' ')}</span>}
-        {slip.odds_american != null && (
-          <span className="comm-slip__odds">{slip.odds_american > 0 ? '+' : ''}{slip.odds_american}</span>
-        )}
-        {hasGrade && (
+
+      {/* ── GRADE VERDICT HEADLINE ── */}
+      <div style={{
+        borderLeft: `3px solid ${gradeColor}`,
+        background: `${gradeColor}0a`,
+        borderRadius: '0 5px 5px 0',
+        padding: '10px 12px',
+        marginBottom: '8px',
+      }}>
+        {/* Row 1: grade · EV · parlay prob · date */}
+        <div style={{display:'flex',alignItems:'baseline',gap:'10px',flexWrap:'wrap'}}>
           <span style={{
-            marginLeft: 'auto', fontSize: '10px',
-            fontFamily: 'var(--font-display)', fontWeight: 800, letterSpacing: '0.1em',
-            color: gradeColor, border: `1px solid ${gradeColor}55`,
-            borderRadius: '3px', padding: '2px 6px',
+            fontFamily: 'var(--font-display)', fontWeight: 900,
+            fontSize: '22px', letterSpacing: '0.04em',
+            color: gradeColor, lineHeight: 1,
           }}>
-            {grade.letter} · {evStr || grade.label}
+            {gradeDisplay}
           </span>
+          <span style={{
+            fontFamily: 'var(--font-mono)', fontSize: '13px',
+            color: evColor, fontWeight: 700,
+          }}>
+            {evDisplay}
+          </span>
+          {probDisplay && (
+            <span style={{
+              fontFamily: 'var(--font-mono)', fontSize: '11px',
+              color: 'rgba(224,232,255,0.5)',
+            }}>
+              {probDisplay} prob
+            </span>
+          )}
+          {dateStr && (
+            <span style={{
+              marginLeft: 'auto', fontFamily: 'var(--font-mono)',
+              fontSize: '10px', color: 'rgba(224,232,255,0.3)',
+            }}>
+              {dateStr}
+            </span>
+          )}
+        </div>
+        {/* Row 2: confidence · legs count · ticket type · odds */}
+        <div style={{
+          display:'flex', gap:'8px', flexWrap:'wrap', alignItems:'center',
+          marginTop: '5px',
+        }}>
+          {confLabel && (
+            <span style={{
+              fontSize: '10px', fontFamily: 'var(--font-display)', fontWeight: 700,
+              letterSpacing: '0.12em', color: 'rgba(224,232,255,0.5)',
+              textTransform: 'uppercase',
+            }}>
+              {confLabel} CONFIDENCE
+            </span>
+          )}
+          {numLegs > 0 && (
+            <span style={{
+              fontSize: '10px', fontFamily: 'var(--font-display)', fontWeight: 700,
+              letterSpacing: '0.1em', color: 'rgba(224,232,255,0.35)',
+              textTransform: 'uppercase',
+            }}>
+              {numLegs}-LEG
+            </span>
+          )}
+          {ticketType && (
+            <span style={{
+              fontSize: '10px', fontFamily: 'var(--font-display)', fontWeight: 700,
+              letterSpacing: '0.1em', color: 'rgba(224,232,255,0.35)',
+              textTransform: 'uppercase',
+            }}>
+              {ticketType}
+            </span>
+          )}
+          {typeof americanOdds === 'number' && isFinite(americanOdds) && (
+            <span style={{
+              fontSize: '10px', fontFamily: 'var(--font-mono)',
+              color: 'rgba(224,232,255,0.4)',
+            }}>
+              {americanOdds > 0 ? '+' : ''}{americanOdds}
+            </span>
+          )}
+        </div>
+        {/* Row 3: confidence reasons (array joined to string — never rendered as array) */}
+        {confReasons && (
+          <div style={{
+            marginTop: '4px', fontSize: '9px', fontFamily: 'var(--font-mono)',
+            color: 'rgba(224,232,255,0.28)', letterSpacing: '0.03em',
+          }}>
+            {confReasons}
+          </div>
         )}
       </div>
 
-      {/* Honest singles-better note */}
-      {honestRead.singles_would_be_better && (
+      {/* ── SINGLES BETTER FLAG (only when explicitly true — not when null) ── */}
+      {singlesBetter && (
         <div style={{
-          fontSize: '10px', padding: '4px 8px', margin: '4px 0',
-          background: 'rgba(255,176,32,0.07)', borderLeft: '2px solid #ffb020',
-          color: '#ffb020', fontFamily: 'var(--font-display)', letterSpacing: '0.04em',
+          fontSize: '11px', padding: '6px 10px', marginBottom: '8px',
+          background: 'rgba(255,176,32,0.07)', border: '1px solid rgba(255,176,32,0.28)',
+          borderRadius: '4px', color: '#ffb020',
+          fontFamily: 'var(--font-display)', fontWeight: 700, letterSpacing: '0.06em',
+          textTransform: 'uppercase', display: 'flex', alignItems: 'center', gap: '6px',
         }}>
-          Singles would be better — parlay EV {evStr}, best single +{(honestRead.best_single_ev_pct || 0).toFixed(1)}%
+          <span>&#9888;</span>
+          <span>SINGLES WOULD BE BETTER</span>
+          {typeof honestRead.best_single_ev_pct === 'number' && isFinite(honestRead.best_single_ev_pct) && (
+            <span style={{
+              marginLeft: 'auto', fontSize: '10px',
+              fontFamily: 'var(--font-mono)', fontWeight: 400,
+            }}>
+              best single +{honestRead.best_single_ev_pct.toFixed(1)}%
+            </span>
+          )}
         </div>
       )}
 
-      {/* Legs */}
-      <div className="comm-slip__legs">
-        {legs.length === 0 && <div className="comm-slip__leg comm-slip__leg--empty">—</div>}
+      {/* ── LEGS ── */}
+      <div style={{display:'flex',flexDirection:'column',gap:'4px'}}>
+        {legs.length === 0 && (
+          <div style={{
+            padding: '8px', fontSize: '11px',
+            color: 'rgba(224,232,255,0.3)', fontFamily: 'var(--font-mono)',
+          }}>—</div>
+        )}
         {legs.map((leg, i) => {
-          const legEv = evByLegId[leg.leg_id];
-          const hasLegEv = legEv != null;
+          const legEv    = evByLegId[leg.leg_id];
+          const hasLegEv = typeof legEv === 'number' && isFinite(legEv);
           const legEvStr = hasLegEv ? (legEv > 0 ? '+' : '') + legEv.toFixed(1) + '%' : null;
           const legEvColor = hasLegEv
             ? commGradeColor(legEv > 0 ? 'green' : legEv < 0 ? 'red' : 'amber')
             : null;
+          const legTier = typeof leg.tier === 'string' && leg.tier ? leg.tier : 'EDGE';
+          const tc = tierColor(legTier);
+          const hrPct = typeof leg.model_prob === 'number' && isFinite(leg.model_prob)
+            ? (leg.model_prob * 100).toFixed(1) + '%'
+            : null;
+
           return (
-            <div key={i} className="comm-slip__leg" style={{display:'flex',alignItems:'center',gap:'4px',flexWrap:'wrap'}}>
-              <span className="comm-slip__leg-dot" />
-              {/* Clickable batter name → opens card */}
+            <div key={i} style={{
+              display: 'flex', alignItems: 'center', gap: '7px', flexWrap: 'wrap',
+              padding: '7px 8px',
+              background: 'rgba(255,255,255,0.03)',
+              borderRadius: '4px',
+              borderLeft: `2px solid ${tc}44`,
+            }}>
+              {/* Tier badge */}
+              <span style={{
+                fontSize: '9px', fontFamily: 'var(--font-display)', fontWeight: 800,
+                letterSpacing: '0.1em', color: tc,
+                background: `${tc}12`, border: `1px solid ${tc}40`,
+                borderRadius: '3px', padding: '2px 5px', flexShrink: 0,
+              }}>
+                {legTier}
+              </span>
+              {/* Clickable batter name */}
               <button
                 style={{
                   background: 'none', border: 'none', cursor: 'pointer',
-                  color: 'inherit', fontFamily: 'inherit', fontSize: 'inherit',
-                  fontWeight: 'inherit', letterSpacing: 'inherit', padding: 0,
-                  textAlign: 'left', textDecoration: 'underline', textDecorationStyle: 'dotted',
-                  textUnderlineOffset: '2px',
+                  color: 'rgba(224,232,255,0.9)',
+                  fontFamily: 'var(--font-display)', fontSize: '13px',
+                  fontWeight: 700, letterSpacing: '0.02em', padding: 0,
+                  textAlign: 'left', textDecoration: 'underline',
+                  textDecorationStyle: 'dotted', textUnderlineOffset: '2px',
+                  flexShrink: 0,
                 }}
                 onClick={() => onOpenCard && onOpenCard(commLegRow(leg))}
                 title="View batter card"
               >
                 {leg.player_name || '—'}
               </button>
-              {leg.team && <span className="comm-slip__leg-team">{leg.team}</span>}
-              {leg.tier && (
-                <span className={`comm-slip__leg-tier comm-slip__leg-tier--${(leg.tier || '').toLowerCase()}`}>
-                  {leg.tier}
+              {/* Team */}
+              {leg.team && (
+                <span style={{
+                  fontSize: '10px', color: 'rgba(224,232,255,0.38)',
+                  fontFamily: 'var(--font-mono)', flexShrink: 0,
+                }}>
+                  {leg.team}
                 </span>
               )}
-              {leg.model_prob != null && (
-                <span className="comm-slip__leg-prob">{(Number(leg.model_prob) * 100).toFixed(1)}%</span>
+              {/* HR% */}
+              {hrPct && (
+                <span style={{
+                  fontSize: '11px', fontFamily: 'var(--font-mono)',
+                  color: 'rgba(224,232,255,0.6)', fontWeight: 600,
+                }}>
+                  {hrPct} HR
+                </span>
               )}
+              {/* Per-leg EV (only when it's a real number) */}
               {hasLegEv && (
                 <span style={{
-                  fontSize: '9px', fontFamily: 'var(--font-mono)',
-                  color: legEvColor, marginLeft: '1px',
+                  fontSize: '10px', fontFamily: 'var(--font-mono)',
+                  color: legEvColor, fontWeight: 700,
                 }}>
-                  {legEvStr}
+                  {legEvStr} EV
                 </span>
               )}
-              {/* Per-batter Pick button */}
+              {/* PICK button */}
               <button
                 onClick={() => handlePickLeg(leg)}
                 style={{
@@ -202,13 +362,18 @@ function CommSlipCard({ post, onRemove, onOpenCard }) {
         })}
       </div>
 
-      {/* Wager input + payout */}
-      <div style={{display:'flex',gap:'6px',alignItems:'center',marginTop:'7px',flexWrap:'wrap'}}>
+      {/* ── WAGER / PAYOUT ── */}
+      <div style={{
+        display:'flex', gap:'8px', alignItems:'center',
+        marginTop: '10px', padding: '7px 8px',
+        background: 'rgba(255,255,255,0.02)',
+        borderRadius: '4px', flexWrap: 'wrap',
+      }}>
         <span style={{
           fontSize: '9px', fontFamily: 'var(--font-display)', fontWeight: 800,
-          letterSpacing: '0.1em', color: 'rgba(224,232,255,0.4)', textTransform: 'uppercase',
+          letterSpacing: '0.12em', color: 'rgba(224,232,255,0.38)', textTransform: 'uppercase',
         }}>WAGER</span>
-        <span style={{fontSize:'10px',color:'rgba(224,232,255,0.45)',fontFamily:'var(--font-mono)'}}>$</span>
+        <span style={{fontSize:'11px',color:'rgba(224,232,255,0.4)',fontFamily:'var(--font-mono)'}}>$</span>
         <input
           type="number"
           min="0"
@@ -217,15 +382,15 @@ function CommSlipCard({ post, onRemove, onOpenCard }) {
           onChange={e => setWager(e.target.value)}
           placeholder="0"
           style={{
-            width: '58px', background: 'rgba(255,255,255,0.05)',
+            width: '64px', background: 'rgba(255,255,255,0.06)',
             border: '1px solid rgba(224,232,255,0.15)', borderRadius: '3px',
             color: 'rgba(224,232,255,0.85)', fontFamily: 'var(--font-mono)',
-            fontSize: '11px', padding: '2px 5px', outline: 'none',
+            fontSize: '12px', padding: '3px 6px', outline: 'none',
           }}
         />
         {payoutStr && (
           <span style={{
-            fontSize: '10px', fontFamily: 'var(--font-mono)',
+            fontSize: '11px', fontFamily: 'var(--font-mono)',
             color: hasOdds ? '#1aff66' : 'rgba(224,232,255,0.3)',
           }}>
             {payoutStr}
@@ -233,8 +398,8 @@ function CommSlipCard({ post, onRemove, onOpenCard }) {
         )}
       </div>
 
-      {/* Slip-level actions: Copy Slip · Remove */}
-      <div style={{display:'flex',gap:'6px',marginTop:'7px',alignItems:'center',flexWrap:'wrap'}}>
+      {/* ── ACTIONS: Copy Slip · Remove ── */}
+      <div style={{display:'flex',gap:'6px',marginTop:'8px',alignItems:'center',flexWrap:'wrap'}}>
         {legs.length > 0 && (
           <button
             onClick={handleCopySlip}
