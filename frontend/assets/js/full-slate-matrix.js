@@ -1988,10 +1988,42 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
           <div className="fsm-sub">{subtitle}</div>
         </div>
         <div className="fsm-topbar__status">
-          <span className="fsm-live"><i className="fsm-live__dot" />LIVE</span>
-          <span className="fsm-stat-pill">{displayPool.length} / {total} BATTERS</span>
-          <span className="fsm-stat-pill">{getFSMGames().length} GAMES</span>
-          <span className="fsm-clock">UPD {timer} AGO</span>
+          <div className="fsm-colmenu">
+            <button className="fsm-colbtn" onClick={() => setColOpen((o) => !o)} aria-expanded={colOpen}>
+              COLUMNS <b>{activeCols.length}</b>
+              <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </button>
+            <button className="fsm-colbtn" onClick={() => setEditMode((o) => !o)} title={editMode ? "EDIT mode ON — drag column headers to reorder; click to exit" : "EDIT mode — drag column headers to reorder (persists across sessions)"} style={editMode ? { borderColor: "rgba(26,255,102,0.5)", color: "#1aff66" } : undefined}>
+              EDIT{editMode ? " ✓" : ""}
+            </button>
+            {colOpen &&
+            <div className="fsm-colpop">
+              <div className="fsm-colpop__head"><span>STAT COLUMNS</span><button onClick={resetCols}>RESET</button></div>
+              <div className="fsm-colpop__hint">Hover or tap ⓘ for what each stat means</div>
+              <div className="fsm-colpop__list">
+                {colPref.order.map((k, idx) => {
+                  const c = FSM_COLS.find((x) => x.key === k);
+                  const on = !colPref.hidden.includes(k);
+                  return (
+                    <React.Fragment key={k}>
+                    <div className="fsm-colrow" title={c.title}>
+                      <label className="fsm-colrow__lbl">
+                        <input type="checkbox" checked={on} onChange={() => toggleCol(k)} />
+                        <span>{c.head}</span>
+                      </label>
+                      <span className="fsm-colrow__mv">
+                        <button className={"fsm-colinfo" + (colInfo === k ? " is-on" : "")} onClick={() => setColInfo((x) => x === k ? null : k)} title={c.title} aria-label="What is this stat?">ⓘ</button>
+                        <button onClick={() => moveCol(idx, -1)} disabled={idx === 0} aria-label="Move up">▲</button>
+                        <button onClick={() => moveCol(idx, 1)} disabled={idx === colPref.order.length - 1} aria-label="Move down">▼</button>
+                      </span>
+                    </div>
+                    {colInfo === k && <div className="fsm-coldesc">{c.title}</div>}
+                    </React.Fragment>);
+                })}
+              </div>
+            </div>
+            }
+          </div>
         </div>
       </div>
       )}
@@ -2069,6 +2101,12 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
           {/* ── GAMES ── */}
           <div className="fsm-ctrl-section">
             <span className="fsm-ctrl-section__hd">GAMES</span>
+            <div className="fsm-live-cluster">
+              <span className="fsm-live"><i className="fsm-live__dot" />LIVE</span>
+              <span className="fsm-stat-pill">{displayPool.length} / {total} BATTERS</span>
+              <span className="fsm-stat-pill">{getFSMGames().length} GAMES</span>
+              <span className="fsm-clock">UPD {timer} AGO</span>
+            </div>
             {view === "game" &&
             <div className="fsm-gamenav">
               <button className={selGame === "all" ? "is-on" : ""} onClick={() => setSelGame("all")}>ALL · {getFSMGames().length}</button>
@@ -2093,7 +2131,7 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
             </label>
           </div>
         </div>
-        {/* ── BATTER THREAT legend + COLUMNS/EDIT ── */}
+        {/* ── BATTER THREAT legend ── */}
         <div className="fsm-ctrl-aux">
           <div className="fsm-legend">
             <span className="fsm-legend__title" title="Batter HR-threat tier: dot color shows how dangerous this hitter is for a HR (model probability + barrel quality). Green glow = TARGET pitcher (HR/9 ≥ 2.2) — a separate pitcher-vulnerability signal layered on top.">BATTER THREAT</span>
@@ -2101,42 +2139,6 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
             <span className="fsm-mkey" key={k} title={`${k} batter threat — ${FSM_MATCHUP_DESC[k]}`}><i style={{ background: FSM_MATCHUP[k].color }} />{k}</span>
             )}
             <span className="fsm-mkey" key="TARGET" title={`TARGET — ${FSM_MATCHUP_DESC.TARGET}`}><i style={{ background: "#1aff66" }} />TARGET</span>
-          </div>
-          <div className="fsm-colmenu">
-            <button className="fsm-colbtn" onClick={() => setColOpen((o) => !o)} aria-expanded={colOpen}>
-              COLUMNS <b>{activeCols.length}</b>
-              <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-            </button>
-            <button className="fsm-colbtn" onClick={() => setEditMode((o) => !o)} title={editMode ? "EDIT mode ON — drag column headers to reorder; click to exit" : "EDIT mode — drag column headers to reorder (persists across sessions)"} style={editMode ? { borderColor: "rgba(26,255,102,0.5)", color: "#1aff66" } : undefined}>
-              EDIT{editMode ? " ✓" : ""}
-            </button>
-            {colOpen &&
-            <div className="fsm-colpop">
-              <div className="fsm-colpop__head"><span>STAT COLUMNS</span><button onClick={resetCols}>RESET</button></div>
-              <div className="fsm-colpop__hint">Hover or tap ⓘ for what each stat means</div>
-              <div className="fsm-colpop__list">
-                {colPref.order.map((k, idx) => {
-                  const c = FSM_COLS.find((x) => x.key === k);
-                  const on = !colPref.hidden.includes(k);
-                  return (
-                    <React.Fragment key={k}>
-                    <div className="fsm-colrow" title={c.title}>
-                      <label className="fsm-colrow__lbl">
-                        <input type="checkbox" checked={on} onChange={() => toggleCol(k)} />
-                        <span>{c.head}</span>
-                      </label>
-                      <span className="fsm-colrow__mv">
-                        <button className={"fsm-colinfo" + (colInfo === k ? " is-on" : "")} onClick={() => setColInfo((x) => x === k ? null : k)} title={c.title} aria-label="What is this stat?">ⓘ</button>
-                        <button onClick={() => moveCol(idx, -1)} disabled={idx === 0} aria-label="Move up">▲</button>
-                        <button onClick={() => moveCol(idx, 1)} disabled={idx === colPref.order.length - 1} aria-label="Move down">▼</button>
-                      </span>
-                    </div>
-                    {colInfo === k && <div className="fsm-coldesc">{c.title}</div>}
-                    </React.Fragment>);
-                })}
-              </div>
-            </div>
-            }
           </div>
         </div>
       </div>
