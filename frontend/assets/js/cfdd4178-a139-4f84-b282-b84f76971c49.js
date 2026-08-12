@@ -201,6 +201,8 @@ const Stage = ({ engine, lens, ccOpen, onCloseCC, appliedFilters, roomFilters, o
     body = <CommunityBoard />;
   } else if (engine.id === "community" && lens && lens.id === "profile") {
     body = <CommunityProfile />;
+  } else if (engine.id === "community" && lens && lens.id === "history") {
+    body = <SlipHistory />;
   } else {
     body = <RadarScope engineName={engine.name + (engine.suffix ? " " + engine.suffix : "")} lensName={lens ? lens.name : "Overview"} accent={engine.color} />;
   }

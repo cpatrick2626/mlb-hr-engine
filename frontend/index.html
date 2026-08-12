@@ -6399,6 +6399,21 @@ button.fsm-tier { appearance: none; text-decoration: none; }
 .tcs-comm-banner__input { flex: 1; min-width: 140px; background: var(--bg-elevated); border: 1px solid rgba(155,89,245,0.3); border-radius: 4px; color: var(--fg-1); font-family: var(--font-mono); font-size: 12px; padding: 5px 8px; outline: none; }
 .tcs-comm-banner__input:focus { border-color: #9b59f5; }
 .tcs-comm-banner__err { font-family: var(--font-body); font-size: 11px; color: var(--red-500); }
+
+/* ===== SLIP HISTORY ===== */
+.sh-root { padding: 20px; display: flex; flex-direction: column; gap: 16px; }
+.sh-header { display: flex; flex-direction: column; gap: 4px; }
+.sh-title { font-family: var(--font-display); font-weight: 800; font-size: 18px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--fg-1); }
+.sh-meta { font-family: var(--font-body); font-size: 12px; color: var(--fg-3); }
+.sh-list { display: flex; flex-direction: column; gap: 8px; }
+.sh-gate { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 48px 24px; text-align: center; }
+.sh-gate__icon { font-size: 32px; color: var(--fg-4); }
+.sh-gate__title { font-family: var(--font-display); font-weight: 700; font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg-3); }
+.sh-gate__sub { font-family: var(--font-body); font-size: 12px; color: var(--fg-4); max-width: 320px; }
+.sh-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 48px 24px; text-align: center; }
+.sh-empty__icon { font-size: 32px; color: var(--fg-4); }
+.sh-empty__title { font-family: var(--font-display); font-weight: 700; font-size: 13px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--fg-3); }
+.sh-empty__sub { font-family: var(--font-body); font-size: 12px; color: var(--fg-4); max-width: 320px; }
 </style>
 <style>
 /* ---- Player Search ---- */
@@ -6551,6 +6566,7 @@ tr.is-search-hit > td {
   <script type="text/babel" src="assets/js/player-search.js"></script>
   <script type="text/babel" src="assets/js/a6cd8ef6-2b53-4016-a340-66b69a8928bd.js"></script>
   <script type="text/babel" src="assets/js/community-board.js"></script>
+  <script type="text/babel" src="assets/js/slip-history.js"></script>
   <script type="text/babel" src="assets/js/auth.js"></script>
 
 

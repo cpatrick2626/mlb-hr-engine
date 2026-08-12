@@ -84,6 +84,7 @@ window.ENGINES = [
     subs: [
       { id: "betSlips", name: "Bet Slips", tag: "DEFAULT" },
       { id: "profile",  name: "Profile" },
+      { id: "history",  name: "History" },
     ],
   },
 ];
