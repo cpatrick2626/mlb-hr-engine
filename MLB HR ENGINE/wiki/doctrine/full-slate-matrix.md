@@ -130,15 +130,29 @@ The `fsm-sortbar` renders two labeled groups in one bar: **SORT** and **FILTER**
 
 The active filter description appears in the status bar note string: `"TM ≥60"`, `"HR PROB ≥15%"`, or both joined.
 
-### Additional filters (fsm-filters row)
+### Control layout (as of Aug 12 2026)
 
-**PLAYER GROUP** (radio): All Players / Qualified (PA ≥ 100) / Elite Targets (tier ∈ {APEX, ELITE, EDGE}).
+Controls are grouped into three labeled sections in the `fsm-sortbar`:
 
-**FOCUS** (radio): ALL / POWER (`barrel ≥ 4.5 || slg ≥ .470`) / CONTACT (`avg ≥ .255`) / MATCHUP (`quality ∈ {"ELITE", "STRONG"}`).
+- **SORT & FILTER** — RANK button, column sort, TM ≥60 toggle, HR PROB ≥15% toggle
+- **SCOPE** — ROLE multi-select toggles (see Roles section below)
+- **GAMES** — GAME VIEW / PLAYER VIEW toggle; LIVE readout (relocated here from the top bar Aug 12)
+
+The **COLUMNS** and **EDIT** controls moved to the top bar (Aug 12), no longer in the sortbar.
+
+### PLAYER GROUP and FOCUS controls (removed Aug 12 2026)
+
+**PLAYER GROUP** and **FOCUS** radio controls are **no longer rendered on the board**. They were removed in commit `4e9743b` (Aug 12). The underlying predicate functions remain in `full-slate-matrix.js` with state pinned to `"all"` / `"ALL"` — the rows they would filter are never excluded. They are preserved for possible future re-exposure (e.g. a strategy-mode toggle) but are currently dead UI.
+
+Prior to removal the predicates were:
+- **PLAYER GROUP**: All Players / Qualified (PA ≥ 100) / Elite Targets (tier ∈ {APEX, ELITE, EDGE})
+- **FOCUS**: ALL / POWER (`barrel ≥ 4.5 || slg ≥ .470`) / CONTACT (`avg ≥ .255`) / MATCHUP (`quality ∈ {"ELITE", "STRONG"}`)
+
+### ROLE filter (active)
 
 **ROLE** (multi-select toggles): See Roles section. AND intersection — selects rows where every selected role flag is `true`.
 
-All these filters compose as AND (every active filter must pass for a row to appear in `pool`).
+All active filters compose as AND (every active filter must pass for a row to appear in `pool`).
 
 ---
 
@@ -227,7 +241,7 @@ This is a display-layer adjustment only. It does not write to any model field an
 
 ## Add-to-Slip
 
-The `SLIP` column (rightmost, `fsm-cell--slip`) contains `FsmSlipBtn` for each row. Clicking calls `window.__hrSlip.addLeg(...)` with player name, teamAbbr, pitcher_name, model_prob, tier, model_tier_rank, board (`main`/`jig`), hrprob, barrel, and hh.
+The `SLIP` column (rightmost, `fsm-cell--slip`) contains `FsmSlipBtn` for each row. Clicking calls `window.__hrSlip.addLeg(...)` with player name, teamAbbr, pitcher_name, model_prob, tier, model_tier_rank, board (`main`/`jig`), hrprob, barrel, and hh. As of Aug 12 2026 (commit `d696a63`), `addLeg` also snapshots `true_matchup_score`, `jig_score`, `edge`, `arsenal_edge_score`, and `arsenal_edge_confidence` onto the client-side leg object at add time — these are additive, client-side only (no DB column, no POST field). New legs show these values in the pick card; legs added before this change show `"—"`. See [[ticket-slip-system]] for full leg snapshot doctrine.
 
 Button states: `idle` (blue +) / `loading` (grey …) / `added` (green ✓) / `error` (red !) / `noauth` (amber ⚿). State sourced from `window.__hrSlip.getState().cardStatus[row.id || row.name]` via subscription.
 
