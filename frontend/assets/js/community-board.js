@@ -386,7 +386,7 @@ function CommSlipCard({ post, onRemove, onOpenCard }) {
                 {/* Team */}
                 {leg.team && (
                   <span style={{
-                    fontSize: '10px', color: 'rgba(224,232,255,0.38)',
+                    fontSize: '10px', color: 'rgba(224,232,255,0.6)',
                     fontFamily: 'var(--font-mono)', flexShrink: 0,
                   }}>
                     {leg.team}
@@ -396,7 +396,7 @@ function CommSlipCard({ post, onRemove, onOpenCard }) {
                 {hrPct && (
                   <span style={{
                     fontSize: '11px', fontFamily: 'var(--font-mono)',
-                    color: 'rgba(224,232,255,0.6)', fontWeight: 600,
+                    color: tc, fontWeight: 700,
                   }}>
                     {hrPct} HR
                   </span>
@@ -431,32 +431,32 @@ function CommSlipCard({ post, onRemove, onOpenCard }) {
                   marginTop: '5px', paddingTop: '5px',
                   borderTop: '1px solid rgba(255,255,255,0.05)',
                   fontSize: '10px', fontFamily: 'var(--font-mono)',
-                  color: 'rgba(224,232,255,0.5)',
+                  color: 'rgba(224,232,255,0.72)',
                 }}>
                   {pitcherName && (
                     <span title="Pitcher faced">
-                      <span style={{color: 'rgba(224,232,255,0.32)'}}>vs&nbsp;</span>
+                      <span style={{color: 'rgba(224,232,255,0.5)'}}>vs&nbsp;</span>
                       {pitcherName}
                     </span>
                   )}
                   {opponent && (
-                    <span style={{color: 'rgba(224,232,255,0.38)'}}>{opponent}</span>
+                    <span style={{color: 'rgba(224,232,255,0.6)'}}>{opponent}</span>
                   )}
                   {tmScore != null && (
-                    <span title="True matchup score at pick time">
-                      <span style={{color: 'rgba(224,232,255,0.32)'}}>TM&nbsp;</span>
+                    <span title="True matchup score at pick time" style={{color: tc}}>
+                      <span style={{color: 'rgba(224,232,255,0.5)'}}>TM&nbsp;</span>
                       {Math.round(tmScore)}
                     </span>
                   )}
                   {tierRank != null && (
-                    <span title="Model tier rank">
-                      <span style={{color: 'rgba(224,232,255,0.32)'}}>rank&nbsp;</span>
+                    <span title="Model HR-threat rank — #1 is the strongest play on the slate">
+                      <span style={{color: 'rgba(224,232,255,0.5)'}}>model rank&nbsp;</span>
                       #{tierRank}
                     </span>
                   )}
                   {parkFactor != null && (
                     <span title="Park HR factor">
-                      <span style={{color: 'rgba(224,232,255,0.32)'}}>park&nbsp;</span>
+                      <span style={{color: 'rgba(224,232,255,0.5)'}}>park&nbsp;</span>
                       {parkFactor.toFixed(2)}x
                     </span>
                   )}
