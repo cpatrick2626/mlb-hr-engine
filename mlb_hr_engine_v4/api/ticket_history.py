@@ -14,7 +14,7 @@ log = logging.getLogger("uvicorn.error")
 _TICKET_SELECT = (
     "ticket_id,date,board,ticket_type,num_legs,status,fd_deployed,"
     "created_at,completed_at,settled_at,"
-    "legs(leg_id,leg_date,player_name,team,opponent,pitcher,"
+    "legs(leg_id,leg_date,player_name,player_id,team,opponent,pitcher,"
     "hr_result,settlement_status,removed)"
 )
 
@@ -112,6 +112,7 @@ def _clean_leg(
     clean = {
         "leg_id": leg.get("leg_id"),
         "player_name": leg.get("player_name"),
+        "player_id": leg.get("player_id"),
         "team": leg.get("team"),
         "opponent": leg.get("opponent"),
         "pitcher": leg.get("pitcher"),
@@ -119,6 +120,11 @@ def _clean_leg(
         "settlement_status": leg.get("settlement_status") or "pending",
         "game_status": _game_status(game) if game else None,
         "linescore": _linescore(game),
+        # Live-state join key (Phase 1 program). None when the leg's team+date
+        # doesn't resolve to exactly one game — e.g. a doubleheader where
+        # opponent alone can't disambiguate. Callers must treat None as
+        # "don't poll this leg" rather than guessing a game_pk.
+        "game_pk": game.get("gamePk") if game else None,
     }
     return clean
 
