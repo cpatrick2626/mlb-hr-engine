@@ -14,6 +14,7 @@ def _secret(key: str, default: str = "") -> str:
 
 # ── API Keys ──────────────────────────────────────────────────────────────────
 ODDS_API_KEY: str = _secret("ODDS_API_KEY")
+PROPS_LOOKAHEAD_HOURS: int = int(_secret("PROPS_LOOKAHEAD_HOURS", "6"))
 
 # ── Bankroll ──────────────────────────────────────────────────────────────────
 BANKROLL: float = float(_secret("BANKROLL", "100"))
@@ -186,6 +187,26 @@ CALIBRATION_PLATT_B: float = -0.4611      # intercept — Platt CV-fitted
 CALIBRATION_ISOTONIC_BREAKPOINTS: list = []  # raw prob breakpoints (fitted)
 CALIBRATION_ISOTONIC_VALUES:      list = []  # calibrated prob at each breakpoint
 
+# ── Warehouse Isotonic Recalibration (final stage) ────────────────────────────
+# Isotonic curve fitted on labeled batter_stat_history outcomes (hr_outcome vs
+# the FINAL displayed model_prob, i.e. post prob_scale + post Platt). Applied in
+# pipeline.py AFTER apply_calibration() so fit input == production input.
+# Curve artifact: data/warehouse_isotonic.json — refit via
+# scripts/analysis/fit_warehouse_isotonic.py (never hand-edit the curve).
+# Fitted 2026-08-07 on 5,596 unique labeled batter-games (17 slates, 7/21–8/6):
+#   mean predicted 10.68% → calibrated 7.68% vs observed 7.63%.
+#   AUC 0.7092 before AND after (monotone — ranking preserved exactly).
+#   Brier 0.06873 → 0.06757.
+# NOTE: refit required if prob_scale (learned_adjustments.json) or Platt params
+# change — the curve is fitted against the output of that exact upstream chain.
+# Rollback: set WAREHOUSE_ISOTONIC_ENABLED=False.
+# ROLLED BACK 2026-08-07: the 2026-08-07 curve was fit on contaminated data
+# (fit window overlapped 100% of the holdout dates, 705 post-start snapshots,
+# no Preview/pre-start filter) and WORSENED held-out calibration (ECE 2.54pp
+# → 3.27pp; Brier delta -0.000181 with CI crossing zero). Artifact + fit
+# script retained for a properly-validated refit when data supports it.
+WAREHOUSE_ISOTONIC_ENABLED: bool = False
+
 # ── Context Moderation ────────────────────────────────────────────────────────
 # Guards against contact/suppressed-power batters reaching ≥15% probability
 # solely via multiplicative context stacking (park + hittable pitcher + platoon).
@@ -260,6 +281,10 @@ PITCHER_VULNERABILITY_HR9_THRESHOLD: float = 2.2  # pitcher_hr9 ≥ this → TAR
 # ── Full Slate Tier Display ───────────────────────────────────────────────────
 # 6-tier classification driven by model_prob. Display-only — does not affect
 # model probability, EV, or confidence_tier (which is EV/edge-based).
+# Restored 2026-08-07: original raw-probability cutoffs, paired with the
+# warehouse isotonic rollback (WAREHOUSE_ISOTONIC_ENABLED=False above). The
+# 54599fc isotonic-image cutoffs only make sense against isotonic output;
+# with raw model_prob these are the correct thresholds.
 FS_TIER_THRESHOLDS: dict = {
     "APEX":   0.20,
     "ELITE":  0.16,

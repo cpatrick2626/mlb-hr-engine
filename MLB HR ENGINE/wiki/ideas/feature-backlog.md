@@ -65,6 +65,19 @@ Build only after engine is validated AND sample is healthy:
 | Domain governance agents (advisory) | Later; already designed in agent doc |
 | External model benchmarking | Log THE BAT X HR projections vs ours for ~30d — but **only after our own calibration sample is healthy**. "Different" ≠ "better"; outcomes + closing line are the real benchmarks |
 
+### Cross-project capability awareness (2026-08-13)
+
+These are external production/support capabilities, not MLB scoring features. Mission Control OS owns governance, approvals, Result Cards, and worker routing; Build Intelligence Atlas / AI Capability Foundry own capability metadata and qualification; Hermes owns scheduled execution. MLB HR ENGINE remains the owner of its data, formulas, payloads, UX, and production truth.
+
+| Capability | MLB use | Dependencies | Risks / protected boundary | Next action |
+|---|---|---|---|---|
+| Mission Control cloud worker lane | Bounded docs, research, validation, or media tasks from an immutable repository snapshot | Accepted Mission Control `WorkerAdapter` contract and a cloud-capable provider | Cloud cannot see local-only/uncommitted state; never auto-commit/push/upload; no scoring, calibration, ranking, filter, payload, `config.py`, or `pipeline.py` authority | No MLB implementation now; wait for the simulated Mission Control contract to pass |
+| Evidence/Result Card + security review | One receipt for objective/actions/files/diff/tests/risks/git/deploy state; read-only-first threat review | Mission Control Result Card and security-worker contracts | Findings are advisory; operator approval before any patch/deploy; MLB acceptance and production proof remain separate | Adopt only through a future read-only pilot against an explicitly authorized snapshot |
+| Remotion motion graphics | Deterministic daily recap/shareable cards from already-approved, immutable slate/ticket/result data | Isolated template project, asset/license review, approved input contract, Foundry qualification | **Display/media only**; must not calculate or alter `model_prob`, EV, tiers, rank, JIG/HVY, settlement, or payloads. Remotion uses a custom source-available license and is free only for eligible users/organizations | Park until validation priorities are healthy; then write one docs-only storyboard and input manifest before any install |
+| Sites | Interactive research report or disposable capability dashboard | Approved non-sensitive source snapshot and freshness label | Prototype/report only; never migrate the established MLB app, replace Vercel/Fly, or become production truth | Use only for a separately approved short-lived report |
+
+No runtime code, package, provider, scheduler, formula, scoring path, or deployment state was changed for this awareness update.
+
 ---
 
 ## Strategy Section (added 2026-07-06)

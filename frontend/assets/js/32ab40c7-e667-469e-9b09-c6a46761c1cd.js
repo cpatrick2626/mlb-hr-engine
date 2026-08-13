@@ -44,9 +44,7 @@ function stratOpenFanduel(e, strat, players) {
   if (navigator.clipboard) {
     navigator.clipboard.writeText(q).catch(() => {});
   }
-  /* Deep-link priority: bet → event → name search (links often absent; search stays fallback) */
-  const deepLink = players[0]?.fd_bet_link || players[0]?.fd_event_link || null;
-  window.open(deepLink || stratFanDuelUrl(primary), "_blank", "noopener");
+  window.open(stratFanDuelUrl(primary), "_blank", "noopener");
   let el = document.getElementById("md-qp-fd-toast");
   if (!el) {
     el = document.createElement("div");

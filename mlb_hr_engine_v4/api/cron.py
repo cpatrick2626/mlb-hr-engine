@@ -12,8 +12,11 @@ Locally, these are read from .env via python-dotenv.
 
 import sys
 import os
+import json
 import logging
-from datetime import datetime
+import time
+from datetime import datetime, timezone, timedelta
+from pathlib import Path
 
 logging.basicConfig(
     level=logging.INFO,
@@ -27,11 +30,121 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from dotenv import load_dotenv
 load_dotenv()
 
-from pipeline import load_game_data, serializable
+from pipeline import load_game_data, serializable, schedule_jig_stat_capture
 from api.cache import store_picks, insert_picks, today_et
 
 MODEL_VERSION = "v4"
 
+
+# ── Odds skip-guard ────────────────────────────────────────────────────────────
+# Gate the Odds API pull at zero odds-API cost. Game times come from the free
+# MLB Stats API. All comparisons are in UTC so DST is self-calibrating.
+
+# Must match clients/odds_api._CACHE_PATH and CACHE_TTL_MINUTES exactly.
+_ODDS_CACHE_PATH         = Path(__file__).parent.parent / "data" / "odds_cache.json"
+_ODDS_CACHE_TTL_MINUTES  = 45   # mirrors odds_api.CACHE_TTL_MINUTES
+_PULL_WINDOW_H_BEFORE    = 4    # open the window this many hours before first pitch
+_PULL_WINDOW_H_AFTER     = 3    # close the window this many hours after last first pitch
+
+
+def _odds_cache_age_minutes() -> float:
+    """Age of the odds disk cache in minutes; infinity when missing or unreadable."""
+    try:
+        with open(_ODDS_CACHE_PATH, encoding="utf-8") as f:
+            data = json.load(f)
+        return (time.time() - data["timestamp"]) / 60
+    except Exception:
+        return float("inf")
+
+
+def _game_start_times_utc(target_date: str) -> list[datetime]:
+    """
+    Return UTC start datetimes for today's games from the MLB Stats API.
+    FREE — no Odds API call. Returns [] on error or when times are unavailable.
+    """
+    try:
+        from clients import mlb_stats
+        games = mlb_stats.get_today_schedule(target_date)
+        times: list[datetime] = []
+        for g in games:
+            ts = g.get("game_time_utc", "")
+            if not ts:
+                continue
+            try:
+                times.append(datetime.fromisoformat(ts.replace("Z", "+00:00")))
+            except ValueError:
+                pass
+        return times
+    except Exception as exc:
+        logger.warning("[odds_guard] schedule fetch failed: %s", exc)
+        return []
+
+
+def should_pull_odds(target_date: str) -> tuple[bool, str]:
+    """
+    Return (should_pull, reason). Costs zero Odds API requests — game times
+    come from the free MLB Stats API (no key required).
+
+    Pulls only when ALL conditions hold:
+      1. Odds cache is stale (age > 45 min)
+      2. Current UTC >= first pitch UTC − 4 h
+      3. Current UTC <  last  pitch UTC + 3 h
+
+    DST-safe: every comparison is UTC throughout; no hard-coded ET offsets.
+    """
+    age_min = _odds_cache_age_minutes()
+    if age_min <= _ODDS_CACHE_TTL_MINUTES:
+        return False, f"cache fresh (age={age_min:.0f}m)"
+
+    times = _game_start_times_utc(target_date)
+    if not times:
+        return False, "no games scheduled or start times unavailable"
+
+    now_utc     = datetime.now(timezone.utc)
+    first_pitch = min(times)
+    last_pitch  = max(times)
+
+    if now_utc < first_pitch - timedelta(hours=_PULL_WINDOW_H_BEFORE):
+        hours_away = (first_pitch - now_utc).total_seconds() / 3600
+        return False, f"first game in {hours_away:.1f}h (too early)"
+
+    if now_utc >= last_pitch + timedelta(hours=_PULL_WINDOW_H_AFTER):
+        hours_ago = (now_utc - last_pitch).total_seconds() / 3600
+        return False, f"all games done — last pitch {hours_ago:.1f}h ago"
+
+    return True, (
+        f"within window — first={first_pitch.strftime('%H:%MZ')} "
+        f"last={last_pitch.strftime('%H:%MZ')}"
+    )
+
+
+def _write_odds_skip_sentinel() -> None:
+    """
+    Write an empty fresh-cache sentinel so odds_api._load_cache() short-circuits
+    the Odds API call. The pipeline then runs in odds_pending mode (projected slate,
+    zero odds cost). Sentinel expires naturally after _ODDS_CACHE_TTL_MINUTES.
+    """
+    sentinel = {
+        "timestamp": time.time(),
+        "props":     [],
+        "quota":     {"used": None, "remaining": None},
+        "fd_links":  [],
+    }
+    try:
+        _ODDS_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        tmp = _ODDS_CACHE_PATH.with_suffix(".tmp")
+        with open(tmp, "w", encoding="utf-8") as f:
+            json.dump(sentinel, f)
+        os.replace(tmp, _ODDS_CACHE_PATH)
+        logger.info(
+            "[odds_guard] sentinel written — Odds API blocked for %dm",
+            _ODDS_CACHE_TTL_MINUTES,
+        )
+    except Exception as exc:
+        logger.warning("[odds_guard] sentinel write failed (non-fatal): %s", exc)
+
+
+# ── Existing capture helpers (unchanged) ───────────────────────────────────────
 
 def _require_odds_api_key() -> None:
     if not os.getenv("ODDS_API_KEY", "").strip():
@@ -69,10 +182,11 @@ def _check_capture_readiness(capture: dict) -> None:
     if capture["odds_lines_fetched"] == 0:
         _log_capture_summary(capture, picks_upserted=0)
         logger.error(
-            "[capture] CAPTURE FAILED: games present but zero odds fetched — "
-            "check ODDS_API_KEY / odds source"
+            "[capture] ODDS PENDING: games present but zero odds fetched — "
+            "building projected slate; will backfill when odds post. "
+            "Check ODDS_API_KEY / odds source if this persists past expected post time."
         )
-        raise RuntimeError("capture failed: games present but zero odds fetched")
+        return  # proceed — projected slate builds without odds
 
     if capture["qualified_count"] == 0:
         logger.warning(
@@ -85,18 +199,48 @@ def run(target_date: str = None) -> dict:
     target_date = target_date or today_et().strftime("%Y-%m-%d")
     print(f"[cron] Running pipeline for {target_date}...")
 
+    # ── Odds skip-guard ───────────────────────────────────────────────────────
+    # Gate the Odds API pull at zero cost. When the guard blocks, a sentinel
+    # fresh-cache is written so load_game_data() sees zero odds and takes the
+    # existing odds_pending path — the MLB Stats slate still builds normally.
+    pull_odds, guard_reason = should_pull_odds(target_date)
+    if pull_odds:
+        logger.info("[odds_guard] PULL — %s", guard_reason)
+    else:
+        logger.info("[odds_guard] SKIP — %s", guard_reason)
+        _write_odds_skip_sentinel()
+
     data = load_game_data(target_date)
     capture = _capture_readiness(data)
     _check_capture_readiness(capture)
 
+    odds_pending = capture["games_scheduled"] > 0 and capture["odds_lines_fetched"] == 0
+
+    # Observability: distinguish early-morning pending (normal) from stale pending
+    # (odds should have posted by now — likely dead key or quota exhaustion).
+    # Threshold: 1pm ET = 17:00 UTC (EDT, UTC-4 in season). Greppable alert label.
+    odds_pending_stale = False
+    if odds_pending:
+        _ODDS_EXPECTED_POST_HOUR_UTC = 17
+        if datetime.utcnow().hour >= _ODDS_EXPECTED_POST_HOUR_UTC:
+            odds_pending_stale = True
+            logger.error(
+                "[capture] ALERT ODDS_PENDING_PAST_THRESHOLD: odds still zero past %d:00 UTC — "
+                "check ODDS_API_KEY / quota; possible dead key.",
+                _ODDS_EXPECTED_POST_HOUR_UTC,
+            )
+
     payload = {
-        "date":            target_date,
-        "ran_at":          datetime.utcnow().isoformat() + "Z",
-        "ranked":          serializable(data.get("ranked", [])),
-        "all_by_model":    serializable(data.get("all_by_model", []))[:50],
-        "auto_parlays":    data.get("auto_parlays", {}),
-        "profile_parlays": data.get("profile_parlays", {}),
-        "stats":           data.get("stats", {}),
+        "date":               target_date,
+        "ran_at":             datetime.utcnow().isoformat() + "Z",
+        "ranked":             serializable(data.get("ranked", [])),
+        "all_by_model":       serializable(data.get("all_by_model", []))[:50],
+        "auto_parlays":       data.get("auto_parlays", {}),
+        "profile_parlays":    data.get("profile_parlays", {}),
+        "stats":              data.get("stats", {}),
+        "odds_pending":       odds_pending,
+        "odds_pending_stale": odds_pending_stale,
+        "odds_guard":         {"pull": pull_odds, "reason": guard_reason},
     }
 
     try:
@@ -105,10 +249,22 @@ def run(target_date: str = None) -> dict:
         # verifies JWTs), so provide a placeholder before importing.
         os.environ.setdefault("SUPABASE_JWT_SECRET", "")
         from api.main import _build_slate_payload
-        payload["slate_cache"] = _build_slate_payload(data)
+        payload["slate_cache"] = _build_slate_payload(
+            data, odds_pending=odds_pending, odds_pending_stale=odds_pending_stale
+        )
         print(f"[cron] slate_cache built — {len(payload['slate_cache'].get('leaderboard_rows', []))} rows")
     except Exception as e:
         print(f"[cron] slate_cache build failed (payload stored without it): {e}")
+
+    # JIG warehouse secondary capture — fire-and-forget after jigScore is computed.
+    # Inserts new batter_stat_history rows (distinct run_ts from MAIN capture) so
+    # warehouse_backfill can label them with hr_outcome. Non-fatal if it fails.
+    try:
+        jig_rows = (payload.get("slate_cache") or {}).get("leaderboard_rows_jig") or []
+        schedule_jig_stat_capture(target_date, jig_rows, data.get("all_players", []))
+        print(f"[cron] JIG warehouse capture scheduled — {len(jig_rows)} rows")
+    except Exception as e:
+        print(f"[cron] JIG warehouse capture scheduling failed (non-fatal): {e}")
 
     store_picks(target_date, payload)
 
@@ -148,7 +304,8 @@ def run(target_date: str = None) -> dict:
     _log_capture_summary(capture, picks_upserted)
     print(
         f"[cron] Done — {stats.get('qualified', 0)} qualified picks, "
-        f"{stats.get('players', 0)} total players stored for {target_date}"
+        f"{stats.get('players', 0)} total players stored for {target_date}; "
+        f"odds_guard={'PULL' if pull_odds else 'SKIP'} ({guard_reason})"
     )
     return payload
 

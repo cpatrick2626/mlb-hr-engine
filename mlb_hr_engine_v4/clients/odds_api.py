@@ -187,7 +187,25 @@ def _try_api() -> tuple[list[dict], dict]:
         return [], dict(_last_quota)
     all_props: list[dict] = []
     fd_links: list[dict] = []
+    now_utc = datetime.now(timezone.utc)
+    lookahead = timedelta(hours=config.PROPS_LOOKAHEAD_HOURS)
+    tail_cutoff = timedelta(hours=3)  # mirrors cron._PULL_WINDOW_H_AFTER
+    games_in_slate = len(events)
+    games_in_window = 0
+    props_requests_fired = 0
     for event in events:
+        ct_str = event.get("commence_time", "")
+        try:
+            ct = datetime.fromisoformat(ct_str.replace("Z", "+00:00"))
+        except Exception:
+            ct = None
+        if ct is not None:
+            if ct > now_utc + lookahead:
+                continue
+            if ct < now_utc - tail_cutoff:
+                continue
+        games_in_window += 1
+        props_requests_fired += 1
         props, fd_info = _get_event_props(event["id"])
         for p in props:
             p["home_team"] = event.get("home_team", "")
@@ -204,6 +222,11 @@ def _try_api() -> tuple[list[dict], dict]:
                 "bet_links":     fd_info.get("bet_links", {}),
             })
     _last_fd_links = fd_links
+    print(
+        f"[odds_api] games_in_slate={games_in_slate} "
+        f"games_in_window={games_in_window} "
+        f"props_requests_fired={props_requests_fired}"
+    )
     return all_props, dict(_last_quota)
 
 

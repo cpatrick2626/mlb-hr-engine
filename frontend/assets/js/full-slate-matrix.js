@@ -93,6 +93,9 @@ const fdeg = (v) => v.toFixed(1) + "°";
 /* column defs — bucketsHi = higher is better (4 cuts), bucketsLo = lower is better */
 const FSM_COLS = [
 { key: "odds", head: "ODDS", title: "HR prop odds (American)", group: "STATS", mode: "odds", fmt: (v) => String(v) },
+{ key: "implied_prob", head: "IMP%", title: "Market implied HR probability from FanDuel American odds (vig-inclusive). Positive +X → 100/(X+100); negative −X → X/(X+100). '—' = no line posted.", group: "EV", mode: "neutral", fmt: (v) => (v * 100).toFixed(1) + "%" },
+{ key: "edge", head: "EDGE", title: "Model HR probability minus market implied probability (pp). Positive = +EV: model rates this more likely than the market. Sort ▼ to surface +EV single bets. '—' = no line posted.", group: "EV", mode: "ev_flag", fmt: (v) => (v >= 0 ? "+" : "") + (v * 100).toFixed(1) + "pp" },
+{ key: "ev_pct", head: "EV%", title: "Expected value per $1 staked × 100. Formula: (model_prob × decimal_payout) − (1 − model_prob). Positive = profitable long-run. Sort ▼ to surface +EV singles. '—' = no line posted.", group: "EV", mode: "ev_flag", fmt: (v) => (v >= 0 ? "+" : "") + v.toFixed(1) + "%" },
 { key: "hr", head: "HR", title: "Home runs — REAL vs-hand split count in VS HAND mode (PA always shown; thin <30 PA tagged amber); season total in SEASON mode", group: "STATS", bucketsHi: [28, 18, 10, 5], fmt: (v) => String(v) },
 { key: "barrel", head: "BARREL%", title: "Barrel rate (Savant brl_pa: barrels per plate appearance, not per batted-ball event) — optimal EV + launch-angle contact, the best HR predictor", group: "STATCAST", bucketsHi: [8, 6, 4.5, 3], fmt: fp },
 { key: "xslg", head: "xSLG", title: "Expected slugging from quality of contact", group: "STATS", bucketsHi: [0.520, 0.450, 0.400, 0.350], fmt: f3d },
@@ -143,6 +146,19 @@ FSM_COLS.forEach((c) => { c.scope = FSM_SCOPE_HAND_KEYS.includes(c.key) ? "hand"
 /* vs-hand display keys → payload split fields */
 const FSM_VS_HAND_SRC = { avg: "vs_hand_avg", slg: "vs_hand_slg", iso: "vs_hand_iso", hrpa: "vs_hand_hr_pa" };
 const FSM_VS_HAND_MIN_PA = 30; // matches the backend's reliable-sample gate
+
+/* BEST COHORT filter — mirrors config.py LINEUP_PA / DEFAULT_PA */
+const FSM_LINEUP_PA = {1:4.5, 2:4.3, 3:4.2, 4:4.1, 5:3.9, 6:3.7, 7:3.6, 8:3.4, 9:3.2};
+const FSM_DEFAULT_PA = 3.8;
+
+function fsmBestCohort(row) {
+  const raw = row._raw || row;
+  const slot = raw.lineup_spot;
+  const expPa = (slot != null && FSM_LINEUP_PA[slot] != null) ? FSM_LINEUP_PA[slot] : FSM_DEFAULT_PA;
+  const hrpa = raw.hrpa;
+  const vsSlg = raw.vs_hand_slg;
+  return expPa >= 4.2 && hrpa != null && hrpa >= 0.0435 && vsSlg != null && vsSlg >= 0.440;
+}
 
 /* Overlay REAL vs-hand splits onto the AVG/SLG/ISO/HR-PA display keys.
    Display-only: `_raw` keeps the untouched row for the batter-card hero and
@@ -324,6 +340,10 @@ function FsmCell({ col, row, extra }) {
   if (col.mode === "odds") return <td className={`fsm-cell fsm-cell--odds${xc}`} data-label={lbl}>{v == null ? na : col.fmt(v)}</td>;
   if (col.mode === "headline") return <td className={`fsm-cell fsm-cell--headline${xc}`} data-label={lbl}>{v == null ? na : col.fmt(v)}{tag}</td>;
   if (col.mode === "neutral") return <td className={`fsm-cell fsm-cell--neutral${xc}`} data-label={lbl}>{v == null ? na : col.fmt(v)}</td>;
+  if (col.mode === "ev_flag") {
+    const cls = v == null ? "" : v >= 0 ? " fsm-cell--ev-pos" : " fsm-cell--ev-neg";
+    return <td className={`fsm-cell${cls}${xc}`} data-label={lbl}>{v == null ? "—" : col.fmt(v)}</td>;
+  }
   /* HR column in VS HAND mode: show "N HR" as value for clarity (PA in scope tag) */
   if (col.key === "hr" && scope && scope.scope === "hand") {
     const b = fsmBucket(col, v);
@@ -351,48 +371,15 @@ function fsmFanDuelUrl(term) {
     : "https://sportsbook.fanduel.com/baseball/mlb?tab=player-home-runs";
 }
 
-function fsmCopyFanDuelSearch(term) {
-  if (navigator.clipboard) {
-    navigator.clipboard.writeText(term).catch(() => {});
-  }
-}
-
-function fsmShowFanDuelToast(term) {
-  let el = document.getElementById("fsm-fd-toast");
-  if (!el) {
-    el = document.createElement("div");
-    el.id = "fsm-fd-toast";
-    el.style.cssText = "position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1a2030;border:1px solid #3b6fff;color:#e0e8ff;padding:10px 18px;border-radius:8px;font-size:13px;font-family:inherit;z-index:9999;pointer-events:none;transition:opacity .3s;white-space:nowrap;";
-    document.body.appendChild(el);
-  }
-  el.textContent = "Copied FanDuel search: " + term;
-  el.style.opacity = "1";
-  clearTimeout(el._t);
-  el._t = setTimeout(() => { el.style.opacity = "0"; }, 2800);
-}
-
 function fsmOpenFanDuelSearch(e, term) {
   e.stopPropagation();
   e.preventDefault();
-  fsmCopyFanDuelSearch(term);
+  try { navigator.clipboard.writeText(term); } catch (_) {}
   window.open(fsmFanDuelUrl(term), "_blank", "noopener");
-  fsmShowFanDuelToast(term);
 }
 
-/* FD tier-icon click: prefer captured deep link (bet-level, then event-level —
-   lands on the specific game), else Streamlit parity search URL. Links are often
-   absent (FD rarely posts outcome links); name search + clipboard stays the fallback. */
 function fsmOpenFD(e, row) {
-  const deepLink = row.fd_bet_link || row.fd_event_link;
-  if (deepLink) {
-    e.stopPropagation();
-    e.preventDefault();
-    fsmCopyFanDuelSearch(row.name);   // keep name on clipboard for manual fallback
-    window.open(deepLink, "_blank", "noopener");
-    fsmShowFanDuelToast(row.name);
-  } else {
-    fsmOpenFanDuelSearch(e, row.name);
-  }
+  fsmOpenFanDuelSearch(e, row.name);
 }
 
 /* Tier badge tooltip — tier name + doctrine description + this row's real model_prob. */
@@ -521,7 +508,7 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, i
           type="button"
           className="fsm-tier fsm-tier--btn"
           style={{ "--tc": t.color, "--tg": t.glow }}
-          onClick={(e) => { e.stopPropagation(); e.preventDefault(); const board = isJigContext ? 'jig' : (row._board || 'main'); const raw = row._raw || row; window.__hrSlip && window.__hrSlip.requestAdd({ player_id: raw.id, name: raw.name, teamAbbr: raw.teamAbbr, team: raw.teamAbbr, pitcher: raw.pitcher_name, pitcher_name: raw.pitcher_name, model_prob: raw.model_prob, tier: raw.tier, model_tier_rank: raw.model_tier_rank, board: board, hrprob: raw.hrprob, barrel: raw.barrel, hh: raw.hh, fd_bet_link: raw.fd_bet_link, fd_event_link: raw.fd_event_link, signal_snapshot: fsmBuildSnapshot(raw, board, sortState) }); }}
+          onClick={(e) => { e.stopPropagation(); e.preventDefault(); const board = isJigContext ? 'jig' : (row._board || 'main'); const raw = row._raw || row; window.__hrSlip && window.__hrSlip.requestAdd({ player_id: raw.id, name: raw.name, teamAbbr: raw.teamAbbr, team: raw.teamAbbr, pitcher: raw.pitcher_name, pitcher_name: raw.pitcher_name, model_prob: raw.model_prob, tier: raw.tier, model_tier_rank: raw.model_tier_rank, board: board, hrprob: raw.hrprob, barrel: raw.barrel, hh: raw.hh, fd_bet_link: raw.fd_bet_link, fd_event_link: raw.fd_event_link, true_matchup_score: raw.true_matchup_score, jig_score: raw.jigScore, edge: raw.edge, arsenal_edge_score: raw.arsenal_edge_score, arsenal_edge_confidence: raw.arsenal_edge_confidence, signal_snapshot: fsmBuildSnapshot(raw, board, sortState) }); }}
           title={fsmTierTip(row, isJigContext, jigLabel, jigRank) + " · Click: select destination"}
           aria-label={`Select destination for ${row.name}`}>
 
@@ -570,15 +557,14 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, i
               {isDualHR && <span className="fsm-matchup__proj">▸{hrProj.toFixed(1)}%</span>}
             </span>
             <span className="fsm-matchup__metric fsm-matchup__metric--single">
-              <span className="fsm-matchup__lbl">BATTER EDGE</span>
-              <span className="fsm-matchup__val">{row.arsenal_edge_score != null ? Number(row.arsenal_edge_score).toFixed(1) : "—"}</span>
-            </span>
-            <span className="fsm-matchup__metric fsm-matchup__metric--single">
               <span className="fsm-matchup__lbl">SIGNAL</span>
               <span className="fsm-matchup__val">{row.arsenal_edge_confidence != null ? Math.round(Number(row.arsenal_edge_confidence) * 100) + "%" : "—"}</span>
             </span>
           </span>
         </button>
+      </td>
+      <td className="fsm-cell fsm-share-col" data-label="SHARE" style={{textAlign:'center',padding:'4px 2px',verticalAlign:'middle'}}>
+        <button type="button" style={{padding:'4px 10px',background:'rgba(255,176,32,0.14)',border:'1.5px solid rgba(255,176,32,0.60)',borderRadius:999,color:'#ffb020',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:10,letterSpacing:'0.08em',textTransform:'uppercase',cursor:'pointer',lineHeight:1,minHeight:28,display:'inline-flex',alignItems:'center',justifyContent:'center',whiteSpace:'nowrap'}} title={`Export full intel card for ${row.name}`} onClick={(e)=>{e.stopPropagation();window.fsmShareCard&&window.fsmShareCard(row);}}>SHARE</button>
       </td>
       {cols.map((c, ci) => <FsmCell key={c.key} col={c} row={row} extra={ci >= 12} />)}
       <td className="fsm-cell fsm-cell--slip" style={{ textAlign: 'center', padding: '0 4px' }}>
@@ -717,9 +703,14 @@ function FsmTable({ rows, cols, showGame, onBatter, onPitch, onReorder, onFront,
       hrprob:          raw.hrprob,
       barrel:          raw.barrel,
       hh:              raw.hh,
-      fd_bet_link:     raw.fd_bet_link,
-      fd_event_link:   raw.fd_event_link,
-      signal_snapshot: fsmBuildSnapshot(raw, board, sortState),
+      fd_bet_link:             raw.fd_bet_link,
+      fd_event_link:           raw.fd_event_link,
+      true_matchup_score:      raw.true_matchup_score,
+      jig_score:               raw.jigScore,
+      edge:                    raw.edge,
+      arsenal_edge_score:      raw.arsenal_edge_score,
+      arsenal_edge_confidence: raw.arsenal_edge_confidence,
+      signal_snapshot:         fsmBuildSnapshot(raw, board, sortState),
     });
   };
 
@@ -738,13 +729,13 @@ function FsmTable({ rows, cols, showGame, onBatter, onPitch, onReorder, onFront,
   return (
     <table className="fsm-table">
       <colgroup>
-        <col style={{ width: "72px" }} /><col style={{ width: "128px" }} /><col style={{ width: "220px" }} />
+        <col style={{ width: "72px" }} /><col style={{ width: "128px" }} /><col style={{ width: "220px" }} /><col style={{ width: "80px" }} />
         {cols.map((c) => <col key={c.key} style={{ width: c.key === "pa" ? "46px" : "60px" }} />)}
         <col style={{ width: "36px" }} />
       </colgroup>
       <thead>
         <tr className="fsm-grouprow">
-          <th className="fsm-gband fsm-gband--id" colSpan={3}>BATTER</th>
+          <th className="fsm-gband fsm-gband--id" colSpan={4}>BATTER</th>
           {bands.map((b, i) => <th key={i} className={"fsm-gband fsm-gband--" + b.label.toLowerCase()} colSpan={b.span}>{b.label}</th>)}
           <th className="fsm-gband" style={{ width: "36px" }} />
         </tr>
@@ -752,6 +743,7 @@ function FsmTable({ rows, cols, showGame, onBatter, onPitch, onReorder, onFront,
           <th className="fsm-th-tier">{isJigContext ? "JIG TIER" : builderMode ? "MODEL TIER" : "TIER"}</th>
           <th className="fsm-th-player">PLAYER</th>
           <th className="fsm-th-matchup">MATCHUP</th>
+          <th className="fsm-th-stat" style={{width:"80px",textAlign:"center",cursor:"default"}} title="Export full intel card">SHARE</th>
           {cols.map((c) =>
           <th key={c.key} className={"fsm-th-stat" + (c.danger ? " fsm-th-danger" : "") + (sortState && sortState.key === c.key ? " is-sorted" : "")} {...thProps(c)}><button type="button" className="fsm-statfront" onClick={(e) => { e.stopPropagation(); onFront(c.key); }} title={c.title} aria-label={`Move ${c.head} to the first stat column`}>{c.head}</button>{arrow(c)}{c.scope === "hand" ? (splitScope === 'vs_hand' ? <span className="fsm-th-scope fsm-th-scope--hand">VS HAND</span> : <span className="fsm-th-scope">SZN</span>) : c.scope === "season" ? <span className="fsm-th-scope">SZN</span> : null}</th>
           )}
@@ -1044,25 +1036,31 @@ function FsmArsenalTable({ title, arsenal, pitchStats }) {
     <div className="fsm-pt fsm-pt--red fsm-pt--arsenal">
       <div className="fsm-pt__title">{title}</div>
       <div className="fsm-pt__grid">
-        <div className="fsm-pt__hd"><span>PITCH TYPE</span><span>USAGE</span><span>VELO</span><span>WHIFF%</span><span>HR</span><span>K%</span><span>HH%</span></div>
+        <div className="fsm-pt__hd"><span>PITCH TYPE</span><span>USAGE</span><span>VELO</span><span>WHIFF%</span><span>PA</span><span>HR</span><span>K%</span><span>HH%</span></div>
         {arsenal.map((p, i) => {
           const ps = pitchStats[p.code] || {};
           const velo = p.velo ?? ps.avg_speed;
           const hrVal = ps.hr != null ? ps.hr : null;
           const kPct = ps.k_pct != null ? ps.k_pct * 100 : null;
           const hh = ps.display_hh != null ? ps.display_hh * 100 : null;
+          const paVal = ps.pa != null ? ps.pa : null;
+          const paSmall = paVal != null && paVal < 10;
           return (
             <div className="fsm-pt__row" key={i}>
               <span className="fsm-pt__type">{p.name || fsmPitchName(p.code)}</span>
               <span className="fsm-pt__usage"><span className="fsm-pt__bar" style={{ width: Math.min(100, p.usage ?? 0) + "%" }} /><i>{p.usage != null ? p.usage.toFixed(1) : "—"}%</i></span>
               <span className="fsm-pt__num">{velo != null ? velo.toFixed(1) : "—"}</span>
               <span className={fsmArsWhiffCls(p.whiff)}>{p.whiff != null ? p.whiff.toFixed(1) + "%" : "—"}</span>
+              <span className="fsm-pt__num" style={paSmall ? {color:"var(--amber)"} : undefined} title={paSmall ? "Small sample (<10 PA)" : undefined}>{paVal != null ? paVal + (paSmall ? "*" : "") : "—"}</span>
               <span className={fsmArsHrCls(hrVal)}>{hrVal != null ? hrVal : "—"}</span>
               <span className={fsmArsKCls(kPct)}>{kPct != null ? kPct.toFixed(1) + "%" : "—"}</span>
               <span className={fsmArsHhCls(hh)}>{hh != null ? hh.toFixed(1) + "%" : "—"}</span>
             </div>
           );
         })}
+        {arsenal.some(p => { const pa = (pitchStats[p.code] || {}).pa; return pa != null && pa < 10; }) && (
+          <div className="fsm-pt__note">* &lt;10 PA — small sample, treat with caution</div>
+        )}
       </div>
     </div>
   );
@@ -1084,11 +1082,13 @@ function FsmBatterVsPitchTable({ title, bvp, arsenal }) {
     <div className="fsm-pt fsm-pt--blue fsm-pt--bvp">
       <div className="fsm-pt__title">{title}</div>
       <div className="fsm-pt__grid">
-        <div className="fsm-pt__hd"><span>PITCH TYPE</span><span>PA</span><span>BA</span><span>SLG</span><span>HR</span><span>K%</span></div>
+        <div className="fsm-pt__hd"><span>PITCH TYPE</span><span>PA</span><span>BA</span><span>SLG</span><span>ISO</span><span>HR</span><span>HR%</span><span>K%</span></div>
         {rows.map((p, i) => {
           const ba = parseFloat(p.ba) || null;
           const slg = parseFloat(p.slg) || null;
+          const iso = (ba != null && slg != null) ? +(slg - ba).toFixed(3) : null;
           const kPct = p.k_pct != null ? p.k_pct * 100 : null;
+          const hrPct = (p.hr != null && (p.pa || 0) >= 10) ? (p.hr / p.pa * 100) : null;
           const smallSample = (p.pa || 0) < 10;
           return (
             <div className={"fsm-pt__row" + (smallSample ? " fsm-pt__row--dim" : "")} key={i}>
@@ -1096,13 +1096,15 @@ function FsmBatterVsPitchTable({ title, bvp, arsenal }) {
               <span className="fsm-pt__num">{p.pa != null ? p.pa : "—"}</span>
               <span className={"fsm-ht " + fsmHeatClass(ba, [0.320, 0.275, 0.230, 0.180])}>{ba != null ? ba.toFixed(3).replace(/^0/, "") : "—"}</span>
               <span className={"fsm-ht " + fsmHeatClass(slg, [0.520, 0.430, 0.350, 0.270])}>{slg != null ? slg.toFixed(3).replace(/^0/, "") : "—"}</span>
+              <span className={"fsm-ht " + fsmHeatClass(iso, [0.250, 0.200, 0.150, 0.100])}>{iso != null ? iso.toFixed(3).replace(/^0/, "") : "—"}</span>
               <span className={fsmBvpHrCls(p.hr)}>{p.hr != null ? p.hr : "—"}</span>
+              <span className="fsm-pt__num">{hrPct != null ? hrPct.toFixed(1) + "%" : "—"}</span>
               <span className={fsmBvpKCls(kPct)}>{kPct != null ? kPct.toFixed(1) + "%" : "—"}</span>
             </div>
           );
         })}
       </div>
-      {rows.some((r) => (r.pa || 0) < 10) && <div className="fsm-pt__note">· = small sample (&lt;10 PA)</div>}
+      {rows.some((r) => (r.pa || 0) < 10) && <div className="fsm-pt__note">· = small sample (&lt;10 PA) — HR% suppressed below 10 PA</div>}
     </div>
   );
 }
@@ -1163,6 +1165,8 @@ function FsmPitchMix({ row, onClose, onBatter, builderMode = false }) {
   const arsenal = detail ? (detail.arsenal || []) : [];
   const pitchStats = detail ? (detail.pitch_stats || {}) : {};
   const bvp = detail ? (detail.batter_vs_pitches || {}) : {};
+  const dataYear = detail ? (detail.data_year || null) : null;
+  const isPriorYear = dataYear != null && dataYear !== new Date().getFullYear();
 
   return (
     <div className="fsm-card fsm-card--h2h">
@@ -1175,6 +1179,7 @@ function FsmPitchMix({ row, onClose, onBatter, builderMode = false }) {
             <div className="fsm-h2h__team">{oppTeam}</div>
             <div className="fsm-h2h__name">{pitcherName}</div>
             <span className="fsm-h2h__badge">{pitcherHand || "?"}HP</span>
+            {isPriorYear && <div className="aei-data-year-warn" style={{marginTop:"6px"}}>⚠ {dataYear} DATA — PRIOR SEASON</div>}
           </div>
           {arsenal.length === 0 ? (
             <div className="fsm-ah">
@@ -1366,6 +1371,8 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false, isJi
   const arsenal    = detail ? (detail.arsenal || []) : [];
   const pitchStats = detail ? (detail.pitch_stats || {}) : {};
   const bvp        = detail ? (detail.batter_vs_pitches || {}) : {};
+  const dataYear   = detail ? (detail.data_year || null) : null;
+  const isPriorYear = dataYear != null && dataYear !== new Date().getFullYear();
   const pitcherRecent = detail && Array.isArray(detail.pitcher_recent) ? detail.pitcher_recent : [];
   // TODO: exclude PH-only games when `started` field becomes available from MLB StatsAPI
   const batterRecent  = detail && Array.isArray(detail.batter_recent) ? detail.batter_recent.filter(g => (g.pa ?? 0) >= 1) : [];
@@ -1446,10 +1453,15 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false, isJi
       hrprob:          row.hrprob,
       barrel:          row.barrel,
       hh:              row.hh,
-      fd_bet_link:     row.fd_bet_link,
-      fd_event_link:   row.fd_event_link,
-      signal_snapshot: fsmBuildSnapshot(row, aeiBoard, null),
-    });
+      fd_bet_link:             row.fd_bet_link,
+      fd_event_link:           row.fd_event_link,
+      true_matchup_score:      row.true_matchup_score,
+      jig_score:               row.jigScore,
+      edge:                    row.edge,
+      arsenal_edge_score:      row.arsenal_edge_score,
+      arsenal_edge_confidence: row.arsenal_edge_confidence,
+      signal_snapshot:         fsmBuildSnapshot(row, aeiBoard, null),
+    }, onClose);
   };
 
   return (
@@ -1462,6 +1474,7 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false, isJi
         <div className="aei-header__title">ARSENAL EDGE INTEL</div>
         {aeiState && <div className={`aei-header__state aei-header__state--${aeiState.toLowerCase()}`}>{aeiState}</div>}
         <div className="aei-header__sub">{batterName} VS {pitcherName} — PITCH MIX EXPLOITATION</div>
+        {isPriorYear && <div className="aei-data-year-warn">⚠ {dataYear} DATA — PITCHER HAS NO {new Date().getFullYear()} STARTS YET · ALL ARSENAL STATS ARE PRIOR SEASON</div>}
       </div>
 
       <div className="aei-grid">
@@ -1502,7 +1515,7 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false, isJi
               <div className="aei-tblwrap__cap">{pLast} ARSENAL VS {batHand || "?"}HB</div>
               <div className="aei-ars">
                 <div className="aei-ars__hd">
-                  <span>PITCH</span><span>USAGE</span><span>VELO</span><span>WHIFF</span><span>HR/PA</span><span>K%</span><span>HH%</span>
+                  <span>PITCH</span><span>USAGE</span><span>VELO</span><span>WHIFF</span><span>HR/PA</span><span>K%</span><span>HH%</span><span>PA</span>
                 </div>
                 {fetchState === "loading" && <div className="aei-empty">Loading arsenal…</div>}
                 {fetchState === "no-pitcher" && <div className="aei-empty">Pitcher TBD — no detail available</div>}
@@ -1519,6 +1532,8 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false, isJi
                     : (ps.hr != null && ps.pa != null && ps.pa >= 10) ? (ps.hr/ps.pa*100).toFixed(1)+"%" : "—";
                   const kPct  = ps.k_pct != null ? (Number(ps.k_pct)*100).toFixed(0)+"%" : "—";
                   const hhPct = ps.display_hh != null ? (Number(ps.display_hh)*100).toFixed(0)+"%" : "—";
+                  const paVal = ps.pa != null ? ps.pa : null;
+                  const paSmall = paVal != null && paVal < 10;
                   const barW  = Math.min(100, (p.usage ?? 0) * 2) + "%";
                   return (
                     <div key={p.code} className={"aei-ars__row" + (isKey ? " aei-ars__row--key" : "")}>
@@ -1538,9 +1553,13 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false, isJi
                       <span className={"aei-c" + (hrPa !== "—" && parseFloat(hrPa) >= 3 ? " aei-c--hg" : "")}>{hrPa}</span>
                       <span className="aei-c">{kPct}</span>
                       <span className="aei-c">{hhPct}</span>
+                      <span className="aei-c" style={paSmall ? {color:"var(--amber)"} : {color:"var(--fg-3)"}} title={paSmall ? "Small sample (<10 PA)" : "PA vs this batter hand"}>{paVal != null ? paVal + (paSmall ? "*" : "") : "—"}</span>
                     </div>
                   );
                 })}
+                {arsorted.some(p => { const pa = (pitchStats[p.code] || {}).pa; return pa != null && pa < 10; }) && (
+                  <div className="aei-pt__note">* &lt;10 PA — small sample, treat with caution</div>
+                )}
               </div>
             </div>
           </div>
@@ -1778,7 +1797,7 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false, isJi
             </div>
 
             <div className="aei-tblwrap">
-              <div className="aei-tblwrap__cap">LAST 5 GAMES</div>
+              <div className="aei-tblwrap__cap">LAST 5 APPEARANCES</div>
               <div className="aei-bt aei-bt--scroll">
                 <div className="aei-bt__hd" style={{ gridTemplateColumns: recentGridTemplate, minWidth: recentGridMinWidth }}>
                   <span>DATE</span><span>HR</span><span>AVG</span><span>SLG</span><span>PA</span>
@@ -1843,8 +1862,8 @@ function FsmDetailModal({ modal, onClose, setModal, builderMode = false, isJigCo
 function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMode = false, isJigContext = false }) {
   const [view, setView] = React.useState("game");
   const [selGame, setSelGame] = React.useState("all");
-  const [group, setGroup] = React.useState("all");
-  const [focus, setFocus] = React.useState("all");
+  const [group] = React.useState("all");
+  const [focus] = React.useState("all");
   const [selRoles, setSelRoles] = React.useState([]);
   const toggleRole = (id) => setSelRoles((prev) => prev.includes(id) ? prev.filter((r) => r !== id) : [...prev, id]);
   const [selMetrics, setSelMetrics] = React.useState([]);
@@ -1859,6 +1878,7 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
   const [sortState, setSortState] = React.useState({ key: '_board_metric', dir: 'desc' });
   const [splitScope, setSplitScope] = React.useState('vs_hand');
   const [dataVersion, setDataVersion] = React.useState(0);
+  const [bestCohortOn, setBestCohortOn] = React.useState(false);
   React.useEffect(() => {
     const handler = () => setDataVersion(v => v + 1);
     window.addEventListener("hrEngineDataLoaded", handler);
@@ -1926,6 +1946,11 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
   const passMetric = (_r) => true;
 
   const pool = sorted.filter((r) => (selGame === "all" || r.gameId === selGame) && passGroup(r) && passFocus(r) && passRole(r) && passMetric(r));
+  const cohortCount = React.useMemo(() => pool.filter(fsmBestCohort).length, [pool]);
+  const displayPool = React.useMemo(() => {
+    if (!bestCohortOn) return pool;
+    return pool.filter(fsmBestCohort);
+  }, [pool, bestCohortOn]);
   const gamesToShow = selGame === "all" ? getFSMGames() : getFSMGames().filter((g) => g.id === selGame);
   const title = builderMode ? "JIG BUILDER WORKSPACE" : "FULL SLATE INTELLIGENCE MATRIX";
   const subtitle = builderMode ?
@@ -1935,13 +1960,14 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
   "Builder view preserves the current JIG-side source order. Use column controls for manual inspection." :
   "Flat list of every batter on the slate, ranked by model HR probability.";
   const tierDesc = builderMode ? FSM_BUILDER_TIER_DESC : FSM_TIER_DESC;
-  const groupOpts = builderMode ? FSM_BUILDER_GROUP_OPTS : FSM_GROUP_OPTS;
+
 
   const noteBits = [];
   if (group !== "all") noteBits.push(group === "qualified" ? "QUALIFIED" : "ELITE TARGETS");
   if (focus !== "all") noteBits.push("FOCUS " + focus.toUpperCase());
   if (selGame !== "all") noteBits.push("1 GAME");
   if (projSortOn && sortState && sortState.key === '_board_metric') noteBits.push((!isJigContext && !builderMode) ? "SORT: TM PROJECTED" : "SORT: JIG PROJECTED");
+  if (bestCohortOn) noteBits.push("BEST COHORT · " + cohortCount);
   const note = noteBits.length ? noteBits.join(" · ") : filterNote || "NO ACTIVE FILTERS";
 
   const openBatter = (row) => setModal({ type: "batter", row });
@@ -1962,10 +1988,42 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
           <div className="fsm-sub">{subtitle}</div>
         </div>
         <div className="fsm-topbar__status">
-          <span className="fsm-live"><i className="fsm-live__dot" />LIVE</span>
-          <span className="fsm-stat-pill">{pool.length} / {total} BATTERS</span>
-          <span className="fsm-stat-pill">{getFSMGames().length} GAMES</span>
-          <span className="fsm-clock">UPD {timer} AGO</span>
+          <div className="fsm-colmenu">
+            <button className="fsm-colbtn" onClick={() => setColOpen((o) => !o)} aria-expanded={colOpen}>
+              COLUMNS <b>{activeCols.length}</b>
+              <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </button>
+            <button className="fsm-colbtn" onClick={() => setEditMode((o) => !o)} title={editMode ? "EDIT mode ON — drag column headers to reorder; click to exit" : "EDIT mode — drag column headers to reorder (persists across sessions)"} style={editMode ? { borderColor: "rgba(26,255,102,0.5)", color: "#1aff66" } : undefined}>
+              EDIT{editMode ? " ✓" : ""}
+            </button>
+            {colOpen &&
+            <div className="fsm-colpop">
+              <div className="fsm-colpop__head"><span>STAT COLUMNS</span><button onClick={resetCols}>RESET</button></div>
+              <div className="fsm-colpop__hint">Hover or tap ⓘ for what each stat means</div>
+              <div className="fsm-colpop__list">
+                {colPref.order.map((k, idx) => {
+                  const c = FSM_COLS.find((x) => x.key === k);
+                  const on = !colPref.hidden.includes(k);
+                  return (
+                    <React.Fragment key={k}>
+                    <div className="fsm-colrow" title={c.title}>
+                      <label className="fsm-colrow__lbl">
+                        <input type="checkbox" checked={on} onChange={() => toggleCol(k)} />
+                        <span>{c.head}</span>
+                      </label>
+                      <span className="fsm-colrow__mv">
+                        <button className={"fsm-colinfo" + (colInfo === k ? " is-on" : "")} onClick={() => setColInfo((x) => x === k ? null : k)} title={c.title} aria-label="What is this stat?">ⓘ</button>
+                        <button onClick={() => moveCol(idx, -1)} disabled={idx === 0} aria-label="Move up">▲</button>
+                        <button onClick={() => moveCol(idx, 1)} disabled={idx === colPref.order.length - 1} aria-label="Move down">▼</button>
+                      </span>
+                    </div>
+                    {colInfo === k && <div className="fsm-coldesc">{c.title}</div>}
+                    </React.Fragment>);
+                })}
+              </div>
+            </div>
+            }
+          </div>
         </div>
       </div>
       )}
@@ -1981,17 +2039,100 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
 
       {/* CONTROLS + LEGENDS */}
       <div className="fsm-controls">
-        <div className="fsm-viewtoggle" role="tablist">
-          <button className={view === "game" ? "is-on" : ""} title="Group batters by game, each under its matchup header (park, time, weather, HR factor)." onClick={() => setView("game")}>GAME VIEW</button>
-          <button className={view === "player" ? "is-on" : ""} title={playerViewTitle} onClick={() => setView("player")}>PLAYER VIEW</button>
-        </div>
-        <div className="fsm-legends">
-          <div className="fsm-legend">
-            <span className="fsm-legend__title">TIER</span>
-            {FSM_TIER_ORDER.map((t) =>
-            <span className="fsm-tierpill" key={t} style={{ "--tc": FSM_TIERS[t].color, "--tg": FSM_TIERS[t].glow }} title={`${t} tier — ${tierDesc[t]}`}>{t}</span>
-            )}
+        <div className="fsm-ctrl-row">
+          {/* ── SORT & FILTER ── */}
+          <div className="fsm-ctrl-section">
+            <span className="fsm-ctrl-section__hd">SORT &amp; FILTER</span>
+            <div className="fsm-sortbar">
+              <span className="fsm-sortbar__lbl">SORT</span>
+              <button className={"fsm-sortbar__btn" + (!sortState ? " is-on" : "")} onClick={() => setSortState(null)} title="Default: canonical model rank order">RANK</button>
+              {!isJigContext && !builderMode ? (
+                <button className={"fsm-sortbar__btn" + (sortState && sortState.key === '_board_metric' ? " is-on" : "")} onClick={() => setSortState({ key: '_board_metric', dir: 'desc' })} title="Sort MAIN board by TM (True Matchup score) descending — HR PROB tiebreak. All players shown.">TM</button>
+              ) : (
+                <button className={"fsm-sortbar__btn" + (sortState && sortState.key === '_board_metric' ? " is-on" : "")} onClick={() => setSortState({ key: '_board_metric', dir: 'desc' })} title="Sort JIG board by jigScore descending — JIG formula, never TM. All players shown.">JIG SCORE</button>
+              )}
+              <span className="fsm-sortbar__sep" />
+              <button className={"fsm-sortbar__btn fsm-sortbar__toggle" + (projSortOn ? " is-on" : "")} onClick={() => setProjSortOn(v => !v)} title={projSortOn ? "Sorting by projected values — click for current values" : "Sorting by current values — click for projected values"}>{projSortOn ? "PROJECTION" : "CURRENT"}</button>
+            </div>
+            <div className="fsm-legend">
+              <span className="fsm-legend__title">TIER</span>
+              {FSM_TIER_ORDER.map((t) =>
+              <span className="fsm-tierpill" key={t} style={{ "--tc": FSM_TIERS[t].color, "--tg": FSM_TIERS[t].glow }} title={`${t} tier — ${tierDesc[t]}`}>{t}</span>
+              )}
+            </div>
+            <FsmRoleFilter selRoles={selRoles} onToggle={toggleRole} />
+            <div className="fsm-rg">
+              <span className="fsm-rg__label">COHORT</span>
+              <div className="fsm-rg__opts">
+                <button
+                  className={"fsm-rg__opt" + (bestCohortOn ? " is-on" : "")}
+                  style={bestCohortOn ? { color: "#ffe066", borderColor: "rgba(255,224,102,0.5)", background: "rgba(255,224,102,0.08)" } : undefined}
+                  title={"BEST COHORT — Shows ONLY players meeting all three study thresholds, in the board's active sort order. Thresholds: Expected PA ≥4.2 (lineup spots 1–3), Season HR/PA ≥4.35%, vs-hand SLG ≥.440. Toggle OFF to restore the full slate. Display-only — no scoring change."}
+                  onClick={() => setBestCohortOn(v => !v)}>
+                  BEST COHORT{bestCohortOn ? " · " + cohortCount : ""}
+                </button>
+              </div>
+            </div>
           </div>
+          <span className="fsm-ctrl-divider" />
+          {/* ── SCOPE ── */}
+          <div className="fsm-ctrl-section">
+            <span className="fsm-ctrl-section__hd">SCOPE</span>
+            <div className="fsm-viewtoggle" role="tablist">
+              <button className={view === "game" ? "is-on" : ""} title="Group batters by game, each under its matchup header (park, time, weather, HR factor)." onClick={() => setView("game")}>GAME VIEW</button>
+              <button className={view === "player" ? "is-on" : ""} title={playerViewTitle} onClick={() => setView("player")}>PLAYER VIEW</button>
+            </div>
+            <div className="fsm-pitchbar">
+              <span className="fsm-pitchbar__lbl">SPLIT SCOPE</span>
+              <div className="fsm-rg__opts" role="radiogroup" aria-label="Split scope" style={{ display: 'inline-flex', padding: '3px', borderRadius: '8px' }}>
+                <button className={"fsm-rg__opt" + (splitScope === 'vs_hand' ? " is-on" : "")} role="radio" aria-checked={splitScope === 'vs_hand'} title="Show REAL vs-hand splits for AVG/SLG/ISO/HR-PA/HR-count — PA always shown; thin <30 PA tagged amber; Statcast stays SZN" style={{ padding: '4px 10px', gap: 0 }} onClick={() => setSplitScope('vs_hand')}>VS HAND</button>
+                <button className={"fsm-rg__opt" + (splitScope === 'season' ? " is-on" : "")} role="radio" aria-checked={splitScope === 'season'} title="Show season-blended values for AVG/SLG/ISO/HR-PA/HR-count — compare vs-hand vs season by toggling" style={{ padding: '4px 10px', gap: 0 }} onClick={() => setSplitScope('season')}>SEASON</button>
+              </div>
+              {splitScope === 'vs_hand' && <>
+                <span className="fsm-scope fsm-scope--hand fsm-scope--pill" title="Real faced-hand split — reliable sample (30+ PA); PA shown">VS R / VS L · REAL · PA</span>
+                <span className="fsm-scope fsm-scope--thin fsm-scope--pill" title="Real faced-hand split — thin sample (<30 PA); treat with caution">THIN &lt;30 PA</span>
+                <span className="fsm-scope fsm-scope--szn fsm-scope--pill" title="Season-blended fallback — no hand split or pitcher TBD">SZN FALLBACK</span>
+              </>}
+              {splitScope === 'season' && <span className="fsm-scope fsm-scope--szn fsm-scope--pill" title="All stat columns showing season-blended values">ALL SZN · AVG / SLG / ISO / HR-PA / HR</span>}
+              <span className="fsm-pitchbar__note">{splitScope === 'vs_hand' ? 'AVG · SLG · ISO · HR/PA · HR = real vs-hand when tagged (PA always shown)' : 'AVG · SLG · ISO · HR/PA · HR = season-blended'} · Statcast = season always</span>
+            </div>
+          </div>
+          <span className="fsm-ctrl-divider" />
+          {/* ── GAMES ── */}
+          <div className="fsm-ctrl-section">
+            <span className="fsm-ctrl-section__hd">GAMES</span>
+            <div className="fsm-live-cluster">
+              <span className="fsm-live"><i className="fsm-live__dot" />LIVE</span>
+              <span className="fsm-stat-pill">{displayPool.length} / {total} BATTERS</span>
+              <span className="fsm-stat-pill">{getFSMGames().length} GAMES</span>
+              <span className="fsm-clock">UPD {timer} AGO</span>
+            </div>
+            {view === "game" &&
+            <div className="fsm-gamenav">
+              <button className={selGame === "all" ? "is-on" : ""} onClick={() => setSelGame("all")}>ALL · {getFSMGames().length}</button>
+              {getFSMGames().map((g) =>
+              <button key={g.id} className={selGame === g.id ? "is-on" : ""} onClick={() => setSelGame(g.id)}>
+                {g.away} @ {g.home}
+              </button>
+              )}
+            </div>
+            }
+            <label className="fsm-gamesel fsm-gamesel--inline">
+              <span className="fsm-gamesel__label">GAMES</span>
+              <span className="fsm-gamesel__field">
+                <select value={selGame} onChange={(e) => setSelGame(e.target.value)}>
+                  <option value="all">All games · {getFSMGames().length}</option>
+                  {getFSMGames().map((g) =>
+                  <option key={g.id} value={g.id}>{g.away} @ {g.home} · {g.time}</option>
+                  )}
+                </select>
+                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              </span>
+            </label>
+          </div>
+        </div>
+        {/* ── BATTER THREAT legend ── */}
+        <div className="fsm-ctrl-aux">
           <div className="fsm-legend">
             <span className="fsm-legend__title" title="Batter HR-threat tier: dot color shows how dangerous this hitter is for a HR (model probability + barrel quality). Green glow = TARGET pitcher (HR/9 ≥ 2.2) — a separate pitcher-vulnerability signal layered on top.">BATTER THREAT</span>
             {FSM_MATCHUP_ORDER.map((k) =>
@@ -2000,113 +2141,19 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
             <span className="fsm-mkey" key="TARGET" title={`TARGET — ${FSM_MATCHUP_DESC.TARGET}`}><i style={{ background: "#1aff66" }} />TARGET</span>
           </div>
         </div>
-        {/* GAMES — jump straight to any game */}
-        <label className="fsm-gamesel fsm-gamesel--inline">
-          <span className="fsm-gamesel__label">GAMES</span>
-          <span className="fsm-gamesel__field">
-            <select value={selGame} onChange={(e) => setSelGame(e.target.value)}>
-              <option value="all">All games · {getFSMGames().length}</option>
-              {getFSMGames().map((g) =>
-              <option key={g.id} value={g.id}>{g.away} @ {g.home} · {g.time}</option>
-              )}
-            </select>
-            <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-          </span>
-        </label>
-        {/* COLUMNS — add / remove / reorder stat columns */}
-        <div className="fsm-colmenu">
-          <button className="fsm-colbtn" onClick={() => setColOpen((o) => !o)} aria-expanded={colOpen}>
-            COLUMNS <b>{activeCols.length}</b>
-            <svg viewBox="0 0 24 24" width="13" height="13" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-          </button>
-          <button className="fsm-colbtn" onClick={() => setEditMode((o) => !o)} title={editMode ? "EDIT mode ON — drag column headers to reorder; click to exit" : "EDIT mode — drag column headers to reorder (persists across sessions)"} style={editMode ? { borderColor: "rgba(26,255,102,0.5)", color: "#1aff66" } : undefined}>
-            EDIT{editMode ? " ✓" : ""}
-          </button>
-          {colOpen &&
-          <div className="fsm-colpop">
-            <div className="fsm-colpop__head"><span>STAT COLUMNS</span><button onClick={resetCols}>RESET</button></div>
-            <div className="fsm-colpop__hint">Hover or tap ⓘ for what each stat means</div>
-            <div className="fsm-colpop__list">
-              {colPref.order.map((k, idx) => {
-                const c = FSM_COLS.find((x) => x.key === k);
-                const on = !colPref.hidden.includes(k);
-                return (
-                  <React.Fragment key={k}>
-                  <div className="fsm-colrow" title={c.title}>
-                    <label className="fsm-colrow__lbl">
-                      <input type="checkbox" checked={on} onChange={() => toggleCol(k)} />
-                      <span>{c.head}</span>
-                    </label>
-                    <span className="fsm-colrow__mv">
-                      <button className={"fsm-colinfo" + (colInfo === k ? " is-on" : "")} onClick={() => setColInfo((x) => x === k ? null : k)} title={c.title} aria-label="What is this stat?">ⓘ</button>
-                      <button onClick={() => moveCol(idx, -1)} disabled={idx === 0} aria-label="Move up">▲</button>
-                      <button onClick={() => moveCol(idx, 1)} disabled={idx === colPref.order.length - 1} aria-label="Move down">▼</button>
-                    </span>
-                  </div>
-                  {colInfo === k && <div className="fsm-coldesc">{c.title}</div>}
-                  </React.Fragment>);
-              })}
-            </div>
-          </div>
-          }
-        </div>
       </div>
-      <div className="fsm-pitchbar">
-        <span className="fsm-pitchbar__lbl">SPLIT SCOPE</span>
-        <div className="fsm-rg__opts" role="radiogroup" aria-label="Split scope" style={{ display: 'inline-flex', padding: '3px', borderRadius: '8px' }}>
-          <button className={"fsm-rg__opt" + (splitScope === 'vs_hand' ? " is-on" : "")} role="radio" aria-checked={splitScope === 'vs_hand'} title="Show REAL vs-hand splits for AVG/SLG/ISO/HR-PA/HR-count — PA always shown; thin <30 PA tagged amber; Statcast stays SZN" style={{ padding: '4px 10px', gap: 0 }} onClick={() => setSplitScope('vs_hand')}>VS HAND</button>
-          <button className={"fsm-rg__opt" + (splitScope === 'season' ? " is-on" : "")} role="radio" aria-checked={splitScope === 'season'} title="Show season-blended values for AVG/SLG/ISO/HR-PA/HR-count — compare vs-hand vs season by toggling" style={{ padding: '4px 10px', gap: 0 }} onClick={() => setSplitScope('season')}>SEASON</button>
-        </div>
-        {splitScope === 'vs_hand' && <>
-          <span className="fsm-scope fsm-scope--hand fsm-scope--pill" title="Real faced-hand split — reliable sample (30+ PA); PA shown">VS R / VS L · REAL · PA</span>
-          <span className="fsm-scope fsm-scope--thin fsm-scope--pill" title="Real faced-hand split — thin sample (<30 PA); treat with caution">THIN &lt;30 PA</span>
-          <span className="fsm-scope fsm-scope--szn fsm-scope--pill" title="Season-blended fallback — no hand split or pitcher TBD">SZN FALLBACK</span>
-        </>}
-        {splitScope === 'season' && <span className="fsm-scope fsm-scope--szn fsm-scope--pill" title="All stat columns showing season-blended values">ALL SZN · AVG / SLG / ISO / HR-PA / HR</span>}
-        <span className="fsm-pitchbar__note">{splitScope === 'vs_hand' ? 'AVG · SLG · ISO · HR/PA · HR = real vs-hand when tagged (PA always shown)' : 'AVG · SLG · ISO · HR/PA · HR = season-blended'} · Statcast = season always</span>
-      </div>
-      <div className="fsm-filters">
-        <FsmRadioGroup label="PLAYER GROUP" value={group} onChange={setGroup} options={groupOpts} />
-        <span className="fsm-filters__div" />
-        <FsmRadioGroup label="FOCUS" value={focus} onChange={setFocus} options={FSM_FOCUS_OPTS} />
-        <span className="fsm-filters__div" />
-        <FsmRoleFilter selRoles={selRoles} onToggle={toggleRole} />
-      </div>
-      <div className="fsm-sortbar">
-        <span className="fsm-sortbar__lbl">SORT</span>
-        <button className={"fsm-sortbar__btn" + (!sortState ? " is-on" : "")} onClick={() => setSortState(null)} title="Default: canonical model rank order">RANK</button>
-        {!isJigContext && !builderMode ? (
-          <button className={"fsm-sortbar__btn" + (sortState && sortState.key === '_board_metric' ? " is-on" : "")} onClick={() => setSortState({ key: '_board_metric', dir: 'desc' })} title="Sort MAIN board by TM (True Matchup score) descending — HR PROB tiebreak. All players shown.">TM</button>
-        ) : (
-          <button className={"fsm-sortbar__btn" + (sortState && sortState.key === '_board_metric' ? " is-on" : "")} onClick={() => setSortState({ key: '_board_metric', dir: 'desc' })} title="Sort JIG board by jigScore descending — JIG formula, never TM. All players shown.">JIG SCORE</button>
-        )}
-        <span className="fsm-sortbar__sep" />
-        <button className={"fsm-sortbar__btn fsm-sortbar__toggle" + (projSortOn ? " is-on" : "")} onClick={() => setProjSortOn(v => !v)} title={projSortOn ? "Sorting by projected values — click for current values" : "Sorting by current values — click for projected values"}>{projSortOn ? "PROJECTION" : "CURRENT"}</button>
-      </div>
-
-      {/* GAME-NAV CHIPS — one-click jump to each game */}
-      {view === "game" &&
-      <div className="fsm-gamenav">
-          <button className={selGame === "all" ? "is-on" : ""} onClick={() => setSelGame("all")}>ALL · {getFSMGames().length}</button>
-          {getFSMGames().map((g) =>
-        <button key={g.id} className={selGame === g.id ? "is-on" : ""} onClick={() => setSelGame(g.id)}>
-              {g.away} @ {g.home}
-            </button>
-        )}
-        </div>
-      }
 
       {/* BODY */}
-      {pool.length === 0 ?
+      {displayPool.length === 0 ?
       <div className="fsm-metric-empty">
         <span className="fsm-metric-empty__icon">—</span>
         <span className="fsm-metric-empty__msg">No players on today's slate.</span>
       </div> :
       view === "player" ?
-      <div className="fsm-tablewrap fsm-scroll-container"><FsmTable rows={pool} cols={activeCols} showGame={true} onBatter={openBatter} onPitch={openPitch} onReorder={onReorder} onFront={(key) => { const first = activeCols[0]; if (first && first.key !== key) onReorder(key, first.key); }} onSort={onSort} sortState={sortState} builderMode={builderMode} isJigContext={isJigContext} splitScope={splitScope} editMode={editMode} /></div> :
+      <div className="fsm-tablewrap fsm-scroll-container"><FsmTable rows={displayPool} cols={activeCols} showGame={true} onBatter={openBatter} onPitch={openPitch} onReorder={onReorder} onFront={(key) => { const first = activeCols[0]; if (first && first.key !== key) onReorder(key, first.key); }} onSort={onSort} sortState={sortState} builderMode={builderMode} isJigContext={isJigContext} splitScope={splitScope} editMode={editMode} /></div> :
 
       gamesToShow.map((game) => {
-        const gameRows = pool.filter((r) => r.gameId === game.id);
+        const gameRows = displayPool.filter((r) => r.gameId === game.id);
         if (!gameRows.length) return null;
         return (
           <div className="fsm-gameblock" key={game.id} id={`fsm-game-${game.id}`}>

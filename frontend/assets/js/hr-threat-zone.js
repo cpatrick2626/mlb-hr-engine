@@ -52,6 +52,7 @@ function HRThreatCard({ row, rank, compact, onAdd, addStatus }) {
 
   return (
     <div className={`hrtz-card${compact ? " hrtz-card--compact" : ""}`}
+         data-fullname={name}
          style={{ "--tc": tc }}>
       <div className="hrtz-card__rank">#{rank}</div>
       <div className="hrtz-card__body">

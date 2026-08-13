@@ -8,6 +8,21 @@
     SIGNAL: "#3b6fff", WATCH: "#ffb020", COLD: "#6b7872",
   };
 
+  /* TM score band colors — replicates TM_BANDS from full-slate-matrix.js */
+  const DP_TM_BANDS = [
+    { min: 60, color: "#4ade80" },
+    { min: 50, color: "#86efac" },
+    { min: 38, color: "#fbbf24" },
+    { min: 25, color: "#f97316" },
+    { min:  0, color: "#ef4444" },
+  ];
+  function dpTmColor(s) {
+    if (s == null || !Number.isFinite(Number(s))) return "#6b7872";
+    const n = Number(s);
+    for (const b of DP_TM_BANDS) { if (n >= b.min) return b.color; }
+    return "#ef4444";
+  }
+
   const DP_FONT = { fontFamily: 'var(--font-display, "Barlow Condensed", sans-serif)' };
 
 /* Normalize a display name for FD search URL only — strips generational suffixes
@@ -27,27 +42,11 @@ function fdSearchName(displayName) {
   }
 
   /* CRITICAL: window.open must be called synchronously inside the click handler,
-     before any await, to avoid popup-blocker. Never await before this call.
-     deepLink (bet-level, then event-level, resolved by caller) lands on the specific
-     game; often absent — name search stays the fallback, clipboard copy always. */
-  function dpOpenFD(name, deepLink) {
-    window.open(deepLink || dpFdUrl(name), "_blank", "noopener");
-    if (navigator.clipboard) navigator.clipboard.writeText(name).catch(() => {});
-    dpToast(deepLink ? "Opened FanDuel event: " + name : "Opened FanDuel search: " + name);
-  }
-
-  function dpToast(msg) {
-    let el = document.getElementById("dp-toast");
-    if (!el) {
-      el = document.createElement("div");
-      el.id = "dp-toast";
-      el.style.cssText = "position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1a2030;border:1px solid #3b6fff;color:#e0e8ff;padding:10px 18px;border-radius:8px;font-size:13px;font-family:inherit;z-index:10001;pointer-events:none;transition:opacity .3s;white-space:nowrap;";
-      document.body.appendChild(el);
-    }
-    el.textContent = msg;
-    el.style.opacity = "1";
-    clearTimeout(el._t);
-    el._t = setTimeout(() => { el.style.opacity = "0"; }, 2800);
+     before any await, to avoid popup-blocker. Never await before this call. */
+  function dpOpenFD(name) {
+    try { navigator.clipboard.writeText(name); } catch (_) {}
+    const url = dpFdUrl(name);
+    window.open(url, "_blank", "noopener");
   }
 
   function dpIsAuthed() {
@@ -61,7 +60,7 @@ function fdSearchName(displayName) {
 
   // Imperative controller — setRow is assigned on every PickerPortal render.
   // React guarantees useState setters are stable references so this is safe.
-  const _ctrl = { setRow: null };
+  const _ctrl = { setRow: null, onParentClose: null };
 
   // Defined at IIFE scope so React never unmounts/remounts it between renders.
   function DpOptBtn({ onClick, color, border, disabled, children }) {
@@ -104,28 +103,76 @@ function fdSearchName(displayName) {
         ? (Number(row.model_prob) * 100).toFixed(1) + "%"
         : "—";
     const authed = dpIsAuthed();
-    // Deep-link priority: bet link → event link → null (dpOpenFD falls back to search)
-    const fdLink = row.fd_bet_link || row.fd_event_link || null;
+
+    /* Five pick-card scores — read already-forwarded values, null-guarded. */
+    const isJigLane   = row.board === 'jig' || !!(row.signal_snapshot && row.signal_snapshot.lane === 'jig');
+    const tmLabel     = isJigLane ? 'JIG' : 'TM';
+    const tmRaw       = isJigLane
+      ? (row.jig_score != null && Number.isFinite(Number(row.jig_score)) ? Number(row.jig_score) : null)
+      : (row.true_matchup_score != null && Number.isFinite(Number(row.true_matchup_score)) ? Number(row.true_matchup_score) : null);
+    const tmDisplay   = tmRaw != null ? String(Math.round(tmRaw)) : "—";
+    const tmColor     = dpTmColor(tmRaw);
+    const sigRaw      = row.arsenal_edge_score != null && Number.isFinite(Number(row.arsenal_edge_score)) ? Number(row.arsenal_edge_score) : null;
+    const sigDisplay  = sigRaw != null ? sigRaw.toFixed(1) : "—";
+    const edgeRaw     = row.edge != null && Number.isFinite(Number(row.edge)) ? Number(row.edge) : null;
+    const edgeDisplay = edgeRaw != null ? (edgeRaw >= 0 ? "+" : "") + (edgeRaw * 100).toFixed(1) + "pp" : "—";
+    const edgeColor   = edgeRaw != null ? (edgeRaw >= 0 ? "#1aff66" : "#ffb020") : "#6b7872";
+    const confRaw     = row.arsenal_edge_confidence != null && Number.isFinite(Number(row.arsenal_edge_confidence)) ? Number(row.arsenal_edge_confidence) : null;
+    const confDisplay = confRaw != null ? Math.round(confRaw * 100) + "%" : "—";
+
+    // Captured once at render; called after picker closes to also dismiss the parent card.
+    const onParentClose = _ctrl.onParentClose;
+
+    // Current slip players — read once at render (picker is ephemeral)
+    const currentLegs = (window.__hrSlip ? window.__hrSlip.getState().legs : []);
 
     // Option 1: FD only — no auth required
     const handleFDOnly = () => {
-      dpOpenFD(name, fdLink);   // SYNC — popup-safe
+      dpOpenFD(name);   // SYNC — popup-safe
       onClose();
+      onParentClose && onParentClose();
     };
 
     // Option 2: Slip only — needs auth
     const handleSlipOnly = () => {
-      if (!authed) { onClose(); dpOpenAuth(); return; }
+      if (!authed) { onClose(); onParentClose && onParentClose(); dpOpenAuth(); return; }
       window.__hrSlip.addLeg(row);
       onClose();
+      onParentClose && onParentClose();
     };
 
     // Option 3: FD + Slip — FD MUST open synchronously before any async op
     const handleFDAndSlip = () => {
-      dpOpenFD(name, fdLink);   // SYNC — must be first; kept inside user gesture
-      if (!authed) { onClose(); dpOpenAuth(); return; }
+      dpOpenFD(name);   // SYNC — must be first; kept inside user gesture
+      if (!authed) { onClose(); onParentClose && onParentClose(); dpOpenAuth(); return; }
       window.__hrSlip.addLeg(row);   // async internally; fires, _notify updates surfaces
       onClose();
+      onParentClose && onParentClose();
+    };
+
+    // Option 4: FD + Add to Slip + Submit Slip — opens FD, adds leg, submits whole slip, auto-posts
+    const handleFDAddSubmit = async () => {
+      dpOpenFD(name);   // SYNC — must be first
+      if (!authed) { onClose(); onParentClose && onParentClose(); dpOpenAuth(); return; }
+      onClose();
+      onParentClose && onParentClose();
+      await window.__hrSlip.addLeg(row);
+      const { ticketId } = window.__hrSlip.getState();
+      if (!ticketId) return;
+      try {
+        const res = await window.__hrAuth.authFetch(
+          "https://mlb-hr-api.fly.dev/api/tickets/complete",
+          { method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ticket_id: ticketId }) }
+        );
+        if (res.ok) {
+          window.__hrAuth.authFetch("https://mlb-hr-api.fly.dev/api/community/posts", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ ticket_id: ticketId }),
+          }).catch(() => {});
+          window.__hrSlip.resetSlip();
+        }
+      } catch (_) {}
     };
 
     const opt2c = authed ? "#1aff66" : "#ffb020";
@@ -171,7 +218,7 @@ function fdSearchName(displayName) {
         >
           {/* Header: tier badge · player name · HR prob */}
           <div style={{
-            padding: "12px 16px 10px",
+            padding: "15px 16px 13px",
             borderBottom: "1px solid rgba(59,111,255,0.2)",
             display: "flex", alignItems: "center", gap: "10px",
           }}>
@@ -183,7 +230,7 @@ function fdSearchName(displayName) {
               {row.tier || "—"}
             </span>
             <span style={{
-              ...DP_FONT, fontSize: "14px", fontWeight: 800, letterSpacing: "0.06em",
+              ...DP_FONT, fontSize: "22px", fontWeight: 900, letterSpacing: "0.03em", lineHeight: 1,
               textTransform: "uppercase", color: "#e0e8ff",
               flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
             }}>
@@ -194,6 +241,177 @@ function fdSearchName(displayName) {
             </span>
           </div>
 
+          {/* Stacked score grid — column headers · preview row · selected-leg rows · totals row */}
+          {(() => {
+            /* Combined HR% — product of all finite leg decimals including preview.
+               hrprob on legs is in % units (e.g. 14.2); divide by 100 for decimal.
+               model_prob on the preview row is already 0–1 decimal. */
+            const previewDec = Number.isFinite(Number(row.model_prob))
+              ? Number(row.model_prob)
+              : Number.isFinite(Number(row.hrprob))
+                ? Number(row.hrprob) / 100
+                : null;
+
+            let product = previewDec;
+            let partial = previewDec == null;
+
+            for (const leg of currentLegs) {
+              const p = Number.isFinite(Number(leg.hrprob)) ? Number(leg.hrprob) / 100 : null;
+              if (p != null) { product = product == null ? p : product * p; }
+              else partial = true;
+            }
+
+            const combinedHRDisplay = product != null
+              ? (product * 100).toFixed(2) + "%" + (partial ? "*" : "")
+              : "—";
+
+            /* EV total: selected legs don't store edge, so "—" whenever any are present.
+               Preview-only case (0 selected legs) shows preview edge if it exists. */
+            const evTotalDisplay = (currentLegs.length === 0 && edgeRaw != null)
+              ? edgeDisplay
+              : "—";
+
+            const NAME_W = 80;
+
+            const colHdrSt = (laneColor) => ({
+              ...DP_FONT, fontSize: "9px", fontWeight: 700, letterSpacing: "0.12em",
+              textTransform: "uppercase", color: laneColor, whiteSpace: "nowrap",
+            });
+            const valSt = (color, fs) => ({
+              ...DP_FONT, fontSize: fs || (isMobile ? "11px" : "12px"), fontWeight: 800,
+              letterSpacing: "0.02em", lineHeight: 1, color,
+            });
+            const nameSt = (color) => ({
+              ...DP_FONT, fontSize: "12px", fontWeight: 800, letterSpacing: "0.04em",
+              textTransform: "uppercase", color: color || "rgba(224,232,255,0.9)",
+              display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+            });
+            const subSt = (color) => ({
+              ...DP_FONT, fontSize: "9px", fontWeight: 600, letterSpacing: "0.1em",
+              textTransform: "uppercase", color: color || "rgba(224,232,255,0.55)",
+              display: "block",
+            });
+
+            const cols = [
+              { label: "TM/JIG", laneColor: "rgba(255,138,147,0.92)" },
+              { label: "HR%",    laneColor: "rgba(59,111,255,0.88)"  },
+              { label: "SIGNAL", laneColor: "rgba(59,111,255,0.88)"  },
+              { label: "EDGE",   laneColor: "rgba(59,111,255,0.88)"  },
+              { label: "CONF",   laneColor: "rgba(59,111,255,0.88)"  },
+            ];
+
+            return (
+              <div style={{ borderBottom: "1px solid rgba(59,111,255,0.13)" }}>
+
+                {/* Column header row */}
+                <div style={{ display: "flex", alignItems: "center", padding: "5px 12px 2px" }}>
+                  <div style={{ width: NAME_W, flexShrink: 0 }} />
+                  {cols.map((c, i) => (
+                    <div key={i} style={{ flex: 1, textAlign: "center" }}>
+                      <span style={colHdrSt(c.laneColor)}>{c.label}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Preview batter row */}
+                <div style={{
+                  display: "flex", alignItems: "center",
+                  padding: "4px 12px 5px",
+                  background: "rgba(59,111,255,0.07)",
+                  borderLeft: `3px solid ${tierC}`,
+                }}>
+                  <div style={{ width: NAME_W, flexShrink: 0, paddingRight: 4, overflow: "hidden" }}>
+                    <span style={nameSt(tierC)}>{name}</span>
+                    <span style={subSt()}>preview</span>
+                  </div>
+                  {[
+                    { val: tmDisplay,   color: tmRaw   != null ? tmColor   : "#6b7872" },
+                    { val: prob,         color: prob    !== "—" ? tierC     : "#6b7872" },
+                    { val: sigDisplay,   color: sigRaw  != null ? tierC     : "#6b7872" },
+                    { val: edgeDisplay,  color: edgeColor },
+                    { val: confDisplay,  color: confRaw != null ? tierC     : "#6b7872" },
+                  ].map((cell, i) => (
+                    <div key={i} style={{ flex: 1, textAlign: "center" }}>
+                      <span style={valSt(cell.color)}>{cell.val}</span>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Selected leg rows — scores snapshotted at add time */}
+                {currentLegs.map((leg, i) => {
+                  const legHR = Number.isFinite(Number(leg.hrprob))
+                    ? Number(leg.hrprob).toFixed(1) + "%"
+                    : "—";
+                  const legTierC       = DP_TIER_COLOR[leg.tier] || "#6b7872";
+                  const legIsJig       = leg.board === 'jig';
+                  const legTmRaw       = legIsJig
+                    ? (leg.jig_score != null && Number.isFinite(Number(leg.jig_score)) ? Number(leg.jig_score) : null)
+                    : (leg.true_matchup_score != null && Number.isFinite(Number(leg.true_matchup_score)) ? Number(leg.true_matchup_score) : null);
+                  const legTmDisplay   = legTmRaw   != null ? String(Math.round(legTmRaw)) : "—";
+                  const legTmColor     = dpTmColor(legTmRaw);
+                  const legSigRaw      = leg.arsenal_edge_score != null && Number.isFinite(Number(leg.arsenal_edge_score)) ? Number(leg.arsenal_edge_score) : null;
+                  const legSigDisplay  = legSigRaw  != null ? legSigRaw.toFixed(1) : "—";
+                  const legEdgeRaw     = leg.edge != null && Number.isFinite(Number(leg.edge)) ? Number(leg.edge) : null;
+                  const legEdgeDisplay = legEdgeRaw != null ? (legEdgeRaw >= 0 ? "+" : "") + (legEdgeRaw * 100).toFixed(1) + "pp" : "—";
+                  const legEdgeColor   = legEdgeRaw != null ? (legEdgeRaw >= 0 ? "#1aff66" : "#ffb020") : "#6b7872";
+                  const legConfRaw     = leg.arsenal_edge_confidence != null && Number.isFinite(Number(leg.arsenal_edge_confidence)) ? Number(leg.arsenal_edge_confidence) : null;
+                  const legConfDisplay = legConfRaw != null ? Math.round(legConfRaw * 100) + "%" : "—";
+                  return (
+                    <div key={i} style={{
+                      display: "flex", alignItems: "center",
+                      padding: "4px 12px 4px",
+                      borderTop: "1px solid rgba(59,111,255,0.08)",
+                      borderLeft: `3px solid ${legTierC}55`,
+                    }}>
+                      <div style={{ width: NAME_W, flexShrink: 0, paddingRight: 4, overflow: "hidden" }}>
+                        <span style={nameSt()}>{leg.name || "—"}</span>
+                        {leg.tier && <span style={subSt(legTierC)}>{leg.tier}</span>}
+                      </div>
+                      {[
+                        { val: legTmDisplay,   color: legTmRaw   != null ? legTmColor  : "#6b7872" },
+                        { val: legHR,           color: legHR      !== "—"  ? legTierC   : "#6b7872" },
+                        { val: legSigDisplay,   color: legSigRaw  != null  ? legTierC   : "#6b7872" },
+                        { val: legEdgeDisplay,  color: legEdgeColor },
+                        { val: legConfDisplay,  color: legConfRaw != null  ? legTierC   : "#6b7872" },
+                      ].map((cell, j) => (
+                        <div key={j} style={{ flex: 1, textAlign: "center" }}>
+                          <span style={valSt(cell.color)}>{cell.val}</span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
+
+                {/* Totals row — combined HR% product; EV only if no selected legs + preview has edge;
+                    TM/Signal/Conf are non-aggregable across legs → "—" (never summed) */}
+                <div style={{
+                  display: "flex", alignItems: "center",
+                  padding: "5px 12px 5px",
+                  marginTop: "3px",
+                  borderTop: "1px solid rgba(255,51,68,0.35)",
+                  background: "rgba(255,51,68,0.05)",
+                  borderLeft: "3px solid rgba(255,51,68,0.6)",
+                }}>
+                  <div style={{ width: NAME_W, flexShrink: 0, paddingRight: 4, overflow: "hidden" }}>
+                    <span style={subSt("rgba(255,51,68,0.85)")}>TICKET</span>
+                  </div>
+                  {[
+                    { val: "—",              color: "#6b7872",  fs: undefined },
+                    { val: combinedHRDisplay, color: partial ? "#ffb020" : "#1aff66", fs: isMobile ? "10px" : "11px" },
+                    { val: "—",              color: "#6b7872",  fs: undefined },
+                    { val: evTotalDisplay,   color: evTotalDisplay !== "—" ? edgeColor : "#6b7872", fs: undefined },
+                    { val: "—",              color: "#6b7872",  fs: undefined },
+                  ].map((cell, i) => (
+                    <div key={i} style={{ flex: 1, textAlign: "center" }}>
+                      <span style={valSt(cell.color, cell.fs)}>{cell.val}</span>
+                    </div>
+                  ))}
+                </div>
+
+              </div>
+            );
+          })()}
+
           <div style={{
             ...DP_FONT, fontSize: "9px", fontWeight: 800, letterSpacing: "0.2em",
             textTransform: "uppercase", color: "rgba(59,111,255,0.75)",
@@ -201,6 +419,7 @@ function fdSearchName(displayName) {
           }}>
             SELECT DESTINATION
           </div>
+
 
           <div style={{ padding: "4px 12px 14px", display: "flex", flexDirection: "column", gap: "6px" }}>
 
@@ -232,10 +451,16 @@ function fdSearchName(displayName) {
               </span>
             </DpOptBtn>
 
-            {/* Option 4 — disabled; Phase C only */}
-            <DpOptBtn color="#6b7872" border="rgba(107,120,114,0.25)" disabled>
-              <span style={titleSt("#6b7872")}>FD + CONFIRM SLIP + START NEW</span>
-              <span style={descSt} title="requires slip confirm flow — Phase C">Requires slip confirm flow — Phase C.</span>
+            {/* Option 4 — FD + Add + Submit Slip (enabled; needs auth) */}
+            <DpOptBtn onClick={handleFDAddSubmit} color={opt2c} border={opt2b} disabled={!authed}>
+              <span style={titleSt(authed ? opt2c : "#6b7872")}>
+                {authed ? "FD + ADD TO SLIP + SUBMIT SLIP" : "⚿ FD + ADD TO SLIP + SUBMIT SLIP"}
+              </span>
+              <span style={descSt}>
+                {authed
+                  ? "Opens FD, adds to slip, submits and auto-posts."
+                  : "Sign in to use this option."}
+              </span>
             </DpOptBtn>
 
           </div>
@@ -267,7 +492,8 @@ function fdSearchName(displayName) {
 
   // Override the stub registered in slip-state.js with the real implementation.
   if (window.__hrSlip) {
-    window.__hrSlip.requestAdd = function (row) {
+    window.__hrSlip.requestAdd = function (row, onParentClose) {
+      _ctrl.onParentClose = onParentClose || null;
       if (_ctrl.setRow) _ctrl.setRow(row);
     };
   }

@@ -159,9 +159,10 @@ const Stage = ({ engine, lens, ccOpen, onCloseCC, appliedFilters, roomFilters, o
         </div>;
       } else {
         body = <React.Fragment>
-          <HRThreatZone rows={rows} isJigContext={engine.id === "jig"} />
-          <PitcherVulnerabilityStrip rows={rows} isJigContext={engine.id === "jig"} />
-          <EscalationFeed rows={rows} isJigContext={engine.id === "jig"} />
+          {/* HIDDEN — PRIMARY HR THREAT ZONE, PITCHER VULNERABILITY, ESCALATION FEED relocated to Strategy engine in future task */}
+          {/* <HRThreatZone rows={rows} isJigContext={engine.id === "jig"} /> */}
+          {/* <PitcherVulnerabilityStrip rows={rows} isJigContext={engine.id === "jig"} /> */}
+          {/* <EscalationFeed rows={rows} isJigContext={engine.id === "jig"} /> */}
           <div className="md-room">
             <FullSlateMatrix
             rows={rows}
@@ -196,6 +197,12 @@ const Stage = ({ engine, lens, ccOpen, onCloseCC, appliedFilters, roomFilters, o
         <ArsenalEdgeExploit rows={applyRoomFilters(arsenalRows, appliedFilters)} />
       </div>
     );
+  } else if (engine.id === "community" && (!lens || lens.id === "betSlips")) {
+    body = <CommunityBoard />;
+  } else if (engine.id === "community" && lens && lens.id === "profile") {
+    body = <CommunityProfile />;
+  } else if (engine.id === "community" && lens && lens.id === "history") {
+    body = <SlipHistory />;
   } else {
     body = <RadarScope engineName={engine.name + (engine.suffix ? " " + engine.suffix : "")} lensName={lens ? lens.name : "Overview"} accent={engine.color} />;
   }

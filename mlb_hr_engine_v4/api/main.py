@@ -15,14 +15,22 @@ POST /api/invite/redeem           — redeem invite code (auth required)
 POST /api/tickets/leg             — add leg to ticket; null ticket_id opens new ticket (JWT required — Phase 1)
 POST /api/tickets/leg/remove      — soft-delete a leg (sets removed=true); ownership-checked (JWT required — Phase A)
 POST /api/tickets/complete        — finalize ticket, set fd_deployed=true (JWT required — Phase 1)
+GET  /api/tickets/{id}/analysis   — honest per-leg/combined probability + EV analysis (JWT owner only)
 POST /api/fd-event                — record a FanDuel handoff click (JWT required)
 GET  /api/ledger?lane=main|jig    — settled/void legs + hit-rate buckets, per user per lane (JWT required — Phase S2/D5)
 GET  /api/my-tickets              — caller's tickets + legs + game linescores (JWT required)
+GET  /api/profile                 — caller's public community identity (JWT required)
+PATCH /api/profile/username       — edit caller's username only (JWT required)
+POST /api/community/posts         — publish caller's completed ticket (JWT required)
+GET  /api/community/posts         — community slips grouped by public identity (open read)
+DELETE /api/community/posts/{id}  — un-publish caller's post; ticket remains intact (JWT required)
 GET  /api/builds                  — list caller's named TCC builds (JWT required)
 POST /api/builds                  — create/update caller's named TCC build (JWT required)
 DELETE /api/builds/{build_id}     — delete caller's own TCC build (JWT required)
 GET  /api/layout/{layout_key}     — return caller's column layout for key, or null (JWT required)
 POST /api/layout/{layout_key}     — upsert caller's column layout for key (JWT required)
+PATCH /api/tickets/{id}/stake     — update stake on caller's own ticket (JWT required)
+GET  /api/slate/export            — full-slate CSV/JSON export: all players, all fields (no auth)
 
 The pipeline is normally triggered by GitHub Actions cron (see api/cron.py).
 The /api/pipeline/run endpoint is a manual fallback; it runs in a background
@@ -35,12 +43,15 @@ import os
 import copy
 import json
 import logging
+import re
 from datetime import date, datetime, timezone
+from math import isfinite
 
 from dotenv import load_dotenv
 load_dotenv()
 
-from fastapi import FastAPI, Depends, HTTPException, Query, Request, BackgroundTasks
+from fastapi import FastAPI, Depends, HTTPException, Query, Request, BackgroundTasks, Response
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from api.auth import require_auth, require_beta
@@ -53,7 +64,7 @@ from clients.batter_pitch_profile import (
     get_batter_pitch_profile_display,
     pitch_mix_verdict_display,
 )
-from clients.pitch_mix import canonical_pitch_type, get_batter_vs_pitches, get_pitcher_pitch_stats, load_hvy_context
+from clients.pitch_mix import canonical_pitch_type, get_batter_vs_pitches, get_pitcher_data_year, get_pitcher_pitch_stats, load_hvy_context
 from config import FS_TIER_THRESHOLDS, JIG_TIER_THRESHOLDS
 from roles import classify_role
 
@@ -74,6 +85,10 @@ app.add_middleware(
 )
 
 CRON_SECRET = os.environ.get("CRON_SECRET", "")
+
+# Warn on board when Odds API remaining requests fall at or below this value.
+# Free tier is 500/month; 50 gives ~4-5 pipeline runs of headroom before exhaustion.
+ODDS_QUOTA_LOW_THRESHOLD = 50
 
 
 # ── Health ─────────────────────────────────────────────────────────────────────
@@ -276,7 +291,15 @@ async def ticket_complete(body: dict, user=Depends(require_auth)):
     raw_stake = body.get("stake")
     stake = float(raw_stake) if raw_stake is not None else None
     result = complete_ticket(ticket_id, user_id=user.get("sub"), stake=stake)
-    return {"status": "ok", **result}
+    return {
+        "status": "ok",
+        **result,
+        # Explicit lifecycle contract for Pass 2: the completed ticket is no
+        # longer the active building slip. The next add, with no ticket_id,
+        # opens a fresh ticket rather than creating an empty ticket here.
+        "reset_slip": True,
+        "active_ticket_id": None,
+    }
 
 
 # ── FanDuel handoff capture (Phase 1) ─────────────────────────────────────
@@ -426,6 +449,34 @@ async def ledger(
     }
 
 
+@app.patch("/api/tickets/{ticket_id}/stake")
+async def update_ticket_stake(ticket_id: str, body: dict, user=Depends(require_auth)):
+    """Update stake on the caller's own ticket. Owner-only; auth-gated."""
+    raw_stake = body.get("stake")
+    if raw_stake is not None:
+        if isinstance(raw_stake, bool) or not isinstance(raw_stake, (int, float)):
+            raise HTTPException(status_code=422, detail="stake must be a non-negative number or null")
+        stake = float(raw_stake)
+        if stake < 0 or not isfinite(stake):
+            raise HTTPException(status_code=422, detail="stake must be a finite non-negative number")
+    else:
+        stake = None
+    result = (
+        supabase_client()
+        .table("tickets")
+        .select("ticket_id,user_id")
+        .eq("ticket_id", ticket_id)
+        .limit(1)
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    if result.data[0].get("user_id") != user.get("sub"):
+        raise HTTPException(status_code=403, detail="Not authorized for this ticket")
+    supabase_client().table("tickets").update({"stake": stake}).eq("ticket_id", ticket_id).execute()
+    return {"status": "ok", "ticket_id": ticket_id, "stake": stake}
+
+
 @app.post("/api/tickets/leg/remove")
 async def ticket_remove_leg(body: dict, user=Depends(require_auth)):
     leg_id = body.get("leg_id")
@@ -449,6 +500,475 @@ def my_tickets(user=Depends(require_auth)):
     if not user_id:
         raise HTTPException(status_code=401, detail="Authenticated token is missing sub")
     return {"tickets": get_my_tickets(supabase_client(), user_id)}
+
+
+# ── Community Bet Slips (Phase 1 backend/data foundation) ────────────────────
+# Social/capture layer only. It references frozen tickets/legs but never writes
+# to engine, scoring, probability, tiers, JIG, pipeline, or slate data.
+
+_PROFILE_COLUMNS = "user_id,app_number,username"
+_COMMUNITY_TICKET_COLUMNS = (
+    "ticket_id,date,board,ticket_type,num_legs,stake,odds_american,sportsbook,"
+    "status,fd_deployed,created_at,completed_at,"
+    "legs(leg_id,leg_date,player_name,player_id,team,opponent,pitcher,"
+    "model_prob,tier,model_tier_rank,engine_generated_at,market_odds_american,"
+    "market_prob,signal_snapshot,removed)"
+)
+_TICKET_ANALYSIS_COLUMNS = (
+    "ticket_id,user_id,odds_american,"
+    "legs(leg_id,player_name,model_prob,market_odds_american,signal_snapshot,removed)"
+)
+_USERNAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 _-]{2,29}$")
+
+
+def _probability(value) -> float | None:
+    """Return a valid decimal probability without correcting or replacing it."""
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        probability = float(value)
+    except (TypeError, ValueError):
+        return None
+    return probability if 0.0 <= probability <= 1.0 else None
+
+
+def _american_odds_math(value) -> dict | None:
+    """Use the same American implied-probability/EV basis as the board."""
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        american = int(value)
+    except (TypeError, ValueError):
+        return None
+    if american == 0:
+        return None
+    if american > 0:
+        implied_probability = 100.0 / (american + 100.0)
+        decimal_odds = 1.0 + american / 100.0
+    else:
+        absolute = abs(american)
+        implied_probability = absolute / (absolute + 100.0)
+        decimal_odds = 1.0 + 100.0 / absolute
+    return {
+        "american": american,
+        "implied_probability": implied_probability,
+        "decimal_odds": decimal_odds,
+    }
+
+
+def _leg_sample_evidence(signal_snapshot) -> dict:
+    """Read frozen sample evidence only; never fetch or invent a replacement."""
+    if not isinstance(signal_snapshot, dict):
+        return {"pa": None, "basis": "not_captured", "quality": "unknown"}
+
+    candidates = (
+        (signal_snapshot.get("vs_hand_pa"), "vs_hand_pa"),
+        ((signal_snapshot.get("data_quality") or {}).get("vs_hand_pa"), "vs_hand_pa"),
+        (
+            (((signal_snapshot.get("aei") or {}).get("batter_vs_top_pitch") or {}).get("pa")),
+            "batter_vs_top_pitch_pa",
+        ),
+    )
+    for raw_pa, basis in candidates:
+        if raw_pa is None or isinstance(raw_pa, bool):
+            continue
+        try:
+            pa = int(raw_pa)
+        except (TypeError, ValueError):
+            continue
+        if pa < 0:
+            continue
+        quality = "thin" if pa < 10 else "limited" if pa < 30 else "adequate"
+        return {"pa": pa, "basis": basis, "quality": quality}
+    return {"pa": None, "basis": "not_captured", "quality": "unknown"}
+
+
+def _ev_grade(ev_pct: float | None) -> dict:
+    """Grade only combined EV; leg count, probability, and vibes never boost it."""
+    if ev_pct is None:
+        return {
+            "status": "pending",
+            "letter": None,
+            "label": "PENDING",
+            "color": None,
+            "driver": "combined_ev_pct",
+        }
+    if ev_pct >= 10.0:
+        letter = "A"
+    elif ev_pct >= 5.0:
+        letter = "B"
+    elif ev_pct > 0.0:
+        letter = "C+"
+    elif ev_pct == 0.0:
+        letter = "C"
+    elif ev_pct >= -10.0:
+        letter = "D"
+    else:
+        letter = "F"
+    label = "GOOD" if ev_pct > 0.0 else "NEUTRAL" if ev_pct == 0.0 else "POOR"
+    color = "green" if ev_pct > 0.0 else "amber" if ev_pct == 0.0 else "red"
+    return {
+        "status": "complete",
+        "letter": letter,
+        "label": label,
+        "color": color,
+        "driver": "combined_ev_pct",
+    }
+
+
+def _ticket_analysis(ticket: dict) -> dict:
+    """Derive honest ticket math from frozen calibrated model_prob + real odds."""
+    source_legs = [leg for leg in (ticket.get("legs") or []) if not leg.get("removed", False)]
+    analyzed_legs: list[dict] = []
+    probability_product = 1.0
+    model_probabilities_complete = bool(source_legs)
+    leg_odds_complete = bool(source_legs)
+    leg_decimal_product = 1.0
+    raw_single_evs: list[tuple[str | None, float]] = []
+    confidence_reasons: set[str] = set()
+    sample_qualities: list[str] = []
+
+    if not source_legs:
+        confidence_reasons.add("no_active_legs")
+
+    for leg in source_legs:
+        model_probability = _probability(leg.get("model_prob"))
+        odds_math = _american_odds_math(leg.get("market_odds_american"))
+        sample = _leg_sample_evidence(leg.get("signal_snapshot"))
+        sample_qualities.append(sample["quality"])
+
+        if model_probability is None:
+            model_probabilities_complete = False
+            confidence_reasons.add("invalid_or_missing_model_prob")
+        else:
+            probability_product *= model_probability
+
+        pending_reasons: list[str] = []
+        if odds_math is None:
+            leg_odds_complete = False
+            pending_reasons.append(
+                "missing_odds" if leg.get("market_odds_american") is None else "invalid_odds"
+            )
+            confidence_reasons.add(pending_reasons[-1])
+        else:
+            leg_decimal_product *= odds_math["decimal_odds"]
+
+        if sample["quality"] == "unknown":
+            confidence_reasons.add("sample_size_not_captured")
+        elif sample["quality"] == "thin":
+            confidence_reasons.add("thin_sample_under_10_pa")
+
+        implied_probability = odds_math["implied_probability"] if odds_math else None
+        edge = (
+            model_probability - implied_probability
+            if model_probability is not None and implied_probability is not None
+            else None
+        )
+        raw_ev = (
+            model_probability * (odds_math["decimal_odds"] - 1.0) - (1.0 - model_probability)
+            if model_probability is not None and odds_math is not None
+            else None
+        )
+        if raw_ev is not None:
+            raw_single_evs.append((leg.get("leg_id"), raw_ev * 100.0))
+
+        analyzed_legs.append({
+            "leg_id": leg.get("leg_id"),
+            "player_name": leg.get("player_name"),
+            "status": "pending" if pending_reasons or model_probability is None else "complete",
+            "pending_reasons": pending_reasons + (
+                ["invalid_or_missing_model_prob"] if model_probability is None else []
+            ),
+            "model_prob": round(model_probability, 6) if model_probability is not None else None,
+            "american_odds": odds_math["american"] if odds_math else None,
+            "decimal_odds": round(odds_math["decimal_odds"], 4) if odds_math else None,
+            "implied_prob": round(implied_probability, 4) if implied_probability is not None else None,
+            "edge": round(edge, 4) if edge is not None else None,
+            "ev_pct": round(raw_ev * 100.0, 2) if raw_ev is not None else None,
+            "data_quality": sample,
+        })
+
+    combined_probability = probability_product if model_probabilities_complete else None
+    ticket_odds_value = ticket.get("odds_american")
+    ticket_odds_math = _american_odds_math(ticket_odds_value)
+    invalid_ticket_odds = ticket_odds_value is not None and ticket_odds_math is None
+    combined_pending_reasons: list[str] = []
+    if not source_legs:
+        combined_pending_reasons.append("no_active_legs")
+    if not model_probabilities_complete:
+        combined_pending_reasons.append("invalid_or_missing_model_prob")
+    if not leg_odds_complete:
+        combined_pending_reasons.append("one_or_more_legs_missing_odds")
+    if invalid_ticket_odds:
+        combined_pending_reasons.append("invalid_ticket_odds")
+
+    combined_decimal_odds = None
+    odds_source = None
+    if not combined_pending_reasons:
+        if ticket_odds_math is not None:
+            combined_decimal_odds = ticket_odds_math["decimal_odds"]
+            odds_source = "ticket_actual"
+        else:
+            combined_decimal_odds = leg_decimal_product
+            odds_source = "leg_product"
+
+    raw_combined_ev_pct = (
+        (combined_probability * combined_decimal_odds - 1.0) * 100.0
+        if combined_probability is not None and combined_decimal_odds is not None
+        else None
+    )
+    combined_ev_pct = round(raw_combined_ev_pct, 2) if raw_combined_ev_pct is not None else None
+    best_single = max(raw_single_evs, key=lambda item: item[1]) if raw_single_evs else None
+    singles_better = (
+        raw_combined_ev_pct < best_single[1]
+        if raw_combined_ev_pct is not None and best_single is not None
+        else None
+    )
+
+    if confidence_reasons:
+        confidence_label = "LOW"
+    elif any(quality == "limited" for quality in sample_qualities):
+        confidence_label = "MEDIUM"
+    else:
+        confidence_label = "HIGH"
+
+    return {
+        "ticket_id": ticket.get("ticket_id"),
+        "status": "pending" if combined_pending_reasons else "complete",
+        "legs": analyzed_legs,
+        "combined": {
+            "status": "pending" if combined_pending_reasons else "complete",
+            "partial": bool(combined_pending_reasons),
+            "pending_reasons": combined_pending_reasons,
+            "probability": round(combined_probability, 6) if combined_probability is not None else None,
+            "decimal_odds": round(combined_decimal_odds, 4) if combined_decimal_odds is not None else None,
+            "odds_source": odds_source,
+            "ticket_american_odds": ticket_odds_math["american"] if ticket_odds_math else None,
+            "ev_pct": combined_ev_pct,
+            "assumption": "independent_legs_probability_product",
+            "correlation_adjusted": False,
+        },
+        "grade": _ev_grade(combined_ev_pct),
+        "confidence": {
+            "label": confidence_label,
+            "meaning": "data_reliability_not_win_probability",
+            "reasons": sorted(confidence_reasons),
+        },
+        "honest_read": {
+            "singles_would_be_better": singles_better,
+            "best_single_leg_id": best_single[0] if best_single else None,
+            "best_single_ev_pct": round(best_single[1], 2) if best_single else None,
+        },
+    }
+
+
+@app.get("/api/tickets/{ticket_id}/analysis")
+async def get_ticket_analysis(ticket_id: str, user=Depends(require_auth)):
+    """Return derived ticket math only when the ticket belongs to the JWT caller."""
+    result = (
+        supabase_client()
+        .table("tickets")
+        .select(_TICKET_ANALYSIS_COLUMNS)
+        .eq("ticket_id", ticket_id)
+        .limit(1)
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    ticket = result.data[0]
+    if ticket.get("user_id") != user.get("sub"):
+        raise HTTPException(status_code=403, detail="Not authorized for this ticket")
+    return {"analysis": _ticket_analysis(ticket)}
+
+
+def _profile_for_user(user_id: str) -> dict:
+    result = (
+        supabase_client()
+        .table("profiles")
+        .select(_PROFILE_COLUMNS)
+        .eq("user_id", user_id)
+        .limit(1)
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Community profile not found; complete profile migration first")
+    return result.data[0]
+
+
+def _public_ticket(ticket: dict) -> dict:
+    """Return an allowlisted ticket snapshot; never leak ticket.user_id or email."""
+    return {
+        key: ticket.get(key)
+        for key in (
+            "ticket_id", "date", "board", "ticket_type", "num_legs", "stake",
+            "odds_american", "sportsbook", "status", "fd_deployed", "created_at", "completed_at",
+        )
+    } | {
+        "legs": [
+            {
+                key: leg.get(key)
+                for key in (
+                    "leg_id", "leg_date", "player_name", "player_id", "team", "opponent", "pitcher",
+                    "model_prob", "tier", "model_tier_rank", "engine_generated_at",
+                    "market_odds_american", "market_prob", "signal_snapshot",
+                )
+            }
+            for leg in (ticket.get("legs") or [])
+            if not leg.get("removed", False)
+        ],
+        "analysis": _ticket_analysis(ticket),
+    }
+
+
+@app.get("/api/profile")
+async def get_profile(user=Depends(require_auth)):
+    """Return only the JWT caller's public identity; app_number is read-only."""
+    return {"profile": _profile_for_user(user.get("sub"))}
+
+
+@app.patch("/api/profile/username")
+async def update_username(body: dict, user=Depends(require_auth)):
+    """Edit the caller's username. app_number has no mutation endpoint."""
+    username = str(body.get("username") or "").strip()
+    if not _USERNAME_RE.fullmatch(username):
+        raise HTTPException(
+            status_code=422,
+            detail="username must be 3-30 characters: letters, numbers, spaces, _ or -",
+        )
+    user_id = user.get("sub")
+    _profile_for_user(user_id)
+    try:
+        result = (
+            supabase_client()
+            .table("profiles")
+            .update({"username": username})
+            .eq("user_id", user_id)
+            .execute()
+        )
+    except Exception as exc:
+        if "profiles_username_lower_unique" in str(exc) or "duplicate key" in str(exc).lower():
+            raise HTTPException(status_code=409, detail="Username is already taken") from exc
+        raise
+    return {"status": "ok", "profile": result.data[0] if result.data else _profile_for_user(user_id)}
+
+
+@app.post("/api/community/posts")
+async def post_ticket_to_community(body: dict, user=Depends(require_auth)):
+    """Publish a completed ticket only when it belongs to the JWT caller."""
+    ticket_id = body.get("ticket_id")
+    if not ticket_id:
+        raise HTTPException(status_code=400, detail="ticket_id is required")
+    user_id = user.get("sub")
+    ticket_result = (
+        supabase_client()
+        .table("tickets")
+        .select("ticket_id,user_id,completed_at,fd_deployed")
+        .eq("ticket_id", ticket_id)
+        .limit(1)
+        .execute()
+    )
+    if not ticket_result.data:
+        raise HTTPException(status_code=404, detail="Ticket not found")
+    ticket = ticket_result.data[0]
+    if ticket.get("user_id") != user_id:
+        raise HTTPException(status_code=403, detail="Not authorized for this ticket")
+    if not ticket.get("completed_at") or not ticket.get("fd_deployed"):
+        raise HTTPException(status_code=409, detail="Only submitted tickets can be posted to community")
+    _profile_for_user(user_id)
+    existing = (
+        supabase_client()
+        .table("community_posts")
+        .select("post_id,ticket_id,posted_at")
+        .eq("ticket_id", ticket_id)
+        .limit(1)
+        .execute()
+    )
+    if existing.data:
+        raise HTTPException(status_code=409, detail="Ticket is already posted to community")
+    result = supabase_client().table("community_posts").insert({
+        "ticket_id": ticket_id,
+        "user_id": user_id,
+    }).execute()
+    post = result.data[0]
+    return {"status": "ok", "post": {
+        "post_id": post["post_id"],
+        "ticket_id": post["ticket_id"],
+        "posted_at": post["posted_at"],
+    }}
+
+
+@app.delete("/api/community/posts/{post_id}")
+async def remove_community_post(post_id: str, user=Depends(require_auth)):
+    """Un-publish the caller's post while preserving its ticket and legs."""
+    result = (
+        supabase_client()
+        .table("community_posts")
+        .select("post_id,ticket_id,user_id")
+        .eq("post_id", post_id)
+        .limit(1)
+        .execute()
+    )
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Community post not found")
+    post = result.data[0]
+    if post.get("user_id") != user.get("sub"):
+        raise HTTPException(status_code=403, detail="Not authorized for this community post")
+    supabase_client().table("community_posts").delete().eq("post_id", post_id).execute()
+    return {
+        "status": "ok",
+        "post_id": post["post_id"],
+        "ticket_id": post["ticket_id"],
+        "removed": True,
+        "ticket_preserved": True,
+    }
+
+
+@app.get("/api/community/posts")
+async def get_community_posts():
+    """Return public slips grouped by stable identity (app_number). Open read — no auth."""
+    posts = (
+        supabase_client()
+        .table("community_posts")
+        .select("post_id,ticket_id,user_id,posted_at")
+        .order("posted_at", desc=True)
+        .execute()
+        .data or []
+    )
+    if not posts:
+        return {"users": []}
+    user_ids = list({post["user_id"] for post in posts})
+    ticket_ids = list({post["ticket_id"] for post in posts})
+    profiles = (
+        supabase_client().table("profiles").select(_PROFILE_COLUMNS).in_("user_id", user_ids).execute().data or []
+    )
+    tickets = (
+        supabase_client().table("tickets").select(_COMMUNITY_TICKET_COLUMNS).in_("ticket_id", ticket_ids).execute().data or []
+    )
+    profiles_by_user = {profile["user_id"]: profile for profile in profiles}
+    tickets_by_id = {ticket["ticket_id"]: ticket for ticket in tickets}
+    today_str = today_et().isoformat()  # e.g. "2026-08-12" — ET slate date, DST-aware via ZoneInfo
+    grouped: dict[str, dict] = {}
+    for post in posts:
+        profile = profiles_by_user.get(post["user_id"])
+        ticket = tickets_by_id.get(post["ticket_id"])
+        if not profile or not ticket:
+            log.warning("[community] skipping post %s with missing profile or ticket", post.get("post_id"))
+            continue
+        if ticket.get("date") != today_str:
+            continue  # older or null-date slips excluded from active board; retained in DB for history
+        # user_id is the internal immutable grouping key and intentionally is
+        # not returned; app_number is the public permanent identity.
+        group = grouped.setdefault(post["user_id"], {
+            "username": profile["username"],
+            "app_number": profile["app_number"],
+            "posts": [],
+        })
+        group["posts"].append({
+            "post_id": post["post_id"],
+            "posted_at": post["posted_at"],
+            "slip": _public_ticket(ticket),
+        })
+    return {"users": list(grouped.values())}
 
 
 # ── TCC build persistence ──────────────────────────────────────────────────────
@@ -642,7 +1162,7 @@ def _true_matchup_score(row: dict) -> int | None:
     return int(round(_clamp(score, 0.0, 100.0)))
 
 
-def _jig_score(player: dict, arsenal_data: dict | None = None) -> float:
+def _jig_score(player: dict, arsenal_data: dict | None = None) -> tuple[float, float]:
     """
     JIG tactical exploit score.
     Inputs: raw Statcast contact/power profile + optional
@@ -680,9 +1200,10 @@ def _jig_score(player: dict, arsenal_data: dict | None = None) -> float:
     hr_term = min(hrpa / 0.08, 1.0) * 0.10
 
     # --- Tactical signals (0.22 weight) ---
-    arsenal_signal  = 0.0
+    arsenal_signal   = 0.0
     pitch_dmg_signal = 0.0
-    pitch_mix_signal = 0.0
+    pitch_mix_signal = 0.0  # live: dormant — not yet validated against outcomes
+    pitch_mix_shadow = 0.0  # shadow: rv_per100 candidate, accumulating for backtest
 
     pitcher_id  = player.get("pitcher_id")
     batter_id   = player.get("batter_id") or player.get("player_id")
@@ -726,28 +1247,29 @@ def _jig_score(player: dict, arsenal_data: dict | None = None) -> float:
             pitch_dmg_signal = 0.0
 
         try:
-            # Pitch-mix weakness: pitcher's worst rv_per100 pitches
-            # weighted by usage vs this batter side
-            pitcher_pitches = get_pitcher_pitch_stats(pitcher_id, batter_side)
+            # Shadow: rv_per100 from arsenal_data (positive = hittable pitch).
+            # Not folded into live tactical until validated against hr_outcome.
+            pitcher_arsenal = (arsenal_data or {}).get(pitcher_id, [])
             weakness = 0.0
             total_pct = 0.0
-            for pdata in pitcher_pitches.values():
-                usage  = pdata.get("pitch_pct", 0)
-                rv     = pdata.get("rv_per100", 0) or 0
-                # Higher rv_per100 = worse for pitcher = exploit signal
-                weakness += usage * max(rv, 0)
+            for pdata in pitcher_arsenal:
+                usage = pdata.get("pitch_pct", 0) or 0
+                rv    = pdata.get("rv_per100") or 0
+                weakness  += usage * max(rv, 0)
                 total_pct += usage
             if total_pct > 0:
                 weakness /= total_pct
-            # Normalize: cap at rv_per100 of 3.0
-            pitch_mix_signal = min(weakness / 3.0, 1.0) * 0.04
+            pitch_mix_shadow = min(weakness / 3.0, 1.0) * 0.04
         except Exception as e:
-            log.warning("JIG pitch_mix_signal fallback | player=%s pitcher=%s err=%s",
+            log.warning("JIG pitch_mix_shadow fallback | player=%s pitcher=%s err=%s",
                 player.get("player_name", "?"), pitcher_id, e)
-            pitch_mix_signal = 0.0
+            pitch_mix_shadow = 0.0
 
-    tactical = arsenal_signal + pitch_dmg_signal + pitch_mix_signal
-    return round(((base_score + hr_term) * stab + tactical) * 100, 2)
+    tactical        = arsenal_signal + pitch_dmg_signal + pitch_mix_signal
+    tactical_shadow = arsenal_signal + pitch_dmg_signal + pitch_mix_shadow
+    live_score   = round(((base_score + hr_term) * stab + tactical) * 100, 2)
+    shadow_score = round(((base_score + hr_term) * stab + tactical_shadow) * 100, 2)
+    return live_score, shadow_score
 
 
 # ── Full Slate ─────────────────────────────────────────────────────────────────
@@ -764,11 +1286,13 @@ def _jig_tier(jig_score: float) -> str:
     return "COLD"
 
 
-def _build_slate_payload(data: dict) -> dict:
+def _build_slate_payload(data: dict, odds_pending: bool = False, odds_pending_stale: bool = False) -> dict:
     """
     Map pipeline data → React frontend shape.
     Returns leaderboard_rows, leaderboard_rows_jig, slate_games, generated_at, date.
     Does NOT include from_cache / cache_age_minutes — caller adds those.
+    odds_pending=True when games are scheduled but no odds were fetched; projected
+    fields (model_prob, tiers, Statcast) are still populated — odds/EV/edge are null.
     """
     import datetime as _dt
     players = data.get("all_players", [])
@@ -831,6 +1355,24 @@ def _build_slate_payload(data: dict) -> dict:
         odds = (f"+{fd_raw}" if fd_raw and fd_raw > 0
                 else str(fd_raw) if fd_raw else None)
 
+        # EV surface: implied_prob, edge, ev_pct — computed only when a real HR line exists.
+        # Uses calibrated model_prob (honest scale). Never fabricated from missing odds.
+        if fd_raw is not None:
+            if fd_raw > 0:
+                _impl = 100.0 / (fd_raw + 100.0)
+                _dec_payout = fd_raw / 100.0
+            else:
+                _abs = abs(fd_raw)
+                _impl = _abs / (_abs + 100.0)
+                _dec_payout = 100.0 / _abs
+            implied_prob = round(_impl, 4)
+            edge = round(model_prob - _impl, 4)
+            ev_pct = round((model_prob * _dec_payout - (1.0 - model_prob)) * 100.0, 2)
+        else:
+            implied_prob = None
+            edge = None
+            ev_pct = None
+
         home = (p.get("home_team") or p.get("team") or "home").upper()
         _own = (p.get("team") or "").upper()
         _opp = (p.get("opponent") or "").upper()
@@ -879,6 +1421,9 @@ def _build_slate_payload(data: dict) -> dict:
             "wind_mph": game_weather.get("wind_mph"),
             "wind_deg": game_weather.get("wind_deg"),
             "odds":     odds,
+            "implied_prob": implied_prob,
+            "edge":     edge,
+            "ev_pct":   ev_pct,
             # FanDuel deep links (display/handoff only — additive passthrough)
             "fd_event_link": p.get("fd_event_link"),
             "fd_bet_link":   p.get("fd_bet_link"),
@@ -991,7 +1536,7 @@ def _build_slate_payload(data: dict) -> dict:
             p = players_by_id.get((r.get("id"), r.get("game_pk")))
             if p is None:
                 p = players_by_id_fallback.get(r.get("id"), {})
-            r["jigScore"] = _jig_score(p, arsenal_data=_arsenal_data)
+            r["jigScore"], r["jigScore_shadow"] = _jig_score(p, arsenal_data=_arsenal_data)
             try:
                 r["hvy_modifier"] = load_hvy_context(
                     p, arsenal_data=_arsenal_data
@@ -1142,6 +1687,14 @@ def _build_slate_payload(data: dict) -> dict:
                 "wind_deg": _game_weather.get("wind_deg"),
             }
 
+    odds_quota = data.get("odds_quota") or {}
+    odds_quota_remaining = odds_quota.get("remaining")
+    odds_quota_used = odds_quota.get("used")
+    odds_quota_low = (
+        odds_quota_remaining is not None
+        and odds_quota_remaining < ODDS_QUOTA_LOW_THRESHOLD
+    )
+
     return {
         "leaderboard_rows":     leaderboard_rows,
         "leaderboard_rows_jig": jig_rows,
@@ -1150,6 +1703,11 @@ def _build_slate_payload(data: dict) -> dict:
         "date":                 today_et().strftime("%Y-%m-%d"),
         "fs_tier_thresholds":   dict(FS_TIER_THRESHOLDS),
         "jig_build_error":      jig_build_error,
+        "odds_pending":         odds_pending,
+        "odds_pending_stale":   odds_pending_stale,
+        "odds_quota_remaining": odds_quota_remaining,
+        "odds_quota_used":      odds_quota_used,
+        "odds_quota_low":       odds_quota_low,
     }
 
 
@@ -1216,6 +1774,246 @@ async def get_slate():
     }
 
 
+@app.get("/api/slate/export")
+async def export_slate(
+    format: str = Query("csv"),
+    date_str: str = Query(None, alias="date"),
+):
+    """
+    Full-slate data export — every player, all fields, as CSV or JSON.
+    Reads the same cached slate as /api/slate. No recompute, no extra fetches.
+    CSV: one row per player, all field groups (MAIN + JIG + EV + Statcast +
+         vs-hand splits with PA counts + pitcher + arsenal edge summary + context).
+    JSON: structured equivalent.
+    format=csv (default) | format=json
+    """
+    import io
+    import csv as _csv
+
+    if format not in ("csv", "json"):
+        raise HTTPException(status_code=400, detail="format must be 'csv' or 'json'")
+
+    if date_str:
+        try:
+            date.fromisoformat(date_str)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Use YYYY-MM-DD format.")
+        target_date = date_str
+    else:
+        target_date = today_et().strftime("%Y-%m-%d")
+
+    # Same cache-first path as /api/slate — never rebuild in-request.
+    sc = None
+    stale = False
+    try:
+        cached = get_picks(target_date)
+        if cached and "slate_cache" in cached:
+            _sc = cached["slate_cache"]
+            if _sc.get("date") == target_date:
+                sc = _sc
+    except Exception as e:
+        log.warning("[/api/slate/export] cache lookup failed: %s", e)
+
+    if sc is None:
+        try:
+            latest = get_latest_picks()
+            if latest and "slate_cache" in latest:
+                sc = latest["slate_cache"]
+                stale = True
+        except Exception as e:
+            log.warning("[/api/slate/export] latest cache lookup failed: %s", e)
+
+    if not sc:
+        raise HTTPException(
+            status_code=404,
+            detail="No slate data available. Pipeline has not run yet.",
+        )
+
+    main_rows = sc.get("leaderboard_rows") or []
+    jig_rows_list = sc.get("leaderboard_rows_jig") or []
+    slate_date = sc.get("date", target_date)
+    generated_at = sc.get("generated_at", "")
+    odds_pending = sc.get("odds_pending", False)
+    odds_pending_stale = sc.get("odds_pending_stale", False)
+
+    # Build JIG lookup by (id, game_pk); fall back to id-only for missing game_pk.
+    _jig_by_id_gpk = {}
+    _jig_by_id = {}
+    for r in jig_rows_list:
+        _jig_by_id_gpk[(r.get("id"), r.get("game_pk"))] = r
+        _jig_by_id.setdefault(r.get("id"), r)
+
+    def _jig_for(row):
+        return (
+            _jig_by_id_gpk.get((row.get("id"), row.get("game_pk")))
+            or _jig_by_id.get(row.get("id"))
+            or {}
+        )
+
+    def _v(val):
+        return "" if val is None else val
+
+    def _build_export_row(mr):
+        jig = _jig_for(mr)
+        return {
+            # IDENTITY
+            "name":             _v(mr.get("name")),
+            "team":             _v(mr.get("teamAbbr")),
+            "bats":             _v(mr.get("bats")),
+            "batter_id":        _v(mr.get("id")),
+            "gameId":           _v(mr.get("gameId")),
+            "game_pk":          _v(mr.get("game_pk")),
+            "game_time":        _v(mr.get("gameStartUtc")),
+            "game_status":      _v(mr.get("gameStatus")),
+            "pitcher_name":     _v(mr.get("pitcher_name")),
+            "pitcher_hand":     _v(mr.get("pitcher_hand")),
+            "pitcher_id":       _v(mr.get("pitcher_id")),
+            # MAIN
+            "model_prob":       _v(mr.get("model_prob")),
+            "hrprob":           _v(mr.get("hrprob")),
+            "tier":             _v(mr.get("tier")),
+            "model_tier_rank":  _v(mr.get("model_tier_rank")),
+            # JIG
+            "jigScore":         _v(jig.get("jigScore")),
+            "jigTier":          _v(jig.get("jigTier")),
+            "jigScore_shadow":  _v(jig.get("jigScore_shadow")),
+            # EV
+            "odds":             _v(mr.get("odds")),
+            "implied_prob":     _v(mr.get("implied_prob")),
+            "edge":             _v(mr.get("edge")),
+            "ev_pct":           _v(mr.get("ev_pct")),
+            # PROJECTIONS
+            "model_prob_projected": _v(mr.get("model_prob_projected")),
+            "hrprob_projected":     _v(mr.get("hrprob_projected")),
+            "jigscore_projected":   _v(jig.get("jigscore_projected")),
+            "tm_projected":         _v(mr.get("tm_projected")),
+            # ROLES
+            "prime":            _v(mr.get("prime")),
+            "explosive":        _v(mr.get("explosive")),
+            "advantage":        _v(mr.get("advantage")),
+            "wildcard":         _v(mr.get("wildcard")),
+            "hvy_score":        _v(jig.get("hvy_score")),
+            "true_matchup_score": _v(mr.get("true_matchup_score")),
+            # STATCAST
+            "barrel_pct":       _v(mr.get("barrel")),
+            "hh_pct":           _v(mr.get("hh")),
+            "xiso":             _v(mr.get("iso")),
+            "xslg":             _v(mr.get("xslg")),
+            "slg":              _v(mr.get("slg")),
+            "ev":               _v(mr.get("ev")),
+            "maxev":            _v(mr.get("maxev")),
+            "blast_pct":        _v(mr.get("blast")),
+            "squp_pct":         _v(mr.get("squp")),
+            "pullair_pct":      _v(mr.get("pullair")),
+            "la":               _v(mr.get("la")),
+            "fast_pct":         _v(mr.get("fast")),
+            "xwoba":            _v(mr.get("xwoba")),
+            "obp":              _v(mr.get("obp")),
+            "avg":              _v(mr.get("avg")),
+            "fb_pct":           _v(mr.get("fb")),
+            "sweet_pct":        _v(mr.get("sweet")),
+            "hrfb":             _v(mr.get("hrfb")),
+            "hr_season":        _v(mr.get("hr")),
+            "hrpa":             _v(mr.get("hrpa")),
+            "pa_season":        _v(mr.get("pa")),
+            "bbpct":            _v(mr.get("bbpct")),
+            "kpct":             _v(mr.get("kpct")),
+            "pull_pct":         _v(mr.get("pull")),
+            # vs-HAND (PA counts included so thin samples are visible)
+            "vs_hand":          _v(mr.get("vs_hand")),
+            "vs_hand_avg":      _v(mr.get("vs_hand_avg")),
+            "vs_hand_iso":      _v(mr.get("vs_hand_iso")),
+            "vs_hand_slg":      _v(mr.get("vs_hand_slg")),
+            "vs_hand_hr":       _v(mr.get("vs_hand_hr")),
+            "vs_hand_pa":       _v(mr.get("vs_hand_pa")),
+            "vs_hand_hr_pa":    _v(mr.get("vs_hand_hr_pa")),
+            "vs_lhp_avg":       _v(mr.get("vs_lhp_avg")),
+            "vs_lhp_slg":       _v(mr.get("vs_lhp_slg")),
+            "vs_lhp_iso":       _v(mr.get("vs_lhp_iso")),
+            "vs_lhp_hr":        _v(mr.get("vs_lhp_hr")),
+            "vs_lhp_pa":        _v(mr.get("vs_lhp_pa")),
+            "vs_lhp_hr_pa":     _v(mr.get("vs_lhp_hr_pa")),
+            "vs_rhp_avg":       _v(mr.get("vs_rhp_avg")),
+            "vs_rhp_slg":       _v(mr.get("vs_rhp_slg")),
+            "vs_rhp_iso":       _v(mr.get("vs_rhp_iso")),
+            "vs_rhp_hr":        _v(mr.get("vs_rhp_hr")),
+            "vs_rhp_pa":        _v(mr.get("vs_rhp_pa")),
+            "vs_rhp_hr_pa":     _v(mr.get("vs_rhp_hr_pa")),
+            # PITCHER
+            "pitcher_era":              _v(mr.get("pitcher_era")),
+            "pitcher_hr9":              _v(mr.get("pitcher_hr9")),
+            "pitcher_whip":             _v(mr.get("pitcher_whip")),
+            "pitcher_k_pct":            _v(mr.get("pitcher_k_pct")),
+            "pitcher_bb_pct":           _v(mr.get("pitcher_bb_pct")),
+            "pitcher_barrel_allowed":   _v(mr.get("pitcher_barrel_allowed")),
+            "pitcher_hh_allowed":       _v(mr.get("pitcher_hh_allowed")),
+            "pitcher_fb_allowed":       _v(mr.get("pitcher_fb_allowed")),
+            "pitcher_hr_allowed":       _v(mr.get("pitcher_hr_allowed")),
+            "pitcher_confirmed":        _v(mr.get("pitcher_confirmed")),
+            # ARSENAL EDGE SUMMARY
+            "arsenal_edge_score":       _v(mr.get("arsenal_edge_score")),
+            "arsenal_edge_label":       _v(mr.get("arsenal_edge_label")),
+            "arsenal_edge_key_pitch":   _v(mr.get("arsenal_edge_key_pitch")),
+            "arsenal_edge_confidence":  _v(mr.get("arsenal_edge_confidence")),
+            "arsenal_edge_sample_flag": _v(mr.get("arsenal_edge_sample_flag")),
+            # CONTEXT
+            "h2h_factor":       _v(mr.get("h2h_factor")),
+            "streak_factor":    _v(mr.get("streak_factor")),
+            "short_form_hr":    _v(mr.get("short_form_hr")),
+            "temp_f":           _v(mr.get("temp_f")),
+            "wind_mph":         _v(mr.get("wind_mph")),
+            "wind_deg":         _v(mr.get("wind_deg")),
+            "lineup_confirmed": _v(mr.get("lineup_confirmed")),
+            "lineup_spot":      _v(mr.get("lineup_spot")),
+        }
+
+    export_rows = [_build_export_row(r) for r in main_rows]
+
+    context_flags = []
+    if stale:
+        context_flags.append("stale=true")
+    if odds_pending:
+        context_flags.append("odds_pending=true (EV fields blank)")
+    if odds_pending_stale:
+        context_flags.append("odds_pending_stale=true")
+
+    if format == "json":
+        return JSONResponse(
+            content={
+                "slate_date":        slate_date,
+                "generated_at":      generated_at,
+                "stale":             stale,
+                "odds_pending":      odds_pending,
+                "odds_pending_stale": odds_pending_stale,
+                "player_count":      len(export_rows),
+                "players":           export_rows,
+            },
+            headers={
+                "Content-Disposition": f'attachment; filename="slate_{slate_date}.json"',
+            },
+        )
+
+    # CSV
+    columns = list(export_rows[0].keys()) if export_rows else []
+    buf = io.StringIO()
+    context_str = " | ".join(context_flags) if context_flags else "fresh"
+    buf.write(
+        f"# slate_date={slate_date} | generated_at={generated_at}"
+        f" | {context_str} | players={len(export_rows)}\n"
+    )
+    writer = _csv.DictWriter(buf, fieldnames=columns, lineterminator="\n")
+    writer.writeheader()
+    writer.writerows(export_rows)
+
+    return Response(
+        content=buf.getvalue().encode("utf-8"),
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="slate_{slate_date}.csv"',
+        },
+    )
+
+
 @app.get("/api/pitcher-detail")
 async def get_pitcher_detail(pitcher_id: int, batter_id: int = 0,
                              batter_side: str = "", pitcher_hand: str = ""):
@@ -1280,6 +2078,8 @@ async def get_pitcher_detail(pitcher_id: int, batter_id: int = 0,
         log.warning("pitcher-detail pitch_stats failed pid=%s: %s", pitcher_id, e)
         result["pitch_stats"] = {}
 
+    result["data_year"] = get_pitcher_data_year(pitcher_id)
+
     # Batter vs pitches (vs pitcher_hand, not batter_side)
     try:
         bvp = get_batter_vs_pitches(batter_id, pitcher_hand) if batter_id else {}
@@ -1314,21 +2114,15 @@ async def get_pitcher_detail(pitcher_id: int, batter_id: int = 0,
         log.warning("pitcher-detail pitcher_recent failed pid=%s: %s", pitcher_id, e)
         result["pitcher_recent"] = []
 
-    # Batter recent form: last 5 games (HR/AVG/SLG/PA)
+    # Batter recent form: read from persisted slate (fresh per pipeline run).
+    # Slate recent_form_games matches what /api/slate serves; avoids the stale
+    # in-process _GAME_LOG_CACHE that clear_game_log_caches() cannot reach in Fly.
     try:
-        from clients.mlb_stats import _game_log_splits
-        batter_recent = []
-        for s in (_game_log_splits(batter_id)[:5] if batter_id else []):
-            stat = s.get("stat", {})
-            ab = int(stat.get("atBats") or 0)
-            batter_recent.append({
-                "date": s.get("date"),
-                "hr":   int(stat.get("homeRuns") or 0),
-                "avg":  round(int(stat.get("hits") or 0) / ab, 3) if ab else None,
-                "slg":  round(int(stat.get("totalBases") or 0) / ab, 3) if ab else None,
-                "pa":   int(stat.get("plateAppearances") or 0),
-            })
-        result["batter_recent"] = batter_recent
+        if batter_id:
+            _, _bd_player, _bd_row, _, _ = _cached_batter_context(batter_id)
+            result["batter_recent"] = list(_bd_player.get("recent_form_games") or _bd_row.get("recent_form_games") or [])
+        else:
+            result["batter_recent"] = []
     except Exception as e:
         log.warning("pitcher-detail batter_recent failed bid=%s: %s", batter_id, e)
         result["batter_recent"] = []
@@ -1511,8 +2305,10 @@ async def get_batter_detail(batter_id: int, pitcher_id: int = 0, game_pk: int = 
     resolved_game_pk = game_pk or player.get("game_pk") or row.get("game_pk")
     generated_at = (payload.get("slate_cache") or {}).get("generated_at")
 
-    # Cache-only recent records. Calling the existing game-log helpers on a miss
-    # would perform an external MLB StatsAPI request, which B1 explicitly forbids.
+    # Recent form: PRIMARY source is the persisted slate (fresh per pipeline run).
+    # The in-process _GAME_LOG_CACHE is stale in the long-running Fly process —
+    # clear_game_log_caches() runs only in the GH Actions pipeline process, not here.
+    # twenty_game_trend is kept from the in-process cache (best-effort; slate stores 5).
     from clients import mlb_stats as _mlb_stats
     batter_cache_hit = False
     pitcher_cache_hit = False
@@ -1521,20 +2317,11 @@ async def get_batter_detail(batter_id: int, pitcher_id: int = 0, game_pk: int = 
     twenty_game_trend = None
     pitcher_recent = []
     try:
-        batter_cache_hit = batter_id in _mlb_stats._GAME_LOG_CACHE
+        batter_recent = list(player.get("recent_form_games") or row.get("recent_form_games") or [])
+        batter_cache_hit = bool(batter_recent)
         cached_batter_games = _mlb_stats._GAME_LOG_CACHE.get(batter_id, [])
         if not isinstance(cached_batter_games, list):
-            raise TypeError("batter game-log cache entry is not a list")
-        for split in cached_batter_games[:5]:
-            stat = split.get("stat", {})
-            ab = int(stat.get("atBats") or 0)
-            batter_recent.append({
-                "date": split.get("date"),
-                "hr": int(stat.get("homeRuns") or 0),
-                "avg": round(int(stat.get("hits") or 0) / ab, 3) if ab else None,
-                "slg": round(int(stat.get("totalBases") or 0) / ab, 3) if ab else None,
-                "pa": int(stat.get("plateAppearances") or 0),
-            })
+            cached_batter_games = []
         if cached_batter_games:
             twenty_game_trend = [
                 {
@@ -1544,7 +2331,7 @@ async def get_batter_detail(batter_id: int, pitcher_id: int = 0, game_pk: int = 
                 for split in reversed(cached_batter_games[:20])
             ]
     except Exception as exc:
-        log.warning("batter-detail batter recent cache failed bid=%s: %s", batter_id, exc)
+        log.warning("batter-detail recent failed bid=%s: %s", batter_id, exc)
         batter_cache_hit = False
         cached_batter_games = []
         batter_recent = []
@@ -1579,7 +2366,7 @@ async def get_batter_detail(batter_id: int, pitcher_id: int = 0, game_pk: int = 
     twenty_game_trend_sample_count = len(twenty_game_trend or [])
 
     season_hr = player.get("season_hr") if player.get("season_hr") is not None else row.get("hr")
-    batter_games_played = len(cached_batter_games) if batter_cache_hit else None
+    batter_games_played = len(cached_batter_games) if cached_batter_games else None
     team_games_played_raw = next(
         (
             source.get(key)
@@ -1749,7 +2536,7 @@ async def get_batter_detail(batter_id: int, pitcher_id: int = 0, game_pk: int = 
             "slate_date": payload.get("date") or (payload.get("slate_cache") or {}).get("date"),
             "generated_at": generated_at,
             "freshness": freshness,
-            "source": "pipeline_runs.payload + in_process_game_log_cache",
+            "source": "pipeline_runs.payload (recent_form) + in_process_game_log_cache (20g trend)",
             "display_only": True,
         },
         "threat": _detail_module(threat, {

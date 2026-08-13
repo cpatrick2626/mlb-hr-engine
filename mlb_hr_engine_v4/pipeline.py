@@ -145,6 +145,105 @@ def _schedule_batter_stat_history_capture(slate_date: str, players: list[dict]) 
         )
 
 
+def _write_jig_stat_history(
+    slate_date: str,
+    run_ts: str,
+    jig_rows: tuple[dict, ...],
+    player_by_key: dict,
+) -> None:
+    """Background worker: upsert jigScore/jigScore_shadow/jigTier to batter_stat_history."""
+    try:
+        rows = []
+        for r in jig_rows:
+            try:
+                batter_id = int(r.get("id") or 0)
+                game_pk = int(r.get("game_pk") or 0)
+            except (TypeError, ValueError):
+                continue
+            if not batter_id or not game_pk:
+                continue
+            p = player_by_key.get((batter_id, game_pk), {})
+            raw = {
+                "jigScore":        r.get("jigScore"),
+                "jigScore_shadow": r.get("jigScore_shadow"),
+                "jigTier":         r.get("jigTier"),
+                # Required for Preview filter in warehouse queries
+                "game_time_utc":   p.get("game_time_utc") or r.get("gameStartUtc"),
+                "game_status":     p.get("game_status") or r.get("gameStatus", "Preview"),
+                "model_prob":      p.get("model_prob"),
+            }
+            rows.append({
+                "slate_date":  slate_date,
+                "run_ts":      run_ts,
+                "batter_id":   batter_id,
+                "game_pk":     game_pk,
+                "raw_payload": _warehouse_json_value(raw),
+            })
+
+        if not rows:
+            return
+
+        from supabase import create_client
+        warehouse_client = create_client(
+            os.environ["SUPABASE_URL"],
+            os.environ["SUPABASE_SERVICE_KEY"],
+        )
+        warehouse_client.table("batter_stat_history").upsert(
+            rows,
+            on_conflict="slate_date,run_ts,batter_id,game_pk",
+        ).execute()
+        _LOG.info(
+            "[warehouse] jig batter_stat_history captured %d rows for %s at %s",
+            len(rows), slate_date, run_ts,
+        )
+    except Exception as exc:
+        _LOG.warning(
+            "[warehouse] jig batter_stat_history capture failed (non-fatal): %s",
+            exc,
+            exc_info=True,
+        )
+
+
+def schedule_jig_stat_capture(
+    slate_date: str,
+    jig_rows: list[dict],
+    all_players: list[dict],
+) -> None:
+    """Fire-and-forget: capture jigScore/jigScore_shadow/jigTier to batter_stat_history.
+
+    Called from cron.py after _build_slate_payload() so jig fields are available.
+    Inserts new rows with a distinct run_ts from the MAIN capture. warehouse_backfill
+    labels these rows with hr_outcome identically to MAIN rows.
+    """
+    if not jig_rows:
+        return
+    player_by_key: dict[tuple, dict] = {}
+    for p in all_players:
+        pid = p.get("player_id")
+        gpk = p.get("game_pk")
+        if pid is not None and gpk is not None:
+            try:
+                player_by_key[(int(pid), int(gpk))] = p
+            except (TypeError, ValueError):
+                pass
+
+    run_ts = datetime.now(timezone.utc).isoformat()
+    try:
+        _WAREHOUSE_EXECUTOR.submit(
+            _write_jig_stat_history,
+            slate_date,
+            run_ts,
+            tuple(jig_rows),
+            player_by_key,
+        )
+    except Exception as exc:
+        _LOG.warning(
+            "[warehouse] jig_stat_history scheduling failed (non-fatal): %s",
+            exc,
+            exc_info=True,
+        )
+
+
 # ── Core helpers (same logic as v3 main.py, extracted here) ──────────────────
 
 def _fetch_typical_slots(
@@ -445,6 +544,9 @@ def _build_player_profile(
     # Apply post-model probability calibration (monotone → ranking preserved)
     # barrel_rate passed for elite tier Platt (ELITE_PLATT_ENABLED in config.py)
     model_prob = round(_cal.apply_calibration(model_prob, barrel_rate=sc_barrel), 4)
+    # Final stage: warehouse isotonic recalibration (monotone — ranking preserved).
+    # Fitted on labeled batter_stat_history outcomes vs this exact post-Platt value.
+    model_prob = _cal.apply_warehouse_isotonic(model_prob)
 
     # ── MAIN projected values (display-only; never fed into scoring/EV/filters) ──
     # Projection: same calc sequence without ×0.82 lineup penalty, using typical slot PA.
@@ -471,7 +573,9 @@ def _build_player_profile(
             )
             if _aw is not None:
                 _proj_raw = round(_aw.apply_prob_scale(_proj_raw), 4)
-            _proj_model_prob = round(_cal.apply_calibration(_proj_raw, barrel_rate=sc_barrel), 4)
+            _proj_model_prob = _cal.apply_warehouse_isotonic(
+                round(_cal.apply_calibration(_proj_raw, barrel_rate=sc_barrel), 4)
+            )
 
     # Additional fields for Full Slate table display
     season_hits = int(season_stats.get("hits", 0))
@@ -872,6 +976,10 @@ def load_game_data(
 
     _ET = timezone(timedelta(hours=-4))  # EDT (Apr–Oct)
     game_date = target_date or (config.TARGET_DATE or datetime.now(_ET).strftime("%Y-%m-%d"))
+
+    # Game logs are run-scoped inputs: force the slate's bulk fetch to hydrate
+    # current-season batter/pitcher recency instead of reusing an older run.
+    mlb_stats.clear_game_log_caches()
 
     # Clear stale name-match cache so expired None entries from a previous run
     # (e.g., a run where props were empty or quota-exhausted) don't block matching.
