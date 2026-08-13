@@ -290,6 +290,88 @@ def get_live_game_status(game_pk: int) -> dict:
         return {}
 
 
+def get_game_abstract_status(game_pk: int) -> str:
+    """
+    "Preview"/"Live"/"Final" for one game_pk, via /schedule?gamePk=. Not present
+    on the /linescore payload, so this is a small separate lookup. Never raises.
+    """
+    if not game_pk:
+        return ""
+    try:
+        data = _get("/schedule", {"sportId": 1, "gamePk": game_pk})
+    except Exception:
+        return ""
+    for date_entry in data.get("dates", []):
+        for g in date_entry.get("games", []):
+            if g.get("gamePk") == game_pk:
+                return g.get("status", {}).get("abstractGameState", "")
+    return ""
+
+
+def _live_person(person: dict) -> Optional[dict]:
+    if not person or not person.get("id"):
+        return None
+    return {"id": person.get("id"), "name": person.get("fullName", "")}
+
+
+def get_live_game_state(game_pk: int) -> dict:
+    """
+    Full live-state bundle for one game_pk: status, inning/half/outs, score,
+    bases, current pitcher/batter, on-deck batter. Source: MLB Stats API
+    /schedule (status) + /game/{game_pk}/linescore (everything else), both
+    free/unauthenticated. Null-safe by design — never raises; any field this
+    can't resolve (non-live game, missing data, request failure) comes back
+    as None rather than raising or omitting the key, so callers always get a
+    well-formed dict. TTL/caching is the caller's responsibility (see
+    api/main.py's in-process live-state cache).
+    """
+    empty_state = {
+        "game_pk": game_pk,
+        "status": None,
+        "inning": None,
+        "inning_half": None,
+        "outs": None,
+        "score": {"home": None, "away": None},
+        "bases": {"first": False, "second": False, "third": False},
+        "current_pitcher": None,
+        "current_batter": None,
+        "on_deck": None,
+    }
+    if not game_pk:
+        return empty_state
+
+    status = get_game_abstract_status(game_pk)
+
+    try:
+        data = _get(f"/game/{game_pk}/linescore")
+    except Exception:
+        data = {}
+
+    offense = data.get("offense") or {}
+    defense = data.get("defense") or {}
+    teams = data.get("teams") or {}
+
+    return {
+        "game_pk": game_pk,
+        "status": status or None,
+        "inning": data.get("currentInning"),
+        "inning_half": data.get("inningState") or None,
+        "outs": data.get("outs"),
+        "score": {
+            "home": (teams.get("home") or {}).get("runs"),
+            "away": (teams.get("away") or {}).get("runs"),
+        },
+        "bases": {
+            "first": bool(offense.get("first")),
+            "second": bool(offense.get("second")),
+            "third": bool(offense.get("third")),
+        },
+        "current_pitcher": _live_person(defense.get("pitcher")),
+        "current_batter": _live_person(offense.get("batter")),
+        "on_deck": _live_person(offense.get("onDeck")),
+    }
+
+
 def _parse_lineup(players: list) -> list[dict]:
     result = []
     for i, p in enumerate(players, 1):
