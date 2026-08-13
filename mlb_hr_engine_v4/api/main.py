@@ -19,6 +19,7 @@ GET  /api/tickets/{id}/analysis   — honest per-leg/combined probability + EV a
 POST /api/fd-event                — record a FanDuel handoff click (JWT required)
 GET  /api/ledger?lane=main|jig    — settled/void legs + hit-rate buckets, per user per lane (JWT required — Phase S2/D5)
 GET  /api/my-tickets              — caller's tickets + legs + game linescores (JWT required)
+GET  /api/live-state/{game_pk}    — on-demand live score/inning/outs/batter/pitcher for one game (no auth; short in-process TTL cache)
 GET  /api/profile                 — caller's public community identity (JWT required)
 PATCH /api/profile/username       — edit caller's username only (JWT required)
 POST /api/community/posts         — publish caller's completed ticket (JWT required)
@@ -44,6 +45,7 @@ import copy
 import json
 import logging
 import re
+import time
 from datetime import date, datetime, timezone
 from math import isfinite
 
@@ -65,6 +67,7 @@ from clients.batter_pitch_profile import (
     pitch_mix_verdict_display,
 )
 from clients.pitch_mix import canonical_pitch_type, get_batter_vs_pitches, get_pitcher_data_year, get_pitcher_pitch_stats, load_hvy_context
+from clients.mlb_stats import get_live_game_state
 from config import FS_TIER_THRESHOLDS, JIG_TIER_THRESHOLDS
 from roles import classify_role
 
@@ -500,6 +503,45 @@ def my_tickets(user=Depends(require_auth)):
     if not user_id:
         raise HTTPException(status_code=401, detail="Authenticated token is missing sub")
     return {"tickets": get_my_tickets(supabase_client(), user_id)}
+
+
+# ── Live Game State (Phase 1 — Layer 1) ───────────────────────────────────────
+# Additive, on-demand read path. Does not touch /api/slate, pipeline.py, cron,
+# config, or MAIN/JIG scoring. Public (no auth) — relays free MLB Stats API
+# data, same posture as /api/batter-detail and /api/pitcher-detail.
+
+LIVE_STATE_CACHE_TTL_SECONDS = 20
+
+# In-process only — ephemeral live state doesn't need durability across
+# restarts. {game_pk: (fetched_at_monotonic, state_dict)}
+_LIVE_STATE_CACHE: dict[int, tuple[float, dict]] = {}
+
+
+def _get_live_state_cached(game_pk: int) -> dict:
+    now = time.monotonic()
+    cached = _LIVE_STATE_CACHE.get(game_pk)
+    if cached and (now - cached[0]) < LIVE_STATE_CACHE_TTL_SECONDS:
+        return cached[1]
+    try:
+        state = get_live_game_state(game_pk)
+    except Exception:
+        # Defense in depth: get_live_game_state() is itself null-safe and
+        # should not raise, but this route must never 500 regardless.
+        state = {
+            "game_pk": game_pk, "status": None, "inning": None, "inning_half": None,
+            "outs": None, "score": {"home": None, "away": None},
+            "bases": {"first": False, "second": False, "third": False},
+            "current_pitcher": None, "current_batter": None, "on_deck": None,
+        }
+    _LIVE_STATE_CACHE[game_pk] = (now, state)
+    return state
+
+
+@app.get("/api/live-state/{game_pk}")
+async def live_state(game_pk: int):
+    """On-demand live state for one game_pk. Never 500s — well-formed nulls on any gap."""
+    state = _get_live_state_cached(game_pk)
+    return {**state, "fetched_at": datetime.now(timezone.utc).isoformat()}
 
 
 # ── Community Bet Slips (Phase 1 backend/data foundation) ────────────────────
