@@ -1,4 +1,5 @@
 function OddsPendingBanner() {
+  return null; // HIDDEN: operator disabled — remove this line to re-enable
   const [info, setInfo] = React.useState(() => ({
     pending: window.SLATE_ODDS_PENDING === true,
     stale: window.SLATE_ODDS_PENDING_STALE === true,
