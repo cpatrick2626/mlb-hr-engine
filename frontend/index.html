@@ -3,6 +3,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>HR Engine — Master Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>/* ============================================================
    HR ENGINE — Color & Type Foundations
    A dark, neon-charged sports analytics terminal aesthetic.
@@ -452,10 +455,10 @@
      =========================================================== */
 
   /* Surfaces (darkest -> lightest) */
-  --bg-void:        #04070a;   /* page void, outside cards */
-  --bg-base:        #0a1014;   /* primary panel background */
-  --bg-raised:      #0e1519;   /* raised card / inset table */
-  --bg-elevated:    #131b21;   /* hover, secondary chips */
+  --bg-void:        #020507;   /* page void, outside cards */
+  --bg-base:        #070c10;   /* primary panel background */
+  --bg-raised:      #0b1217;   /* raised card / inset table */
+  --bg-elevated:    #101821;   /* hover, secondary chips */
   --bg-overlay:     rgba(8, 12, 16, 0.78);
 
   /* Foreground / text */
@@ -465,9 +468,9 @@
   --fg-4:           #3a4642;   /* disabled, subtle dividers */
 
   /* Borders */
-  --border-1:       rgba(180, 220, 200, 0.08);   /* hairline */
-  --border-2:       rgba(180, 220, 200, 0.16);   /* card edge */
-  --border-strong:  rgba(180, 220, 200, 0.32);
+  --border-1:       rgba(180, 220, 200, 0.10);   /* hairline */
+  --border-2:       rgba(180, 220, 200, 0.18);   /* card edge */
+  --border-strong:  rgba(180, 220, 200, 0.34);
 
   /* ===========================================================
      ACCENT RAILS — the two-tone heart of HR Engine
@@ -479,8 +482,8 @@
   --green-500:      #1aff66;   /* core neon green */
   --green-600:      #14e858;
   --green-700:      #0eb845;
-  --green-glow:     rgba(26, 255, 102, 0.55);
-  --green-glow-soft:rgba(26, 255, 102, 0.18);
+  --green-glow:     rgba(26, 255, 102, 0.35);
+  --green-glow-soft:rgba(26, 255, 102, 0.12);
 
   /* RED — danger, cold, pitcher favored, miss */
   --red-100:        #ffdfe2;
@@ -488,13 +491,13 @@
   --red-500:        #ff3344;   /* core neon red */
   --red-600:        #e8202f;
   --red-700:        #b3151f;
-  --red-glow:       rgba(255, 51, 68, 0.55);
-  --red-glow-soft:  rgba(255, 51, 68, 0.18);
+  --red-glow:       rgba(255, 51, 68, 0.35);
+  --red-glow-soft:  rgba(255, 51, 68, 0.12);
 
   /* CYAN — secondary, neutral data, focus rings */
   --cyan-300:       #7ce8ff;
   --cyan-500:       #00d9ff;
-  --cyan-glow:      rgba(0, 217, 255, 0.45);
+  --cyan-glow:      rgba(0, 217, 255, 0.28);
 
   /* BLUE — SIGNAL tier, informational accents */
   --blue-300:       #7ea8ff;
@@ -542,7 +545,7 @@
   /* ===========================================================
      TYPE
      =========================================================== */
-  --font-display: "Barlow Condensed", "Oswald", "Impact", sans-serif;
+  --font-display: "Space Grotesk", "Barlow Condensed", "Oswald", "Impact", sans-serif;
   --font-body:    "Barlow", "Inter", system-ui, sans-serif;
   --font-mono:    "JetBrains Mono", "IBM Plex Mono", ui-monospace, monospace;
 
@@ -605,26 +608,26 @@
                         inset 0 1px 0 rgba(255,255,255,0.02);
 
   --glow-green-sm:      0 0 0 1px var(--green-500),
-                        0 0 12px var(--green-glow-soft);
+                        0 0 8px var(--green-glow-soft);
   --glow-green-md:      0 0 0 1px var(--green-500),
-                        0 0 24px var(--green-glow),
-                        inset 0 0 16px var(--green-glow-soft);
+                        0 0 14px var(--green-glow),
+                        inset 0 0 8px var(--green-glow-soft);
   --glow-green-lg:      0 0 0 1.5px var(--green-500),
-                        0 0 40px var(--green-glow),
-                        inset 0 0 24px var(--green-glow-soft);
+                        0 0 20px var(--green-glow),
+                        inset 0 0 12px var(--green-glow-soft);
 
   --glow-red-sm:        0 0 0 1px var(--red-500),
-                        0 0 12px var(--red-glow-soft);
+                        0 0 8px var(--red-glow-soft);
   --glow-red-md:        0 0 0 1px var(--red-500),
-                        0 0 24px var(--red-glow),
-                        inset 0 0 16px var(--red-glow-soft);
+                        0 0 14px var(--red-glow),
+                        inset 0 0 8px var(--red-glow-soft);
 
   --glow-cyan-sm:       0 0 0 1px var(--cyan-500),
-                        0 0 12px var(--cyan-glow);
+                        0 0 8px var(--cyan-glow);
 
   /* Text glow — for hero numbers and LIVE indicators */
-  --text-glow-green:    0 0 8px var(--green-glow), 0 0 24px var(--green-glow-soft);
-  --text-glow-red:      0 0 8px var(--red-glow),   0 0 24px var(--red-glow-soft);
+  --text-glow-green:    0 0 6px var(--green-glow), 0 0 16px var(--green-glow-soft);
+  --text-glow-red:      0 0 6px var(--red-glow),   0 0 16px var(--red-glow-soft);
 
   /* ===========================================================
      MOTION
@@ -3221,7 +3224,7 @@ html, body { height: 100%; overflow: hidden; overflow-x: hidden; max-width: 100v
 }
 .fsm-viewtoggle button + button { border-left: 1px solid rgba(180,220,200,0.12); }
 .fsm-viewtoggle button:hover { color: var(--fg-1); background: rgba(180,220,200,0.04); }
-.fsm-viewtoggle button.is-on { color: #04140a; background: var(--green-500); box-shadow: 0 0 14px rgba(26,255,102,0.4); }
+.fsm-viewtoggle button.is-on { color: #04140a; background: var(--green-500); box-shadow: 0 0 8px rgba(26,255,102,0.22); }
 
 .fsm-legends { display: flex; gap: 18px; flex-wrap: wrap; align-items: center; }
 .fsm-legend { display: flex; align-items: center; gap: 6px; }
@@ -3245,7 +3248,7 @@ html, body { height: 100%; overflow: hidden; overflow-x: hidden; max-width: 100v
 .fsm-gamesel__label { font-family: var(--font-display); font-weight: 700; font-size: 9px; letter-spacing: 0.16em; color: var(--fg-3); text-transform: uppercase; }
 .fsm-gamesel__field { position: relative; display: flex; align-items: center; }
 .fsm-gamesel select {
-  appearance: none; -webkit-appearance: none; width: 100%; background: #0a1014;
+  appearance: none; -webkit-appearance: none; width: 100%; background: var(--bg-base);
   border: 1px solid rgba(180,220,200,0.16); border-radius: 6px; color: var(--fg-1);
   font-family: var(--font-display); font-weight: 600; font-size: 12px; letter-spacing: 0.04em;
   padding: 9px 30px 9px 12px; cursor: pointer; outline: none; transition: all .15s ease;
@@ -3253,7 +3256,7 @@ html, body { height: 100%; overflow: hidden; overflow-x: hidden; max-width: 100v
 .fsm-gamesel select:hover { border-color: rgba(26,255,102,0.4); }
 .fsm-gamesel select:focus { border-color: var(--green-500); box-shadow: 0 0 0 1px rgba(26,255,102,0.4); }
 .fsm-gamesel__field svg { position: absolute; right: 10px; color: var(--fg-3); pointer-events: none; }
-.fsm-gamesel option { background: #0a1014; color: var(--fg-1); }
+.fsm-gamesel option { background: var(--bg-base); color: var(--fg-1); }
 
 /* game-nav chips */
 .fsm-pitchbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -3313,7 +3316,7 @@ html, body { height: 100%; overflow: hidden; overflow-x: hidden; max-width: 100v
   transition: all .14s ease; white-space: nowrap;
 }
 .fsm-gamenav button:hover { color: var(--fg-1); border-color: rgba(180,220,200,0.3); background: var(--bg-elevated); }
-.fsm-gamenav button.is-on { color: #04140a; background: var(--green-500); border-color: transparent; box-shadow: 0 0 12px rgba(26,255,102,0.35); }
+.fsm-gamenav button.is-on { color: #04140a; background: var(--green-500); border-color: transparent; box-shadow: 0 0 7px rgba(26,255,102,0.2); }
 
 /* GAMES selector inline (controls row) */
 .fsm-gamesel--inline { flex-direction: row; align-items: center; gap: 8px; min-width: 0; }
@@ -3326,7 +3329,7 @@ html, body { height: 100%; overflow: hidden; overflow-x: hidden; max-width: 100v
 .fsm-sortbar__lbl { font-family: var(--font-display); font-weight: 700; font-size: 9px; letter-spacing: 0.16em; color: var(--fg-3); text-transform: uppercase; margin-right: 2px; }
 .fsm-sortbar__btn { font-family: var(--font-display); font-weight: 700; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; padding: 5px 10px; border-radius: 6px; border: 1px solid rgba(180,220,200,0.28); background: rgba(180,220,200,0.04); color: var(--fg-2); cursor: pointer; transition: all .14s ease; }
 .fsm-sortbar__btn:hover { color: var(--fg-1); border-color: rgba(180,220,200,0.3); background: var(--bg-elevated); }
-.fsm-sortbar__btn.is-on { color: #04140a; background: var(--green-500); border-color: transparent; box-shadow: 0 0 10px rgba(26,255,102,0.3); }
+.fsm-sortbar__btn.is-on { color: #04140a; background: var(--green-500); border-color: transparent; box-shadow: 0 0 6px rgba(26,255,102,0.18); }
 .fsm-sortbar__sep { width: 1px; height: 18px; background: var(--border-2); margin: 0 4px; flex-shrink: 0; }
 .fsm-sortbar__toggle.is-on { color: #00101f; background: #3b9eff; border-color: transparent; box-shadow: 0 0 10px rgba(59,158,255,0.3); }
 .fsm-metric-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; padding: 48px 24px; text-align: center; }
@@ -3334,7 +3337,7 @@ html, body { height: 100%; overflow: hidden; overflow-x: hidden; max-width: 100v
 .fsm-metric-empty__msg { font-family: var(--font-display); font-size: 11px; letter-spacing: 0.12em; color: var(--fg-3); text-transform: uppercase; max-width: 340px; line-height: 1.6; }
 .fsm-rg { display: flex; flex-direction: column; gap: 6px; }
 .fsm-rg__label { font-family: var(--font-display); font-weight: 700; font-size: 9px; letter-spacing: 0.16em; color: var(--fg-3); text-transform: uppercase; }
-.fsm-rg__opts { display: flex; gap: 3px; background: #0a1014; border: 1px solid rgba(180,220,200,0.18); border-radius: 9px; padding: 4px; }
+.fsm-rg__opts { display: flex; gap: 3px; background: var(--bg-base); border: 1px solid rgba(180,220,200,0.18); border-radius: 9px; padding: 4px; }
 .fsm-rg__opt {
   display: flex; align-items: center; gap: 8px; padding: 7px 13px; border-radius: 6px;
   background: transparent; border: 1px solid rgba(180,220,200,0.12); cursor: pointer; color: var(--fg-2);
@@ -3363,7 +3366,7 @@ html, body { height: 100%; overflow: hidden; overflow-x: hidden; max-width: 100v
 .fsm-colmenu { position: relative; }
 .fsm-colbtn {
   display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
-  background: #0a1014; border: 1px solid rgba(180,220,200,0.16); border-radius: 6px;
+  background: var(--bg-base); border: 1px solid rgba(180,220,200,0.16); border-radius: 6px;
   color: var(--fg-2); font-family: var(--font-display); font-weight: 700; font-size: 10.5px;
   letter-spacing: 0.08em; text-transform: uppercase; padding: 8px 10px;
 }
@@ -3371,7 +3374,7 @@ html, body { height: 100%; overflow: hidden; overflow-x: hidden; max-width: 100v
 .fsm-colbtn b { color: var(--green-500); font-family: var(--font-mono); }
 .fsm-colpop {
   position: absolute; top: calc(100% + 6px); right: 0; z-index: 40; width: 230px;
-  background: #0b1116; border: 1px solid rgba(180,220,200,0.18); border-radius: 8px;
+  background: var(--bg-base); border: 1px solid rgba(180,220,200,0.18); border-radius: 8px;
   box-shadow: 0 18px 40px -16px rgba(0,0,0,0.85); overflow: hidden;
 }
 .fsm-colpop__head { display: flex; align-items: center; justify-content: space-between; padding: 9px 11px; border-bottom: 1px solid rgba(180,220,200,0.1); font-family: var(--font-display); font-weight: 700; font-size: 9px; letter-spacing: 0.14em; color: var(--fg-4); text-transform: uppercase; }
@@ -3400,7 +3403,7 @@ html, body { height: 100%; overflow: hidden; overflow-x: hidden; max-width: 100v
   font-family: var(--font-mono); font-variant-numeric: tabular-nums;
 }
 .fsm-table thead th {
-  position: sticky; top: 0; z-index: 3; background: #0d141a; border-bottom: 2px solid #2a3a34;
+  position: sticky; top: 0; z-index: 3; background: var(--bg-raised); border-bottom: 2px solid #1e2e28;
   font-family: var(--font-display); font-weight: 700; font-size: 10px; color: var(--fg-2);
   letter-spacing: 0.04em; text-transform: uppercase; text-align: center; padding: 7px 4px;
   white-space: nowrap; cursor: help;
@@ -3433,12 +3436,12 @@ html, body { height: 100%; overflow: hidden; overflow-x: hidden; max-width: 100v
   position: relative; width: 100%;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
   padding: 5px 4px; border-radius: 5px; border: 0; cursor: pointer; color: var(--tc);
-  background: radial-gradient(circle at 50% 0%, var(--tg), transparent 80%), rgba(8,12,16,0.55);
-  box-shadow: inset 0 0 0 1.3px var(--tg), 0 0 12px -6px var(--tg);
+  background: radial-gradient(circle at 50% 0%, var(--tg), transparent 70%), rgba(6,10,14,0.65);
+  box-shadow: inset 0 0 0 1.3px var(--tg), 0 0 8px -4px var(--tg);
   font-family: var(--font-display); transition: transform .14s ease, box-shadow .14s ease;
 }
 button.fsm-tier { appearance: none; text-decoration: none; }
-.fsm-tier:hover { box-shadow: inset 0 0 0 1.5px var(--tc), 0 0 16px -3px var(--tg); transform: translateY(-1px); }
+.fsm-tier:hover { box-shadow: inset 0 0 0 1.5px var(--tc), 0 0 10px -2px var(--tg); transform: translateY(-1px); }
 .fsm-tier:active { transform: translateY(0); }
 .fsm-tier:focus-visible { outline: 2px solid var(--green-500); outline-offset: 2px; }
 .fsm-tier__icon { display: flex; color: var(--tc); filter: drop-shadow(0 0 4px var(--tg)); }
