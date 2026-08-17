@@ -1,6 +1,25 @@
 # Live Game State + Live-Aware Surfaces + In-App Alerts — program plan
 
-Status: **Phase 1 built (Rule 13 Stage 2), 2026-08-13** — on branch `claude/mlb-hr-engine-cloud-audit-bsedt3`, not merged, not deployed. See audit in `mlb_hr_engine_v4/scripts/analysis/live_state_alerts_program_audit_2026-08-13.md` for the original findings this build followed. Phases 2+ remain unbuilt.
+Status: **Phase 1 built and deployed, 2026-08-13** (merged via PR #5, commit `d1cf518`; API deployed to Fly, frontend auto-deployed via Vercel). **Phase 2a built, 2026-08-13** — on branch `claude/live-targets-banner-phase2a`, draft PR opened, **not merged, not deployed**. See audit in `mlb_hr_engine_v4/scripts/analysis/live_state_alerts_program_audit_2026-08-13.md` for the original Phase 1 findings. Phase 2b+ (diamond, homered trigger, notifications table) remain unbuilt.
+
+## Phase 2a — LIVE TARGETS banner real-data wiring
+
+**What it replaces:** the `LiveTargets`/`TargetCard` banner (`frontend/assets/js/f2ee1fd2-*.js`, mounted from `frontend/assets/js/a6cd8ef6-*.js`) previously rendered `window.LIVE_TARGETS` (`frontend/assets/js/0ead2d7a-*.js:5-16`), a fully hardcoded mock array with no `game_pk`/`player_id` — free-text `name`/matchup/inning/score strings only. Its default ("mon") card state unconditionally rendered a `"LIVE"` badge and a fake inning string regardless of real game status.
+
+**What was built:** new `frontend/assets/js/live-targets-live.js`, a self-mounting IIFE that:
+- Resolves each `LIVE_TARGETS` entry to a real `game_pk` by case/accent-insensitive name matching against `window.LEADERBOARD_ROWS` / `LEADERBOARD_ROWS_JIG` (already fetched for the dashboard; each row carries `game_pk` per the existing `/api/slate` pass-through, `api/main.py:1460`, itself sourced from the Phase 1 `_match_game()` join). Zero or ambiguous (multiple distinct `game_pk`) name matches → unresolved; never guessed. No new backend matcher was written — this reuses the existing join transitively via the slate response.
+- Polls `GET /api/live-state/{game_pk}` for each distinct resolved `game_pk` every 20s (`LT_POLL_INTERVAL_MS`), matching `LIVE_STATE_CACHE_TTL_SECONDS` and `live-alerts.js`'s `LA_POLL_INTERVAL_MS`. Also re-resolves on the existing `hrEngineDataLoaded` event (slate refresh).
+- Publishes `window.LIVE_TARGETS_STATE` (per-target `{resolved, status, inningLabel, scoreLabel, gamePk}`) and dispatches `liveTargetsStateUpdated`, which `TargetCard` subscribes to via `React.useState`/`useEffect` (same event-driven pattern already used by `OddsPendingBanner`/`OddsQuotaBanner` in `a6cd8ef6-*.js`).
+
+**Scope boundary (intentional):** only the `"mon"` (default) badge/inning path is now real-status-driven — `Live` → real `"LIVE"` + inning; `Final` → honest `"FINAL"`/"GAME OVER"; unresolved, `Preview`, or a fetch error → honest `"PREGAME"`, never a guessed live state. The `"hr"`/`"dead"` badges and the HR-count line (`t.hrs`) are **untouched** — those represent the batter-homered trigger, still a Phase 2b+ concern (see "Known gap to carry forward" below, now partially resolved for the banner but not for that trigger). The top-line score (`t.g`, now real when resolved, `"—"` otherwise) is wired for all card states since it's an objective fact, not a trigger claim.
+
+**Validation performed (mocked, no live-browser check):** no JS test framework exists in root `frontend/` (no `package.json`). Validated via a throwaway Node harness (`.scratch/phase2a_live_targets_validation.mjs`, not committed) loading the real module in a sandboxed `window`/`fetch` context: single unambiguous match resolves with correct inning/score formatting; doubleheader-style ambiguous match (two same-name rows, different `game_pk`) stays unresolved without ever calling `fetch`; no-match stays unresolved; a resolved-but-`Final` game reports honest `Final` status; a network failure resolves to the honest unresolved fallback with no crash and no fabricated live status; an accented/suffixed mock name (`"ACUÑA JR."`) correctly matches a real slate row (`"Ronald Acuna Jr."`). All 6 passed.
+
+**Requires the operator's live-browser check before deploy:** the banner actually rendering correct real inning/score for a genuinely live game in the browser, and correctly falling back to `PREGAME`/`FINAL` (never a stale/fake `LIVE`) for non-live or unresolved cards. Nothing here was checked against a live render — only the resolution/formatting/fallback logic in isolation.
+
+**Protected-surface confirmation:** `/api/slate`, `pipeline.py`, `api/cron.py`, `config.py`, MAIN/JIG scoring/calibration, and the `/api/live-state` endpoint itself have zero diff hunks (verified via `git diff main --stat`). No backend file touched at all — this is a frontend-only change. No migration, no secret, no new infra.
+
+**Deploy status:** not deployed, not merged. Draft PR only. No Fly deploy is needed for this change even after merge — it's frontend-only, so Vercel's merge-to-`main` auto-deploy covers it.
 
 ## Phase 1 — what shipped
 

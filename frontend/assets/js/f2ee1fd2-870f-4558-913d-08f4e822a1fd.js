@@ -23,12 +23,30 @@ const EdgeBolt = ({ uid }) => {
 };
 
 const TargetCard = ({ t, onPick, uid }) => {
+  // Real game state comes from live-targets-live.js (Phase 2a), which
+  // resolves each target to a game_pk and polls /api/live-state/{game_pk}.
+  // "hr"/"dead" badges and the HR-count line stay mock-driven — that's the
+  // batter-homered trigger, a separate signal not yet built (later phase).
+  const [live, setLive] = React.useState(() => (window.LIVE_TARGETS_STATE || {})[t.id] || null);
+  React.useEffect(() => {
+    const handler = () => setLive((window.LIVE_TARGETS_STATE || {})[t.id] || null);
+    window.addEventListener("liveTargetsStateUpdated", handler);
+    return () => window.removeEventListener("liveTargetsStateUpdated", handler);
+  }, [t.id]);
+
+  // Real score when resolved; an honest placeholder (never the stale mock
+  // number) when the card hasn't resolved to a real game yet.
+  const scoreText = live && live.resolved && live.scoreLabel ? live.scoreLabel : "—";
+
   // build the two info lines based on state
   const cls = `md-tgt md-tgt--${t.state}`;
+  const monStatus = t.state === "mon" && live && live.resolved ? live.status : null;
   const statusEl =
-    t.state === "hr"   ? <span className="hr">HR</span> :
-    t.state === "dead" ? <span className="no">FINAL</span> :
-                         <span className="mon">LIVE</span>;
+    t.state === "hr"        ? <span className="hr">HR</span> :
+    t.state === "dead"      ? <span className="no">FINAL</span> :
+    monStatus === "Live"    ? <span className="mon">LIVE</span> :
+    monStatus === "Final"   ? <span className="no">FINAL</span> :
+                               <span className="mon">PREGAME</span>;
   const line2 =
     t.state === "hr" ? (
       <span className="md-tgt__line">
@@ -37,8 +55,12 @@ const TargetCard = ({ t, onPick, uid }) => {
       </span>
     ) : t.state === "dead" ? (
       <span className="md-tgt__line"><span className="no">NO HR</span> · GAME OVER</span>
+    ) : monStatus === "Live" ? (
+      <span className="md-tgt__line"><span className="k">{live.inningLabel || "—"}</span> | <span className="mon">MONITORING</span></span>
+    ) : monStatus === "Final" ? (
+      <span className="md-tgt__line"><span className="no">GAME OVER</span></span>
     ) : (
-      <span className="md-tgt__line"><span className="k">{t.inn}</span> | <span className="mon">MONITORING</span></span>
+      <span className="md-tgt__line"><span className="k">PREGAME</span></span>
     );
 
   return (
@@ -46,7 +68,7 @@ const TargetCard = ({ t, onPick, uid }) => {
       {(t.state === "hr" || t.state === "dead") && <EdgeBolt uid={uid} />}
       <span className="md-tgt__name">{t.name}</span>
       <span className="md-tgt__line">
-        <span className="k">{t.m}</span> | {statusEl} {t.g}
+        <span className="k">{t.m}</span> | {statusEl} {scoreText}
       </span>
       {line2}
     </button>
