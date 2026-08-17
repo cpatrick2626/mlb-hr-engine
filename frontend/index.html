@@ -3905,12 +3905,14 @@ button.fsm-tier { appearance: none; text-decoration: none; }
     overflow: visible;
   }
 
-  /* 3 — Sticky topbar, wraps to two rows on mobile */
+  /* 3 — Sticky topbar, wraps to rows on mobile; width lock prevents sticky bleed */
   .md-topbar {
     position: sticky;
     top: 0;
     z-index: 100;
     height: auto;
+    width: 100%;
+    box-sizing: border-box;
     background: var(--bg-void);
     padding: 8px 10px 4px;
     border-bottom: 1px solid rgba(180,220,200,0.08);
@@ -3938,7 +3940,8 @@ button.fsm-tier { appearance: none; text-decoration: none; }
     height: 56px;
     gap: 8px;
     overflow: hidden;
-    max-width: 100%;
+    width: 100%;
+    box-sizing: border-box;
   }
   .md-banner__rail {
     width: 80px;
@@ -3988,12 +3991,15 @@ button.fsm-tier { appearance: none; text-decoration: none; }
   .md-cc-btn__label { display: none; }
   .md-cc-btn__chev  { display: none; }
 
-  /* 11b — Right column becomes a row on mobile: [auth] [TCC gear] side-by-side */
+  /* 11b — Right controls: own full-width row after FIND PLAYER (order 5), right-aligned */
   .md-topbar-right {
+    flex: 0 0 100%;
+    order: 6;
+    margin-left: 0;
+    justify-content: flex-end;
     flex-direction: row;
     align-items: center;
     gap: 6px;
-    margin-left: auto;
   }
   #auth-root button { min-height: 44px; }
   #slip-btn-root { display: inline-flex; align-items: center; }
