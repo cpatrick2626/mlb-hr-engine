@@ -1,6 +1,6 @@
-# Live Game State + Live-Aware Surfaces + In-App Alerts — program plan
+# Live Game State + Live-Aware Surfaces + In-App Alerts — program record
 
-Status: **Phase 1 built and deployed, 2026-08-13** (merged via PR #5, commit `d1cf518`; API deployed to Fly, frontend auto-deployed via Vercel). **Phase 2a built, 2026-08-13** — on branch `claude/live-targets-banner-phase2a`, draft PR opened, **not merged, not deployed**. See audit in `mlb_hr_engine_v4/scripts/analysis/live_state_alerts_program_audit_2026-08-13.md` for the original Phase 1 findings. Phase 2b+ (diamond, homered trigger, notifications table) remain unbuilt.
+Status: **Phase 1 built, merged, and deployed, 2026-08-13** (PR #5, merge commit `d1cf518`). **Phase 2a built 2026-08-13 and merged 2026-08-17** (PR #6, merge commit `be2a583`; code `a7df7b0`, wiki `dcec28d`). The live Fly OpenAPI currently exposes `/api/live-state/{game_pk}`. The August 18 synchronization did not have a non-empty production slate or a confirmed public frontend URL, so real-game banner rendering remains unverified. Phase 2b+ (diamond, homered trigger, notifications table) remain unbuilt. See `mlb_hr_engine_v4/scripts/analysis/live_state_alerts_program_audit_2026-08-13.md` for the original Phase 1 audit.
 
 ## Phase 2a — LIVE TARGETS banner real-data wiring
 
@@ -13,13 +13,13 @@ Status: **Phase 1 built and deployed, 2026-08-13** (merged via PR #5, commit `d1
 
 **Scope boundary (intentional):** only the `"mon"` (default) badge/inning path is now real-status-driven — `Live` → real `"LIVE"` + inning; `Final` → honest `"FINAL"`/"GAME OVER"; unresolved, `Preview`, or a fetch error → honest `"PREGAME"`, never a guessed live state. The `"hr"`/`"dead"` badges and the HR-count line (`t.hrs`) are **untouched** — those represent the batter-homered trigger, still a Phase 2b+ concern (see "Known gap to carry forward" below, now partially resolved for the banner but not for that trigger). The top-line score (`t.g`, now real when resolved, `"—"` otherwise) is wired for all card states since it's an objective fact, not a trigger claim.
 
-**Validation performed (mocked, no live-browser check):** no JS test framework exists in root `frontend/` (no `package.json`). Validated via a throwaway Node harness (`.scratch/phase2a_live_targets_validation.mjs`, not committed) loading the real module in a sandboxed `window`/`fetch` context: single unambiguous match resolves with correct inning/score formatting; doubleheader-style ambiguous match (two same-name rows, different `game_pk`) stays unresolved without ever calling `fetch`; no-match stays unresolved; a resolved-but-`Final` game reports honest `Final` status; a network failure resolves to the honest unresolved fallback with no crash and no fabricated live status; an accented/suffixed mock name (`"ACUÑA JR."`) correctly matches a real slate row (`"Ronald Acuna Jr."`). All 6 passed.
+**Validation performed:** the pre-merge throwaway Node harness (`.scratch/phase2a_live_targets_validation.mjs`, not committed) passed all six resolution, fallback, error, and name-normalization cases. Production checks confirmed the live Fly route and a successful API response, but the empty production slate could not exercise real-game banner rendering.
 
-**Requires the operator's live-browser check before deploy:** the banner actually rendering correct real inning/score for a genuinely live game in the browser, and correctly falling back to `PREGAME`/`FINAL` (never a stale/fake `LIVE`) for non-live or unresolved cards. Nothing here was checked against a live render — only the resolution/formatting/fallback logic in isolation.
+**Still requires a live-browser check:** confirm the banner renders the correct inning and score for a genuinely live game, and falls back to `PREGAME`/`FINAL` rather than stale or fabricated `LIVE` status. The August 18 production check could not exercise this because `/api/slate` returned a stale empty cache with zero rows and zero games.
 
 **Protected-surface confirmation:** `/api/slate`, `pipeline.py`, `api/cron.py`, `config.py`, MAIN/JIG scoring/calibration, and the `/api/live-state` endpoint itself have zero diff hunks (verified via `git diff main --stat`). No backend file touched at all — this is a frontend-only change. No migration, no secret, no new infra.
 
-**Deploy status:** not deployed, not merged. Draft PR only. No Fly deploy is needed for this change even after merge — it's frontend-only, so Vercel's merge-to-`main` auto-deploy covers it.
+**Repository status:** merged to `main` through PR #6 on 2026-08-17. No Fly deploy is required for the Phase 2a frontend-only change. Vercel deployment is expected from the merge-to-`main` workflow, but this synchronization did not independently verify the public frontend artifact.
 
 ## Phase 1 — what shipped
 
@@ -60,11 +60,11 @@ Contract:
 - `tests/test_live_state_game_pk_derivation.py` — single-game resolves; doubleheader-ambiguous (no opponent, or opponent matches both games) leaves `game_pk` null; opponent correctly disambiguates two unrelated same-day games; no-match case is null.
 - Regression sweep (per-file, not full-suite per the repo's known cross-pollution issue): `test_ticket_history_contract.py`, `test_my_tickets.py`, and the rest of `tests/` — all green except two pre-existing failures (`test_pitcher_detail.py`, `test_community_posts.py`) confirmed to fail identically on `main` before this change (verified via `git stash`).
 
-**Requires the operator's live-browser / live-game / home-PC step before deploy:** the toast actually firing against a real due-up batter in a live game, and `/api/live-state/{game_pk}` against a real in-progress `game_pk`. Nothing here was validated against the live MLB feed — only mocked responses.
+**Remaining validation gap:** the alert toast still needs observation against a real due-up batter in a live game. The endpoint is deployed; this is a live-game behavior check, not a deployment prerequisite.
 
 ## Deploy status
 
-Not deployed. `flyctl deploy` (API) and Vercel's merge-to-`main` auto-deploy (frontend) are both operator-authorized steps, out of scope for this build.
+Phase 1 is merged and its API routes are present in the live Fly OpenAPI. Phase 2a is merged to `main`; its public frontend rendering has not been independently verified in a live game. The August 18 API check returned HTTP success but a stale empty slate, so row-level live behavior could not be validated.
 
 ## Original plan (Phase 1 scope, as authored pre-build)
 
@@ -90,4 +90,8 @@ Full animated diamond, second trigger ("slip batter homered"), a Supabase `notif
 
 ### Known gap to carry forward
 
-`legs` rows don't store `game_pk` — deriving it means joining `leg.team` + `leg.leg_date` against the day's schedule, with doubleheaders needing the same disambiguation the pipeline already does (`api/main.py:1301-1315`). Not a blocker, just not a new problem to rediscover later.
+`legs` rows still do not store `game_pk`. Phase 1 resolves it through the existing team + date join, narrowed by opponent. If a doubleheader remains ambiguous, `_match_game()` returns `None`; the alert client skips that leg. A wrong-game alert is therefore impossible by construction.
+
+## Home-PC Graphify follow-up
+
+Graphify is home-PC-only and gitignored. Run `graphify update mlb_hr_engine_v4` on the home PC because Phase 1 added `/api/live-state/{game_pk}` and `get_live_game_state()`. Do not attempt this refresh from the work laptop.
