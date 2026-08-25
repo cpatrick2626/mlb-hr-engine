@@ -41,10 +41,70 @@ function fdSearchName(displayName) {
       : "https://sportsbook.fanduel.com/baseball/mlb?tab=player-home-runs";
   }
 
+  /* FanDuel killed ?q= app pre-fill (confirmed 2026-08-25). Clipboard copy +
+     manual paste is the only reliable mobile path now.
+     execCommand('copy') runs synchronously inside the gesture and is more
+     reliable on mobile browsers than the async Clipboard API, which can be
+     cancelled mid-flight when window.open backgrounds the tab. Try it first;
+     fall back to navigator.clipboard as a best-effort second attempt. */
+  function dpCopyToClipboard(text) {
+    let ok = false;
+    try {
+      const ta = document.createElement("textarea");
+      ta.value = text;
+      ta.style.position = "fixed";
+      ta.style.top = "-9999px";
+      ta.style.left = "-9999px";
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      ok = document.execCommand("copy");
+      document.body.removeChild(ta);
+    } catch (_) {}
+    if (!ok) {
+      try { navigator.clipboard && navigator.clipboard.writeText(text); } catch (_) {}
+    }
+    return ok;
+  }
+
+  let _dpToastTimer = null;
+  function dpShowToast(message) {
+    let el = document.getElementById("dp-copy-toast");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "dp-copy-toast";
+      el.style.cssText = [
+        "position:fixed", "left:50%", "bottom:24px", "transform:translateX(-50%)",
+        "z-index:99999",
+        "background:var(--bg-raised, #1a2030)",
+        "border:1px solid rgba(26,255,102,0.5)",
+        "color:#e0e8ff",
+        "font-family:var(--font-display, \"Barlow Condensed\", sans-serif)",
+        "font-size:12px", "font-weight:700", "letter-spacing:0.03em",
+        "padding:10px 16px", "border-radius:6px",
+        "box-shadow:0 8px 24px rgba(0,0,0,0.5)",
+        "opacity:0", "transition:opacity .15s",
+        "pointer-events:none", "max-width:calc(100vw - 32px)",
+        "text-align:center", "white-space:nowrap", "overflow:hidden", "text-overflow:ellipsis",
+      ].join(";");
+      document.body.appendChild(el);
+    }
+    el.textContent = message;
+    clearTimeout(_dpToastTimer);
+    requestAnimationFrame(() => { el.style.opacity = "1"; });
+    _dpToastTimer = setTimeout(() => { el.style.opacity = "0"; }, 2000);
+  }
+
   /* CRITICAL: window.open must be called synchronously inside the click handler,
-     before any await, to avoid popup-blocker. Never await before this call. */
+     before any await, to avoid popup-blocker. Never await before this call.
+     Copy happens first, synchronously, so it lands before window.open can
+     background the tab and cancel a pending async clipboard write. */
   function dpOpenFD(name) {
-    try { navigator.clipboard.writeText(name); } catch (_) {}
+    const trimmed = (name || "").trim();
+    if (trimmed) {
+      dpCopyToClipboard(trimmed);
+      dpShowToast(`✓ Copied ${trimmed} — paste in FanDuel search`);
+    }
     const url = dpFdUrl(name);
     window.open(url, "_blank", "noopener");
   }
