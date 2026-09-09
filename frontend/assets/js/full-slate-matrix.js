@@ -1905,7 +1905,16 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
   }, [rows, splitScope]);
   const sorted = React.useMemo(() => {
     const s0 = [...splitRows];
-    if (!sortState) return s0;
+    if (!sortState) {
+      if (!projSortOn) return s0;
+      const projHr = (row) => { const v = Number(row.hrprob_projected ?? row.hrprob); return Number.isFinite(v) ? v : -Infinity; };
+      const baseHr = (row) => { const v = Number(row.hrprob); return Number.isFinite(v) ? v : -Infinity; };
+      return [...s0].sort((a, b) => {
+        const bp = projHr(b), ap = projHr(a);
+        if (bp !== ap) return bp - ap;
+        return baseHr(b) - baseHr(a);
+      });
+    }
     if (sortState.key === '_board_metric') {
       const pick = (row, curKey, projKey) => {
         const confirmed = isJigContext ? row.pitcher_confirmed === true : row.lineup_confirmed === true;
