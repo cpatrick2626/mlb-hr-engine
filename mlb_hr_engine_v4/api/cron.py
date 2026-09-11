@@ -144,6 +144,19 @@ def _write_odds_skip_sentinel() -> None:
         logger.warning("[odds_guard] sentinel write failed (non-fatal): %s", exc)
 
 
+def _prepare_odds_cache(target_date: str) -> tuple[bool, str]:
+    """Apply the pull guard without destroying a fresh, usable odds cache."""
+    pull_odds, guard_reason = should_pull_odds(target_date)
+    if pull_odds:
+        logger.info("[odds_guard] PULL — %s", guard_reason)
+    elif guard_reason.startswith("cache fresh"):
+        logger.info("[odds_guard] REUSE — %s", guard_reason)
+    else:
+        logger.info("[odds_guard] SKIP — %s", guard_reason)
+        _write_odds_skip_sentinel()
+    return pull_odds, guard_reason
+
+
 # ── Existing capture helpers (unchanged) ───────────────────────────────────────
 
 def _require_odds_api_key() -> None:
@@ -200,15 +213,9 @@ def run(target_date: str = None) -> dict:
     print(f"[cron] Running pipeline for {target_date}...")
 
     # ── Odds skip-guard ───────────────────────────────────────────────────────
-    # Gate the Odds API pull at zero cost. When the guard blocks, a sentinel
-    # fresh-cache is written so load_game_data() sees zero odds and takes the
-    # existing odds_pending path — the MLB Stats slate still builds normally.
-    pull_odds, guard_reason = should_pull_odds(target_date)
-    if pull_odds:
-        logger.info("[odds_guard] PULL — %s", guard_reason)
-    else:
-        logger.info("[odds_guard] SKIP — %s", guard_reason)
-        _write_odds_skip_sentinel()
+    # Gate the Odds API pull at zero cost. Reuse fresh odds when available;
+    # otherwise write a sentinel so the projected slate builds without a pull.
+    pull_odds, guard_reason = _prepare_odds_cache(target_date)
 
     data = load_game_data(target_date)
     capture = _capture_readiness(data)

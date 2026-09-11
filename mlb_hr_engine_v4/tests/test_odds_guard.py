@@ -7,6 +7,8 @@ without making any Odds API or MLB Stats API calls.
 from __future__ import annotations
 
 import sys
+import json
+import tempfile
 import unittest
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
@@ -132,6 +134,48 @@ class TestShouldPullOdds(unittest.TestCase):
             mock_dt.now.return_value = now
             cron.should_pull_odds(self.DATE)
         mock_odds.assert_not_called()
+
+    def test_fresh_cache_is_reused_without_overwriting_props(self):
+        """A fresh odds cache must survive the guard so the pipeline can attach it."""
+        cached = {
+            "timestamp": 1,
+            "props": [{"player_name": "Kyle Tucker", "price": 350}],
+            "quota": {"used": 1, "remaining": 499},
+            "fd_links": [],
+        }
+        with tempfile.TemporaryDirectory() as temp_dir:
+            cache_path = Path(temp_dir) / "odds_cache.json"
+            cache_path.write_text(json.dumps(cached), encoding="utf-8")
+            with (
+                mock.patch.object(
+                    cron,
+                    "should_pull_odds",
+                    return_value=(False, "cache fresh (age=20m)"),
+                ),
+                mock.patch.object(cron, "_ODDS_CACHE_PATH", cache_path),
+            ):
+                pull, reason = cron._prepare_odds_cache(self.DATE)
+            preserved = json.loads(cache_path.read_text(encoding="utf-8"))
+
+        self.assertFalse(pull)
+        self.assertIn("cache fresh", reason)
+        self.assertEqual(preserved["props"], cached["props"])
+
+    def test_outside_pull_window_still_writes_empty_sentinel(self):
+        """A timing-based skip must keep blocking downstream Odds API access."""
+        with (
+            mock.patch.object(
+                cron,
+                "should_pull_odds",
+                return_value=(False, "first game in 10.7h (too early)"),
+            ),
+            mock.patch.object(cron, "_write_odds_skip_sentinel") as write_sentinel,
+        ):
+            pull, reason = cron._prepare_odds_cache(self.DATE)
+
+        self.assertFalse(pull)
+        self.assertIn("too early", reason)
+        write_sentinel.assert_called_once_with()
 
 
 if __name__ == "__main__":
