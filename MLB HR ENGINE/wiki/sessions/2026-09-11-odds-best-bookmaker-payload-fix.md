@@ -1,6 +1,6 @@
 # Odds Best-Bookmaker Payload Fix - 2026-09-11
 
-Status: **STAGE 2 FIX RECORD**
+Status: **DEPLOYED / VERIFIED**
 
 ## Failure
 
@@ -15,5 +15,7 @@ No fetch, matching, scoring, `model_prob`, MAIN/JIG, calibration, tier, or pipel
 ## Validation
 
 - Regression coverage verifies FanDuel preference, BetRivers fallback, and no-line null behavior.
-- Production deployment is gated on scoped commits being pushed first.
+- Code commit `cf67df0` and wiki commit `d12fdbd` were pushed before deployment.
 - Live `/api/slate` verification must use a newly generated slate payload; previously stored cached rows remain unchanged until the next pipeline write.
+
+The post-deploy daily pipeline completed successfully from pushed SHA `d12fdbd`: 88 odds lines and 88/410 player matches. The refreshed `/api/slate` contains 88 odds rows, all from BetRivers for this run, plus 322 genuine no-line rows. Examples include Rafael Flores Jr. `+510` (BetRivers), implied probability `0.1639`, edge `0.0478`, and EV `29.14%`; Pete Crow-Armstrong `+300` (BetRivers), implied probability `0.25`, edge `-0.0178`, and EV `-7.12%`. A no-line row remains null across all odds fields.
