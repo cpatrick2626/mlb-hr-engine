@@ -1393,18 +1393,22 @@ def _build_slate_payload(data: dict, odds_pending: bool = False, odds_pending_st
                   "WEAK": "WEAK"}
         quality = mq_map.get(p.get("matchup_quality", "AVG"), "AVG")
 
+        # Prefer FanDuel when present, but publish the best available bookmaker
+        # line so a valid non-FanDuel prop is not discarded at the API boundary.
         fd_raw = p.get("fanduel_american")
-        odds = (f"+{fd_raw}" if fd_raw and fd_raw > 0
-                else str(fd_raw) if fd_raw else None)
+        odds_raw = fd_raw if fd_raw is not None else p.get("best_american")
+        odds_bookmaker = "fanduel" if fd_raw is not None else p.get("best_bookmaker")
+        odds = (f"+{odds_raw}" if odds_raw and odds_raw > 0
+                else str(odds_raw) if odds_raw else None)
 
         # EV surface: implied_prob, edge, ev_pct — computed only when a real HR line exists.
         # Uses calibrated model_prob (honest scale). Never fabricated from missing odds.
-        if fd_raw is not None:
-            if fd_raw > 0:
-                _impl = 100.0 / (fd_raw + 100.0)
-                _dec_payout = fd_raw / 100.0
+        if odds_raw is not None:
+            if odds_raw > 0:
+                _impl = 100.0 / (odds_raw + 100.0)
+                _dec_payout = odds_raw / 100.0
             else:
-                _abs = abs(fd_raw)
+                _abs = abs(odds_raw)
                 _impl = _abs / (_abs + 100.0)
                 _dec_payout = 100.0 / _abs
             implied_prob = round(_impl, 4)
@@ -1463,6 +1467,7 @@ def _build_slate_payload(data: dict, odds_pending: bool = False, odds_pending_st
             "wind_mph": game_weather.get("wind_mph"),
             "wind_deg": game_weather.get("wind_deg"),
             "odds":     odds,
+            "odds_bookmaker": odds_bookmaker,
             "implied_prob": implied_prob,
             "edge":     edge,
             "ev_pct":   ev_pct,
