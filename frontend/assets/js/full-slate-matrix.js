@@ -92,8 +92,8 @@ const fdeg = (v) => v.toFixed(1) + "°";
 
 /* column defs — bucketsHi = higher is better (4 cuts), bucketsLo = lower is better */
 const FSM_COLS = [
-{ key: "odds", head: "ODDS", title: "HR prop odds (American)", group: "STATS", mode: "odds", fmt: (v) => String(v) },
-{ key: "implied_prob", head: "IMP%", title: "Market implied HR probability from FanDuel American odds (vig-inclusive). Positive +X → 100/(X+100); negative −X → X/(X+100). '—' = no line posted.", group: "EV", mode: "neutral", fmt: (v) => (v * 100).toFixed(1) + "%" },
+{ key: "odds", head: "ODDS / BOOK", title: "Observed HR prop odds (American) and bookmaker. FanDuel is preferred when the feed provides it; otherwise the observed fallback book is shown explicitly.", group: "STATS", mode: "odds", fmt: (v) => String(v) },
+{ key: "implied_prob", head: "IMP%", title: "Market implied HR probability from the observed bookmaker odds (vig-inclusive). Positive +X → 100/(X+100); negative −X → X/(X+100). '—' = no line posted.", group: "EV", mode: "neutral", fmt: (v) => (v * 100).toFixed(1) + "%" },
 { key: "edge", head: "EDGE", title: "Model HR probability minus market implied probability (pp). Positive = +EV: model rates this more likely than the market. Sort ▼ to surface +EV single bets. '—' = no line posted.", group: "EV", mode: "ev_flag", fmt: (v) => (v >= 0 ? "+" : "") + (v * 100).toFixed(1) + "pp" },
 { key: "ev_pct", head: "EV%", title: "Expected value per $1 staked × 100. Formula: (model_prob × decimal_payout) − (1 − model_prob). Positive = profitable long-run. Sort ▼ to surface +EV singles. '—' = no line posted.", group: "EV", mode: "ev_flag", fmt: (v) => (v >= 0 ? "+" : "") + v.toFixed(1) + "%" },
 { key: "hr", head: "HR", title: "Home runs — REAL vs-hand split count in VS HAND mode (PA always shown; thin <30 PA tagged amber); season total in SEASON mode", group: "STATS", bucketsHi: [28, 18, 10, 5], fmt: (v) => String(v) },
@@ -337,7 +337,10 @@ function FsmCell({ col, row, extra }) {
   const scope = col.scope === "hand" && row._vsScope ? row._vsScope[col.key] : null;
   const tag = scope ? <FsmScopeTag scope={scope} /> : null;
   const na = col.na || "—";
-  if (col.mode === "odds") return <td className={`fsm-cell fsm-cell--odds${xc}`} data-label={lbl}>{v == null ? na : col.fmt(v)}</td>;
+  if (col.mode === "odds") {
+    const book = row.odds_bookmaker ? ` · ${String(row.odds_bookmaker).toUpperCase()}` : "";
+    return <td className={`fsm-cell fsm-cell--odds${xc}`} data-label={lbl}>{v == null ? na : col.fmt(v) + book}</td>;
+  }
   if (col.mode === "headline") return <td className={`fsm-cell fsm-cell--headline${xc}`} data-label={lbl}>{v == null ? na : col.fmt(v)}{tag}</td>;
   if (col.mode === "neutral") return <td className={`fsm-cell fsm-cell--neutral${xc}`} data-label={lbl}>{v == null ? na : col.fmt(v)}</td>;
   if (col.mode === "ev_flag") {
@@ -1257,7 +1260,7 @@ function FsmPitchMix({ row, onClose, onBatter, builderMode = false }) {
           <div className="fsm-h2h__btier">
             <div><span>MODEL TIER</span><b>{row.tier}</b></div>
             <div><span>MODEL HR PROB</span><b style={{ color: "#1aff66" }}>{row.hrprob != null ? row.hrprob.toFixed(1) + "%" : "—"}</b></div>
-            <div><span>{builderMode ? "SOURCE FEED ODDS" : "HR ODDS"}</span><b style={{ color: "#ffb020" }}>{row.odds || "—"}</b></div>
+            <div><span>{builderMode ? "SOURCE FEED ODDS" : "HR ODDS / BOOK"}</span><b style={{ color: "#ffb020" }}>{row.odds ? `${row.odds}${row.odds_bookmaker ? ` · ${String(row.odds_bookmaker).toUpperCase()}` : ""}` : "—"}</b></div>
           </div>
         </div>
 
@@ -1645,7 +1648,7 @@ function FsmArsenalEdgeIntel({ row, onClose, onBatter, builderMode = false, isJi
               </div>
               <div className="aei-vcard__bot">
                 <span className="aei-vcard__note">KEY PITCH: {keyPitchName}</span>
-                <span className="aei-odds">HR ODDS <b>{row.odds || "—"}</b></span>
+                <span className="aei-odds">HR ODDS / BOOK <b>{row.odds ? `${row.odds}${row.odds_bookmaker ? ` · ${String(row.odds_bookmaker).toUpperCase()}` : ""}` : "—"}</b></span>
               </div>
             </div>
 
