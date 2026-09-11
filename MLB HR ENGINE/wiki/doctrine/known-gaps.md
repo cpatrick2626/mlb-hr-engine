@@ -216,11 +216,43 @@ Velocity is NOT available from `pitch-arsenal-stats`, and the alternate `pitch-a
 
 ---
 
-## LIVE Targets Banner — add-to-slip intentionally blocked
+## LIVE Targets Banner — live state wired; add-to-slip still blocked
 
-**Gap:** The LIVE Targets Banner in the live production board uses hardcoded mock data with no real `player_id`. Wiring add-to-slip to it would write legs with NULL or incorrect player IDs, corrupting calibration data.
+**Current state:** Phase 2a (`a7df7b0`, merged through PR #6 as `be2a583`) name-matches each static `window.LIVE_TARGETS` entry to real `/api/slate` rows, obtains an unambiguous `game_pk`, and polls `/api/live-state/{game_pk}` for status, inning, and score. Unresolved or ambiguous targets fall back honestly; no game is guessed.
 
-**Status:** INTENTIONAL BLOCK. Unblock only after banner is wired to real `/api/slate` rows with valid `player_id` values.
+**Remaining gap:** The target roster is still a hardcoded array and does not carry a trusted `player_id`. Wiring add-to-slip would still risk NULL or incorrect player IDs and corrupt calibration data.
+
+**Status:** LIVE GAME STATE RESOLVED; ADD-TO-SLIP INTENTIONAL BLOCK. Unblock only after targets originate from real rows with stable `player_id` values.
+
+---
+
+## AGENTS.md contradicts the ratified JIG-native tier state
+
+**Gap:** `AGENTS.md` currently says no `jigTier` field exists. Current code and Obsidian doctrine show the opposite: `config.JIG_TIER_THRESHOLDS` is ratified, `_build_slate_payload()` emits additive `jigTier`, the export contract includes it, and JIG still sorts by `jigScore` rather than `jigTier`.
+
+**Risk:** An agent following only `AGENTS.md` may delete, duplicate, or incorrectly defer an already-ratified display field.
+
+**Status:** OPEN GOVERNANCE DRIFT. Code was not changed during the 2026-08-18 synchronization. Correct `AGENTS.md` in the dedicated `AGENTS.md Grounding Update` room before future JIG tier work.
+
+---
+
+## Community feed contract test is stale after today-only filtering
+
+**Gap:** The Community feed now excludes tickets whose `date` does not equal the current ET slate date. `tests/test_community_posts.py` still creates `ticket-a` without a `date`, so `test_owner_can_post_and_feed_groups_by_stable_user_not_mutable_username` deterministically receives an empty feed and fails at `payload["users"][0]`.
+
+**Evidence:** 2026-08-18 targeted regression run: 57 passed, 1 failed. The failing test reproduced twice in isolation. The API behavior matches the intentional August 12 today-only feature; the fixture did not move with the contract.
+
+**Status:** OPEN TEST FIXTURE DEFECT. Diagnosis only; no application or test code changed in the synchronization pass.
+
+---
+
+## Production slate is currently stale and empty
+
+**Gap:** On 2026-08-18, live Fly `/health` returned OK and OpenAPI exposed the current route set, but `/api/slate` returned `stale: true` for date 2026-08-17 with zero `slate_games`, zero MAIN rows, and zero JIG rows.
+
+**Impact:** Current row-level payload fields, `jigTier` distribution, LIVE TARGETS resolution, and live-game banner rendering cannot be validated against production until a populated slate exists.
+
+**Status:** OPEN OPERATIONAL CHECK. No pipeline run, deploy, or cache mutation was authorized or performed during this review.
 
 ---
 
@@ -286,3 +318,9 @@ on the live JIG board July 16. See `tier-vocabulary.md` and `main-jig-separation
 - [[ticket-roles]] — role calibration
 - [[design-pitch-mix-analysis]] — pitch mix data wiring
 - [[tier-vocabulary]] — JIG tier vocabulary
+
+## Odds provider coverage — FanDuel unavailable in current feed (2026-09-11)
+
+One controlled live request for PIT@CHC (`batter_home_runs`, `regions=us`, American odds, no bookmaker filter) returned only BetRivers. The response contained no `fanduel` bookmaker, so the existing FanDuel-preferred payload logic had no FanDuel line to select. The key reported 498 requests remaining from a 500-request allowance after the two-call audit.
+
+The Odds API provider directory currently lists BetRivers under US bookmakers but does not list FanDuel. This is an upstream coverage/provider limitation, not a parser key mismatch. Until a source that supplies FanDuel lines is authorized and integrated, board odds and EV are observed-book context only and must display the actual bookmaker; they must not be described as FanDuel odds.
