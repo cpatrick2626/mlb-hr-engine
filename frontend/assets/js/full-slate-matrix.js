@@ -501,7 +501,9 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, i
   const hasJigProjection = jigProj != null && Number.isFinite(Number(jigProj));
   const jigConfirmed = row.pitcher_confirmed === true || (hasJigScore && hasJigProjection && Number(jigProj) === Number(jigScore));
   const isDualTM = !confirmed && tmProj != null && Number.isFinite(tmProj) && tmProj !== row.true_matchup_score;
-  const isDualHR = !confirmed && hrProj != null && Number.isFinite(hrProj) && hrProj !== row.hrprob;
+  const hasHrProjection = hrProj != null && Number.isFinite(Number(hrProj));
+  const isDualHR = !confirmed && hasHrProjection && hrProj !== row.hrprob;
+  const hrProjectionPending = !confirmed && !hasHrProjection;
   const isDualJig = !jigConfirmed && hasJigProjection && (!hasJigScore || Number(jigProj) !== Number(jigScore));
   const jigProjectionPending = !jigConfirmed && !hasJigProjection;
   return (
@@ -533,7 +535,7 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, i
           <span className="fsm-player__dot" title={row.pitcherVuln === "TARGET" ? `BATTER THREAT: ${row.quality || "—"} — batter HR-threat tier (model probability + barrel quality) · GLOW: TARGET pitcher allows 2.2+ HR/9 (separate pitcher-vulnerability signal)` : `BATTER THREAT: ${row.quality || "—"} — batter HR-threat tier based on model probability + barrel quality`} style={{ background: (FSM_MATCHUP[row.quality] || { color: "#6b7872" }).color, boxShadow: row.pitcherVuln === "TARGET" ? "0 0 0 2px #1aff66, 0 0 6px rgba(26,255,102,0.85)" : undefined }} />
           <span className="fsm-player__col">
             <span className="fsm-player__name">{row.name}</span>
-            <span className="fsm-player__meta">{row.teamAbbr}<i className="fsm-player__bar">|</i>{row.bats}</span>
+            <span className="fsm-player__meta">{row.teamAbbr}<i className="fsm-player__bar">|</i>{row.bats}{!isJigContext && !confirmed && <span className="fsm-tbd-badge" title="Eligible active-roster hitter — lineup not yet confirmed">UNCONFIRMED</span>}</span>
             {game
         ? <span className="fsm-player__game"><span className="fsm-player__gm--opp">{game.away}@{game.home}</span><i className="fsm-player__bar">·</i><span className="fsm-player__gm--time">{game.time || fsmFmtEt(row.gameStartUtc)}</span>{row.pitcher_name && <><i className="fsm-player__bar">·</i><span className="fsm-player__gm--pitcher">{row.pitcher_name}</span></>}</span>
         : (row.gameStartUtc || row.pitcher_name) && <span className="fsm-player__game"><span className="fsm-player__gm--time">{fsmFmtEt(row.gameStartUtc)}</span>{row.gameStartUtc && row.pitcher_name && <i className="fsm-player__bar">·</i>}{row.pitcher_name && <span className="fsm-player__gm--pitcher">{row.pitcher_name}</span>}</span>}
@@ -556,8 +558,9 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, i
             </span>
             <span className="fsm-matchup__metric fsm-matchup__metric--hr">
               <span className="fsm-matchup__lbl">HR PROB</span>
-              <span className="fsm-matchup__val fsm-matchup__val--hero">{row.hrprob != null ? row.hrprob.toFixed(1) + "%" : "—"}</span>
-              {isDualHR && <span className="fsm-matchup__proj">▸{hrProj.toFixed(1)}%</span>}
+              <span className="fsm-matchup__val fsm-matchup__val--hero" title={hrProjectionPending ? "CURRENT HR probability — projected value pending pitcher confirmation" : undefined}>{row.hrprob != null ? row.hrprob.toFixed(1) + "%" : "—"}</span>
+              {isDualHR ? <span className="fsm-matchup__proj">▸{hrProj.toFixed(1)}%</span> :
+              hrProjectionPending ? <span className="fsm-matchup__proj" title="Projected HR probability unavailable until the opposing pitcher is known">▸PENDING</span> : null}
             </span>
             <span className="fsm-matchup__metric fsm-matchup__metric--single">
               <span className="fsm-matchup__lbl">SIGNAL</span>
@@ -1863,7 +1866,8 @@ function FsmDetailModal({ modal, onClose, setModal, builderMode = false, isJigCo
    retired 2026-07-08 — superseded by REAL vs-hand splits via fsmSplitRow. */
 
 function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMode = false, isJigContext = false }) {
-  const [view, setView] = React.useState("game");
+  const isJigBoard = isJigContext || builderMode;
+  const [view, setView] = React.useState(isJigBoard ? "game" : "player");
   const [selGame, setSelGame] = React.useState("all");
   const [group] = React.useState("all");
   const [focus] = React.useState("all");
@@ -1877,8 +1881,8 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
   const [colOpen, setColOpen] = React.useState(false);
   const [colInfo, setColInfo] = React.useState(null);
   const [editMode, setEditMode] = React.useState(false);
-  const [projSortOn, setProjSortOn] = React.useState(false);
-  const [sortState, setSortState] = React.useState({ key: '_board_metric', dir: 'desc' });
+  const [projSortOn, setProjSortOn] = React.useState(!isJigBoard);
+  const [sortState, setSortState] = React.useState(isJigBoard ? { key: '_board_metric', dir: 'desc' } : null);
   const [splitScope, setSplitScope] = React.useState('vs_hand');
   const [dataVersion, setDataVersion] = React.useState(0);
   const [bestCohortOn, setBestCohortOn] = React.useState(false);
@@ -1910,19 +1914,24 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
     const s0 = [...splitRows];
     if (!sortState) {
       if (!projSortOn) return s0;
-      const projHr = (row) => { const v = Number(row.hrprob_projected ?? row.hrprob); return Number.isFinite(v) ? v : -Infinity; };
-      const baseHr = (row) => { const v = Number(row.hrprob); return Number.isFinite(v) ? v : -Infinity; };
-      return [...s0].sort((a, b) => {
-        const bp = projHr(b), ap = projHr(a);
-        if (bp !== ap) return bp - ap;
-        return baseHr(b) - baseHr(a);
-      });
+      /* Honest PROJECTION rank: a row with no real hrprob_projected is NOT sorted
+         as if its current hrprob were the projection — it is pending and sinks
+         below every row with a real projected value, in stable source order. */
+      const projHr = (row) => { const v = Number(row.hrprob_projected); return Number.isFinite(v) ? v : null; };
+      const withProj = [], pending = [];
+      s0.forEach((row) => (projHr(row) != null ? withProj : pending).push(row));
+      withProj.sort((a, b) => projHr(b) - projHr(a));
+      return [...withProj, ...pending];
     }
     if (sortState.key === '_board_metric') {
       const pick = (row, curKey, projKey) => {
         const confirmed = isJigContext ? row.pitcher_confirmed === true : row.lineup_confirmed === true;
-        if (confirmed) return row[curKey] ?? -Infinity;
-        return (projSortOn ? (row[projKey] ?? row[curKey]) : row[curKey]) ?? -Infinity;
+        if (confirmed || !projSortOn) return row[curKey] ?? -Infinity;
+        /* JIG's own projected-score fallback is untouched — this honesty fix is
+           scoped to MAIN's TM/HR PROB pair only. */
+        if (projKey === 'jigscore_projected') return row[projKey] ?? row[curKey] ?? -Infinity;
+        const p = row[projKey];
+        return (p != null && Number.isFinite(Number(p))) ? p : -Infinity;
       };
       return [...s0].sort((a, b) => {
         if (!isJigContext && !builderMode) {
