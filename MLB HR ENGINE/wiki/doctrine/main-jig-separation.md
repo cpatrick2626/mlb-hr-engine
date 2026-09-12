@@ -13,7 +13,7 @@ MAIN and JIG are separate intelligence layers and must remain permanently separa
 3. **HVY signal isolation:** The HVY pitch-mix modifier is display-only on the JIG side. It must not be folded into MAIN's model probability or λ calculation.
 4. **Separate output:** MAIN and JIG produce separate pick lists. A composite/blended list requires explicit new doctrine.
 5. **No hidden blending:** Do not introduce hidden composite scoring that blends tactical/HVY signals and model scoring. Any blend must be explicit, documented, and operator-authorized.
-6. **TCC orchestrates; does not compute:** The Tactical Control Center (TCC) orchestrates what the operator sees. It does not compute MAIN or JIG scores. See `MASTER_TCC_DOCTRINE.md`.
+6. **TCC is a display/workflow surface; it does not compute:** TCC displays existing state and outputs; it does not compute MAIN or JIG scores. Planning/governance belongs to the ChatGPT Project Manager / Command Center. No TCC room is required.
 7. **Separate key namespaces:** MAIN uses `tac_*` session/state keys. JIG uses `jig_tac_*` session/state keys. Cross-engine key access is contamination. Do not read or write across namespaces.
 
 ### What counts as contamination

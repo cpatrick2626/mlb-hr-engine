@@ -1,6 +1,13 @@
 # Production Surface Truth
 
-**Last Updated:** 2026-07-01
+## Current authoritative map — 2026-09-12
+
+- `frontend/` at repository root is the canonical production frontend. Vercel automatically deploys pushes to `main`.
+- `mlb_hr_engine_v4/` is the engine/backend. Fly app `mlb-hr-api` is backend-only and requires manual `flyctl` deployment.
+- Current root `fly.toml`: `min_machines_running=1`, `memory_mb=1024`, `TRACKING_DATA_DIR=/data`, persistent volume mounted at `/data`.
+- Any older statement in this document that root frontend assets are served by Fly, or that `mlb_hr_engine_v4/frontend/` is the production canonical tree, is superseded.
+
+**Last Updated:** 2026-09-12
 
 ---
 

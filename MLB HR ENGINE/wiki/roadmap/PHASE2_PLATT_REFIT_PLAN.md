@@ -1,7 +1,9 @@
-# Phase 2 Calibration — Platt Refit Plan (SCOPED, WAITING FOR REAL DATA)
+# Phase 2 Calibration — Platt Refit Plan (HISTORICAL; CALIBRATION FROZEN)
+
+> **Current status — 2026-09-12:** This plan is retained for historical context only. MAIN calibration is FROZEN. No top-band refit is queued or approved. Any future recalibration requires new evidence and explicit operator authorization. Do not execute this plan based on its old trigger or sample-size language.
 
 ## Status
-SCOPED + twice-confirmed (independent audits in Fable and Codex, 2026-07-10). NOT shipped. VERDICT: wait for post-1.12 settled data before fitting. Ready to execute once enough fresh settled rows accumulate.
+RETIRED / SUPERSEDED on 2026-09-12. The historical analysis below records the former proposal; it is not queued, approved, or executable under current calibration doctrine.
 
 ## Why Phase 2 exists
 prob_scale=1.12 (live) fixed the AGGREGATE under-prediction (~21% → ~0% overall bias). But a flat scalar can't fix band-specific SHAPE. Residual miscalibration remains, and it's worse than "low band under-predicts": 1.12 traded low-band under-prediction for top-band OVER-prediction.
@@ -50,5 +52,5 @@ Practical note (Codex): the original fitting harness scripts/analysis/analyze_ca
 - Keep AUTO_LEARN_FROZEN=True through and after — if auto-learn moves prob_scale off 1.12, the refit coefficients (fit conditional on 1.12 upstream) are invalidated.
 - HIGH-risk formula/scoring surface: operator-authorized, Fable-tier, gated + regression + independent review before commit.
 
-## Trigger to execute
+## Historical trigger — retired
 When post-1.12 settled data reaches a sufficient sample (target: comparable to the current n≈3,800, or at minimum n≥200 per major band, per the calibration-change sample rule). Check accumulation periodically via the settled legs/pick_tracker data.

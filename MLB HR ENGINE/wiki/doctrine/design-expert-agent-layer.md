@@ -1,5 +1,7 @@
 # AI Expert-Agent Layer — Design Spec
 
+> **Direction update — 2026-09-12:** This is a historical design proposal, not an active product roadmap. Parlay/ticket construction agents and parlay product expansion are RETIRED / INVALIDATED. The north star is +EV single-leg HR bets at longer odds. Preserve historical descriptions for provenance; do not build or route future work from them.
+
 Status: DESIGN / PLANNING ONLY. Risk: MEDIUM (analyst agents) to HIGH (anything touching scoring/modal). Core principle: Expertise = methods + data + rules + validation. Not impersonation.
 
 Cross-references: [[wiki/doctrine/ticket-roles|ticket-roles]] · [[wiki/doctrine/main-jig-separation|main-jig-separation]] · [[wiki/doctrine/ask-the-board-skill|ask-the-board-skill]]
@@ -14,7 +16,7 @@ Not greenfield. Extends /ask-the-board (existing advisory-lens skill) and the CC
 4. Lives inside existing surfaces (tooltips, batter card, ticket review, pitch-mix modal). No separate advisor panel yet.
 
 ## Recommended roster (trimmed from 24 to a sharp bench)
-Tier 1 (new high-value): Power Profile Scout, Matchup/Pitch-Mix Analyst, Risk Analyst, Parlay/Ticket Construction Analyst, Explainability/Clarity Agent, Data Quality Agent.
+Tier 1 (historical proposal; not active): Power Profile Scout, Matchup/Pitch-Mix Analyst, Risk Analyst, ~~Parlay/Ticket Construction Analyst~~ (RETIRED), Explainability/Clarity Agent, Data Quality Agent.
 Tier 2 (later): Sabermetric Analyst, Park/Weather Analyst, Platoon/Splits Analyst, Odds/Value Analyst (display-only).
 Tier 3 (formalize as board lenses, do not build standalone): Product Director, Systems Architect, Engineers, QA, Deploy/Ops, UX/Design agents.
 
@@ -23,13 +25,13 @@ Each agent defined by: domain, inputs (existing row fields), outputs, boundaries
 - Power Profile Scout: why a hitter is dangerous (barrel/HH/maxEV/pull-air/xSLG/HR-PA). User-facing.
 - Matchup/Pitch-Mix Analyst: why a matchup is exploitable (arsenal/vulnerability/splits). User-facing.
 - Risk Analyst: what is wrong with a pick/ticket (volatility/sample/spot). User-facing.
-- Parlay/Ticket Analyst: combine roles into sound tickets. User-facing. Ticket logic is operator-strategy, not a model output. See [[wiki/doctrine/ticket-roles|ticket-roles]] for role definitions.
+- ~~Parlay/Ticket Analyst: combine roles into sound tickets.~~ RETIRED / INVALIDATED as product direction; do not build parlay construction or grading. Historical ticket records remain available as evidence.
 - Explainability/Clarity Agent: plain-language translation of tier/role/metrics. User-facing.
 - Data Quality Agent: flag stale/missing/low-sample data (silent-1.0 pitchers, stale odds). Behind-scenes + confidence badge.
 
 ## Build order
 First: Explainability Agent (tooltips) — DONE 2026-06-15 (template-grounded tier/role badge tooltips, v1 shipped).
-Then: Data Quality flags → Power Profile Scout → Matchup/Pitch-Mix Analyst → Risk/Parlay Analyst → in-product agent debate. Each phase: calibrate → build read-only → operator review → ship.
+Historical proposed sequence: Data Quality flags → Power Profile Scout → Matchup/Pitch-Mix Analyst → Risk Analyst → in-product agent debate. This sequence is not an active roadmap; parlay work is retired.
 
 ## Guardrails
 No impersonation, no voice/identity cloning, no scraping, no copyrighted reproduction, no fake certainty, no scoring changes, market data display-only, MAIN/JIG separation preserved. Biggest technical risk = hallucination: every claim must trace to real row data or doctrine, cite the metric, show "--" rather than invent.

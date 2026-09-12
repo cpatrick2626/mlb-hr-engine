@@ -1,5 +1,9 @@
 # CLAUDE.md
 
+## Current project authority — 2026-09-12
+
+ChatGPT — MLB HR Engine Project Manager / Command Center is the planning and governance authority. Claude Code and Codex are bounded execution agents. Root `frontend/` is the production frontend on Vercel (automatic deploy from push to `main`); `mlb_hr_engine_v4/` is the engine/backend; Fly app `mlb-hr-api` is backend-only and deploys manually. Current Fly settings are `min_machines_running=1`, `memory_mb=1024`, and tracking mounted at `/data` via `TRACKING_DATA_DIR=/data`. Obsidian Git is disabled; Core Sync configuration alone does not prove live account sync. Graphify is STALE; inspect source directly and do not regenerate without authorization. MAIN calibration is FROZEN pending new evidence and explicit operator authorization. Product north star is +EV single-leg HR bets at longer odds; parlay expansion is retired. Any contradictory older section below is historical and superseded.
+
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## 1. Project Overview
@@ -121,11 +125,11 @@ Two surfaces deploy independently.
 - Read endpoints (picks, strategies, runs) gated by Supabase JWT auth.
 - Pipeline trigger endpoint gated by `X-Cron-Secret` header. Normal pipeline runs come from GitHub Actions cron (`api/cron.py`); the manual endpoint is a fallback.
 - Containerized via the root `Dockerfile` (Python 3.12-slim, uvicorn, single worker on port 8080).
-- Deployed to Fly.io. `fly.toml` declares:
+- Backend deployed to Fly.io. `fly.toml` declares:
   - `app = "mlb-hr-api"`, `primary_region = "iad"`
-  - `auto_stop_machines = true`, `auto_start_machines = true`, `min_machines_running = 0`
-  - Shared CPU, 512 MB
-  - Volume `mlb_tracking` mounted at `/app/tracking` to persist pick/CLV CSVs across deploys
+  - `auto_stop_machines = true`, `auto_start_machines = true`, `min_machines_running = 1`
+  - Shared CPU, 1024 MB
+  - Volume `mlb_tracking` mounted at `/data`; `TRACKING_DATA_DIR=/data`
 - API dependencies live in `mlb_hr_engine_v4/requirements-api.txt` (FastAPI + uvicorn + supabase + python-jose; no Streamlit/rich/gspread).
 
 Required Fly.io secrets (set via `fly secrets set KEY=value`):
@@ -168,24 +172,24 @@ Subdirectories (only those that exist are listed):
 
 Note: the same `clients/`, `engine/`, `output/`, `data/`, `tracking/`, `backtest/` module names also exist (with reduced surface area) in v1/v2/v3. Treat each version's tree as self-contained.
 
-## 10. Frontend Surfaces — TWO TREES, ONLY ONE DEPLOYS
+## 10. Frontend Surfaces — Current Production Truth
 
-> **AGENT WARNING (2026-06-23):** This repo has **two directories named `frontend/`**. Multiple agents have analyzed the wrong tree. Read this block before any frontend work.
+> **CURRENT TRUTH (2026-09-12):** Root `frontend/` is the canonical production frontend and Vercel deploys it automatically from pushes to `main`. `mlb_hr_engine_v4/` is the engine/backend. Its `frontend/` tree is not the production frontend; do not call it canonical unless new source evidence proves otherwise.
 >
 > | Tree | Type | Vercel? | Deploys? |
 > |------|------|---------|---------|
-> | `frontend/` **(repo root)** | Static HTML + CDN React 18 + `@babel/standalone` — **no build step** | **YES — Root Dir = `frontend`** | **YES — LIVE PRODUCTION** |
-> | `mlb_hr_engine_v4/frontend/` | Next.js 14 (`app/page.tsx`) | No | **NO — dead prototype** |
+> | `frontend/` **(repo root)** | Static production frontend | **YES** | **YES — LIVE PRODUCTION** |
+> | `mlb_hr_engine_v4/frontend/` | Noncanonical prototype/secondary tree | No | **NO — not production canonical** |
 >
 > Root `frontend/` is NOT Next.js. It loads React 18 + Babel from unpkg CDN and transpiles JSX via `<script type="text/babel">` at runtime. Live component bundles: `hr-threat-zone.js`, `jig-command.js`, `full-slate-matrix.js`, `escalation-feed.js`, `slate-command-strip.js`, `pitcher-vulnerability-strip.js` — in `frontend/assets/js/`. Existence confirmed 2026-06-23.
 >
 > Authoritative topology: `wiki/architecture/frontend-topology.md`
 
-`mlb_hr_engine_v4/frontend/` is a Next.js 14 prototype surface used for design iteration of HR threat card components and related tactical UI. As of 2026-05-25 it is **standalone**: no Python runtime, FastAPI service, or Fly.io deployment invokes it. Streamlit (`app.py`) and Next.js (`frontend/`) are isolated operational surfaces with no runtime cross-dependency.
+The older surface descriptions and setup instructions below are retained as historical context only where they conflict with this current map. Do not treat them as production routing instructions.
 
 ### Canonical paths
 
-- **Frontend root:** `mlb_hr_engine_v4/frontend/`
+- **Frontend root:** `frontend/` (repository root; production)
 - **Active TSX components:** `mlb_hr_engine_v4/frontend/components/`
 - **Build entry:** `mlb_hr_engine_v4/frontend/app/page.tsx`
 - **TypeScript config:** `mlb_hr_engine_v4/frontend/tsconfig.json` (path alias `@/*` resolves to `./*`, scoped inside `frontend/`)
@@ -198,8 +202,8 @@ Do NOT run these unless the operator explicitly authorizes a frontend session. D
 ### Surface isolation rules
 
 - Streamlit dashboard (`app.py`) does NOT import, consume, or render `.tsx` files. Confirmed by C-001 audit and X-001 investigation.
-- FastAPI service (`api/main.py`) does NOT serve `frontend/` assets.
-- Fly.io deployment (`fly.toml`, `Dockerfile`) does NOT build `frontend/`.
+- Frontend deployment is Vercel automatic on push to `main`.
+- Fly deployment serves the backend only and is run manually with `flyctl`.
 - Next.js components do NOT call Python runtime directly. Any future bridge must go through the FastAPI service contract (and require a separate doctrine update).
 - session_state, cache, auth, and routing are NOT shared between Streamlit and Next.js.
 
@@ -207,9 +211,9 @@ Do NOT run these unless the operator explicitly authorizes a frontend session. D
 
 On 2026-05-25, the pre-rebuild `mlb_hr_engine_v4/components/hr/*.tsx` files were archived to `mlb_hr_engine_v4/_archive/components_hr_pre_rebuild/hr/`. These were the May 23 "tactical HR threat card system" originals, superseded by the May 24 "MAIN HR-threat-first rebuild" inside `frontend/components/hr/`. The archived versions had zero importers and were not doctrine-aligned (missing corner brackets, pulse animations, semantic green barrel palette, etc.). See `mlb_hr_engine_v4/_archive/components_hr_pre_rebuild/README.md` for restoration steps and full audit trail.
 
-### Future integration (not yet specified)
+### Historical integration plan — superseded
 
-If `frontend/` is wired into production (Fly.io deployment, FastAPI integration, replacement of Streamlit operator dashboard, etc.), the following doctrine items MUST be updated in the same change:
+The following old plan assumed root `frontend/` was not in production. That assumption is superseded. Root `frontend/` is production on Vercel; Fly is backend-only. Do not use this list as a future production-integration trigger.
 
 - This section
 - `AGENTS.md` (platform identity)
@@ -218,7 +222,7 @@ If `frontend/` is wired into production (Fly.io deployment, FastAPI integration,
 - `ROOM_06_DEPLOYMENT_FD_SLIP_TRACKING_DOCTRINE.md` (if deployment surface changes)
 - Deployment configs (`fly.toml`, `Dockerfile`)
 
-Until then, treat `frontend/` as design iteration only.
+The statement that root `frontend/` is design iteration only is superseded. Root `frontend/` is production.
 
 ### Audit trail
 
@@ -322,9 +326,8 @@ Historical session/changelog material lives in the `OPTIMIZATION_RESULTS_*.md`, 
 
 | Agent | Scope |
 |-------|-------|
-| Claude App | doctrine, UX, formula philosophy, architecture decisions |
-| Claude Code | file edits, audits, LOW/MEDIUM/HIGH risk repo work, wiki writes |
-| ChatGPT | external research, formula validation |
+| ChatGPT — MLB HR Engine Project Manager / Command Center | planning, governance, scope, routing, ratification |
+| Claude Code / Codex | bounded file edits, audits, validation, and wiki work assigned by PM |
 | Playwright | runtime validation, port checks |
 | Supabase CLI | schema, migrations |
 | Firecrawl JS | external data scrapes → `raw\` immediately |
@@ -333,7 +336,7 @@ Historical session/changelog material lives in the `OPTIMIZATION_RESULTS_*.md`, 
 | Continue.dev | in-editor assist → `wiki\sessions\` |
 | Replit | rapid prototypes → `raw\` or `wiki\sessions\` |
 | GitHub | version control, commits mirror log entries |
-| Obsidian Git | auto-commits vault on timer |
+| Obsidian Git | installed but disabled; automation intervals are zero; do not claim automatic commits |
 | Caveman | review hooks → status in `wiki\stabilization\` |
 
 ### PROTECTED ZONES
@@ -365,10 +368,10 @@ This project has a knowledge graph at mlb_hr_engine_v4/graphify-out/ with god no
 **Durable workflow rule:** See `AGENTS.md` § GRAPHIFY WORKFLOW RULE for the full freshness-gate protocol, surface exclusions, Codex requirements, and completion-report format. That section is the authoritative source. The rules below are Claude Code query shortcuts only.
 
 Rules:
-- For codebase questions, first run `graphify query "<question>"` when mlb_hr_engine_v4/graphify-out/graph.json exists. Use `graphify path "<A>" "<B>"` for relationships and `graphify explain "<concept>"` for focused concepts. These return a scoped subgraph, usually much smaller than GRAPH_REPORT.md or raw grep output.
+- For codebase questions, first confirm Graphify is FRESH under `AGENTS.md`'s freshness gate. Query only a fresh graph; when stale, inspect current files directly. Use `graphify path "<A>" "<B>"` and `graphify explain "<concept>"` only after that gate passes.
 - If mlb_hr_engine_v4/graphify-out/wiki/index.md exists, use it for broad navigation instead of raw source browsing.
 - Read mlb_hr_engine_v4/graphify-out/GRAPH_REPORT.md only for broad architecture review or when query/path/explain do not surface enough context.
-- After modifying code, run `graphify update mlb_hr_engine_v4` to keep the graph current (AST-only, no API cost). The `.graphifyignore` in `mlb_hr_engine_v4/` excludes `frontend/`, `Docs/`, `_archive/`, and `node_modules/`.
+- After backend changes, check Graphify freshness. Update it only with explicit operator authorization. When stale, inspect current source directly. The `.graphifyignore` in `mlb_hr_engine_v4/` excludes `frontend/`, `Docs/`, `_archive/`, and `node_modules/`.
 - Do NOT use Graphify for frontend/Vercel/Claude Design/Obsidian questions — those surfaces are excluded from the graph.
 
 ## Agent skills

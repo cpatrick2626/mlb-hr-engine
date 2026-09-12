@@ -1,5 +1,7 @@
 # Feedback Loop Architecture Blueprint
 
+> **Direction and status update — 2026-09-12:** This blueprint is historical planning material, not authorization to activate its proposed loops or products. North star: +EV single-leg HR bets at longer odds. Parlay construction/grading/product expansion is RETIRED / INVALIDATED. MAIN calibration is FROZEN; future recalibration requires new evidence and explicit operator authorization.
+
 Status: DESIGN / PLANNING ONLY. Risk: LOW (doctrine doc; no app/engine/pipeline/schema changes).
 Room: MAIN SKILLS
 
@@ -21,9 +23,7 @@ No loop is documented without an activation gate. A threshold of "n/a" is a red 
 Agents READ across grains. Agents WRITE only to their own analysis output tables. Agents NEVER mutate prediction snapshots or scoring. Rule-based logic before LLM, always. No path from "agent concluded X" to "system behaves differently" without human review at a named gate.
 
 **4. Dual lens — keep both visible.**
-Primary north star: **HR prediction accuracy** (Brier score, calibration, hit-rate by tier/role).
-Secondary: **betting-market efficiency** (CLV, EV realization, closing-line edge).
-These lenses re-rank the loops differently. Show both orderings. The tension is real and documented.
+Product north star: **+EV single-leg HR bets at longer odds**. HR prediction accuracy (Brier score, calibration, hit-rate by tier/role) and market efficiency (CLV, EV realization, closing-line edge) remain evaluation lenses; neither authorizes changes to frozen calibration or scoring.
 
 ---
 
@@ -427,7 +427,7 @@ This rule prevents the failure mode where accumulated research starts implicitly
 
 ### 4.6 — Recommended Bounded Use
 
-Use External Hermes for ONE bounded task: **build the timeless advisory-seat corpus + document the theory foundation** (parlay correlation, Kelly, devigging, calibration literature, rare-event probability, Bayesian sports modeling, ticket-review theory).
+This historical proposal to commission a corpus about parlay construction is retired. Any future research must directly support the single-leg HR product direction and receive current PM authorization.
 
 This is a scoped, deliverable-driven task with a completion criterion (a set of reference documents in the knowledge base). It is NOT "do open-ended multi-year web research and keep reading indefinitely."
 
@@ -468,8 +468,8 @@ Add `tier` column to pick tracker (unblocks L2). Ensure `role` is frozen at sele
 **CLV Measurement (L7)**
 Cheapest loop to activate. Requires only closing-line capture cron job. Build as early diagnostic — but do not let its availability distort prioritization toward market efficiency at the expense of accuracy work.
 
-**External Hermes Timeless Corpus (bounded)**
-One bounded task: build advisory-seat reference docs for parlay theory, Kelly, devigging, calibration, Bayesian sports modeling. Scoped to timeless knowledge only. Sandboxed. Output is documents for human review.
+**External Hermes Timeless Corpus (historical proposal — retired)**
+Do not commission the previously proposed parlay-focused advisory corpus as product work.
 
 ### AS DATA ACCUMULATES
 

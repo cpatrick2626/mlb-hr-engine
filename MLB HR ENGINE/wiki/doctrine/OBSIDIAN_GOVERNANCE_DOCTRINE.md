@@ -1,6 +1,12 @@
 # Obsidian Governance Doctrine
 
-**Last Updated:** 2026-06-08
+**Last Updated:** 2026-09-12
+
+## Current authority and sync truth — 2026-09-12
+
+ChatGPT — MLB HR Engine Project Manager / Command Center is the canonical PM/governance authority. Claude Code and Codex are bounded execution agents. Any room ownership labels below are historical if they conflict with this authority; do not require a nonexistent TCC room.
+
+Obsidian Git is installed but **disabled** in this vault. Its community-plugin ID is absent from `.obsidian/community-plugins.json`; local automation intervals are zero and pull-on-boot is false. Do not claim that it auto-commits or auto-syncs the vault. Core Sync is enabled in local configuration only; this does not prove account-level activation or live sync. `Welcome.md` is a missing, nonblocking workspace reference and remains untouched.
 
 ---
 
@@ -30,7 +36,9 @@ This doctrine applies to:
 - future AI operators
 
 Primary governance room:
-- Room 10 - AI WORKFORCE COMMAND
+- `MLB HR Engine Project Manager / Command Center` (ChatGPT)
+
+The historical label `Room 10 - AI WORKFORCE COMMAND` is superseded by the current room map in `AGENTS.md`.
 
 ---
 

@@ -1,8 +1,15 @@
 # Deploy Runbook
 
-**Last Updated:** 2026-06-15
+**Last Updated:** 2026-09-12
 
 ---
+
+## Current deployment split — 2026-09-12
+
+- **Frontend:** repository-root `frontend/`; Vercel automatically deploys pushes to `main`.
+- **Backend:** `mlb_hr_engine_v4/`; Fly app `mlb-hr-api`; deploy manually with `flyctl` from the repository root after explicit operator authorization.
+- Current Fly configuration: `min_machines_running=1`, `memory_mb=1024`, `TRACKING_DATA_DIR=/data`, persistent volume mounted at `/data`.
+- A Git push does not deploy the Fly backend. Do not deploy the frontend through Fly.
 
 ## Summary
 
@@ -14,11 +21,13 @@ Operational runbook for deploying the MLB HR Engine API to Fly.io. GitHub push d
 
 Run from the PARENT repo root (`C:\MLB HR Engine\mlb-hr-engine-master`) — where `fly.toml` lives:
 
-```
-C:\Users\ChrisPatrick\.fly\bin\flyctl.exe deploy
+```powershell
+flyctl deploy
 ```
 
-`flyctl` is NOT on PATH. Always use the full binary path or prefix with the full path.
+Verified home-PC executable: `C:\Users\cpatr\AppData\Local\Microsoft\WinGet\Links\flyctl.exe` (`flyctl v0.4.70` on 2026-08-18). The winget link is on `PATH`. The retired `C:\Users\ChrisPatrick\.fly\bin\flyctl.exe` path is invalid on this machine.
+
+Deploys are home-PC-only and require explicit operator authorization.
 
 **Do NOT run from `MLB HR ENGINE\` (the vault subfolder) — `fly.toml` is not there.**
 

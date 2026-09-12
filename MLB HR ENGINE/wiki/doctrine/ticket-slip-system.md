@@ -100,8 +100,10 @@ Both bugs found in the 2026-07-02 audit were closed by destination-picker Phase 
 
 ## To Close the Gaps (Future Work)
 
+**Product-direction correction — 2026-09-12:** Parlay construction, grading, and product expansion are RETIRED / INVALIDATED. The product north star is +EV single-leg HR bets at longer odds. The historical placeholder description above records current UI behavior only; it does not authorize a future parlay engine.
+
 1. ~~Leg settlement job~~ — ✅ BUILT 2026-07-07 (`api/settle_legs.py`, boxscore-based — did NOT reuse `backtest/outcomes.py`). Remaining: cron/ops automation of the settlement run (currently manual `--commit`).
-2. **Real combined-probability/grade engine** — replace `SAMPLE` overlay values with actual parlay probability and slip-grade computation.
+2. ~~Real combined-probability/grade engine~~ — RETIRED / INVALIDATED as product direction; do not build parlay probability or grading.
 3. **(Optional) Verified FD capture** — replace the intent link with confirmed placement capture.
 
 ---

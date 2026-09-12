@@ -1,5 +1,23 @@
 # MLB HR Engine — AGENT OPERATING RULES
 
+## Current PM and execution authority — 2026-09-12
+
+- **ChatGPT — MLB HR Engine Project Manager / Command Center** is the canonical planning, governance, and ratification authority.
+- Claude Code and Codex are bounded execution agents. They do not become PM authority by editing this repository.
+- Route work to an existing room named by the operator or confirmed in current project state. Historical room maps below do not prove that a room exists; do not require or invent a `TCC Tactical Command Center` room.
+- The TCC is an application/workflow surface. TCC doctrine does not establish a chat room or PM authority.
+- Current project truth in a validated, accepted Project State Sync or explicit operator instruction supersedes older handoffs and room maps.
+
+## Current evidence overrides — 2026-09-12
+
+- Production UI: root `frontend/`; Vercel auto-deploys pushes to `main`. `mlb_hr_engine_v4/` is the engine/backend; Fly app `mlb-hr-api` is backend-only and deploys manually with `flyctl`. Current root `fly.toml`: one minimum machine, 1024 MB, `TRACKING_DATA_DIR=/data`, volume mounted at `/data`.
+- Obsidian Git is installed but disabled. Its local automation intervals are zero and pull-on-boot is false. Core Sync is enabled in local configuration only; that does not prove an account is connected or syncing.
+- Graphify is STALE at this checkout and non-authoritative. The primary generated output is `mlb_hr_engine_v4/graphify-out/`; inspect source directly while stale. Root `graphify-out/` is a legacy/ambiguous secondary output. Never regenerate without separate authorization.
+- MAIN calibration is FROZEN. Recalibration needs new evidence and explicit operator authorization.
+- North star: +EV single-leg HR bets at longer odds. Parlay construction, grading, and product expansion are RETIRED / INVALIDATED as product direction. Historical records remain historical.
+- `jigTier` exists as an additive display/context field derived from `jigScore`. It does not feed `jigScore`, order or filter JIG, or affect MAIN. JIG tactical order remains `jigScore` plus its sort order. In JIG, inherited `row.tier` remains MAIN probability context and must be labeled `MODEL TIER`.
+- These current facts supersede conflicting statements later in this file and historical documents.
+
 ## PLATFORM IDENTITY
 
 Main
@@ -77,7 +95,7 @@ JIG TCC:
 
 Never make Main and JIG filters identical.
 
-TCC Tactical Command Center is the main and only room for:
+The TCC application surface owns:
 - Tactical Command Center layout
 - TCC dashboard shell
 - TCC command panels
@@ -91,9 +109,8 @@ TCC Tactical Command Center is the main and only room for:
 - TCC validation results
 - TCC doctrine and governance
 
-TCC routing rules:
-- If work is TCC-related, keep it in `TCC Tactical Command Center`.
-- Do not suggest another room for TCC work unless absolutely required or the operator explicitly asks.
+TCC product rules:
+- ChatGPT Project Manager / Command Center owns planning and governance for TCC work; use an operator-confirmed existing room for routing.
 - TCC orchestrates; TCC does not compute.
 - TCC may display model outputs, tactical signals, state, and workflow status.
 - TCC must not create hidden scoring.
@@ -176,11 +193,7 @@ row.tier in JIG context = MAIN model probability tier, not JIG-native tactical t
 Do not describe JIG row.tier as JIG tactical confidence, JIG deployment tier, or JIG-native escalation.
 This is contextual probability information, not JIG scoring output.
 
-No jigTier field currently exists.
-If a JIG-native tier is required, introduce it as a separate jigTier field only after:
-- dedicated jigScore distribution audit
-- explicit operator authorization
-- separate doctrine update
+`jigTier` exists as a separate additive display/context field. See the current evidence override above and `wiki/doctrine/main-jig-separation.md`. It does not alter JIG order/scoring or MAIN.
 
 
 ---
@@ -458,11 +471,11 @@ PUSH STATUS
 - Keep responses short and direct unless the operator asks for more detail.
 - Claude Design is the canonical UI/dashboard layout source. Preserve its visual intent unless the operator explicitly authorizes a design change.
 - Room map:
-  - `MLB HR Engine Setup` = main command, routing, general project direction, next-action planning
+  - `MLB HR Engine Project Manager / Command Center` = canonical PM authority, routing, general project direction, and next-action planning
   - `Issue Intake & Triage` = operator bugs, concerns, screenshots, confusing UI, missing data, suspected issues
   - `Tier Ranking & Classification Doctrine` = tier ranking, opportunity class, rank order, tier display, canonical/lens ranking doctrine, escalation quality
   - `FanDuel Shortcut Audit` = FanDuel links, search behavior, copy fallback, row-click isolation, FD shortcut validation
-  - `TCC Tactical Command Center` = main and only room for Tactical Command Center layout, dashboard shell, command panels, workflow behavior, visual hierarchy, tactical UX, navigation behavior, status panels, TCC issue review, TCC implementation prompts, TCC validation results, and TCC doctrine/governance. Does NOT own the global utility skill library.
+  - `TCC Tactical Command Center` = historical room label; not a confirmed active destination. TCC is an application surface, with planning/governance owned by the ChatGPT Project Manager / Command Center and implementation by the assigned execution agent.
   - `Mobile UI Overhaul` = mobile/tablet implementation and responsive polish based on Mobile Architecture V2 and Claude Design
   - `Obsidian Governance Update` = wiki, doctrine, logs, session notes, durable documentation
   - `AGENTS.md Grounding Update` = project-wide rules, AI ownership, room behavior, protected surfaces, operating instructions

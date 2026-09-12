@@ -1,8 +1,12 @@
 # LOOPS.md
 
-> **AUTHORITATIVE.** Claude Skills, account memory, and chat history are secondary consumers and must point here, not redefine these loops. Portable across Claude PM, Claude Code, ChatGPT, Gemini, and future agents. One-source-of-truth: each loop has ONE home — this file.
+## Current ownership override — 2026-09-12
 
-Last updated: 2026-06-19
+ChatGPT — MLB HR Engine Project Manager / Command Center owns planning and governance. Claude Code and Codex are bounded execution agents. Historical Claude PM / TCC room references below are deprecated as routing authority; do not require a TCC room. Root `frontend/` is production on Vercel (automatic deploy from push to `main`); Fly app `mlb-hr-api` is backend-only and requires manual `flyctl` deployment. MAIN calibration is frozen; any future recalibration requires new evidence and explicit operator authorization. The product north star is +EV single-leg HR bets at longer odds; parlay product expansion is retired.
+
+> **AUTHORITATIVE LOOP REFERENCE.** Skills, memory, and chat history are secondary consumers and must point here. This file defines loop mechanics only; current PM and product authority comes from the ChatGPT MLB HR Engine Project Manager / Command Center.
+
+Last updated: 2026-09-12
 
 ---
 
@@ -127,13 +131,13 @@ Required sequence:
 
 ---
 
-## Loop 8 — PM → Claude Code Handoff
+## Loop 8 — PM → Execution Agent Handoff
 
-**Purpose:** Define the two-Claude operating model and the packet interface between them.
+**Purpose:** Define the ChatGPT PM to bounded execution-agent interface.
 
 **Roles:**
-- **Claude PM (chat):** Plans, architects, audits, routes, and writes copy-ready execution packets. Does not execute code.
-- **Claude Code:** Executes, tests, commits, and deploys. Does not plan scope. Executes what the packet specifies and reports back.
+- **ChatGPT — MLB HR Engine Project Manager / Command Center:** owns planning, governance, scope, routing, and ratification.
+- **Claude Code / Codex:** bounded execution agents that implement and validate authorized scope, then report to the PM. Commit, push, and deploy only with explicit operator authorization.
 
 **The packet is the interface.** Every execution packet carries:
 
@@ -149,7 +153,7 @@ Required sequence:
 | Obsidian update | Whether a vault update is required on completion |
 | Completion report | Format for reporting back to PM |
 
-⛔ **GATE:** Claude Code must not expand scope beyond the packet. Scope questions go back to PM before execution begins.
+⛔ **GATE:** Execution agents must not expand scope beyond the packet. Scope questions return to the PM before execution begins. Old references to a Claude PM or mandatory TCC room are historical and do not define current ownership.
 
 **Operating rules 1–16:** → See [AGENTS.md](AGENTS.md). Do not restate here.
 

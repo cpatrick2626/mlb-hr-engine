@@ -1,6 +1,12 @@
 # Room Governance Doctrine
 
-**Last Updated:** 2026-06-11
+## Current ownership — 2026-09-12
+
+**ChatGPT — MLB HR Engine Project Manager / Command Center** is the canonical planning, governance, scope, routing, and ratification authority. Claude Code and Codex are bounded execution agents. This section supersedes the historical room map and ownership labels below; those names do not prove an active room exists. Use an existing room named by the operator or verified in current project state. Do not require or invent a `TCC Tactical Command Center` room. TCC refers to the application/workflow surface, not the PM authority.
+
+The product north star is +EV single-leg HR bets at longer odds. MAIN calibration is FROZEN; future recalibration requires new evidence and explicit operator authorization. Root `frontend/` is the production frontend on Vercel (automatic deploy from push to `main`); Fly app `mlb-hr-api` is backend-only and deploys manually. Obsidian Git is installed but disabled. Graphify is STALE and non-authoritative at this checkout; inspect source directly.
+
+**Last Updated:** 2026-09-12
 
 ---
 
@@ -37,11 +43,12 @@ EFFICIENT ROOM UPDATE RULE
 - Keep every interaction to one action.
 
 Standard room map:
+> The names in this older map are not proof of current room existence. Route only to a room the operator names or current project state verifies.
 - `MLB HR Engine Setup` = main command, routing, general project direction, next-action planning
 - `Issue Intake & Triage` = operator bugs, concerns, screenshots, confusing UI, missing data, suspected issues
 - `Tier Ranking & Classification Doctrine` = tier ranking, opportunity class, rank order, tier display, canonical/lens ranking doctrine, escalation quality
 - `FanDuel Shortcut Audit` = FanDuel links, search behavior, copy fallback, row-click isolation, FD shortcut validation
-- `TCC Tactical Command Center` = main and only room for Tactical Command Center layout, dashboard shell, command panels, workflow behavior, visual hierarchy, tactical UX, navigation behavior, status panels, TCC issue review, TCC implementation prompts, TCC validation results, and TCC doctrine/governance. Does NOT own the global utility skill library.
+- `TCC Tactical Command Center` = historical room label; not a confirmed active destination. TCC is an application surface, with planning/governance owned by the ChatGPT Project Manager / Command Center and implementation by the assigned execution agent.
 - `Mobile UI Overhaul` = mobile/tablet implementation and responsive polish based on Mobile Architecture V2 and Claude Design
 - `Obsidian Governance Update` = wiki, doctrine, logs, session notes, durable documentation
 - `AGENTS.md Grounding Update` = project-wide rules, AI ownership, room behavior, protected surfaces, operating instructions
@@ -62,12 +69,11 @@ If a system belongs to another room:
 
 Do not duplicate ownership across rooms.
 
-Cross-room coordination happens through Room 11 -
-STRATEGIC COMMUNICATIONS HUB.
+Planning and cross-room coordination are owned by ChatGPT — MLB HR Engine Project Manager / Command Center. Use an operator-confirmed room for any handoff.
 
-Room 10 also owns AI workflow governance and durable project-memory enforcement.
+The ChatGPT Project Manager / Command Center owns AI workflow governance and durable project-memory enforcement.
 When a session creates governance, architecture, stabilization, deployment,
-scoring, or other durable project knowledge, Room 10 is responsible for making
+scoring, or other durable project knowledge, the ChatGPT Project Manager / Command Center is responsible for making
 sure the Obsidian vault is updated or explicitly reviewed for update need.
 
 ---
@@ -131,12 +137,12 @@ Where rules overlap, the stricter gate wins.
 Related doctrine:
 - [Obsidian Governance Doctrine](OBSIDIAN_GOVERNANCE_DOCTRINE.md)
 
-## TCC Tactical Command Center Governance
+## TCC Application Surface Governance
 
-- `TCC Tactical Command Center` is the main and only room for all MLB HR ENGINE Tactical Command Center work.
+- TCC is an application/workflow surface; its planning and governance route through the ChatGPT Project Manager / Command Center.
 - TCC ownership includes Tactical Command Center layout, dashboard shell, command panels, workflow behavior, visual hierarchy, tactical UX, navigation behavior, status panels, TCC issue review, TCC-specific implementation prompts, TCC validation results, and TCC doctrine/governance.
-- If work is TCC-related, keep it in `TCC Tactical Command Center`.
-- Do not suggest another room for TCC work unless absolutely required or the operator explicitly asks.
+- Route TCC work to an existing room confirmed by the operator or current project state; do not assume a TCC room exists.
+- Do not treat TCC as a chat room. Route TCC work through the ChatGPT Project Manager / Command Center or another operator-confirmed existing room.
 - TCC orchestrates; TCC does not compute.
 - TCC may display model outputs, tactical signals, state, and workflow status.
 - TCC must not create hidden scoring.
@@ -181,9 +187,9 @@ Related doctrine:
 ### Routing Clarifications
 
 - Skill work must use `ROOM Deployed From: MAIN SKILLS`.
-- `TCC Tactical Command Center` owns Tactical Command Center app/shell/UX work, not general utility skill-library ownership.
+- TCC application/shell/UX is a product surface, not a room destination; planning/governance routes through the ChatGPT Project Manager / Command Center.
 - The global skill library remains available to all rooms; MAIN SKILLS owns changes to the skill library itself.
-- Prior ambiguity where skill-library work was routed from `TCC Tactical Command Center` is corrected as of 2026-06-12.
+- Prior room-label references are historical; utility skill-library ownership remains with `MAIN SKILLS`.
 
 ---
 
@@ -191,7 +197,7 @@ Related doctrine:
 
 Obsidian is the formal long-term project memory system for MLB HR ENGINE.
 
-Room 10 - AI WORKFORCE COMMAND is responsible for governance enforcement across:
+ChatGPT — MLB HR Engine Project Manager / Command Center is responsible for governance enforcement across:
 - doctrine
 - room governance
 - architecture decisions
@@ -230,11 +236,11 @@ Governance command:
 
 ---
 
-## Vault Auto-Commit Interaction Rule (2026-06-12)
+## Historical Vault Auto-Commit Incident (2026-06-12; automation now disabled)
 
 ### Context
 
-The Obsidian vault at `MLB HR ENGINE/` is tracked inside the main repo. Vault backup automation periodically auto-commits any changes inside the vault subtree (commits typically titled `vault backup: <timestamp>`).
+The 2026-06-12 record described vault auto-commit behavior at that time. Current local evidence shows Obsidian Git is disabled, its commit/push intervals are zero, and auto-backup-after-change is false. Do not expect automatic commits; the historical incident below is retained as provenance only.
 
 ### Observed Failure Mode (2026-06-12)
 
@@ -244,7 +250,7 @@ Between Step A landing on disk and Step C completing, the vault backup process a
 
 History is still clean and reversible, but the intended single-logical-commit narrative was lost.
 
-### Doctrine Rule
+### Historical Doctrine Rule — Not Current Automation Guidance
 
 Any time a planned commit batches a vault-tracked file with one or more non-vault files, ONE of the following must be done before the vault edit hits disk:
 

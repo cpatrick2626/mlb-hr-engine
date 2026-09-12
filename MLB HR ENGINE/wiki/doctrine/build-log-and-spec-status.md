@@ -1,6 +1,8 @@
 # Build Log and Spec Status
 
-**Last Updated:** 2026-06-13
+> **Current Graphify correction — 2026-09-12:** The August 18 refresh recorded below was accurate only for that snapshot. The current checkout is STALE against the primary graph output; inspect source directly and do not regenerate under this task.
+
+**Last Updated:** 2026-09-12
 
 ---
 
