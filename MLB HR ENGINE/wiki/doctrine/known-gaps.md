@@ -319,6 +319,18 @@ on the live JIG board July 16. See `tier-vocabulary.md` and `main-jig-separation
 - [[design-pitch-mix-analysis]] — pitch mix data wiring
 - [[tier-vocabulary]] — JIG tier vocabulary
 
+## PROJECTION mode silently falls back to CURRENT when `model_prob_projected` is null (2026-09-11)
+
+**Gap:** In PROJECTION mode, current frontend behavior falls back to CURRENT `hrprob` whenever `model_prob_projected` is null. A CURRENT probability can therefore appear as a valid projection when none is actually available — most visibly when the opposing probable pitcher is TBD (see the MIA case in `wiki/architecture/pipeline-data-flow.md` § Pre-Lineup Player Population & Projection State).
+
+**Required future behavior:** keep the player visible, do not fake a projected probability, and explicitly indicate the projection is unavailable or pending — likely language `PITCHER TBD` and/or `PROJECTION PENDING`.
+
+**Status:** OPEN. Not yet fixed. Frontend/display work only; no probability or backend change is implied.
+
+**Cross-ref:** [[pipeline-data-flow]] (architecture doc, same section) for the full CURRENT vs. PROJECTED semantics this defect sits on top of.
+
+---
+
 ## Odds provider coverage — FanDuel unavailable in current feed (2026-09-11)
 
 One controlled live request for PIT@CHC (`batter_home_runs`, `regions=us`, American odds, no bookmaker filter) returned only BetRivers. The response contained no `fanduel` bookmaker, so the existing FanDuel-preferred payload logic had no FanDuel line to select. The key reported 498 requests remaining from a 500-request allowance after the two-call audit.
