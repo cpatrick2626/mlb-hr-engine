@@ -3331,6 +3331,20 @@ html, body { height: 100%; overflow: hidden; overflow-x: hidden; max-width: 100v
 .fsm-gamesel--inline { flex-direction: row; align-items: center; gap: 8px; min-width: 0; }
 .fsm-gamesel--inline .fsm-gamesel__field { min-width: 188px; }
 
+/* board-local player search field (reuses fsm-gamesel select chrome) */
+.fsm-searchfield { background: var(--bg-base); border: 1px solid rgba(180,220,200,0.16); border-radius: 6px; padding: 0 10px; min-width: 168px; transition: border-color .15s ease, box-shadow .15s ease; }
+.fsm-searchfield:focus-within { border-color: var(--green-500); box-shadow: 0 0 0 1px rgba(26,255,102,0.4); }
+.fsm-searchfield__input { flex: 1; background: none; border: none; outline: none; color: var(--fg-1); font-family: var(--font-display); font-weight: 600; font-size: 12px; letter-spacing: 0.04em; padding: 9px 0; min-width: 0; }
+.fsm-searchfield__input::placeholder { color: var(--fg-4); }
+.fsm-searchfield__clear { background: none; border: none; color: var(--fg-3); cursor: pointer; padding: 0 0 0 6px; line-height: 1; font-size: 15px; flex-shrink: 0; }
+.fsm-searchfield__clear:hover { color: var(--fg-1); }
+
+/* per-team sub-block header, shown when GAME VIEW is narrowed to one game */
+.fsm-teamblock { display: flex; flex-direction: column; gap: 6px; margin-top: 4px; }
+.fsm-teamblock__hd { display: flex; align-items: center; gap: 8px; padding: 5px 4px; border-left: 2px solid var(--tc, rgba(180,220,200,0.3)); }
+.fsm-teamblock__name { font-family: var(--font-display); font-weight: 800; font-size: 12px; letter-spacing: 0.1em; color: var(--tc, var(--fg-1)); text-transform: uppercase; }
+.fsm-teamblock__count { font-family: var(--font-display); font-weight: 600; font-size: 9px; letter-spacing: 0.1em; color: var(--fg-3); text-transform: uppercase; }
+
 /* PLAYER GROUP / FOCUS filter row */
 .fsm-filters { display: flex; align-items: stretch; gap: 18px; flex-wrap: wrap; }
 .fsm-filters__div { width: 1px; background: rgba(180,220,200,0.12); align-self: stretch; }

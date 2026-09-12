@@ -1869,6 +1869,8 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
   const isJigBoard = isJigContext || builderMode;
   const [view, setView] = React.useState(isJigBoard ? "game" : "player");
   const [selGame, setSelGame] = React.useState("all");
+  const [selTeam, setSelTeam] = React.useState("all");
+  const [searchQ, setSearchQ] = React.useState("");
   const [group] = React.useState("all");
   const [focus] = React.useState("all");
   const [selRoles, setSelRoles] = React.useState([]);
@@ -1965,8 +1967,12 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
     return selRoles.every((id) => r[id] === true);
   };
   const passMetric = (_r) => true;
+  const passTeam = (r) => selTeam === "all" || r.teamAbbr === selTeam;
+  const searchNorm = searchQ.trim().toLowerCase();
+  const passSearch = (r) => !searchNorm || String(r.name || "").toLowerCase().indexOf(searchNorm) !== -1;
+  const slateTeams = React.useMemo(() => Array.from(new Set(rows.map((r) => r.teamAbbr).filter(Boolean))).sort(), [rows]);
 
-  const pool = sorted.filter((r) => (selGame === "all" || r.gameId === selGame) && passGroup(r) && passFocus(r) && passRole(r) && passMetric(r));
+  const pool = sorted.filter((r) => (selGame === "all" || r.gameId === selGame) && passGroup(r) && passFocus(r) && passRole(r) && passMetric(r) && passTeam(r) && passSearch(r));
   const cohortCount = React.useMemo(() => pool.filter(fsmBestCohort).length, [pool]);
   const displayPool = React.useMemo(() => {
     if (!bestCohortOn) return pool;
@@ -1987,6 +1993,8 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
   if (group !== "all") noteBits.push(group === "qualified" ? "QUALIFIED" : "ELITE TARGETS");
   if (focus !== "all") noteBits.push("FOCUS " + focus.toUpperCase());
   if (selGame !== "all") noteBits.push("1 GAME");
+  if (selTeam !== "all") noteBits.push(selTeam);
+  if (searchNorm) noteBits.push('SEARCH "' + searchQ.trim() + '"');
   if (projSortOn && sortState && sortState.key === '_board_metric') noteBits.push((!isJigContext && !builderMode) ? "SORT: TM PROJECTED" : "SORT: JIG PROJECTED");
   if (bestCohortOn) noteBits.push("BEST COHORT · " + cohortCount);
   const note = noteBits.length ? noteBits.join(" · ") : filterNote || "NO ACTIVE FILTERS";
@@ -2150,6 +2158,33 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
                 <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
               </span>
             </label>
+            <label className="fsm-gamesel fsm-gamesel--inline">
+              <span className="fsm-gamesel__label">TEAM</span>
+              <span className="fsm-gamesel__field">
+                <select value={selTeam} onChange={(e) => setSelTeam(e.target.value)}>
+                  <option value="all">All teams · {slateTeams.length}</option>
+                  {slateTeams.map((t) => <option key={t} value={t}>{t}</option>)}
+                </select>
+                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path d="M6 9l6 6 6-6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+              </span>
+            </label>
+            <label className="fsm-gamesel fsm-gamesel--inline">
+              <span className="fsm-gamesel__label">FIND PLAYER</span>
+              <span className="fsm-gamesel__field fsm-searchfield">
+                <input
+                  className="fsm-searchfield__input"
+                  type="text"
+                  value={searchQ}
+                  onChange={(e) => setSearchQ(e.target.value)}
+                  placeholder="Player name"
+                  aria-label="Filter board by player name"
+                  autoComplete="off"
+                  spellCheck="false" />
+                {searchQ &&
+                <button type="button" className="fsm-searchfield__clear" aria-label="Clear player search" onClick={() => setSearchQ("")}>&#xd7;</button>
+                }
+              </span>
+            </label>
           </div>
         </div>
         {/* ── BATTER THREAT legend ── */}
@@ -2168,7 +2203,7 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
       {displayPool.length === 0 ?
       <div className="fsm-metric-empty">
         <span className="fsm-metric-empty__icon">—</span>
-        <span className="fsm-metric-empty__msg">No players on today's slate.</span>
+        <span className="fsm-metric-empty__msg">{rows.length > 0 ? "No players match the current filters." : "No players on today's slate."}</span>
       </div> :
       view === "player" ?
       <div className="fsm-tablewrap fsm-scroll-container"><FsmTable rows={displayPool} cols={activeCols} showGame={true} onBatter={openBatter} onPitch={openPitch} onReorder={onReorder} onFront={(key) => { const first = activeCols[0]; if (first && first.key !== key) onReorder(key, first.key); }} onSort={onSort} sortState={sortState} builderMode={builderMode} isJigContext={isJigContext} splitScope={splitScope} editMode={editMode} /></div> :
@@ -2176,10 +2211,29 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
       gamesToShow.map((game) => {
         const gameRows = displayPool.filter((r) => r.gameId === game.id);
         if (!gameRows.length) return null;
+        /* Only split into per-team blocks once the operator has narrowed to a
+           specific game — keeps the default "all games" view identical to the
+           pre-existing single-table-per-game layout. */
+        const showTeamGroups = selGame !== "all";
+        const teamOrder = (game.teams && game.teams.length) ? game.teams : Array.from(new Set(gameRows.map((r) => r.teamAbbr)));
         return (
           <div className="fsm-gameblock" key={game.id} id={`fsm-game-${game.id}`}>
               <FsmGameHeader game={game} n={gameRows.length} />
+              {showTeamGroups ?
+              teamOrder.map((teamAbbr) => {
+                const teamRows = gameRows.filter((r) => r.teamAbbr === teamAbbr);
+                if (!teamRows.length) return null;
+                return (
+                  <div className="fsm-teamblock" key={teamAbbr}>
+                    <div className="fsm-teamblock__hd" style={{ "--tc": TEAM_COLOR[teamAbbr] || "#3b6fff" }}>
+                      <span className="fsm-teamblock__name">{teamAbbr}</span>
+                      <span className="fsm-teamblock__count">{teamRows.length} BATTERS</span>
+                    </div>
+                    <div className="fsm-tablewrap fsm-scroll-container"><FsmTable rows={teamRows} cols={activeCols} onBatter={openBatter} onPitch={openPitch} onReorder={onReorder} onFront={(key) => { const first = activeCols[0]; if (first && first.key !== key) onReorder(key, first.key); }} onSort={onSort} sortState={sortState} builderMode={builderMode} isJigContext={isJigContext} splitScope={splitScope} editMode={editMode} /></div>
+                  </div>);
+              }) :
               <div className="fsm-tablewrap fsm-scroll-container"><FsmTable rows={gameRows} cols={activeCols} onBatter={openBatter} onPitch={openPitch} onReorder={onReorder} onFront={(key) => { const first = activeCols[0]; if (first && first.key !== key) onReorder(key, first.key); }} onSort={onSort} sortState={sortState} builderMode={builderMode} isJigContext={isJigContext} splitScope={splitScope} editMode={editMode} /></div>
+              }
             </div>);
 
       })
