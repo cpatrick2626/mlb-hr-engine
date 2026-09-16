@@ -275,6 +275,7 @@ def _get_event_props(event_id: str) -> tuple[list[dict], dict]:
     """Returns (props, fd_info). fd_info holds FanDuel deep links for the event:
     event_link/event_sid (event-level, usually present when FD lists the game) and
     bet_links {player_name: link} (outcome-level, RARELY present — absence is normal)."""
+    global _last_error
     fd_info: dict = {"event_link": None, "event_sid": None, "bet_links": {}}
     try:
         resp = _SESSION.get(
@@ -292,6 +293,24 @@ def _get_event_props(event_id: str) -> tuple[list[dict], dict]:
         )
         _parse_quota(resp)
         if resp.status_code != 200:
+            _KNOWN = {
+                401: "Invalid API key (401). Check your ODDS_API_KEY.",
+                422: "API key missing or malformed (422). Check your ODDS_API_KEY.",
+                429: "Monthly quota exhausted (429). Free tier: 500 req/month. Upgrade at the-odds-api.com.",
+            }
+            msg = _KNOWN.get(resp.status_code, f"API error {resp.status_code}")
+            try:
+                api_msg = resp.json().get("message", "")
+                if api_msg:
+                    msg += f" — {api_msg}"
+            except Exception:
+                pass
+            _last_error = msg
+            body_snippet = (resp.text or "")[:200]
+            print(
+                f"[odds_api] event props fetch failed for event {event_id}: "
+                f"status={resp.status_code} body={body_snippet!r}"
+            )
             return [], fd_info
         data = resp.json()
 
