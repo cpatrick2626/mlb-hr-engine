@@ -3576,6 +3576,41 @@ button.fsm-tier { appearance: none; text-decoration: none; }
   line-height: 1.25; opacity: 0.75; letter-spacing: 0.01em; white-space: nowrap;
 }
 
+/* Early-Day Decision Intelligence — fair/buy pricing + decision_action + market
+   context, stacked under the existing TM/HR PROB/SIGNAL metrics. Display-only. */
+.fsm-price {
+  display: flex; flex-direction: column; gap: 2px;
+  margin: 6px 5px 0; padding-top: 5px;
+  border-top: 1px solid rgba(180,220,200,0.12);
+}
+.fsm-price__row { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.fsm-price__lbl {
+  font-family: var(--font-display); font-weight: 700; font-size: 8px; letter-spacing: 0.08em;
+  color: var(--fg-3); text-transform: uppercase; white-space: nowrap;
+}
+.fsm-price__lbl--proj { color: #00d9ff; }
+.fsm-price__lbl--current { color: #d8c393; }
+.fsm-price__val {
+  font-family: var(--font-mono); font-size: 11px; font-weight: 800; color: var(--fg-1);
+  white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+.fsm-price__val--live { color: #1aff66; }
+.fsm-price__val--proj { color: #00d9ff; }
+.fsm-price__action {
+  font-family: var(--font-display); font-size: 8.5px; font-weight: 700; letter-spacing: 0.03em;
+  color: #ffb020; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 100%; margin-top: 1px;
+}
+.fsm-price__action--pending { color: var(--fg-3); font-weight: 600; }
+.fsm-price__detail {
+  font-family: var(--font-mono); font-size: 7.5px; color: var(--fg-3); opacity: 0.8;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+}
+.fsm-price__ctx {
+  font-family: var(--font-display); font-size: 7.5px; font-weight: 600; letter-spacing: 0.06em;
+  color: var(--fg-3); text-transform: uppercase; white-space: nowrap; opacity: 0.85;
+}
+
 /* heatmap data cells */
 .fsm-cell { text-align: center; padding: 5px 4px; font-size: 12px; white-space: nowrap; color: var(--fg-2); vertical-align: middle; }
 /* column separators so adjacent same-color cells don't blend across columns */
@@ -6298,17 +6333,30 @@ button.fsm-tier { appearance: none; text-decoration: none; }
   .fsm-row .fsm-player__meta { font-size: 10px; letter-spacing: 0.05em; }
   .fsm-row .fsm-player__game { font-size: 9px; }
 
-  .fsm-row .fsm-matchup {
+  /* display:contents lets the button and the price block each take their own
+     grid slot instead of both being trapped inside the 36px header-row cell */
+  .fsm-row .fsm-matchup { display: contents; }
+  .fsm-row .fsm-matchup__in {
     grid-column: 6; grid-row: 1;
-    width: auto !important; padding: 0 !important;
+    width: auto !important; padding: 1px 4px;
     height: 36px; align-self: center; justify-self: end;
   }
-  .fsm-row .fsm-matchup__in { padding: 1px 4px; }
   .fsm-row .fsm-matchup__metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 3px 4px; }
   .fsm-row .fsm-matchup__val { font-size: 9px; }
   .fsm-row .fsm-matchup__val--hero { font-size: 11px; }
   .fsm-row .fsm-matchup__proj { font-size: 11px; }
   .fsm-row .fsm-matchup__lbl { font-size: 6.5px; letter-spacing: 0.04em; white-space: normal; }
+
+  .fsm-row .fsm-price {
+    grid-column: 1 / -1;
+    flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 4px 10px;
+    margin: 2px 4px 0; padding: 5px 7px; border-top: 0;
+    border-radius: 5px; background: rgba(12,18,23,0.34);
+  }
+  .fsm-row .fsm-price__row { gap: 4px; }
+  .fsm-row .fsm-price__action,
+  .fsm-row .fsm-price__detail,
+  .fsm-row .fsm-price__ctx { flex-basis: 100%; }
 
   .fsm-row .fsm-gauge { width: 48px; height: 33px; }
   .fsm-row .fsm-gauge__num { font-size: 14px; bottom: -1px; }

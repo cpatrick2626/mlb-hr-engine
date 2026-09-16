@@ -371,6 +371,8 @@ def _get_event_props(event_id: str) -> tuple[list[dict], dict]:
                             "price": price,
                             "bookmaker": bk_key,
                             "game_id": event_id,
+                            # Provider-supplied quote timestamp — real, never a pipeline/runtime stamp.
+                            "last_update": bookmaker.get("last_update"),
                         })
 
         # Annotate Over props with measured overround when Under price is available.

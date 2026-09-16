@@ -69,6 +69,7 @@ from clients.batter_pitch_profile import (
 from clients.pitch_mix import canonical_pitch_type, get_batter_vs_pitches, get_pitcher_data_year, get_pitcher_pitch_stats, load_hvy_context
 from clients.mlb_stats import get_live_game_state
 from config import FS_TIER_THRESHOLDS, JIG_TIER_THRESHOLDS
+from engine import market as mkt
 from roles import classify_role
 
 log = logging.getLogger("uvicorn.error")
@@ -1419,6 +1420,66 @@ def _build_slate_payload(data: dict, odds_pending: bool = False, odds_pending_st
             edge = None
             ev_pct = None
 
+        # ── Early-Day Decision Intelligence (additive) ──────────────────────────
+        # Deterministic fair/buy prices derived only from model_prob / model_prob_projected.
+        # Never reads or alters odds/implied_prob/edge/ev_pct above.
+        _mp_proj = p.get("model_prob_projected")
+        fair_odds = mkt.fair_odds_from_prob(model_prob)
+        buy_odds_5 = mkt.buy_odds_from_prob(model_prob, 0.05)
+        buy_odds_10 = mkt.buy_odds_from_prob(model_prob, 0.10)
+        fair_odds_projected = mkt.fair_odds_from_prob(_mp_proj)
+        buy_odds_5_projected = mkt.buy_odds_from_prob(_mp_proj, 0.05)
+        buy_odds_10_projected = mkt.buy_odds_from_prob(_mp_proj, 0.10)
+
+        # Projected probability evaluated against the SAME actual sportsbook quote used
+        # above (odds_raw). Both null unless a real projected prob AND a real quote exist —
+        # never falls back to model_prob or to a different/no-vig quote.
+        if _mp_proj is not None and odds_raw is not None:
+            _actual_implied = mkt.implied_prob(odds_raw)
+            edge_projected_vs_actual = round(_mp_proj - _actual_implied, 4)
+            ev_pct_projected_vs_actual = round(mkt.ev_pct_for_prob(_mp_proj, odds_raw), 2)
+        else:
+            edge_projected_vs_actual = None
+            ev_pct_projected_vs_actual = None
+
+        lineup_confirmed = p.get("lineup_confirmed", False)
+        # Decision probability: confirmed players use current model_prob; unconfirmed
+        # players require model_prob_projected. Never falls back to current model_prob
+        # for an unconfirmed player without a projection — that would surface a
+        # buy/watch decision derived from a probability that isn't the Early-Day signal.
+        decision_prob = model_prob if lineup_confirmed else _mp_proj
+
+        quote_last_update = (
+            (p.get("fanduel_last_update") if fd_raw is not None else p.get("best_last_update"))
+            if odds_raw is not None else None
+        )
+        market_observed_at = quote_last_update
+
+        if odds_raw is not None:
+            market_state = "LIVE_MARKET"
+        elif odds_pending:
+            # odds_pending_stale means the slate-wide odds pull is past the expected
+            # post time with nothing back — an anomaly, not a "pre-market" state.
+            market_state = "MARKET_UNKNOWN" if odds_pending_stale else "PRE_MARKET"
+        else:
+            market_state = "MARKET_UNKNOWN"
+
+        if decision_prob is None:
+            decision_action = None
+        elif odds_raw is not None:
+            _decision_ev = mkt.ev_pct_for_prob(decision_prob, odds_raw)
+            if _decision_ev is not None:
+                decision_action = f"{odds} AVAILABLE · {'ABOVE' if _decision_ev >= 10.0 else 'BELOW'} +10% BUY"
+            else:
+                decision_action = None
+        else:
+            _decision_buy10 = mkt.buy_odds_from_prob(decision_prob, 0.10)
+            if _decision_buy10 is not None:
+                _fmt_buy10 = f"+{_decision_buy10}" if _decision_buy10 > 0 else str(_decision_buy10)
+                decision_action = f"WATCH FOR {_fmt_buy10} OR BETTER"
+            else:
+                decision_action = None
+
         home = (p.get("home_team") or p.get("team") or "home").upper()
         _own = (p.get("team") or "").upper()
         _opp = (p.get("opponent") or "").upper()
@@ -1547,6 +1608,18 @@ def _build_slate_payload(data: dict, odds_pending: bool = False, odds_pending_st
             "explosive":         role["explosive"],
             "advantage":         role["advantage"],
             "wildcard":          role["wildcard"],
+            # Early-Day Decision Intelligence (additive; see Step 2-7 doctrine)
+            "fair_odds":                fair_odds,
+            "buy_odds_5":               buy_odds_5,
+            "buy_odds_10":              buy_odds_10,
+            "fair_odds_projected":      fair_odds_projected,
+            "buy_odds_5_projected":     buy_odds_5_projected,
+            "buy_odds_10_projected":    buy_odds_10_projected,
+            "edge_projected_vs_actual":    edge_projected_vs_actual,
+            "ev_pct_projected_vs_actual": ev_pct_projected_vs_actual,
+            "market_state":       market_state,
+            "market_observed_at": market_observed_at,
+            "decision_action":    decision_action,
         })
 
     leaderboard_rows.sort(

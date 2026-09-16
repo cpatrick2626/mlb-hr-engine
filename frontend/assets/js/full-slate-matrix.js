@@ -487,6 +487,88 @@ function FsmSlipBtn({ status, onClick, label }) {
   );
 }
 
+/* ── Early-Day Decision Intelligence display (additive; read-only, display-only) ──
+   Renders fair/buy pricing, decision_action, and market context from the
+   deterministic backend fields. Never computes odds/EV itself — every value
+   shown here is read verbatim from the row payload. Null-safe against older
+   cached payloads that lack these fields entirely. */
+function fsmFmtAmerican(v) {
+  if (v == null || !Number.isFinite(Number(v))) return null;
+  const n = Number(v);
+  return n > 0 ? "+" + n : String(n);
+}
+
+const FSM_MARKET_STATE_LABEL = {
+  LIVE_MARKET: "LIVE MARKET",
+  PRE_MARKET: "PRE-MARKET",
+  MARKET_UNKNOWN: "MARKET UNKNOWN",
+  STALE_MARKET: "STALE MARKET",
+  PROJECTED_MARKET: "PROJECTED MARKET",
+};
+
+function FsmPriceBlock({ row }) {
+  const raw = row._raw || row;
+  const confirmed = raw.lineup_confirmed === true;
+  const hasProjection = raw.fair_odds_projected != null || raw.buy_odds_10_projected != null;
+
+  let labelKind, fairVal, buyVal;
+  if (confirmed) {
+    labelKind = "live";
+    fairVal = raw.fair_odds;
+    buyVal = raw.buy_odds_10;
+  } else if (hasProjection) {
+    labelKind = "proj";
+    fairVal = raw.fair_odds_projected;
+    buyVal = raw.buy_odds_10_projected;
+  } else if (raw.fair_odds != null || raw.buy_odds_10 != null) {
+    labelKind = "current";
+    fairVal = raw.fair_odds;
+    buyVal = raw.buy_odds_10;
+  } else {
+    labelKind = "pending";
+    fairVal = null;
+    buyVal = null;
+  }
+
+  const fairLbl = labelKind === "proj" ? "PROJ FAIR" : labelKind === "current" ? "CURRENT FAIR" : "FAIR";
+  const buyLbl = labelKind === "proj" ? "PROJ BUY +10" : labelKind === "current" ? "CURRENT BUY +10" : "BUY +10";
+  const lblCls = labelKind === "proj" ? " fsm-price__lbl--proj" : labelKind === "current" ? " fsm-price__lbl--current" : "";
+  const valCls = labelKind === "live" ? " fsm-price__val--live" : labelKind === "proj" ? " fsm-price__val--proj" : "";
+
+  const stateLbl = FSM_MARKET_STATE_LABEL[raw.market_state] || null;
+  const quoteTime = raw.market_state === "LIVE_MARKET" ? fsmFmtEt(raw.market_observed_at) : null;
+  const ctxParts = [confirmed ? "CONFIRMED" : "UNCONFIRMED"];
+  if (stateLbl) ctxParts.push(quoteTime ? `${stateLbl} · AS OF ${quoteTime}` : stateLbl);
+
+  const hasProjVsActual = raw.edge_projected_vs_actual != null && raw.ev_pct_projected_vs_actual != null;
+
+  if (fairVal == null && buyVal == null && !raw.decision_action) return null;
+
+  return (
+    <div className="fsm-price">
+      <div className="fsm-price__row">
+        <span className={"fsm-price__lbl" + lblCls}>{fairLbl}</span>
+        <span className={"fsm-price__val" + valCls}>{fsmFmtAmerican(fairVal) ?? "—"}</span>
+      </div>
+      <div className="fsm-price__row">
+        <span className={"fsm-price__lbl" + lblCls}>{buyLbl}</span>
+        <span className={"fsm-price__val" + valCls}>{fsmFmtAmerican(buyVal) ?? "—"}</span>
+      </div>
+      {labelKind === "pending" && <div className="fsm-price__action fsm-price__action--pending">PENDING</div>}
+      {raw.decision_action &&
+      <div className="fsm-price__action" title={raw.decision_action}>{raw.decision_action}</div>}
+      {hasProjVsActual &&
+      <div
+        className="fsm-price__detail"
+        title={`Projected model probability vs the live sportsbook quote — supplementary to the CURRENT EDGE/EV% columns, not a replacement`}>
+
+          {"PROJ EDGE VS LIVE " + (raw.edge_projected_vs_actual >= 0 ? "+" : "") + (raw.edge_projected_vs_actual * 100).toFixed(1) + "pp · PROJ EV VS LIVE " + (raw.ev_pct_projected_vs_actual >= 0 ? "+" : "") + raw.ev_pct_projected_vs_actual.toFixed(1) + "%"}
+        </div>}
+      <div className="fsm-price__ctx">{ctxParts.join(" · ")}</div>
+    </div>);
+
+}
+
 function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, isJigContext = false, jigLabel = null, jigRank = null, onAddLeg, slipStatus = 'idle', sortState = null }) {
   const [expanded, setExpanded] = React.useState(false);
   const displayTier = isJigContext && jigLabel ? jigLabel : row.tier;
@@ -568,6 +650,7 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, i
             </span>
           </span>
         </button>
+        <FsmPriceBlock row={row} />
       </td>
       <td className="fsm-cell fsm-share-col" data-label="SHARE" style={{textAlign:'center',padding:'4px 2px',verticalAlign:'middle'}}>
         <button type="button" style={{padding:'4px 10px',background:'rgba(255,176,32,0.14)',border:'1.5px solid rgba(255,176,32,0.60)',borderRadius:999,color:'#ffb020',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:10,letterSpacing:'0.08em',textTransform:'uppercase',cursor:'pointer',lineHeight:1,minHeight:28,display:'inline-flex',alignItems:'center',justifyContent:'center',whiteSpace:'nowrap'}} title={`Export full intel card for ${row.name}`} onClick={(e)=>{e.stopPropagation();window.fsmShareCard&&window.fsmShareCard(row);}}>SHARE</button>
@@ -735,7 +818,7 @@ function FsmTable({ rows, cols, showGame, onBatter, onPitch, onReorder, onFront,
   return (
     <table className="fsm-table">
       <colgroup>
-        <col style={{ width: "72px" }} /><col style={{ width: "128px" }} /><col style={{ width: "220px" }} /><col style={{ width: "80px" }} />
+        <col style={{ width: "72px" }} /><col style={{ width: "128px" }} /><col style={{ width: "250px" }} /><col style={{ width: "80px" }} />
         {cols.map((c) => <col key={c.key} style={{ width: c.key === "pa" ? "46px" : "60px" }} />)}
         <col style={{ width: "36px" }} />
       </colgroup>

@@ -3,6 +3,7 @@ Market odds math: conversions, vig removal, break-even.
 All probabilities are 0.0–1.0 fractions.
 """
 
+import math
 from typing import Sequence
 
 import config
@@ -35,6 +36,49 @@ def implied_prob(american: int) -> float:
 def break_even_prob(american: int) -> float:
     """Minimum win rate to profit at these odds (same as implied_prob)."""
     return implied_prob(american)
+
+
+# ── Early-Day Fair/Buy Pricing ──────────────────────────────────────────────────
+# Whole-number American quotes derived directly from a model probability, with
+# no market input. decimal_to_american() above rounds to nearest and can undershoot
+# a target EV (e.g. p=.188 at +10% EV rounds to +485, which is only ~9.98% EV).
+# decimal_to_american_min() rounds toward the higher-payout side so the resulting
+# quote never undershoots the target — it's the smallest whole-number price that
+# still clears it (p=.188 at +10% EV → +486, not +485).
+
+def decimal_to_american_min(decimal: float) -> int:
+    """Smallest whole-number American price whose payout is >= the given decimal odds."""
+    if decimal >= 2.0:
+        raw = (decimal - 1.0) * 100.0
+        american = math.ceil(raw - 1e-9)
+        return max(american, 100)
+    raw = -100.0 / (decimal - 1.0)
+    american = math.ceil(raw - 1e-9)
+    return min(american, -100)
+
+
+def fair_odds_from_prob(prob: float) -> int | None:
+    """Whole-number fair American price for a model probability, or None if prob is unusable."""
+    if prob is None or not (0.0 < prob < 1.0):
+        return None
+    return decimal_to_american(1.0 / prob)
+
+
+def buy_odds_from_prob(prob: float, target_ev: float) -> int | None:
+    """Smallest whole-number American price guaranteeing >= target_ev (e.g. 0.10 for +10%
+    EV) at the given model probability, or None if prob is unusable."""
+    if prob is None or not (0.0 < prob < 1.0):
+        return None
+    return decimal_to_american_min((1.0 + target_ev) / prob)
+
+
+def ev_pct_for_prob(prob: float, american: int) -> float | None:
+    """EV% of a probability against a given American quote (profit-based, matches the
+    existing implied_prob/edge/ev_pct convention in api._build_slate_payload)."""
+    if prob is None or american is None:
+        return None
+    dec_payout = american_to_decimal(american) - 1.0
+    return (prob * dec_payout - (1.0 - prob)) * 100.0
 
 
 # ── Vig Removal ───────────────────────────────────────────────────────────────

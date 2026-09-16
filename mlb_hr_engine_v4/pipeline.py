@@ -837,8 +837,11 @@ def _match_odds(player, odds_lookup, unique_names):
     else:
         market_nvp  = fixed_nvp
 
+    fd_best = max(fd_matches, key=lambda x: x["price"]) if fd_matches else None
     player.update({
         "best_american":           best["price"], "best_bookmaker": best.get("bookmaker", ""),
+        # Provider-supplied quote timestamp for the selected price — real, never fabricated.
+        "best_last_update":        best.get("last_update"),
         "all_prices":              prices, "n_books": summary.get("n_books", 1),
         "prices_by_book":          book_best,   # {bookmaker: american_odds} for comparison table
         # market_no_vig_prob is the primary EV/edge baseline (dynamic when DYNAMIC_VIG_ENABLED)
@@ -847,6 +850,7 @@ def _match_odds(player, odds_lookup, unique_names):
         "vig_by_book":             vig_by_book,  # {book: vig_fraction} used
         "market_implied_avg":      round(summary.get("implied_prob_avg", 0), 4),
         "fanduel_american":        fd_odds,
+        "fanduel_last_update":     fd_best.get("last_update") if fd_best else None,
     })
     return player
 
