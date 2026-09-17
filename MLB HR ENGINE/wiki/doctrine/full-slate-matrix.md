@@ -23,6 +23,26 @@ The FSM renders in two display modes: **GAME VIEW** (batters grouped under their
 
 ---
 
+## Early-Day Decision Intelligence
+
+Code commit `b032788` adds a read-only pricing and decision block to each Full Slate row. The block consumes deterministic `/api/slate` fields; the browser does not recompute odds or EV.
+
+Presentation depends on lineup state:
+
+- Confirmed: FAIR / BUY +10 from `model_prob`.
+- Unconfirmed with `model_prob_projected`: PROJ FAIR / PROJ BUY +10.
+- Unconfirmed without `model_prob_projected`: CURRENT FAIR / CURRENT BUY +10 may display as context, but `decision_action` is null and no WATCH instruction is shown.
+
+When a real selected-book quote exists, projected EDGE/EV compares `model_prob_projected` with that same quote. It is supplementary and does not replace the current EDGE/EV columns. The selected quote also supplies `market_observed_at`; the UI does not substitute its render time.
+
+Reachable market states are `LIVE_MARKET`, `PRE_MARKET`, and `MARKET_UNKNOWN`. `STALE_MARKET` and `PROJECTED_MARKET` are display definitions only and are not currently emitted. There is no `NO_MARKET` state.
+
+Existing ODDS, BOOK, IMP, EDGE, and EV values remain authoritative. FAIR, BUY, market state, and `decision_action` are additive and do not affect model ranking, tiering, filters, MAIN/JIG separation, or HVY.
+
+See [[2026-09-16-early-day-decision-intelligence]] for the checkpoint, math boundaries, validation evidence, and deployment state.
+
+---
+
 ## Ordering & Ranking (INVARIANT)
 
 **The FSM's default display order is the canonical `model_tier_rank` from the `/api/slate` payload (MAIN ranking). This is the authoritative sequence and must never be altered by any filter, sort toggle, or display preference.**

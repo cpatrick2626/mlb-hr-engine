@@ -50,7 +50,7 @@ authorization.
 ## MAIN Doctrine Reform
 
 - **Market data is display-only:** market fields never gate player qualification in MAIN.
-- **Projected market values:** projected market-facing values derive from `model_prob`.
+- **Market-derived decision values:** current FAIR/BUY values derive from `model_prob`. For an unconfirmed player, projected FAIR/BUY and projected-vs-actual EDGE/EV derive from `model_prob_projected`; they do not replace current EDGE/EV or affect ranking.
 - **Layer 1 filter chain:** 3 market-dependent gates removed.
 - **Qualification order:** model qualifies first; market context displays after.
 

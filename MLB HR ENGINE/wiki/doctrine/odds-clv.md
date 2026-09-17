@@ -1,14 +1,13 @@
 # Odds / CLV — Doctrine
 
-> **STATUS: LIVE (CLV engine + Streamlit surface) — with one critical flag.**
-> The odds source (The Odds API), opening/closing line capture, CLV computation, and CLV display in Streamlit are all real and operational.
-> **FLAG: the production frontend/ board (Vercel) ODDS column is SYNTHETIC — derived from model HR probability (`full-slate-matrix.js:1500`: `980 - hrprob*31`), NOT real market odds. The board does NOT show real odds or CLV. Do not describe the production board as displaying market odds.**
+> **STATUS: LIVE.**
+> The odds source (The Odds API), opening/closing line capture, CLV computation, and Streamlit CLV display are operational. The production Vercel board now displays the selected real sportsbook quote and its bookmaker when a quote exists. It does not display CLV.
 
 ---
 
 ## Summary
 
-The Odds/CLV system fetches real market odds from The Odds API, captures opening and closing lines at pick time and after settlement, and computes closing line value — all surfaced in the Streamlit dashboard. The production React board (Vercel `frontend/`) does **not** consume this data; its ODDS column is a synthetic model-derived placeholder that resembles a betting line but is not one.
+The Odds/CLV system fetches real market odds from The Odds API, captures opening and closing lines at pick time and after settlement, and computes closing line value in the Streamlit dashboard. The production React board consumes the selected sportsbook quote through `/api/slate` and shows ODDS, BOOK, implied probability, EDGE, and EV when a real quote exists. Missing quotes remain null.
 
 ---
 
@@ -44,36 +43,21 @@ The Odds/CLV system fetches real market odds from The Odds API, captures opening
 
 ---
 
-## CRITICAL FLAG — Production Board Odds Are Synthetic (NOT Real)
+## Production board market fields
 
-**`frontend/assets/js/full-slate-matrix.js:1500`:**
+`api/main.py` prefers a FanDuel HR quote when present and otherwise publishes the best available bookmaker quote. The payload includes `odds`, `odds_bookmaker`, `implied_prob`, `edge`, and `ev_pct`. These values stay null when no real quote exists.
 
-```js
-"+" + Math.round(Math.max(150, Math.min(1200, 980 - o.hrprob * 31)))
-```
+Early-Day Decision Intelligence adds deterministic FAIR and BUY prices derived from model probability. Those prices are not sportsbook quotes and are labeled separately. Current EDGE/EV continues to use `model_prob` against the selected real quote. Projected EDGE/EV uses `model_prob_projected` against that same quote and does not replace the current fields.
 
-The ODDS column on the production board is computed from model HR probability. It is **not** fetched from The Odds API or any market source. It is a placeholder-style value that visually resembles a betting line but carries no market information.
+`market_observed_at` is the selected quote's `last_update`. It is not a generated runtime timestamp. BetRivers Beta remains deferred: no trained Beta artifact or projected BetRivers range is shipped.
 
-**Consequences:**
-- The production board does **not** display real odds.
-- The production board does **not** display CLV at all.
-- Any value shown in the ODDS column is a deterministic transform of model output, not a market price.
-
-This is a mock-in-production concern, consistent with the Ticket Slip overlay SAMPLE analytics issue documented in `ticket-slip-system.md`. Per honesty doctrine, displayed values must trace to real data or be clearly labeled as model-derived.
-
----
-
-## To Fix (Backlog)
-
-1. **Wire real odds** — pipe `data/odds_cache.json` real prices into the board's ODDS column via the FastAPI service (an existing `/api/picks` endpoint or new odds endpoint).
-2. **Or label clearly** — if real odds are not wired, relabel the column (e.g., "Model Line") so its synthetic origin is explicit to users.
-3. **Optionally surface CLV on the board** — currently Streamlit-only; could be added as a column once real odds are wired.
+CLV remains a separate Streamlit/tracking surface and is not displayed on Full Slate.
 
 ---
 
 ## Note on Surfaces
 
-Streamlit (`app.py`) and the production React board (`frontend/`) are separate surfaces with no runtime cross-dependency. Real odds/CLV live in Streamlit. The production board does not consume them. See `production-surface-truth.md` for the authoritative surface map.
+Streamlit (`app.py`) and the production React board (`frontend/`) are separate surfaces. Streamlit owns CLV display. The production board consumes selected real market quotes from `/api/slate` but does not display CLV. See `production-surface-truth.md` for the authoritative surface map.
 
 ---
 
@@ -81,7 +65,8 @@ Streamlit (`app.py`) and the production React board (`frontend/`) are separate s
 
 - `production-surface-truth.md` — canonical surface map (which board is live, which is Streamlit)
 - `ticket-slip-system.md` — parallel mock-in-production concern (overlay SAMPLE analytics)
-- `main-model-doctrine.md` — model HR probability (`hrprob`) that feeds the synthetic ODDS formula
+- `main-model-doctrine.md` — model probability, ranking boundaries, and market-context rules
+- `2026-09-16-early-day-decision-intelligence.md` — fair/buy pricing and decision semantics
 - Calibration / feedback loop doctrine (deferred; requires settled picks at scale)
 - `clients/odds_api.py` — The Odds API client
 - `tracking/clv.py` — CLV computation and line capture
