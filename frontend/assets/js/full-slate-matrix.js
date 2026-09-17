@@ -487,88 +487,6 @@ function FsmSlipBtn({ status, onClick, label }) {
   );
 }
 
-/* ── Early-Day Decision Intelligence display (additive; read-only, display-only) ──
-   Renders fair/buy pricing, decision_action, and market context from the
-   deterministic backend fields. Never computes odds/EV itself — every value
-   shown here is read verbatim from the row payload. Null-safe against older
-   cached payloads that lack these fields entirely. */
-function fsmFmtAmerican(v) {
-  if (v == null || !Number.isFinite(Number(v))) return null;
-  const n = Number(v);
-  return n > 0 ? "+" + n : String(n);
-}
-
-const FSM_MARKET_STATE_LABEL = {
-  LIVE_MARKET: "LIVE MARKET",
-  PRE_MARKET: "PRE-MARKET",
-  MARKET_UNKNOWN: "MARKET UNKNOWN",
-  STALE_MARKET: "STALE MARKET",
-  PROJECTED_MARKET: "PROJECTED MARKET",
-};
-
-function FsmPriceBlock({ row }) {
-  const raw = row._raw || row;
-  const confirmed = raw.lineup_confirmed === true;
-  const hasProjection = raw.fair_odds_projected != null || raw.buy_odds_10_projected != null;
-
-  let labelKind, fairVal, buyVal;
-  if (confirmed) {
-    labelKind = "live";
-    fairVal = raw.fair_odds;
-    buyVal = raw.buy_odds_10;
-  } else if (hasProjection) {
-    labelKind = "proj";
-    fairVal = raw.fair_odds_projected;
-    buyVal = raw.buy_odds_10_projected;
-  } else if (raw.fair_odds != null || raw.buy_odds_10 != null) {
-    labelKind = "current";
-    fairVal = raw.fair_odds;
-    buyVal = raw.buy_odds_10;
-  } else {
-    labelKind = "pending";
-    fairVal = null;
-    buyVal = null;
-  }
-
-  const fairLbl = labelKind === "proj" ? "PROJ FAIR" : labelKind === "current" ? "CURRENT FAIR" : "FAIR";
-  const buyLbl = labelKind === "proj" ? "PROJ BUY +10" : labelKind === "current" ? "CURRENT BUY +10" : "BUY +10";
-  const lblCls = labelKind === "proj" ? " fsm-price__lbl--proj" : labelKind === "current" ? " fsm-price__lbl--current" : "";
-  const valCls = labelKind === "live" ? " fsm-price__val--live" : labelKind === "proj" ? " fsm-price__val--proj" : "";
-
-  const stateLbl = FSM_MARKET_STATE_LABEL[raw.market_state] || null;
-  const quoteTime = raw.market_state === "LIVE_MARKET" ? fsmFmtEt(raw.market_observed_at) : null;
-  const ctxParts = [confirmed ? "CONFIRMED" : "UNCONFIRMED"];
-  if (stateLbl) ctxParts.push(quoteTime ? `${stateLbl} · AS OF ${quoteTime}` : stateLbl);
-
-  const hasProjVsActual = raw.edge_projected_vs_actual != null && raw.ev_pct_projected_vs_actual != null;
-
-  if (fairVal == null && buyVal == null && !raw.decision_action) return null;
-
-  return (
-    <div className="fsm-price">
-      <div className="fsm-price__row">
-        <span className={"fsm-price__lbl" + lblCls}>{fairLbl}</span>
-        <span className={"fsm-price__val" + valCls}>{fsmFmtAmerican(fairVal) ?? "—"}</span>
-      </div>
-      <div className="fsm-price__row">
-        <span className={"fsm-price__lbl" + lblCls}>{buyLbl}</span>
-        <span className={"fsm-price__val" + valCls}>{fsmFmtAmerican(buyVal) ?? "—"}</span>
-      </div>
-      {labelKind === "pending" && <div className="fsm-price__action fsm-price__action--pending">PENDING</div>}
-      {raw.decision_action &&
-      <div className="fsm-price__action" title={raw.decision_action}>{raw.decision_action}</div>}
-      {hasProjVsActual &&
-      <div
-        className="fsm-price__detail"
-        title={`Projected model probability vs the live sportsbook quote — supplementary to the CURRENT EDGE/EV% columns, not a replacement`}>
-
-          {"PROJ EDGE VS LIVE " + (raw.edge_projected_vs_actual >= 0 ? "+" : "") + (raw.edge_projected_vs_actual * 100).toFixed(1) + "pp · PROJ EV VS LIVE " + (raw.ev_pct_projected_vs_actual >= 0 ? "+" : "") + raw.ev_pct_projected_vs_actual.toFixed(1) + "%"}
-        </div>}
-      <div className="fsm-price__ctx">{ctxParts.join(" · ")}</div>
-    </div>);
-
-}
-
 function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, isJigContext = false, jigLabel = null, jigRank = null, onAddLeg, slipStatus = 'idle', sortState = null }) {
   const [expanded, setExpanded] = React.useState(false);
   const displayTier = isJigContext && jigLabel ? jigLabel : row.tier;
@@ -613,16 +531,33 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, i
         )}
       </td>
       <td className="fsm-player">
-        <button type="button" className="fsm-player__in" onClick={() => onBatter(row)} title={`Open ${row.name} batter card`}>
+        <div
+          className="fsm-player__in"
+          role="button"
+          tabIndex={0}
+          onClick={() => onBatter(row)}
+          onKeyDown={(e) => { if (e.target !== e.currentTarget) return; if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onBatter(row); } }}
+          title={`Open ${row.name} batter card`}>
           <span className="fsm-player__dot" title={row.pitcherVuln === "TARGET" ? `BATTER THREAT: ${row.quality || "—"} — batter HR-threat tier (model probability + barrel quality) · GLOW: TARGET pitcher allows 2.2+ HR/9 (separate pitcher-vulnerability signal)` : `BATTER THREAT: ${row.quality || "—"} — batter HR-threat tier based on model probability + barrel quality`} style={{ background: (FSM_MATCHUP[row.quality] || { color: "#6b7872" }).color, boxShadow: row.pitcherVuln === "TARGET" ? "0 0 0 2px #1aff66, 0 0 6px rgba(26,255,102,0.85)" : undefined }} />
           <span className="fsm-player__col">
-            <span className="fsm-player__name">{row.name}</span>
+            <span className="fsm-player__namerow">
+              <span className="fsm-player__name">{row.name}</span>
+              <button
+                type="button"
+                className="fsm-player__share"
+                title={`Share ${row.name}`}
+                aria-label={`Share ${row.name}`}
+                onClick={(e) => { e.stopPropagation(); window.fsmShareCard && window.fsmShareCard(row); }}>
+
+                <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><line x1="8.6" y1="10.5" x2="15.4" y2="6.5" /><line x1="8.6" y1="13.5" x2="15.4" y2="17.5" /></svg>
+              </button>
+            </span>
             <span className="fsm-player__meta">{row.teamAbbr}<i className="fsm-player__bar">|</i>{row.bats}{!isJigContext && !confirmed && <span className="fsm-tbd-badge" title="Eligible active-roster hitter — lineup not yet confirmed">UNCONFIRMED</span>}</span>
             {game
         ? <span className="fsm-player__game"><span className="fsm-player__gm--opp">{game.away}@{game.home}</span><i className="fsm-player__bar">·</i><span className="fsm-player__gm--time">{game.time || fsmFmtEt(row.gameStartUtc)}</span>{row.pitcher_name && <><i className="fsm-player__bar">·</i><span className="fsm-player__gm--pitcher">{row.pitcher_name}</span></>}</span>
         : (row.gameStartUtc || row.pitcher_name) && <span className="fsm-player__game"><span className="fsm-player__gm--time">{fsmFmtEt(row.gameStartUtc)}</span>{row.gameStartUtc && row.pitcher_name && <i className="fsm-player__bar">·</i>}{row.pitcher_name && <span className="fsm-player__gm--pitcher">{row.pitcher_name}</span>}</span>}
           </span>
-        </button>
+        </div>
       </td>
       <td className="fsm-matchup">
         <button type="button" className="fsm-matchup__in" onClick={() => onPitch(row)} title="Open Arsenal Edge Intel">
@@ -650,10 +585,6 @@ function FsmRow({ row, cols, showGame, onBatter, onPitch, builderMode = false, i
             </span>
           </span>
         </button>
-        <FsmPriceBlock row={row} />
-      </td>
-      <td className="fsm-cell fsm-share-col" data-label="SHARE" style={{textAlign:'center',padding:'4px 2px',verticalAlign:'middle'}}>
-        <button type="button" style={{padding:'4px 10px',background:'rgba(255,176,32,0.14)',border:'1.5px solid rgba(255,176,32,0.60)',borderRadius:999,color:'#ffb020',fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:10,letterSpacing:'0.08em',textTransform:'uppercase',cursor:'pointer',lineHeight:1,minHeight:28,display:'inline-flex',alignItems:'center',justifyContent:'center',whiteSpace:'nowrap'}} title={`Export full intel card for ${row.name}`} onClick={(e)=>{e.stopPropagation();window.fsmShareCard&&window.fsmShareCard(row);}}>SHARE</button>
       </td>
       {cols.map((c, ci) => <FsmCell key={c.key} col={c} row={row} extra={ci >= 12} />)}
       <td className="fsm-cell fsm-cell--slip" style={{ textAlign: 'center', padding: '0 4px' }}>
@@ -818,13 +749,13 @@ function FsmTable({ rows, cols, showGame, onBatter, onPitch, onReorder, onFront,
   return (
     <table className="fsm-table">
       <colgroup>
-        <col style={{ width: "72px" }} /><col style={{ width: "128px" }} /><col style={{ width: "250px" }} /><col style={{ width: "80px" }} />
+        <col style={{ width: "72px" }} /><col style={{ width: "128px" }} /><col style={{ width: "220px" }} />
         {cols.map((c) => <col key={c.key} style={{ width: c.key === "pa" ? "46px" : "60px" }} />)}
         <col style={{ width: "36px" }} />
       </colgroup>
       <thead>
         <tr className="fsm-grouprow">
-          <th className="fsm-gband fsm-gband--id" colSpan={4}>BATTER</th>
+          <th className="fsm-gband fsm-gband--id" colSpan={3}>BATTER</th>
           {bands.map((b, i) => <th key={i} className={"fsm-gband fsm-gband--" + b.label.toLowerCase()} colSpan={b.span}>{b.label}</th>)}
           <th className="fsm-gband" style={{ width: "36px" }} />
         </tr>
@@ -832,7 +763,6 @@ function FsmTable({ rows, cols, showGame, onBatter, onPitch, onReorder, onFront,
           <th className="fsm-th-tier">{isJigContext ? "JIG TIER" : builderMode ? "MODEL TIER" : "TIER"}</th>
           <th className="fsm-th-player">PLAYER</th>
           <th className="fsm-th-matchup">MATCHUP</th>
-          <th className="fsm-th-stat" style={{width:"80px",textAlign:"center",cursor:"default"}} title="Export full intel card">SHARE</th>
           {cols.map((c) =>
           <th key={c.key} className={"fsm-th-stat" + (c.danger ? " fsm-th-danger" : "") + (sortState && sortState.key === c.key ? " is-sorted" : "")} {...thProps(c)}><button type="button" className="fsm-statfront" onClick={(e) => { e.stopPropagation(); onFront(c.key); }} title={c.title} aria-label={`Move ${c.head} to the first stat column`}>{c.head}</button>{arrow(c)}{c.scope === "hand" ? (splitScope === 'vs_hand' ? <span className="fsm-th-scope fsm-th-scope--hand">VS HAND</span> : <span className="fsm-th-scope">SZN</span>) : c.scope === "season" ? <span className="fsm-th-scope">SZN</span> : null}</th>
           )}
