@@ -344,8 +344,27 @@ function FsmCell({ col, row, extra }) {
   if (col.mode === "headline") return <td className={`fsm-cell fsm-cell--headline${xc}`} data-label={lbl}>{v == null ? na : col.fmt(v)}{tag}</td>;
   if (col.mode === "neutral") return <td className={`fsm-cell fsm-cell--neutral${xc}`} data-label={lbl}>{v == null ? na : col.fmt(v)}</td>;
   if (col.mode === "ev_flag") {
-    const cls = v == null ? "" : v >= 0 ? " fsm-cell--ev-pos" : " fsm-cell--ev-neg";
-    return <td className={`fsm-cell${cls}${xc}`} data-label={lbl}>{v == null ? "—" : col.fmt(v)}</td>;
+    /* Unconfirmed lineups display projected EDGE/EV% (model_prob_projected vs the
+       same actual sportsbook quote) when a finite projection exists, tagged PROJ.
+       Confirmed rows and unconfirmed rows without a valid projection keep the
+       existing current-value path — never fabricate 0 for a missing projection. */
+    let val = v;
+    let isProj = false;
+    if ((col.key === "edge" || col.key === "ev_pct") && row.lineup_confirmed !== true) {
+      const projKey = col.key === "edge" ? "edge_projected_vs_actual" : "ev_pct_projected_vs_actual";
+      const proj = row[projKey];
+      if (proj != null && Number.isFinite(Number(proj))) {
+        val = Number(proj);
+        isProj = true;
+      }
+    }
+    const cls = val == null ? "" : val >= 0 ? " fsm-cell--ev-pos" : " fsm-cell--ev-neg";
+    return (
+      <td className={`fsm-cell${cls}${xc}`} data-label={lbl}>
+        {isProj && <span className="fsm-th-scope">PROJ</span>}
+        {val == null ? "—" : col.fmt(val)}
+      </td>
+    );
   }
   /* HR column in VS HAND mode: show "N HR" as value for clarity (PA in scope tag) */
   if (col.key === "hr" && scope && scope.scope === "hand") {
