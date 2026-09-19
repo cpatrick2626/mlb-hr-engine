@@ -358,10 +358,10 @@ function FsmCell({ col, row, extra }) {
         isProj = true;
       }
     }
-    const cls = val == null ? "" : val >= 0 ? " fsm-cell--ev-pos" : " fsm-cell--ev-neg";
+    const cls = isProj ? " fsm-cell--proj" : val == null ? "" : val >= 0 ? " fsm-cell--ev-pos" : " fsm-cell--ev-neg";
     return (
       <td className={`fsm-cell${cls}${xc}`} data-label={lbl}>
-        {isProj && <span className="fsm-th-scope">PROJ</span>}
+        {isProj && <span className="fsm-th-scope fsm-th-scope--proj">PROJ</span>}
         {val == null ? "—" : col.fmt(val)}
       </td>
     );

@@ -3292,6 +3292,7 @@ html, body { height: 100%; overflow: hidden; overflow-x: hidden; max-width: 100v
 .fsm-scope--hand.fsm-scope--pill { background: rgba(26,255,102,.06); box-shadow: inset 0 0 0 1px rgba(79,174,125,.35); }
 .fsm-th-scope { display: block; font-size: 6.5px; font-weight: 700; letter-spacing: .1em; color: var(--fg-4); opacity: .75; line-height: 1.2; margin-top: 1px; }
 .fsm-th-scope--hand { color: #4fae7d; opacity: .95; }
+.fsm-th-scope--proj { color: var(--cyan-500, #00d9ff); opacity: 1; }
 /* ---- batter-card real vs-hand splits strip ---- */
 .fsm-card__splits { display: flex; flex-direction: column; gap: 5px; }
 .fsm-split { display: flex; align-items: baseline; gap: 10px; padding: 5px 9px; border-radius: 5px; border: 1px solid rgba(180,220,200,0.1); background: rgba(14,21,25,0.5); }
@@ -3448,6 +3449,7 @@ html, body { height: 100%; overflow: hidden; overflow-x: hidden; max-width: 100v
 .fsm-cell--odds { color: #1aff66; font-weight: 700; }
 .fsm-cell--ev-pos { color: #1aff66; font-weight: 700; }
 .fsm-cell--ev-neg { color: #ff3344; }
+.fsm-cell.fsm-cell--proj { color: var(--cyan-500, #00d9ff); font-weight: 700; }
 
 .fsm-row { cursor: pointer; transition: background .12s ease; }
 .fsm-row:hover { background: rgba(26,255,102,0.05); }
@@ -3589,8 +3591,8 @@ button.fsm-tier { appearance: none; text-decoration: none; }
 .fsm-matchup__metric--hr { color: var(--red-500); }
 .fsm-matchup__metric--single { color: var(--fg-1); }
 .fsm-matchup__proj {
-  color: inherit; font-family: var(--font-mono); font-size: 15px; font-weight: 700;
-  line-height: 1.25; opacity: 0.75; letter-spacing: 0.01em; white-space: nowrap;
+  color: var(--cyan-500, #00d9ff); font-family: var(--font-mono); font-size: 15px; font-weight: 700;
+  line-height: 1.25; opacity: 0.9; letter-spacing: 0.01em; white-space: nowrap;
 }
 
 /* heatmap data cells */

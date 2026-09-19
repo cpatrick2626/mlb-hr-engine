@@ -79,7 +79,7 @@ function BatterDetailCard({ row, onClose, onPitch, builderMode = false }) {
     cyan:"#00d9ff",  amber:"#ffb020",  blue:"#3b6fff",
     gg:"rgba(26,255,102,.55)",
   };
-  const tierColor = t => ({elite:T.green,good:T.green2,mid:T.amber,low:T.red}[t] || T.fg1);
+  const tierColor = t => ({elite:T.green,good:T.green2,mid:T.amber,low:T.red,proj:T.cyan}[t] || T.fg1);
 
   // ── Sub-components (locally scoped) ───────────────────────
   const Eyebrow = ({children,style:s={}}) =>
@@ -383,7 +383,7 @@ function BatterDetailCard({ row, onClose, onPitch, builderMode = false }) {
           </div>
           <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginTop:10}}>
             <Tile d={{k:"HR PROB",   v:hrProb,   p:"tonight",  tier:"elite",  tip:["HR Probability","Model probability of a HR tonight.","Calibrated Poisson"]}} />
-            <Tile d={{k:"PROJ",      v:projProb, p:"w/factors",tier:"good",   tip:["HR Prob Projected","Including park + weather multipliers.","Display only"]}} />
+            <Tile d={{k:"PROJ",      v:projProb, p:"w/factors",tier:"proj",   tip:["HR Prob Projected","Including park + weather multipliers.","Display only"]}} />
             <Tile d={{k:"PACE",      v:seasPace, p:"162g proj",tier:sc_tier(threat.season_pace_hr,40,28)}} />
             <Tile d={{k:"ENV SCORE", v:fv(environ,"hr_environment_0_10",environ.hr_environment_0_10,n=>n.toFixed(1)+"/10"),p:"0–10",tier:(environ.hr_environment_0_10||0)>=7?"elite":"mid"}} />
           </div>
