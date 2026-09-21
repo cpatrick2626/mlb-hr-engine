@@ -33,6 +33,10 @@ try:
     from tracking import adaptive_weights as _aw
 except ImportError:
     _aw = None
+from tracking.runtime_provenance import (
+    build_runtime_provenance as _build_runtime_provenance,
+    unavailable_adaptive_provenance as _unavailable_adaptive_provenance,
+)
 
 # Frozen 2026-07-09 pending deliberate calibration replay — prevents
 # auto-mutation of prob_scale (and min_ev_pct/recent_weight) during analysis.
@@ -77,14 +81,35 @@ def _warehouse_json_value(value):
     return str(value)
 
 
+def _warehouse_payload_with_probability_lineage(
+    payload: dict,
+    lineage: dict | None,
+) -> dict:
+    """Build a warehouse-only snapshot without mutating the live player row."""
+    snapshot = dict(payload)
+    if lineage:
+        snapshot["probability_lineage"] = lineage
+    return _warehouse_json_value(snapshot)
+
+
+def _probability_lineage_key(player: dict) -> tuple[int, int] | None:
+    """Return a lineage identity only when both live IDs are numeric."""
+    try:
+        return int(player["player_id"]), int(player["game_pk"])
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
 def _write_batter_stat_history(
     slate_date: str,
     run_ts: str,
     players: tuple[dict, ...],
+    probability_lineage_by_key: dict[tuple[int, int], dict],
 ) -> None:
     """Background worker: batch-upsert one immutable unified slate snapshot."""
     try:
         rows = []
+        omitted_lineage_count = 0
         for player in players:
             batter_id = player.get("player_id")
             game_pk = player.get("game_pk")
@@ -92,16 +117,29 @@ def _write_batter_stat_history(
                 raise ValueError(
                     "warehouse capture requires player_id and game_pk for every batter"
                 )
+            identity = (int(batter_id), int(game_pk))
+            lineage = probability_lineage_by_key.get(identity)
+            if not lineage:
+                omitted_lineage_count += 1
             rows.append({
                 "slate_date": slate_date,
                 "run_ts": run_ts,
-                "batter_id": int(batter_id),
-                "game_pk": int(game_pk),
-                "raw_payload": _warehouse_json_value(player),
+                "batter_id": identity[0],
+                "game_pk": identity[1],
+                "raw_payload": _warehouse_payload_with_probability_lineage(
+                    player, lineage
+                ),
             })
 
         if not rows:
             return
+
+        if omitted_lineage_count:
+            _LOG.warning(
+                "[probability-lineage] omitted untrusted lineage metadata from "
+                "%d warehouse row(s); normal snapshots preserved",
+                omitted_lineage_count,
+            )
 
         # A dedicated client keeps this background write isolated from the
         # board/cache persistence client used concurrently by API/cron callers.
@@ -127,7 +165,11 @@ def _write_batter_stat_history(
         )
 
 
-def _schedule_batter_stat_history_capture(slate_date: str, players: list[dict]) -> None:
+def _schedule_batter_stat_history_capture(
+    slate_date: str,
+    players: list[dict],
+    probability_lineage_by_key: dict[tuple[int, int], dict],
+) -> None:
     """Submit capture without waiting; board generation always continues."""
     run_ts = datetime.now(timezone.utc).isoformat()
     try:
@@ -136,6 +178,10 @@ def _schedule_batter_stat_history_capture(slate_date: str, players: list[dict]) 
             slate_date,
             run_ts,
             tuple(players),
+            {
+                identity: dict(lineage)
+                for identity, lineage in probability_lineage_by_key.items()
+            },
         )
     except Exception as exc:
         _LOG.warning(
@@ -361,6 +407,56 @@ def _safe_float(val) -> "float | None":
         return None
 
 
+def _apply_main_probability_adjustments(
+    model_prob: float,
+    *,
+    barrel_rate: float,
+    runtime_provenance: dict,
+) -> tuple[float, dict]:
+    """Apply the existing probability chain and return its captured live values."""
+    pre_scale_model_prob = model_prob
+    if _aw is not None:
+        model_prob = round(_aw.apply_prob_scale(model_prob), 4)
+        adaptive_apply_status = (
+            "IDENTITY"
+            if runtime_provenance.get("effective_prob_scale") == 1.0
+            else "APPLIED"
+        )
+    else:
+        adaptive_apply_status = "SKIPPED_IMPORT_UNAVAILABLE"
+    post_scale_pre_calibration_prob = model_prob
+
+    calibration_lineage: dict = {}
+    model_prob = round(
+        _cal.apply_calibration(
+            model_prob,
+            barrel_rate=barrel_rate,
+            lineage=calibration_lineage,
+        ),
+        4,
+    )
+    post_platt_prob = model_prob
+    warehouse_lineage: dict = {}
+    model_prob = _cal.apply_warehouse_isotonic(
+        model_prob,
+        lineage=warehouse_lineage,
+    )
+
+    lineage = {
+        **runtime_provenance,
+        "schema_version": 1,
+        "snapshot_kind": "main_probability",
+        "pre_scale_model_prob": pre_scale_model_prob,
+        "adaptive_apply_status": adaptive_apply_status,
+        "post_scale_pre_calibration_prob": post_scale_pre_calibration_prob,
+        **calibration_lineage,
+        "post_platt_prob": post_platt_prob,
+        **warehouse_lineage,
+        "final_model_prob": model_prob,
+    }
+    return model_prob, lineage
+
+
 def _recent_form_games_from_cache(player_id: int) -> list[dict]:
     """Format up to five cached batter game logs for display-only persistence."""
     cached_games = mlb_stats._GAME_LOG_CACHE.get(player_id, [])
@@ -390,6 +486,8 @@ def _build_player_profile(
     home_team, pitcher, batter_data, pitcher_data,
     game_time_utc: str = "",
     bat_tracking_data: dict = None,
+    probability_runtime_provenance: dict = None,
+    probability_lineage: dict = None,
 ):
     season_stats    = mlb_stats.get_player_season_stats(player_id)
     recent_stats    = mlb_stats.get_player_recent_stats(player_id)
@@ -539,14 +637,15 @@ def _build_player_profile(
     if not lineup_spot:
         model_prob = round(model_prob * 0.82, 4)
 
-    # Apply adaptive calibration scale (moves model_prob toward observed hit rate)
-    model_prob = round(_aw.apply_prob_scale(model_prob), 4) if _aw is not None else model_prob
-    # Apply post-model probability calibration (monotone → ranking preserved)
-    # barrel_rate passed for elite tier Platt (ELITE_PLATT_ENABLED in config.py)
-    model_prob = round(_cal.apply_calibration(model_prob, barrel_rate=sc_barrel), 4)
-    # Final stage: warehouse isotonic recalibration (monotone — ranking preserved).
-    # Fitted on labeled batter_stat_history outcomes vs this exact post-Platt value.
-    model_prob = _cal.apply_warehouse_isotonic(model_prob)
+    # Apply the existing adaptive scale -> Platt -> warehouse-isotonic chain.
+    # The companion lineage captures these live values without recomputation.
+    model_prob, _probability_lineage = _apply_main_probability_adjustments(
+        model_prob,
+        barrel_rate=sc_barrel,
+        runtime_provenance=probability_runtime_provenance or {},
+    )
+    if probability_lineage is not None:
+        probability_lineage.update(_probability_lineage)
 
     # ── MAIN projected values (display-only; never fed into scoring/EV/filters) ──
     # Projection: same calc sequence without ×0.82 lineup penalty, using typical slot PA.
@@ -1003,6 +1102,23 @@ def load_game_data(
         except Exception as _e:
             print(f"[pipeline] auto_apply_safe skipped: {_e}")
 
+    probability_lineage_capture_available = True
+    try:
+        probability_runtime_provenance = (
+            _build_runtime_provenance(_aw)
+            if _aw is not None
+            else _unavailable_adaptive_provenance()
+        )
+    except Exception as exc:
+        probability_runtime_provenance = {}
+        probability_lineage_capture_available = False
+        _LOG.warning(
+            "[probability-lineage] runtime provenance unavailable; "
+            "warehouse lineage capture skipped (non-fatal): %s",
+            exc,
+            exc_info=True,
+        )
+
     # Fetch schedule and odds in parallel for improved performance
     _cb("Fetching schedule and odds concurrently...")
     with ThreadPoolExecutor(max_workers=2) as executor:
@@ -1153,11 +1269,14 @@ def load_game_data(
     def _profile(args: tuple):
         pid, name, spot, team, opp, home_team, opp_pitcher, game_time_utc, game_pk, game_status = args
         try:
+            probability_lineage: dict = {}
             profile = _build_player_profile(
                 pid, name, spot, team, opp, home_team, opp_pitcher,
                 batter_data, pitcher_data,
                 game_time_utc=game_time_utc,
                 bat_tracking_data=bat_tracking_data,
+                probability_runtime_provenance=probability_runtime_provenance,
+                probability_lineage=probability_lineage,
             )
             if profile is None:
                 _drop_no_profile[0] += 1
@@ -1165,16 +1284,27 @@ def load_game_data(
                 profile["game_time_utc"] = game_time_utc
                 profile["game_pk"]       = game_pk
                 profile["game_status"]   = game_status
-            return profile
+            return profile, probability_lineage
         except Exception as e:
             print(f"[pipeline] profile error for {name} ({pid}): {e}")
-            return None
+            return None, None
 
     all_players = []
+    probability_lineage_by_key: dict[tuple[int, int], dict] = {}
     with ThreadPoolExecutor(max_workers=16) as executor:
-        for p in executor.map(_profile, tasks):
+        for p, probability_lineage in executor.map(_profile, tasks):
             if p:
                 all_players.append(p)
+                lineage_key = _probability_lineage_key(p)
+                if probability_lineage_capture_available and lineage_key is not None:
+                    probability_lineage_by_key[lineage_key] = probability_lineage
+                elif probability_lineage_capture_available:
+                    _LOG.warning(
+                        "[probability-lineage] skipped unkeyable player "
+                        "(non-fatal): player_id=%r game_pk=%r",
+                        p.get("player_id"),
+                        p.get("game_pk"),
+                    )
 
     # Additive game-level weather for downstream display/filter joins.
     # Raw weather already influenced weather_factor above; these numeric copies
@@ -1294,7 +1424,11 @@ def load_game_data(
 
     # Warehouse Phase 1: capture the complete unified pre-split batter payload.
     # Submission is asynchronous and never gates the live board return path.
-    _schedule_batter_stat_history_capture(game_date, all_players)
+    _schedule_batter_stat_history_capture(
+        game_date,
+        all_players,
+        probability_lineage_by_key,
+    )
 
     return {
         "date":         game_date,

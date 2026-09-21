@@ -114,7 +114,11 @@ def crossover_prob(a: float, b: float) -> float:
     return sigmoid(b / (1.0 - a))
 
 
-def apply_calibration(p: float, barrel_rate: float = 0.0) -> float:
+def apply_calibration(
+    p: float,
+    barrel_rate: float = 0.0,
+    lineage: dict | None = None,
+) -> float:
     """
     Apply the configured calibration transform to a raw model probability.
 
@@ -130,6 +134,17 @@ def apply_calibration(p: float, barrel_rate: float = 0.0) -> float:
       pipeline.py — applied after apply_prob_scale()
     """
     if not getattr(config, "CALIBRATION_ENABLED", False):
+        if lineage is not None:
+            lineage.update({
+                "calibration_branch": "IDENTITY_DISABLED",
+                "calibration_barrel_rate": barrel_rate,
+                "elite_barrel_threshold": getattr(
+                    config, "ELITE_PLATT_BARREL_THRESHOLD", 0.10
+                ),
+                "elite_threshold_met": False,
+                "platt_a": None,
+                "platt_b": None,
+            })
         return p
 
     method = getattr(config, "CALIBRATION_METHOD", "none")
@@ -141,19 +156,56 @@ def apply_calibration(p: float, barrel_rate: float = 0.0) -> float:
         # everything above; elite Platt crossover=22.3% is near-identity up to 29%.
         # Analysis: V4a variant improved Brier 0.00024; top-50 accuracy 26%→30%;
         # new 25-30% picks created (actual HR rate 29.9%). Rollback: ELITE_PLATT_ENABLED=False.
-        if (getattr(config, "ELITE_PLATT_ENABLED", False)
-                and barrel_rate >= getattr(config, "ELITE_PLATT_BARREL_THRESHOLD", 0.10)):
+        elite_threshold = getattr(config, "ELITE_PLATT_BARREL_THRESHOLD", 0.10)
+        elite_threshold_met = (
+            getattr(config, "ELITE_PLATT_ENABLED", False)
+            and barrel_rate >= elite_threshold
+        )
+        if elite_threshold_met:
             a = getattr(config, "ELITE_PLATT_A", 0.92)
             b = getattr(config, "ELITE_PLATT_B", -0.10)
+            branch = "PLATT_ELITE"
         else:
             a = getattr(config, "CALIBRATION_PLATT_A", 1.0)
             b = getattr(config, "CALIBRATION_PLATT_B", 0.0)
+            branch = "PLATT_STANDARD"
+        if lineage is not None:
+            lineage.update({
+                "calibration_branch": branch,
+                "calibration_barrel_rate": barrel_rate,
+                "elite_barrel_threshold": elite_threshold,
+                "elite_threshold_met": elite_threshold_met,
+                "platt_a": a,
+                "platt_b": b,
+            })
         result = platt_scale(p, a, b)
     elif method == "isotonic":
         bp     = getattr(config, "CALIBRATION_ISOTONIC_BREAKPOINTS", [])
         vals   = getattr(config, "CALIBRATION_ISOTONIC_VALUES", [])
+        if lineage is not None:
+            lineage.update({
+                "calibration_branch": "ISOTONIC",
+                "calibration_barrel_rate": barrel_rate,
+                "elite_barrel_threshold": getattr(
+                    config, "ELITE_PLATT_BARREL_THRESHOLD", 0.10
+                ),
+                "elite_threshold_met": False,
+                "platt_a": None,
+                "platt_b": None,
+            })
         result = isotonic_scale(p, bp, vals)
     else:
+        if lineage is not None:
+            lineage.update({
+                "calibration_branch": "IDENTITY_METHOD",
+                "calibration_barrel_rate": barrel_rate,
+                "elite_barrel_threshold": getattr(
+                    config, "ELITE_PLATT_BARREL_THRESHOLD", 0.10
+                ),
+                "elite_threshold_met": False,
+                "platt_a": None,
+                "platt_b": None,
+            })
         return p
 
     _max = getattr(config, "MAX_GAME_HR_PROB", 0.29)
@@ -178,7 +230,7 @@ def _load_warehouse_curve() -> "dict | bool":
     return _warehouse_curve
 
 
-def apply_warehouse_isotonic(p: float) -> float:
+def apply_warehouse_isotonic(p: float, lineage: dict | None = None) -> float:
     """
     Final-stage isotonic recalibration fitted on labeled warehouse outcomes
     (batter_stat_history.hr_outcome vs the FINAL displayed model_prob).
@@ -194,9 +246,15 @@ def apply_warehouse_isotonic(p: float) -> float:
     when the curve artifact (data/warehouse_isotonic.json) is unavailable.
     """
     if not getattr(config, "WAREHOUSE_ISOTONIC_ENABLED", False):
+        if lineage is not None:
+            lineage["warehouse_isotonic_status"] = "DISABLED"
         return p
     curve = _load_warehouse_curve()
     if not curve:
+        if lineage is not None:
+            lineage["warehouse_isotonic_status"] = "ARTIFACT_UNAVAILABLE"
         return p
+    if lineage is not None:
+        lineage["warehouse_isotonic_status"] = "APPLIED"
     result = isotonic_scale(p, curve["breakpoints"], curve["values"])
     return round(max(0.001, min(1.0 - _EPS, result)), 4)
