@@ -330,6 +330,18 @@ function FsmTMGauge({ score, scoreProjected, confirmed, size }) {
   );
 }
 
+/* EV%/EDGE cells swap to a PROJ value when the lineup is unconfirmed and a
+   finite projection exists. Sorting must resolve the same value the cell
+   renders, never the hidden actual figure behind a PROJ tag. */
+function fsmEvFlagValue(row, key) {
+  if ((key === "edge" || key === "ev_pct") && row.lineup_confirmed !== true) {
+    const projKey = key === "edge" ? "edge_projected_vs_actual" : "ev_pct_projected_vs_actual";
+    const proj = row[projKey];
+    if (proj != null && Number.isFinite(Number(proj))) return { value: Number(proj), isProj: true };
+  }
+  return { value: row[key], isProj: false };
+}
+
 function FsmCell({ col, row, extra }) {
   const v = row[col.key];
   const lbl = col.head;
@@ -348,16 +360,7 @@ function FsmCell({ col, row, extra }) {
        same actual sportsbook quote) when a finite projection exists, tagged PROJ.
        Confirmed rows and unconfirmed rows without a valid projection keep the
        existing current-value path — never fabricate 0 for a missing projection. */
-    let val = v;
-    let isProj = false;
-    if ((col.key === "edge" || col.key === "ev_pct") && row.lineup_confirmed !== true) {
-      const projKey = col.key === "edge" ? "edge_projected_vs_actual" : "ev_pct_projected_vs_actual";
-      const proj = row[projKey];
-      if (proj != null && Number.isFinite(Number(proj))) {
-        val = Number(proj);
-        isProj = true;
-      }
-    }
+    const { value: val, isProj } = fsmEvFlagValue(row, col.key);
     const cls = isProj ? " fsm-cell--proj" : val == null ? "" : val >= 0 ? " fsm-cell--ev-pos" : " fsm-cell--ev-neg";
     return (
       <td className={`fsm-cell${cls}${xc}`} data-label={lbl}>
@@ -1977,7 +1980,7 @@ function FullSlateMatrix({ rows, total, onOpen, filterNote, embedded, builderMod
       });
     }
     return [...s0].sort((a, b) => {
-      const av = a[sortState.key], bv = b[sortState.key];
+      const av = fsmEvFlagValue(a, sortState.key).value, bv = fsmEvFlagValue(b, sortState.key).value;
       const an = av == null ? -Infinity : av, bn = bv == null ? -Infinity : bv;
       return sortState.dir === "desc" ? bn - an : an - bn;
     });
