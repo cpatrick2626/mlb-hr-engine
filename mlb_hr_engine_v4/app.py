@@ -579,7 +579,8 @@ def _ensure_pitch_mix_contexts(players: list[dict], slate_date: str,
         from clients import arsenal as _pm_ar_client
         with st.spinner(spinner_label):
             try:
-                _pm_ar = _pm_ar_client.get_pitcher_arsenal(config.CURRENT_SEASON)
+                _pm_pitcher_ids = [p.get("pitcher_id") for p in players if p.get("pitcher_id")]
+                _pm_ar = _pm_ar_client.get_pitcher_arsenal(config.CURRENT_SEASON, pitcher_ids=_pm_pitcher_ids)
             except Exception:
                 _pm_ar = {}
             st.session_state[_ctx_key] = _pm_load_batch(players, _pm_ar)
@@ -9790,7 +9791,8 @@ def tab_jig(data: dict):
             from clients import arsenal as _ar_client
             from clients import pitch_mix as _pm_client
             try:
-                _ar_data = _ar_client.get_pitcher_arsenal(config.CURRENT_SEASON)
+                _ar_pitcher_ids = [p.get("pitcher_id") for p in _hvy_candidates if p.get("pitcher_id")]
+                _ar_data = _ar_client.get_pitcher_arsenal(config.CURRENT_SEASON, pitcher_ids=_ar_pitcher_ids)
             except Exception:
                 _ar_data = {}
             _hvy_ctxs = _pm_client.load_hvy_contexts_batch(_hvy_candidates, _ar_data)

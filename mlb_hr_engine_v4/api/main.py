@@ -1635,8 +1635,9 @@ def _build_slate_payload(data: dict, odds_pending: bool = False, odds_pending_st
 
     # JIG list — same players, sorted by tactical score descending
     jig_build_error = False
+    _slate_pitcher_ids = [p.get("pitcher_id") for p in players if p.get("pitcher_id")]
     try:
-        _arsenal_data = get_pitcher_arsenal(_dt.datetime.now().year)
+        _arsenal_data = get_pitcher_arsenal(_dt.datetime.now().year, pitcher_ids=_slate_pitcher_ids)
         # Key lookup by (player_id, game_pk) so doubleheader siblings resolve
         # their own game's profile; fall back to name slug when player_id absent,
         # and to player_id-only when game_pk is missing on either side.
@@ -1720,7 +1721,7 @@ def _build_slate_payload(data: dict, odds_pending: bool = False, odds_pending_st
     # AEE precompute — display-only, after JIG so pitch-mix caches are warm
     try:
         from engine.arsenal_edge import compute_aee_score
-        _aee_arsenal = get_pitcher_arsenal(_dt.datetime.now().year)  # cache hit
+        _aee_arsenal = get_pitcher_arsenal(_dt.datetime.now().year, pitcher_ids=_slate_pitcher_ids)  # cache hit
         # Keyed on (player_id, game_pk) so doubleheader siblings get their own
         # game's AEE; player_id-only fallback when game_pk is missing.
         _aee_players = {
@@ -2156,7 +2157,7 @@ async def get_pitcher_detail(pitcher_id: int, batter_id: int = 0,
     # Arsenal: get_pitcher_arsenal returns {pid: [{"pitch_type", "pitch_pct", "avg_speed", "whiff_pct", ...}]}
     try:
         year = _dt.datetime.now().year
-        all_arsenal = get_pitcher_arsenal(year)
+        all_arsenal = get_pitcher_arsenal(year, pitcher_ids=[pitcher_id])
         raw_list = all_arsenal.get(pitcher_id, [])
         arsenal_by_code = {}
         for p in raw_list:

@@ -20,6 +20,7 @@ Two signals computed from this data:
 
 import io
 import csv
+import time
 import requests
 from typing import Optional
 
@@ -41,6 +42,22 @@ _SESSION.headers.update({
 _ARSENAL_CACHE: dict[int, dict[int, list]] = {}
 # {year: {(pitcher_id, pitch_type): {whiff_pct, hard_hit_pct, rv_per100}}}
 _PITCH_STATS_CACHE: dict[int, dict] = {}
+# {year: {pitcher_id: [pitch_dict, ...]}} — reconstructed from pitch-level Statcast
+# data for slate pitchers missing from primary/legacy sources.
+_PITCH_LEVEL_FALLBACK_CACHE: dict[int, dict[int, list]] = {}
+# {year: {pitcher_id: "primary" | "legacy_fallback" | "pitch_level_fallback" | "unavailable"}}
+# Internal diagnostics only — not part of any public API payload.
+_ARSENAL_SOURCE_CACHE: dict[int, dict[int, str]] = {}
+# {year: "primary" | "legacy_fallback"} — which source _ARSENAL_CACHE[year] came from.
+# A transient primary outage that was covered by legacy_fallback must not pin that
+# degraded data in place forever in a long-lived process (Fly API, Streamlit); this
+# lets get_pitcher_arsenal() know when it should keep re-attempting primary.
+_ARSENAL_CACHE_SOURCE: dict[int, str] = {}
+# {year: monotonic timestamp} — earliest time the next primary retry is allowed
+# while _ARSENAL_CACHE[year] is serving legacy_fallback data. Bounds retry frequency
+# without requiring a process restart or season rollover to recover.
+_ARSENAL_FALLBACK_RETRY_AFTER: dict[int, float] = {}
+_LEGACY_FALLBACK_RETRY_COOLDOWN_SEC = 300.0
 
 # Pitch type codes Savant uses for fastball family
 _FASTBALL_TYPES = frozenset({"FF", "SI", "FC"})
@@ -50,6 +67,27 @@ def clear_caches() -> None:
     """Evict stale cache entries so the next fetch hits the network."""
     _ARSENAL_CACHE.clear()
     _PITCH_STATS_CACHE.clear()
+    _PITCH_LEVEL_FALLBACK_CACHE.clear()
+    _ARSENAL_SOURCE_CACHE.clear()
+    _ARSENAL_CACHE_SOURCE.clear()
+    _ARSENAL_FALLBACK_RETRY_AFTER.clear()
+
+
+def _record_source(year: int, pitcher_ids, source: str) -> None:
+    bucket = _ARSENAL_SOURCE_CACHE.setdefault(year, {})
+    for pid in pitcher_ids:
+        bucket[pid] = source
+
+
+def get_arsenal_source(year: int = None) -> dict[int, str]:
+    """
+    Return {pitcher_id: source} for arsenal data supplied by the most recent
+    get_pitcher_arsenal() call(s) in this process, where source is one of
+    "primary", "legacy_fallback", "pitch_level_fallback", or "unavailable".
+    Internal diagnostics/logging only — not exposed on any public API payload.
+    """
+    year = year or config.CURRENT_SEASON
+    return dict(_ARSENAL_SOURCE_CACHE.get(year, {}))
 
 
 def get_pitch_display_stats(year: int = None) -> dict:
@@ -131,27 +169,96 @@ def _parse_pitch_stats_csv(raw: str) -> dict:
 
 # ── Public API ─────────────────────────────────────────────────────────────────
 
-def get_pitcher_arsenal(year: int = None) -> dict[int, list[dict]]:
+def get_pitcher_arsenal(year: int = None, pitcher_ids: "list[int] | None" = None) -> dict[int, list[dict]]:
     """
     Return full pitcher arsenal for the season.
     {pitcher_id: [{"pitch_type", "pitch_pct", "rv_per100", "pa",
                    "avg_speed", "whiff_pct", "hard_hit_pct"}, ...]}
-    Returns {} on network or parse failure — all callers fall back to 1.0 factor.
+    Returns {} on total failure — all callers fall back to 1.0 factor.
 
-    Primary source: pitch-arsenal-stats endpoint (per-pitch RV/100, usage, whiff).
-    Fallback: pitch-arsenals wide-format CSV (usage-only; note: empty as of 2026).
+    Source path (see clients/arsenal.py module docstring for the full doctrine):
+      1. primary — pitch-arsenal-stats endpoint (RV/100, usage, whiff, pa).
+         Retries once on a transient 5xx before falling through.
+      2. legacy_fallback — pitch-arsenals wide-format CSV (usage-only). Rejected
+         if it fetches successfully but parses to no usable pitcher arsenal data
+         (an HTTP 200 with blank usage columns is not treated as success).
+      3. pitch_level_fallback — reconstructed from existing Statcast pitch-level
+         data (clients/pitch_mix.py) for `pitcher_ids` still missing after steps
+         1-2. Scoped to the given pitchers only (current slate), never league-wide.
+         One pitcher's reconstruction failure never blocks the rest of the slate.
+
+    pitcher_ids: optional list of pitcher IDs (typically the current slate) to
+    attempt pitch-level reconstruction for when primary/legacy don't cover them.
+    Omit when the caller only needs whatever primary/legacy already returned.
     """
     year = year or config.CURRENT_SEASON
-    if year in _ARSENAL_CACHE:
-        return _ARSENAL_CACHE[year]
+    base = _ARSENAL_CACHE.get(year)
 
-    # Primary: pitch-arsenal-stats has rv_per100, pitch_usage, whiff%, pa, hard_hit%
-    result = _fetch_arsenal_from_stats(year)
-    if result:
-        _ARSENAL_CACHE[year] = result
-        return result
+    # Cached data pinned from legacy_fallback is degraded, not authoritative — keep
+    # re-attempting primary on a bounded cooldown so a transient outage cannot poison
+    # a long-lived process forever. Primary-sourced cache is left untouched (below).
+    if base is not None and _ARSENAL_CACHE_SOURCE.get(year) == "legacy_fallback":
+        if time.monotonic() >= _ARSENAL_FALLBACK_RETRY_AFTER.get(year, 0.0):
+            recovered = _fetch_arsenal_from_stats(year)
+            if recovered:
+                base = recovered
+                _ARSENAL_CACHE[year] = base
+                _ARSENAL_CACHE_SOURCE[year] = "primary"
+                _ARSENAL_FALLBACK_RETRY_AFTER.pop(year, None)
+                _record_source(year, recovered.keys(), "primary")
+                print(f"[arsenal] primary recovered after legacy_fallback (year={year})")
+            else:
+                _ARSENAL_FALLBACK_RETRY_AFTER[year] = time.monotonic() + _LEGACY_FALLBACK_RETRY_COOLDOWN_SEC
 
-    # Fallback: wide-format CSV (pitch percentages only; no RV/100 or whiff)
+    if base is None:
+        # Primary: pitch-arsenal-stats has rv_per100, pitch_usage, whiff%, pa, hard_hit%
+        result = _fetch_arsenal_from_stats(year)
+        if result:
+            base = result
+            _ARSENAL_CACHE[year] = base
+            _ARSENAL_CACHE_SOURCE[year] = "primary"
+            _record_source(year, result.keys(), "primary")
+        else:
+            legacy = _fetch_legacy_arsenal_fallback(year)
+            if legacy:
+                base = legacy
+                _ARSENAL_CACHE[year] = base
+                _ARSENAL_CACHE_SOURCE[year] = "legacy_fallback"
+                _ARSENAL_FALLBACK_RETRY_AFTER[year] = time.monotonic() + _LEGACY_FALLBACK_RETRY_COOLDOWN_SEC
+                _record_source(year, legacy.keys(), "legacy_fallback")
+            else:
+                base = {}
+
+    pl_cache = _PITCH_LEVEL_FALLBACK_CACHE.setdefault(year, {})
+
+    if pitcher_ids:
+        missing = [pid for pid in pitcher_ids if pid and pid not in base and pid not in pl_cache]
+        if missing:
+            recovered = _fetch_arsenal_from_pitch_level(missing, year)
+            for pid in missing:
+                if pid in recovered:
+                    pl_cache[pid] = recovered[pid]
+                    _record_source(year, [pid], "pitch_level_fallback")
+                else:
+                    _record_source(year, [pid], "unavailable")
+
+    if not pl_cache:
+        return base
+    merged = dict(base)
+    for pid, pitches in pl_cache.items():
+        merged.setdefault(pid, pitches)
+    return merged
+
+
+def _fetch_legacy_arsenal_fallback(year: int) -> dict[int, list[dict]]:
+    """
+    Fetch + validate the legacy pitch-arsenals wide-format CSV (usage-only;
+    no RV/100 or whiff — empty as of 2026 per Savant's current export).
+
+    A fetch that returns HTTP 200 but parses to no usable pitcher arsenal data
+    (e.g. blank usage columns) is FETCH SUCCESS but not USABLE DATA SUCCESS —
+    it must be rejected, not accepted as a successful fallback for a normal slate.
+    """
     url = (
         "https://baseballsavant.mlb.com/leaderboard/pitch-arsenals"
         f"?year={year}&min=1&type=pitcher&hand=&csv=true"
@@ -159,20 +266,135 @@ def get_pitcher_arsenal(year: int = None) -> dict[int, list[dict]]:
     try:
         resp = _SESSION.get(url, timeout=25)
         if resp.status_code != 200:
-            print(f"[arsenal] HTTP {resp.status_code} for year={year}")
+            print(f"[arsenal] legacy fallback HTTP {resp.status_code} for year={year}")
             return {}
         result = _parse_arsenal_csv(resp.text)
-        _ARSENAL_CACHE[year] = result
-        return result
     except Exception as exc:
-        print(f"[arsenal] fetch failed (year={year}): {exc}")
+        print(f"[arsenal] legacy fallback fetch failed (year={year}): {exc}")
         return {}
+
+    if not result:
+        print(
+            f"[arsenal] legacy fallback fetched successfully but contained no usable "
+            f"arsenal data (year={year}) — rejecting"
+        )
+        return {}
+    return result
+
+
+def _fetch_arsenal_from_pitch_level(pitcher_ids: list, year: int) -> dict[int, list[dict]]:
+    """
+    Reconstruct minimal real-data arsenal entries from existing Statcast
+    pitch-level data (clients/pitch_mix.py) for pitchers missing from the
+    primary/legacy sources. Scoped to `pitcher_ids` only — never fetches the
+    full league pitch-by-pitch.
+
+    Only populates pitch_type, pitch_pct (usage), pa, and avg_speed/hard_hit_pct
+    where the underlying Statcast rows support them — all directly derivable
+    from real PA-ending pitch-level data. rv_per100 and whiff_pct are left None
+    (real absence, not fabricated zero); arsenal_matchup_factor() already
+    stabilizes those toward neutral when pa/whiff are missing.
+
+    Same-season safety guard: pitch_mix.py may silently roll back to a prior
+    season when the requested season's data is too sparse (IL stints, early-
+    season returns — this rollback is intentional and unchanged for other
+    pitch_mix consumers). An Arsenal fallback must never silently present that
+    prior-season data as if it were `year`, so a pitcher is only accepted here
+    when get_pitcher_data_year() confirms the reconstructed data actually came
+    from the requested season; otherwise it is rejected and stays "unavailable".
+    """
+    from clients.pitch_mix import get_pitcher_pitch_stats, get_pitcher_data_year  # deferred: avoid import cycle
+
+    result: dict[int, list[dict]] = {}
+    for pid in pitcher_ids:
+        if not pid:
+            continue
+        try:
+            pitch_stats = get_pitcher_pitch_stats(pid, "")
+        except Exception as exc:
+            print(f"[arsenal] pitch-level fallback failed for pitcher {pid}: {exc}")
+            continue
+        if not pitch_stats:
+            continue
+
+        actual_source_year = get_pitcher_data_year(pid)
+        if actual_source_year != year:
+            print(
+                f"[arsenal] requested arsenal year {year} unavailable; pitch-level data "
+                f"resolved to {actual_source_year}; rejecting cross-season fallback "
+                f"(pitcher {pid})"
+            )
+            continue
+
+        pitches = []
+        for pt, ps in pitch_stats.items():
+            pct = ps.get("pitch_pct") or 0.0
+            if pct <= 0:
+                continue
+            pitches.append({
+                "pitch_type":   pt,
+                "pitch_pct":    pct,
+                "rv_per100":    None,
+                "pa":           ps.get("pa", 0),
+                "avg_speed":    ps.get("avg_speed"),
+                "whiff_pct":    None,
+                "hard_hit_pct": ps.get("display_hh"),
+            })
+        if pitches:
+            pitches.sort(key=lambda p: p["pitch_pct"], reverse=True)
+            result[pid] = pitches
+            print(
+                f"[arsenal] pitch-level fallback reconstructed pitcher {pid}: "
+                f"{len(pitches)} pitch types from Statcast pitch-level data (year={year})"
+            )
+    return result
+
+
+def _get_primary_stats_response(url: str, year: int):
+    """
+    GET the primary pitch-arsenal-stats endpoint with ONE bounded retry when the
+    first attempt fails transiently (network exception or HTTP 5xx). Normal
+    successful responses and permanent 4xx responses are never retried.
+    Returns the final response (which may still be a failure) or None.
+    """
+    resp = None
+    for attempt in (1, 2):
+        try:
+            resp = _SESSION.get(url, timeout=25)
+        except Exception as exc:
+            print(f"[arsenal] primary attempt {attempt} failed (year={year}): {exc}")
+            if attempt == 1:
+                print(f"[arsenal] primary retry attempted (year={year})")
+                continue
+            print(f"[arsenal] primary retry failed (year={year})")
+            return None
+
+        if resp.status_code == 200:
+            if attempt == 2:
+                print(f"[arsenal] primary retry succeeded (year={year})")
+            return resp
+
+        if 500 <= resp.status_code < 600:
+            if attempt == 1:
+                print(
+                    f"[arsenal] primary attempt failed HTTP {resp.status_code} "
+                    f"(year={year}) — retry attempted"
+                )
+                continue
+            print(f"[arsenal] primary retry failed HTTP {resp.status_code} (year={year})")
+            return resp
+
+        # Permanent (non-5xx) failure — do not retry
+        return resp
+    return resp
 
 
 def _fetch_arsenal_from_stats(year: int) -> dict[int, list[dict]]:
     """
     Fetch pitcher arsenal from pitch-arsenal-stats endpoint (per-pitch-type rows).
     Returns {pitcher_id: [pitch_dict, ...]} or {} on failure.
+    Retries once on a transient failure (network error or HTTP 5xx) before
+    giving up — see _get_primary_stats_response().
     Column mapping:
       player_id -> pitcher_id
       pitch_usage -> pitch_pct (0-100 scale, converted to 0-1)
@@ -187,7 +409,9 @@ def _fetch_arsenal_from_stats(year: int) -> dict[int, list[dict]]:
         f"?year={year}&type=pitcher&min=1&csv=true"
     )
     try:
-        resp = _SESSION.get(url, timeout=25)
+        resp = _get_primary_stats_response(url, year)
+        if resp is None:
+            return {}
         if resp.status_code != 200:
             print(f"[arsenal] stats HTTP {resp.status_code} for year={year}")
             return {}
