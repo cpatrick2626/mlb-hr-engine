@@ -28,6 +28,11 @@ _GAME_LOG_CACHE_TS: dict[int, float] = {}  # fetched-at epoch seconds
 _PITCHER_GAME_LOG_CACHE: dict[int, list] = {}
 _PITCHER_GAME_LOG_CACHE_TS: dict[int, float] = {}  # fetched-at epoch seconds
 
+# MLB game types kept in the pitcher game log: regular season plus every
+# postseason round (Wild Card, Division, LCS, World Series). The API defaults
+# gameLog to R only, which hid October appearances from days-rest/recent form.
+_PITCHER_LOG_GAME_TYPES = ("R", "F", "D", "L", "W")
+
 # Entries older than this are re-fetched. Prevents the long-running Fly process
 # from serving game-log data that is days stale. Pipeline clears both caches
 # before each run via clear_game_log_caches(), so TTL doesn't affect scoring.
@@ -96,6 +101,14 @@ def _save_multiseason_cache() -> None:
         print(f"[mlb_stats] multiseason cache save failed: {e}")
 
 
+def _sorted_pitcher_log(splits: list) -> list:
+    """Allowed game types only (_PITCHER_LOG_GAME_TYPES), newest first."""
+    return sorted(
+        (s for s in splits if s.get("gameType") in _PITCHER_LOG_GAME_TYPES),
+        key=lambda s: s.get("date", ""), reverse=True,
+    )
+
+
 def _pitcher_game_log_splits(pitcher_id: int) -> list:
     now = time.time()
     if (pitcher_id in _PITCHER_GAME_LOG_CACHE
@@ -105,15 +118,14 @@ def _pitcher_game_log_splits(pitcher_id: int) -> list:
         data = _get(f"/people/{pitcher_id}/stats", {
             "stats": "gameLog", "group": "pitching",
             "season": config.CURRENT_SEASON,
+            "gameType": ",".join(_PITCHER_LOG_GAME_TYPES),
             "limit": 162,
         })
         stats_list = data.get("stats", [])
         splits = stats_list[0].get("splits", []) if stats_list else []
         # Cache even when empty — player has no game log this season (IL, minors, etc.)
         # Network failures still skip caching (caught below) so they stay retryable.
-        _PITCHER_GAME_LOG_CACHE[pitcher_id] = sorted(
-            splits, key=lambda s: s.get("date", ""), reverse=True
-        )
+        _PITCHER_GAME_LOG_CACHE[pitcher_id] = _sorted_pitcher_log(splits)
         _PITCHER_GAME_LOG_CACHE_TS[pitcher_id] = now
     except Exception as e:
         # Don't cache network/parse failures — return stale if available.
@@ -752,7 +764,10 @@ def get_player_stats_as_of(player_id: int, date_str: str) -> tuple[dict, dict]:
 def get_pitcher_stats_as_of(pitcher_id: int, date_str: str) -> dict:
     """Accumulated pitcher stats using only starts with date < date_str."""
     splits = _pitcher_game_log_splits(pitcher_id)
-    prior  = [s for s in splits if s.get("date", "") < date_str]
+    # Season-stats proxy stays regular-season only; postseason rows in the log
+    # are for days-rest / recent form.
+    prior  = [s for s in splits if s.get("date", "") < date_str
+              and s.get("gameType", "R") == "R"]
     return _acc_pitching(prior)
 
 
@@ -1065,7 +1080,7 @@ def _fetch_batch_pitcher_stats(pitcher_ids: list[int]) -> None:
     try:
         data = _get(f"/people", {
             "personIds": pitcher_ids_str,
-            "hydrate": f"stats(group=[pitching],type=[season,gameLog],season={config.CURRENT_SEASON})"
+            "hydrate": f"stats(group=[pitching],type=[season],season={config.CURRENT_SEASON})"
         })
 
         people = data.get("people", [])
@@ -1085,10 +1100,22 @@ def _fetch_batch_pitcher_stats(pitcher_ids: list[int]) -> None:
                     if splits:
                         _BULK_PITCHER_STATS_CACHE[pitcher_id] = splits[0].get("stat", {})
 
-                elif stat_type == "gameLog":
-                    game_logs = stat_group.get("splits", [])
-                    game_logs = sorted(game_logs, key=lambda s: s.get("date", ""), reverse=True)
-                    _PITCHER_GAME_LOG_CACHE[pitcher_id] = game_logs
+        # Game log is a separate request: gameType on the combined hydrate would
+        # also split the season totals by game type. Season stats stay R-only.
+        game_types = ",".join(_PITCHER_LOG_GAME_TYPES)
+        log_data = _get(f"/people", {
+            "personIds": pitcher_ids_str,
+            "hydrate": f"stats(group=[pitching],type=[gameLog],season={config.CURRENT_SEASON},gameType=[{game_types}])"
+        })
+
+        for person in log_data.get("people", []):
+            pitcher_id = person.get("id")
+            if not pitcher_id:
+                continue
+
+            for stat_group in person.get("stats", []):
+                if stat_group.get("type", {}).get("displayName", "") == "gameLog":
+                    _PITCHER_GAME_LOG_CACHE[pitcher_id] = _sorted_pitcher_log(stat_group.get("splits", []))
                     _PITCHER_GAME_LOG_CACHE_TS[pitcher_id] = time.time()
 
     except Exception as e:
